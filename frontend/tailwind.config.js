@@ -12,7 +12,16 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
       },
+      fontFamily: {
+        sans: ['DM Sans', 'sans-serif'],
+        mono: ['DM Mono', 'monospace']
+      },
       colors: {
+        gold: {
+          DEFAULT: '#c9a962',
+          hover: '#e5c57f',
+          muted: 'rgba(201,169,98,0.15)'
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
