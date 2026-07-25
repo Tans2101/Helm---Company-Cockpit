@@ -355,10 +355,6 @@ async def ask_kalun(payload: AskInput, user=Depends(get_current_user)):
             f"{json.dumps(context, indent=2)}"
         ),
     ).with_model("anthropic", "claude-sonnet-4-6")
-    # replay prior history (excluding the message we just stored) into the session
-    for m in history[:-1]:
-        if m["role"] == "user":
-            chat.messages = getattr(chat, "messages", [])
 
     async def gen():
         collected = ""
@@ -481,7 +477,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
