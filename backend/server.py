@@ -42,7 +42,9 @@ QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
-PRO_PRICE = 149.0
+# Display price for Helm Pro. Keep in sync with the Paddle price (USD major units).
+# Current live price pri_01kssnhhqe71k6720sw7bp302a is $8.00 (unit_price.amount=800).
+PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
 # Paddle Billing (Helm Pro). Sandbox by default.
 PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
 PADDLE_CLIENT_TOKEN = os.environ.get('PADDLE_CLIENT_TOKEN', '')
