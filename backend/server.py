@@ -462,7 +462,9 @@ class InviteInput(BaseModel):
 
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:manage"))):
-    pack = payload.pack if payload.pack in VALID_PACKS else "member"
+    if payload.pack not in VALID_PACKS:
+        raise HTTPException(status_code=400, detail="Unknown access pack")
+    pack = payload.pack
     role = "owner" if pack == "owner" else "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
@@ -492,7 +494,9 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
         raise HTTPException(status_code=404, detail="Member not found")
     if m.get("user_id") == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot change your own access")
-    pack = payload.pack if payload.pack in VALID_PACKS else "member"
+    if payload.pack not in VALID_PACKS:
+        raise HTTPException(status_code=400, detail="Unknown access pack")
+    pack = payload.pack
     role = "owner" if pack == "owner" else "member"
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role, "pack": pack}})
     return {"ok": True}

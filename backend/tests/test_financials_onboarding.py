@@ -122,6 +122,10 @@ class TestFinEntryCRUD:
                    "amount": 1234.56, "month": "2025-10", "recurring": False,
                    "note": f"TEST entry {label}"}
         r = requests.post(f"{API}/financials/entries", headers=H(token), json=payload)
+        if label == "member":
+            # member pack is read-only for finance:write (Phase 0 access packs)
+            assert r.status_code == 403, r.text
+            return
         assert r.status_code == 200, r.text
         entry = r.json()["entry"]
         assert entry["type"] == "revenue"
@@ -154,7 +158,8 @@ class TestFinEntryCRUD:
     def test_invalid_type_400(self, token, label):
         r = requests.post(f"{API}/financials/entries", headers=H(token),
                           json={"type": "junk", "category": "c", "amount": 1, "month": "2025-10"})
-        assert r.status_code == 400
+        # member is denied before validation (403); owner reaches validation (400)
+        assert r.status_code == (403 if label == "member" else 400)
 
 
 # ------------------------- Computed flow-through -------------------------
@@ -243,15 +248,16 @@ class TestStripeImport:
 
 # ------------------------- Authorization matrix -------------------------
 class TestFinancePermissions:
-    def test_member_can_write_finance(self):
+    def test_member_cannot_write_finance(self):
         # sanity: member GET works
         r = requests.get(f"{API}/financials", headers=H(MEMBER))
         assert r.status_code == 200
-        assert r.json()["can_write"] is True
-        # can settings update
+        # member pack is read-only for finance:write (Phase 0 access packs)
+        assert r.json()["can_write"] is False
+        # settings update denied
         r = requests.put(f"{API}/financials/settings", headers=H(MEMBER),
                         json={"cash": 3_100_000.0, "gross_margin": 68})
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     def test_fresh_user_apply_sample_then_verify(self):
         """Owner (fresh) applies sample template, verifies data materialized."""

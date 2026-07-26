@@ -227,7 +227,7 @@ def test_integrations_can_manage_flag(owner, member):
 def test_owner_cannot_change_own_role(owner):
     members = owner.get(f"{BASE_URL}/api/members").json()["members"]
     my = next(m for m in members if m["is_self"])
-    r = owner.patch(f"{BASE_URL}/api/members/{my['membership_id']}", json={"role": "member"})
+    r = owner.patch(f"{BASE_URL}/api/members/{my['membership_id']}", json={"pack": "member"})
     assert r.status_code == 400
 
 
@@ -247,10 +247,10 @@ def test_owner_change_member_role_and_delete(owner, mongo):
         owner.post(f"{BASE_URL}/api/members/invite", json={"email": email})
         members = owner.get(f"{BASE_URL}/api/members").json()["members"]
         target = next(m for m in members if m["email"] == email)
-        r = owner.patch(f"{BASE_URL}/api/members/{target['membership_id']}", json={"role": "owner"})
+        r = owner.patch(f"{BASE_URL}/api/members/{target['membership_id']}", json={"pack": "owner"})
         assert r.status_code == 200
         members2 = owner.get(f"{BASE_URL}/api/members").json()["members"]
-        assert next(m for m in members2 if m["email"] == email)["role"] == "owner"
+        assert next(m for m in members2 if m["email"] == email)["pack"] == "owner"
         # delete
         d = owner.delete(f"{BASE_URL}/api/members/{target['membership_id']}")
         assert d.status_code == 200
@@ -279,28 +279,34 @@ def test_workspace_list_and_create_and_switch(owner):
 
 
 # ---------------- Integrations OAuth degradation ----------------
-def test_integrations_oauth_configured_false(owner):
+def test_integrations_oauth_present(owner):
     d = owner.get(f"{BASE_URL}/api/integrations").json()
     ints = {i["provider"]: i for i in d["integrations"] if i.get("provider")}
-    # google + quickbooks present and oauth true configured false
+    # google + quickbooks present and oauth true; configured depends on env keys
     for p in ["google", "quickbooks"]:
         assert p in ints, f"provider {p} missing"
         assert ints[p].get("oauth") is True
-        assert ints[p].get("configured") is False
+        assert "configured" in ints[p]
 
 
-def test_google_connect_degrades_gracefully(owner):
+def test_google_connect_returns_expected_shape(owner):
     r = owner.get(f"{BASE_URL}/api/integrations/google/connect")
     assert r.status_code == 200
     d = r.json()
-    assert d["configured"] is False and "message" in d
+    if d.get("configured"):
+        assert d.get("authorization_url", "").startswith("https://accounts.google.com")
+    else:
+        assert "message" in d
 
 
-def test_quickbooks_connect_degrades_gracefully(owner):
+def test_quickbooks_connect_returns_expected_shape(owner):
     r = owner.get(f"{BASE_URL}/api/integrations/quickbooks/connect")
     assert r.status_code == 200
     d = r.json()
-    assert d["configured"] is False and "message" in d
+    if d.get("configured"):
+        assert d.get("authorization_url", "").startswith("https://appcenter.intuit.com")
+    else:
+        assert "message" in d
 
 
 # ---------------- Plan gating flip ----------------
