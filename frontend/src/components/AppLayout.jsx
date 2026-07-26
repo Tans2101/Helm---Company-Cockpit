@@ -23,7 +23,7 @@ const NAV = [
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/app/people", label: "People", icon: Contact, id: "people" },
   { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
-  { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members" },
+  { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:manage" },
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 
@@ -110,7 +110,7 @@ function SidebarContent({ onNavigate }) {
       <WorkspaceSwitcher onNavigate={onNavigate} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV.map((item) => (
+        {NAV.filter((item) => !item.perm || (user?.perms || []).includes(item.perm)).map((item) => (
           <NavLink
             key={item.id}
             to={item.to}

@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 4 tested Phase 0 (Access Packs), Phase 1 (Financials -> Activity -> Briefing loop) and Phase 3 (People CRUD + headcount sync) end-to-end. New pytest file /app/backend/tests/test_packs_activity_people.py — 20/20 passed. Full backend suite ran 119 tests: 111 passed, 8 failed. All 8 failures are STALE tests from iterations 1-3 whose assumptions no longer hold under the new pack model or under an OAuth env change (see backend_issues.stale_tests below) — not regressions of the new work. Frontend Playwright: as OWNER, sidebar shows Members + People, People CRUD end-to-end works (add TEST_UI_ person → headcount 6→7 → delete → 6), Members invite with pack='finance' populates a badge, per-member pack dropdown flips FINANCE→HR live, Financials 'Recent activity' strip renders with the latest activities (Removed a revenue entry, Logged revenue, Updated cash → runway…). As MEMBER, sidebar hides Members nav, People page has no add-person-btn, Financials page hides add-entry-btn and edit-settings-btn — read-only enforcement in the UI matches the perm set. Backend + frontend integration: after PUT /financials/settings the summary contains 'cash' + 'runway' and appears as briefing.what_changed[0] with detail '<actor> · <rel time>'. can_write flags on /financials and /people are true for owner and false for member. can_act on /decisions is true for owner and false for member. GET /activities returns newest-first with an 'ago' field. Headcount on /company reflects add/remove of a person. All items from the review-request test matrix passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [],
+    "stale_tests": [
+      {"file": "test_financials_onboarding.py", "tests": ["TestFinEntryCRUD::test_create_edit_delete_entry[test_session_user2-member]", "TestFinEntryCRUD::test_invalid_type_400[test_session_user2-member]", "TestFinancePermissions::test_member_can_write_finance"], "reason": "Iteration 3 tests assumed member could write financials. Per iteration 4 spec, member pack is intentionally read-only for finance:write (403). Expected behavior — tests need updating, product is correct."},
+      {"file": "test_kalun_multitenant.py", "tests": ["test_owner_cannot_change_own_role", "test_owner_change_member_role_and_delete"], "reason": "PATCH /api/members/{id} now expects {\"pack\": ...} not {\"role\": ...}. Old tests send role and get 422. Update tests to send {\"pack\": \"owner\"} etc."},
+      {"file": "test_kalun_multitenant.py", "tests": ["test_integrations_oauth_configured_false", "test_google_connect_degrades_gracefully", "test_quickbooks_connect_degrades_gracefully"], "reason": "Google OAuth is now configured (integrations return configured=true). Tests hard-coded assumption that it was unconfigured. Environment change, not a regression."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "People delete button", "issues": ["Uses native window.confirm() dialog — inconsistent with the rest of the shadcn/dark UI. Consider a themed confirm modal."]},
+      {"screen": "Financials Recent activity strip", "issues": ["Actor name + relative time are on the same row aligned right; on narrow viewports (<400px) the summary text can overlap the timestamp. Minor."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_packs_activity_people.py",
+    "/app/test_reports/pytest/iter4_packs.xml",
+    "/app/test_reports/pytest/iter4_all.xml"
+  ],
+  "action_items": [
+    "Update stale iteration-3 tests in test_financials_onboarding.py: member pack should now expect 403 on POST/PATCH/DELETE /api/financials/entries and PUT /api/financials/settings (intended, not a bug).",
+    "Update test_kalun_multitenant.py::test_owner_cannot_change_own_role and test_owner_change_member_role_and_delete to send {\"pack\": ...} instead of {\"role\": ...} to PATCH /api/members/{id}.",
+    "Update test_kalun_multitenant.py OAuth-degradation tests — Google/Quickbooks are now `configured=true` in this env.",
+    "(Polish) Replace native window.confirm() on People delete with a themed modal.",
+    "(Polish) On Financials 'Recent activity' rows, wrap or truncate long summary text so the actor·time meta doesn't overlap on narrow widths."
+  ],
+  "critical_code_review_comments": [
+    "server.py get_principal still silently reassigns active_workspace_id when the stored active workspace has no matching active membership — repeats iteration_2 note. Consider making this an explicit event so the frontend can react.",
+    "server.py add_person/edit_person/remove_person recompute avg_trust by mutating people dict in-place then $set-ing the whole subdoc. If two writers race, one will lose. Not a bug at demo scale but flag it for future.",
+    "server.py PATCH /members/{id} accepts arbitrary pack values and silently coerces invalid ones to 'member'. Consider returning 400 on unknown pack so misconfigured clients don't silently downgrade a member.",
+    "server.py briefing.what_changed prepends the last 5 activities every time — no de-dup with the workspace's stored what_changed[] items, so on a fresh install the same headline can appear twice (once as activity, once as seeded item). Minor UX.",
+    "Frontend Members.jsx: changing a member's pack via <select> has no confirm and no undo. A single misclick can strip a colleague of finance:write. Consider a small confirm toast.",
+    "Frontend People.jsx submitted `del(p)` uses window.confirm — see design_issues."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_packs_activity_people.py (new — 20 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% for new pack/activity/people suite (20/20); 111/119 overall (8 stale)", "frontend": "100%"},
+  "test_credentials": "OWNER: Bearer test_session_kalun_123 (pack=owner). MEMBER: Bearer test_session_user2 (pack=member, read-only + tasks:move + ask:use). Owner workspace has sample data applied (Northwind Robotics, 6 seed people, 36 fin entries).",
+  "seed_data_creation": "test_packs_activity_people.py owner fixture idempotently reapplies POST /api/workspace/apply-template {template:sample} at module scope. All test-created data (TEST_ prefixed entries/people, TEST_-prefixed member invites) is cleaned up in-test or via mongo teardown. Frontend UI test added and then deleted its own TEST_UI_ person to restore headcount.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New iteration-4 test file: /app/backend/tests/test_packs_activity_people.py covers Phase 0/1/3 explicitly. Run with `-n 0` (pytest.ini defaults to -n 2 but state-mutating activity/settings tests can interleave). The 8 pre-existing failures in test_financials_onboarding.py + test_kalun_multitenant.py are STALE (member-finance-write assumption + role->pack API shape + Google OAuth now configured). If main agent updates those tests: (a) flip member-finance-write asserts to 403, (b) change PATCH /members payload to {\"pack\":...}, (c) drop the configured=false assumption. Owner and Member sessions remain seeded (see test_credentials.md).",
+  "rca of the issue": "No functional issues. Stale-test failures are traceable to intentional product changes shipped in iterations 3→4: (1) member pack lost finance:write, (2) PATCH /members changed role->pack, (3) Google/Quickbooks OAuth got configured in this preview. All three are covered by the new suite."
+}

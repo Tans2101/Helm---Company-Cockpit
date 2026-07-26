@@ -4,7 +4,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Plus, Trash2, Wallet, DownloadCloud, X, PenLine } from "lucide-react";
+import { Plus, Trash2, Wallet, DownloadCloud, X, PenLine, History } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
@@ -33,6 +33,7 @@ const emptyForm = () => ({ type: "revenue", category: "Subscriptions", amount: "
 
 export default function Financials() {
   const { data, loading, reload } = useFetch("/financials");
+  const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
@@ -43,6 +44,7 @@ export default function Financials() {
   if (loading || !data) return <LoadingScreen label="Loading financials" />;
 
   const canWrite = data.can_write;
+  const finActs = (activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
 
   const submitEntry = async () => {
     if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
@@ -53,13 +55,14 @@ export default function Financials() {
       setForm(emptyForm());
       setShowForm(false);
       reload();
+      reloadActs();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
     finally { setBusy(false); }
   };
 
   const del = async (id) => {
     if (!window.confirm("Remove this entry? This can't be undone.")) return;
-    try { await api.delete(`/financials/entries/${id}`); reload(); toast.success("Entry removed"); }
+    try { await api.delete(`/financials/entries/${id}`); reload(); reloadActs(); toast.success("Entry removed"); }
     catch (e) { toast.error("Could not delete"); }
   };
 
@@ -70,6 +73,7 @@ export default function Financials() {
       toast.success("Updated");
       setShowSettings(false);
       reload();
+      reloadActs();
     } catch (e) { toast.error("Could not save"); }
     finally { setBusy(false); }
   };
@@ -80,6 +84,7 @@ export default function Financials() {
       const { data: res } = await api.post("/financials/import/stripe");
       toast.success(`Imported ${res.months_imported} month(s) — ${fmt(res.total)} from Stripe`);
       reload();
+      reloadActs();
     } catch (e) { toast.error(e?.response?.data?.detail || "Stripe import needs a live Stripe key"); }
     finally { setBusy(false); }
   };
@@ -138,6 +143,24 @@ export default function Financials() {
               </GlassCard>
             ))}
           </div>
+
+          {finActs.length > 0 && (
+            <GlassCard className="p-4 mb-6 fade-up" data-testid="financials-activity">
+              <div className="flex items-center gap-1.5 mb-3 text-gold">
+                <History className="w-3.5 h-3.5" />
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Recent activity</span>
+              </div>
+              <div className="space-y-2">
+                {finActs.map((a) => (
+                  <div key={a.activity_id} className="flex items-center gap-2 text-sm" data-testid={`fin-activity-${a.activity_id}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-gold/60 shrink-0" />
+                    <span className="text-zinc-300 flex-1 truncate">{a.summary}</span>
+                    <span className="text-xs text-zinc-600 font-mono shrink-0 hidden sm:inline">{a.actor_name} · {a.ago}</span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
 
           <div className="grid lg:grid-cols-3 gap-4 mb-6">
             <GlassCard className="p-5 lg:col-span-2 fade-up">

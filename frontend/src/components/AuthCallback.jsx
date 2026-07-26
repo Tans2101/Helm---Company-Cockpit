@@ -10,12 +10,15 @@ export default function AuthCallback() {
     const hash = window.location.hash || "";
     const sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
     (async () => {
+      let dest = "/app";
       try {
         if (sid) await api.post("/auth/session", { session_id: sid });
+        const { data } = await api.get("/auth/me");
+        if (data?.default_route) dest = data.default_route;
       } catch (e) {
         // ignore, redirect will re-check
       }
-      window.location.replace("/app");
+      window.location.replace(dest);
     })();
   }, []);
 

@@ -50,16 +50,36 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kalun")
 
-# ------------------------- Roles / permissions -------------------------
-MEMBER_PERMS = {"read", "tasks:move", "ask:use", "finance:write"}
-OWNER_PERMS = MEMBER_PERMS | {
-    "decisions:act", "briefing:generate", "reports:pack", "integrations:manage",
-    "billing:manage", "members:manage", "workspace:edit",
+# ------------------------- Access packs / permissions -------------------------
+BASE_PERMS = {"read", "tasks:move", "ask:use"}
+PACK_PERMS = {
+    "member": BASE_PERMS,
+    "finance": BASE_PERMS | {"finance:write"},
+    "hr": BASE_PERMS | {"people:write"},
+    "exec": BASE_PERMS | {"decisions:act", "briefing:generate", "reports:pack"},
+    "owner": BASE_PERMS | {
+        "finance:write", "people:write", "decisions:act", "briefing:generate",
+        "reports:pack", "integrations:manage", "billing:manage", "members:manage",
+        "workspace:edit",
+    },
 }
+PACK_HOME = {"owner": "/app", "exec": "/app", "member": "/app",
+             "finance": "/app/financials", "hr": "/app/people"}
+PACK_LABEL = {"owner": "Owner", "exec": "Executive", "finance": "Finance",
+              "hr": "People/HR", "member": "Member"}
+VALID_PACKS = set(PACK_PERMS.keys())
 
 
-def perms_for(role: str):
-    return OWNER_PERMS if role == "owner" else MEMBER_PERMS
+def pack_of(membership: dict) -> str:
+    """Resolve a membership's access pack, defaulting for legacy owner/member rows."""
+    p = membership.get("pack")
+    if p in VALID_PACKS:
+        return p
+    return "owner" if membership.get("role") == "owner" else "member"
+
+
+def perms_for(pack: str):
+    return PACK_PERMS.get(pack, PACK_PERMS["member"])
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
@@ -179,7 +199,7 @@ async def _bootstrap(user):
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}",
         "workspace_id": ws_id, "user_id": user["user_id"], "email": user["email"],
-        "role": "owner", "status": "active",
+        "role": "owner", "pack": "owner", "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
@@ -204,13 +224,13 @@ async def get_principal(request: Request):
     return {
         "user_id": user["user_id"], "email": user["email"], "name": user.get("name"),
         "picture": user.get("picture"), "workspace_id": membership["workspace_id"],
-        "role": membership["role"],
+        "role": membership["role"], "pack": pack_of(membership),
     }
 
 
 def require(action: str):
     async def dep(principal=Depends(get_principal)):
-        if action not in perms_for(principal["role"]):
+        if action not in perms_for(principal["pack"]):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
         return principal
     return dep
@@ -221,6 +241,37 @@ async def get_ws(workspace_id: str):
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return ws
+
+
+# ------------------------- Activity log -------------------------
+def _rel_time(iso: str) -> str:
+    try:
+        t = datetime.fromisoformat(iso)
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+    except Exception:
+        return ""
+    secs = (datetime.now(timezone.utc) - t).total_seconds()
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return f"{int(secs // 60)}m ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)}h ago"
+    return f"{int(secs // 86400)}d ago"
+
+
+async def log_activity(principal, module, action, summary, patch=None):
+    doc = {
+        "activity_id": f"act_{uuid.uuid4().hex[:12]}",
+        "workspace_id": principal["workspace_id"],
+        "actor_user_id": principal["user_id"],
+        "actor_name": principal.get("name") or principal.get("email") or "Someone",
+        "module": module, "action": action, "summary": summary,
+        "patch": patch or {}, "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.activities.insert_one(doc)
+    return doc
 
 
 # ------------------------- Financials (computed from entries) -------------------------
@@ -331,7 +382,9 @@ async def process_session(payload: SessionInput, response: Response):
 
 @api_router.get("/auth/me")
 async def auth_me(principal=Depends(get_principal)):
-    return principal
+    pack = principal["pack"]
+    return {**principal, "perms": sorted(perms_for(pack)),
+            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member")}
 
 
 @api_router.post("/auth/logout")
@@ -381,7 +434,7 @@ async def create_workspace(payload: CreateWsInput, principal=Depends(get_princip
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
         "user_id": principal["user_id"], "email": principal["email"], "role": "owner",
-        "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
+        "pack": "owner", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
     })
     await db.users.update_one({"user_id": principal["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
@@ -395,20 +448,22 @@ async def list_members(principal=Depends(get_principal)):
         u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
         out.append({
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
-            "status": m["status"], "name": (u or {}).get("name"), "picture": (u or {}).get("picture"),
+            "pack": pack_of(m), "status": m["status"], "name": (u or {}).get("name"),
+            "picture": (u or {}).get("picture"),
             "is_self": m.get("user_id") == principal["user_id"],
         })
-    return {"members": out, "my_role": principal["role"]}
+    return {"members": out, "my_role": principal["role"], "my_pack": principal["pack"]}
 
 
 class InviteInput(BaseModel):
     email: EmailStr
-    role: str = "member"
+    pack: str = "member"
 
 
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:manage"))):
-    role = "owner" if payload.role == "owner" else "member"
+    pack = payload.pack if payload.pack in VALID_PACKS else "member"
+    role = "owner" if pack == "owner" else "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
     if existing:
@@ -417,17 +472,17 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
         "user_id": existing_user["user_id"] if existing_user else None, "email": email,
-        "role": role, "status": "active" if existing_user else "invited",
+        "role": role, "pack": pack, "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
     })
     ws = await get_ws(principal["workspace_id"])
     app_url = str(request.base_url).rstrip("/")
-    email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], role, app_url)
+    email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], PACK_LABEL.get(pack, "Member"), app_url)
     return {"ok": True, "auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False)}
 
 
 class RoleInput(BaseModel):
-    role: str
+    pack: str
 
 
 @api_router.patch("/members/{membership_id}")
@@ -436,9 +491,10 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
     if not m:
         raise HTTPException(status_code=404, detail="Member not found")
     if m.get("user_id") == principal["user_id"]:
-        raise HTTPException(status_code=400, detail="You cannot change your own role")
-    role = "owner" if payload.role == "owner" else "member"
-    await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role}})
+        raise HTTPException(status_code=400, detail="You cannot change your own access")
+    pack = payload.pack if payload.pack in VALID_PACKS else "member"
+    role = "owner" if pack == "owner" else "member"
+    await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role, "pack": pack}})
     return {"ok": True}
 
 
@@ -498,7 +554,18 @@ async def briefing(principal=Depends(get_principal)):
     if nrr:
         metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
     b["metrics"] = metrics
+    acts = await db.activities.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(5)
+    act_items = [{"title": a["summary"], "detail": f"{a['actor_name']} · {_rel_time(a['created_at'])}", "tone": "neutral"} for a in acts]
+    b["what_changed"] = act_items + list(b.get("what_changed", []))
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
+
+
+@api_router.get("/activities")
+async def list_activities(principal=Depends(get_principal)):
+    acts = await db.activities.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)
+    for a in acts:
+        a["ago"] = _rel_time(a["created_at"])
+    return {"activities": acts}
 
 
 @api_router.post("/briefing/generate")
@@ -520,7 +587,7 @@ async def generate_briefing(principal=Depends(require("briefing:generate"))):
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"decisions": c["decisions"], "is_pro": c["plan"] == "pro", "can_act": "decisions:act" in perms_for(principal["role"])}
+    return {"decisions": c["decisions"], "is_pro": c["plan"] == "pro", "can_act": "decisions:act" in perms_for(principal["pack"])}
 
 
 class DecisionAction(BaseModel):
@@ -568,8 +635,8 @@ async def telemetry(principal=Depends(get_principal)):
 async def financials(principal=Depends(get_principal)):
     fin = await compute_financials(principal["workspace_id"])
     entries = await db.financial_entries.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("month", -1).to_list(5000)
-    return {**fin, "entries": entries, "can_write": "finance:write" in perms_for(principal["role"]),
-            "can_manage": "integrations:manage" in perms_for(principal["role"])}
+    return {**fin, "entries": entries, "can_write": "finance:write" in perms_for(principal["pack"]),
+            "can_manage": "integrations:manage" in perms_for(principal["pack"])}
 
 
 class FinEntryInput(BaseModel):
@@ -592,6 +659,9 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finan
              "created_at": datetime.now(timezone.utc).isoformat()}
     await db.financial_entries.insert_one(entry)
     entry.pop("_id", None)
+    await log_activity(principal, "financials", "entry.add",
+                       f"Logged {payload.type} · {entry['category']} {fmt_money(entry['amount'])} ({payload.month})",
+                       {"type": payload.type, "amount": entry["amount"], "month": payload.month})
     return {"ok": True, "entry": entry}
 
 
@@ -604,12 +674,18 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
                   "recurring": payload.recurring, "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
+    await log_activity(principal, "financials", "entry.edit",
+                       f"Updated a {payload.type} entry · {payload.category.strip() or 'Other'} ({payload.month})")
     return {"ok": True}
 
 
 @api_router.delete("/financials/entries/{entry_id}")
 async def delete_fin_entry(entry_id: str, principal=Depends(require("finance:write"))):
+    doc = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
+    if doc:
+        await log_activity(principal, "financials", "entry.delete",
+                           f"Removed a {doc.get('type')} entry · {doc.get('category')} ({doc.get('month')})")
     return {"ok": True}
 
 
@@ -623,6 +699,11 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
                                    {"$set": {"financial_settings.cash": round(payload.cash, 2),
                                              "financial_settings.gross_margin": payload.gross_margin}})
+    fin = await compute_financials(principal["workspace_id"])
+    runway = fin["runway_months"]
+    await log_activity(principal, "financials", "settings.update",
+                       f"Updated cash to {fmt_money(payload.cash)}" + (f" — runway now {runway}mo" if runway else ""),
+                       {"cash": payload.cash, "runway_months": runway})
     return {"ok": True}
 
 
@@ -650,6 +731,8 @@ async def import_stripe_revenue(principal=Depends(require("finance:write"))):
     if docs:
         await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
         await db.financial_entries.insert_many(docs)
+        await log_activity(principal, "financials", "import.stripe",
+                           f"Imported {len(docs)} month(s) of Stripe revenue ({fmt_money(sum(by_month.values()))})")
     return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 
 
@@ -712,7 +795,83 @@ async def calendar(principal=Depends(get_principal)):
 @api_router.get("/people")
 async def people(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return c["people"]
+    data = dict(c["people"])
+    data["can_write"] = "people:write" in perms_for(principal["pack"])
+    return data
+
+
+def _avg_trust(people_list):
+    scores = [p.get("trust_score", 0) for p in people_list if isinstance(p.get("trust_score"), (int, float))]
+    return round(sum(scores) / len(scores)) if scores else 0
+
+
+class PersonInput(BaseModel):
+    name: str
+    role: str = ""
+    department: str = ""
+    trust_score: int = 80
+    quality: str = "B+"
+    tasks_done: int = 0
+    tenure: str = ""
+
+
+def _person_fields(payload: PersonInput):
+    return {"name": payload.name.strip(), "role": payload.role.strip(),
+            "department": payload.department.strip() or "General",
+            "trust_score": payload.trust_score, "quality": payload.quality,
+            "tasks_done": payload.tasks_done, "tenure": payload.tenure.strip() or "New"}
+
+
+@api_router.post("/people")
+async def add_person(payload: PersonInput, principal=Depends(require("people:write"))):
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    c = await get_ws(principal["workspace_id"])
+    people = c["people"]
+    person = {"id": f"p_{uuid.uuid4().hex[:8]}", **_person_fields(payload)}
+    people["people"].append(person)
+    people["avg_trust"] = _avg_trust(people["people"])
+    headcount = len(people["people"])
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
+                                   {"$set": {"people": people, "employees": headcount}})
+    await log_activity(principal, "people", "person.add",
+                       f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f" — headcount now {headcount}",
+                       {"headcount": headcount})
+    return {"ok": True, "person": person}
+
+
+@api_router.patch("/people/{person_id}")
+async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require("people:write"))):
+    c = await get_ws(principal["workspace_id"])
+    people = c["people"]
+    found = None
+    for p in people["people"]:
+        if p["id"] == person_id:
+            p.update(_person_fields(payload))
+            found = p
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Person not found")
+    people["avg_trust"] = _avg_trust(people["people"])
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"people": people}})
+    await log_activity(principal, "people", "person.edit", f"Updated {found['name']}'s profile")
+    return {"ok": True}
+
+
+@api_router.delete("/people/{person_id}")
+async def remove_person(person_id: str, principal=Depends(require("people:write"))):
+    c = await get_ws(principal["workspace_id"])
+    people = c["people"]
+    person = next((p for p in people["people"] if p["id"] == person_id), None)
+    people["people"] = [p for p in people["people"] if p["id"] != person_id]
+    people["avg_trust"] = _avg_trust(people["people"])
+    headcount = len(people["people"])
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
+                                   {"$set": {"people": people, "employees": headcount}})
+    if person:
+        await log_activity(principal, "people", "person.delete",
+                           f"Removed {person['name']} — headcount now {headcount}", {"headcount": headcount})
+    return {"ok": True}
 
 
 # ------------------------- Ask Helm -------------------------
@@ -811,7 +970,7 @@ async def integrations(principal=Depends(get_principal)):
         else:
             item["configured"] = True
         ints.append(item)
-    return {"integrations": ints, "is_pro": c["plan"] == "pro", "can_manage": "integrations:manage" in perms_for(principal["role"])}
+    return {"integrations": ints, "is_pro": c["plan"] == "pro", "can_manage": "integrations:manage" in perms_for(principal["pack"])}
 
 
 @api_router.post("/integrations/{integration_id}/toggle")
@@ -905,7 +1064,7 @@ def get_stripe(request: Request) -> StripeCheckout:
 @api_router.get("/billing/plans")
 async def billing_plans(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["role"])}
+    return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["pack"])}
 
 
 @api_router.post("/payments/checkout")
