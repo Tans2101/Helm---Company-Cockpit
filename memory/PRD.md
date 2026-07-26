@@ -10,6 +10,10 @@ A CEO-only cockpit for seed/Series A companies (~8–40 people). Answers "What d
 - Real Stripe test-mode for Pro upgrade; other integrations mocked
 - Pre-seeded fictional startup: Northwind Robotics (Series A, 24 people)
 
+## Routing
+- Public marketing homepage at `/` (Landing.jsx — hero with live briefing preview, problem, how-it-works, features, CTA).
+- `/login` (Google sign-in). Cockpit is namespaced under `/app/*` (index = Briefing). OAuth redirect returns to `/app`.
+
 ## Architecture
 - Frontend: React 19 + react-router 7, Tailwind, Recharts, framer-motion, sonner. Fixed sidebar shell, per-module pages, SSE chat.
 - Backend: FastAPI + Motor (MongoDB). All routes under /api. Cookie/Bearer session auth.

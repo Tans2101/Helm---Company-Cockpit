@@ -25,7 +25,7 @@ export default function Briefing() {
       toast.success("Briefing synthesized");
     } catch (e) {
       toast.error("Upgrade to Pro to generate AI briefings");
-      navigate("/billing");
+      navigate("/app/billing");
     } finally {
       setGenLoading(false);
     }
@@ -86,7 +86,7 @@ export default function Briefing() {
                 <p className="text-zinc-400 text-sm leading-relaxed mb-4">
                   Your morning executive briefing — synthesized from finance, sales, and team signal into three sentences that matter. Available on Pro.
                 </p>
-                <button data-testid="briefing-upgrade-btn" onClick={() => navigate("/billing")}
+                <button data-testid="briefing-upgrade-btn" onClick={() => navigate("/app/billing")}
                   className="inline-flex items-center gap-2 rounded-md border border-gold/40 text-gold text-sm font-medium px-4 py-2 transition-colors hover:bg-gold/10">
                   <Lock className="w-3.5 h-3.5" /> Unlock with Pro
                 </button>
@@ -122,7 +122,7 @@ export default function Briefing() {
           </div>
           <div className="space-y-3">
             {data.what_to_decide.map((d) => (
-              <button key={d.id} onClick={() => navigate("/decisions")} data-testid={`decide-${d.id}`}
+              <button key={d.id} onClick={() => navigate("/app/decisions")} data-testid={`decide-${d.id}`}
                 className="w-full text-left rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-gold/30 hover:bg-white/[0.04] group">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm text-white leading-snug">{d.title}</p>

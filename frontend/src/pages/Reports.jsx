@@ -22,7 +22,7 @@ export default function Reports() {
       toast.success("Weekly CEO Pack ready");
     } catch (e) {
       toast.error("Upgrade to Pro for the Weekly CEO Pack");
-      navigate("/billing");
+      navigate("/app/billing");
     } finally {
       setBusy(false);
     }
@@ -68,7 +68,7 @@ export default function Reports() {
               <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
             </button>
           ) : (
-            <button data-testid="pack-upgrade-btn" onClick={() => navigate("/billing")}
+            <button data-testid="pack-upgrade-btn" onClick={() => navigate("/app/billing")}
               className="inline-flex items-center gap-2 rounded-md border border-gold/40 text-gold text-sm font-medium px-4 py-2.5 transition-colors hover:bg-gold/10 shrink-0">
               <Lock className="w-4 h-4" /> Unlock with Pro
             </button>

@@ -45,7 +45,7 @@ export default function AskKalun() {
       if (res.status === 402) {
         setMessages((m) => m.slice(0, -1));
         setStreaming(false);
-        navigate("/billing");
+        navigate("/app/billing");
         return;
       }
       const reader = res.body.getReader();

@@ -8,12 +8,12 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && user) navigate("/", { replace: true });
+    if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
   const handleLogin = () => {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + "/";
+    const redirectUrl = window.location.origin + "/app";
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 

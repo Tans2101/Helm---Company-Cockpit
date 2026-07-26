@@ -9,7 +9,7 @@ export default function PaymentCancel() {
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-600 mb-3">Checkout cancelled</p>
         <h1 className="text-3xl font-light text-white">No worries — nothing was charged.</h1>
         <p className="text-zinc-500 mt-3">You can upgrade to Pro whenever you're ready.</p>
-        <button data-testid="cancel-back-btn" onClick={() => navigate("/billing")}
+        <button data-testid="cancel-back-btn" onClick={() => navigate("/app/billing")}
           className="mt-8 inline-flex items-center gap-2 rounded-md bg-gold text-black font-medium px-5 py-2.5 text-sm transition-colors hover:bg-gold-hover">
           <ArrowLeft className="w-4 h-4" /> Back to billing
         </button>

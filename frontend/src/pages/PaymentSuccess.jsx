@@ -47,7 +47,7 @@ export default function PaymentSuccess() {
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Welcome to Pro</p>
             <h1 className="text-3xl font-light text-white">You're in command.</h1>
             <p className="text-zinc-400 mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
-            <button data-testid="success-continue-btn" onClick={() => navigate("/")}
+            <button data-testid="success-continue-btn" onClick={() => navigate("/app")}
               className="mt-8 inline-flex items-center gap-2 rounded-md bg-gold text-black font-medium px-5 py-2.5 text-sm transition-colors hover:bg-gold-hover">
               Enter the cockpit <ArrowRight className="w-4 h-4" />
             </button>
@@ -62,7 +62,7 @@ export default function PaymentSuccess() {
             <p className="text-zinc-500 text-sm mt-2">
               {status === "timeout" ? "Your payment is taking longer than expected. Check billing shortly." : "No charge was made. You can try again anytime."}
             </p>
-            <button onClick={() => navigate("/billing")} className="mt-8 rounded-md border border-white/10 text-white px-5 py-2.5 text-sm hover:bg-white/5 transition-colors">Back to billing</button>
+            <button onClick={() => navigate("/app/billing")} className="mt-8 rounded-md border border-white/10 text-white px-5 py-2.5 text-sm hover:bg-white/5 transition-colors">Back to billing</button>
           </>
         )}
       </div>

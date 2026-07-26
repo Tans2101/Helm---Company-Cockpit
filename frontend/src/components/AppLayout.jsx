@@ -13,18 +13,18 @@ import { ProBadge } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
-  { to: "/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
-  { to: "/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
-  { to: "/financials", label: "Financials", icon: DollarSign, id: "financials" },
-  { to: "/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
-  { to: "/reports", label: "Reports", icon: FileText, id: "reports" },
-  { to: "/team", label: "Team Bandwidth", icon: Users2, id: "team" },
-  { to: "/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
-  { to: "/people", label: "People", icon: Contact, id: "people" },
-  { to: "/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
-  { to: "/members", label: "Team & Access", icon: UsersRound, id: "members" },
-  { to: "/integrations", label: "Integrations", icon: Plug, id: "integrations" },
+  { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
+  { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
+  { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
+  { to: "/app/financials", label: "Financials", icon: DollarSign, id: "financials" },
+  { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
+  { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
+  { to: "/app/team", label: "Team Bandwidth", icon: Users2, id: "team" },
+  { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
+  { to: "/app/people", label: "People", icon: Contact, id: "people" },
+  { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
+  { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members" },
+  { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 
 function WorkspaceSwitcher({ onNavigate }) {
@@ -39,7 +39,7 @@ function WorkspaceSwitcher({ onNavigate }) {
     if (id === active?.workspace_id) { setOpen(false); return; }
     try {
       await api.post("/workspaces/switch", { workspace_id: id });
-      window.location.href = "/";
+      window.location.href = "/app";
     } catch (e) { toast.error("Could not switch workspace"); }
   };
 
@@ -48,7 +48,7 @@ function WorkspaceSwitcher({ onNavigate }) {
     if (!name) return;
     try {
       await api.post("/workspaces", { name });
-      window.location.href = "/";
+      window.location.href = "/app";
     } catch (e) { toast.error("Could not create workspace"); }
   };
 
@@ -141,7 +141,7 @@ function SidebarContent({ onNavigate }) {
         {!isPro && isOwner && (
           <button
             data-testid="sidebar-upgrade-btn"
-            onClick={() => { navigate("/billing"); onNavigate?.(); }}
+            onClick={() => { navigate("/app/billing"); onNavigate?.(); }}
             className="w-full mb-3 rounded-lg border border-gold/25 bg-gradient-to-b from-gold/[0.12] to-transparent p-3 text-left transition-colors hover:border-gold/50"
           >
             <div className="flex items-center gap-1.5 mb-1">

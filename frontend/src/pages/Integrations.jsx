@@ -33,7 +33,7 @@ export default function Integrations() {
 
   const gate = () => {
     if (!data.can_manage) { toast.error("Only workspace owners can manage integrations"); return false; }
-    if (!data.is_pro) { toast.error("Live integrations require Pro"); navigate("/billing"); return false; }
+    if (!data.is_pro) { toast.error("Live integrations require Pro"); navigate("/app/billing"); return false; }
     return true;
   };
 

@@ -15,7 +15,7 @@ export default function AuthCallback() {
       } catch (e) {
         // ignore, redirect will re-check
       }
-      window.location.replace("/");
+      window.location.replace("/app");
     })();
   }, []);
 
