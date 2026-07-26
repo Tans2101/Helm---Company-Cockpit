@@ -1,4 +1,4 @@
-"""Kalun CEO OS backend test suite."""
+"""Helm CEO OS backend test suite."""
 import os
 import pytest
 import requests
@@ -129,8 +129,8 @@ def test_free_plan_gates_integration_toggle(auth):
     assert r.status_code == 403
 
 
-# ---- Ask Kalun (streaming) ----
-def test_ask_kalun_streams(auth):
+# ---- Ask Helm (streaming) ----
+def test_ask_helm_streams(auth):
     _ensure_free(auth)
     r = auth.post(f"{BASE_URL}/api/ask", json={"message": "One-sentence health check."}, stream=True, timeout=60)
     assert r.status_code == 200, r.text[:300]

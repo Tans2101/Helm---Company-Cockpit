@@ -36,7 +36,7 @@ export default function WorkspaceGate() {
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-              <span className="font-mono text-gold font-medium">K</span>
+              <span className="font-mono text-gold font-medium">H</span>
             </div>
             <div>
               <p className="text-white font-semibold tracking-tight leading-none">Helm</p>

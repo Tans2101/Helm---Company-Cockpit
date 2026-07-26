@@ -103,7 +103,7 @@ class TestApplyTemplate:
         assert r.status_code == 403
 
     def test_owner_sample_already_applied(self):
-        """Owner (kalun) already has sample applied per test_credentials note."""
+        """Owner (helm seed) already has sample applied per test_credentials note."""
         fin = requests.get(f"{API}/financials", headers=H(OWNER)).json()
         assert fin["has_data"] is True
         # mrr ~$248K, runway 15-16mo, burn ~$182K, cash $3.10M

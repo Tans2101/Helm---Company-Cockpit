@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   "Where is my team over capacity?",
 ];
 
-export default function AskKalun() {
+export default function AskHelm() {
   const { data: history } = useFetch("/ask/history");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -98,7 +98,7 @@ export default function AskKalun() {
           <div key={i} className={cn("flex gap-3", m.role === "user" && "flex-row-reverse")} data-testid={`msg-${m.role}`}>
             <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
               m.role === "user" ? "bg-white/5 border-white/10" : "bg-gold/15 border-gold/30")}>
-              {m.role === "user" ? <User className="w-3.5 h-3.5 text-zinc-400" /> : <span className="font-mono text-gold text-xs">K</span>}
+              {m.role === "user" ? <User className="w-3.5 h-3.5 text-zinc-400" /> : <span className="font-mono text-gold text-xs">H</span>}
             </div>
             <div className={cn("max-w-[80%] rounded-xl px-4 py-3 text-[15px] leading-relaxed",
               m.role === "user" ? "bg-gold/10 border border-gold/20 text-white" : "bg-[#141417] border border-white/5 text-zinc-200")}>

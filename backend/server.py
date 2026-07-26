@@ -199,7 +199,7 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 <table width="480" cellpadding="0" cellspacing="0" style="background:#121214;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
 <tr><td style="padding:32px 36px 8px 36px;">
 <table cellpadding="0" cellspacing="0"><tr>
-<td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">K</td>
+<td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">H</td>
 <td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Helm</td>
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
@@ -1146,7 +1146,7 @@ async def ask_history(principal=Depends(get_principal)):
 
 
 @api_router.post("/ask")
-async def ask_kalun(payload: AskInput, principal=Depends(require("ask:use"))):
+async def ask_helm(payload: AskInput, principal=Depends(require("ask:use"))):
     c = await get_ws(principal["workspace_id"])
     is_pro = c["plan"] == "pro"
     if not is_pro:

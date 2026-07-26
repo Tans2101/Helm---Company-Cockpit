@@ -1,4 +1,4 @@
-"""Kalun multi-tenant / roles / OAuth-degradation test suite (iteration 2)."""
+"""Helm multi-tenant / roles / OAuth-degradation test suite (iteration 2)."""
 import os
 import uuid
 import time
