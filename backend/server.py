@@ -1,6 +1,8 @@
 import os
 import uuid
 import json
+import hmac
+import hashlib
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -53,6 +55,31 @@ OWNER_PERMS = MEMBER_PERMS | {
 
 def perms_for(role: str):
     return OWNER_PERMS if role == "owner" else MEMBER_PERMS
+
+
+# ------------------------- OAuth state signing (CSRF) -------------------------
+_STATE_SECRET = (EMERGENT_LLM_KEY or "kalun-oauth-state").encode()
+
+
+def _sign_state(provider: str, workspace_id: str) -> str:
+    ts = str(int(datetime.now(timezone.utc).timestamp()))
+    body = f"{provider}:{workspace_id}:{ts}"
+    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{body}:{sig}"
+
+
+def _verify_state(state: str, max_age: int = 600):
+    try:
+        provider, workspace_id, ts, sig = state.split(":")
+    except (ValueError, AttributeError):
+        return None
+    body = f"{provider}:{workspace_id}:{ts}"
+    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    if not hmac.compare_digest(expected, sig):
+        return None
+    if int(datetime.now(timezone.utc).timestamp()) - int(ts) > max_age:
+        return None
+    return provider, workspace_id
 
 
 # ------------------------- Auth / principal -------------------------
@@ -264,7 +291,7 @@ class InviteInput(BaseModel):
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, principal=Depends(require("members:manage"))):
     role = "owner" if payload.role == "owner" else "member"
-    email = payload.email.lower()
+    email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Already a member or invited")
@@ -564,7 +591,7 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     if not cfg["configured"]:
         return {"configured": False, "message": f"{provider.title()} OAuth credentials are not set yet. Add them in the backend .env to enable live connection."}
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
-              "scope": cfg["scope"], "state": f"{provider}:{principal['workspace_id']}", **cfg.get("extra", {})}
+              "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
 
 
@@ -574,9 +601,10 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
     frontend = str(request.base_url).rstrip("/")
     if not cfg or not code or not state:
         return RedirectResponse(f"{frontend}/integrations?error=oauth")
-    workspace_id = state.split(":", 1)[1] if ":" in state else None
-    if not workspace_id:
+    verified = _verify_state(state)
+    if not verified or verified[0] != provider:
         return RedirectResponse(f"{frontend}/integrations?error=state")
+    workspace_id = verified[1]
     data = {"code": code, "client_id": cfg["client_id"], "client_secret": cfg["client_secret"],
             "redirect_uri": cfg["redirect_uri"], "grant_type": "authorization_code"}
     try:

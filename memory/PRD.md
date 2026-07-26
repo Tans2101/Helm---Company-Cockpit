@@ -24,18 +24,21 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 - Emergent Google Auth: /auth/session, /auth/me, /auth/logout; ProtectedRoute + AuthCallback.
 - Briefing (home): metrics, AI synthesis (Pro), what changed / decide / delegate.
 - Decisions: approve/reject/delegate, AI recommendation + confidence, outcome checks.
-- Telemetry: KPIs w/ sparklines, MRR-vs-target, funnel, risk matrix (scatter).
-- Financials: MRR/ARR/runway/burn/cash, revenue-vs-expenses, burn, expense pie, scenarios.
-- Tasks: drag-and-drop Kanban (4 columns), persists via PATCH.
-- Reports: sales/production/procurement cards + AI Weekly CEO Pack (Pro).
-- Team Bandwidth: utilization bars, overload flags.
-- Calendar: meeting intelligence with prep notes.
-- People: roster with trust scores, quality, tenure.
-- Ask Kalun: streaming Claude chat grounded in live company data; free = 5 msgs/day.
-- Integrations: 6 providers, connect/disconnect (live toggles Pro-gated).
-- Billing: Free vs Pro, Stripe checkout, /payment/success + /payment/cancel; demo reset-plan.
-- Plan gating verified: free → 403 on briefing/generate, weekly-pack, integration toggle.
-- Tested: backend 100% (41 pytest), frontend 100%. No open bugs.
+- Telemetry, Financials, Tasks (drag Kanban), Reports (+AI Weekly CEO Pack), Team Bandwidth, Calendar, People, Ask Kalun (streaming Claude), Integrations, Billing (Stripe test-mode).
+- Plan gating: free → 403 on briefing/generate, weekly-pack, integration toggle.
+
+## Implemented (2026-07-26) — Multi-tenant + Integrations
+- Multi-tenant workspaces: each user bootstraps their own seeded workspace; `workspaces` + `memberships` collections; all module endpoints scoped by principal.workspace_id (data isolation).
+- Roles: owner vs member. `require(action)` dependency + perms_for; owner-only writes (decisions, invite, billing, integrations, briefing/pack). Member = read + tasks:move + ask:use.
+- Team & Access page: invite by email (existing users auto-join; new emails join on first login), change role, remove member.
+- Workspace switcher (sidebar) + create/switch workspace.
+- Real OAuth integration framework: Google (Calendar+Gmail combined scopes) + QuickBooks — connect/callback/disconnect, tokens stored per workspace, HMAC-signed state (CSRF). Degrades gracefully when GOOGLE_/QUICKBOOKS_ env keys are empty (shows "Keys needed"). Google Calendar live-events fetch endpoint built.
+- Data-only providers: Stripe (connected), GitHub/Slack/Salesforce (toggles).
+- Tested: backend 100% (84 pytest, run with -n 0), frontend 100%. No open bugs.
+
+## Pending credentials (to go live)
+- GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (enable Calendar + Gmail APIs, add redirect URI /api/oauth/google/callback).
+- QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET (Intuit app, redirect /api/oauth/quickbooks/callback).
 
 ## Backlog
 - P1: Real integrations (Google Calendar, QuickBooks, GitHub sync, Slack push).
