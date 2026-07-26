@@ -15,6 +15,7 @@ import Team from "@/pages/Team";
 import CalendarPage from "@/pages/CalendarPage";
 import People from "@/pages/People";
 import AskKalun from "@/pages/AskKalun";
+import Members from "@/pages/Members";
 import Integrations from "@/pages/Integrations";
 import Billing from "@/pages/Billing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
@@ -41,6 +42,7 @@ function AppRouter() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/people" element={<People />} />
         <Route path="/ask" element={<AskKalun />} />
+        <Route path="/members" element={<Members />} />
         <Route path="/integrations" element={<Integrations />} />
         <Route path="/billing" element={<Billing />} />
       </Route>

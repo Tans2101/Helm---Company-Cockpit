@@ -3,10 +3,12 @@ import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
   FileText, Users2, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Sparkles, Menu, X,
+  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { ProBadge } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -21,14 +23,75 @@ const NAV = [
   { to: "/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/people", label: "People", icon: Contact, id: "people" },
   { to: "/ask", label: "Ask Kalun", icon: MessageSquareText, id: "ask" },
+  { to: "/members", label: "Team & Access", icon: UsersRound, id: "members" },
   { to: "/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
+
+function WorkspaceSwitcher({ onNavigate }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { data, reload } = useFetch("/workspaces");
+  const [open, setOpen] = useState(false);
+  const list = data?.workspaces || [];
+  const active = list.find((w) => w.active) || list[0];
+
+  const switchWs = async (id) => {
+    if (id === active?.workspace_id) { setOpen(false); return; }
+    try {
+      await api.post("/workspaces/switch", { workspace_id: id });
+      window.location.href = "/";
+    } catch (e) { toast.error("Could not switch workspace"); }
+  };
+
+  const create = async () => {
+    const name = window.prompt("Name your new company workspace");
+    if (!name) return;
+    try {
+      await api.post("/workspaces", { name });
+      window.location.href = "/";
+    } catch (e) { toast.error("Could not create workspace"); }
+  };
+
+  if (!active) return null;
+  return (
+    <div className="px-3 pt-3 relative">
+      <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 transition-colors hover:border-white/10">
+        <div className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center text-[11px] text-gold font-mono shrink-0">
+          {active.name?.[0]?.toUpperCase() || "K"}
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-xs text-white truncate">{active.name}</p>
+          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {active.plan}</p>
+        </div>
+        <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-3 right-3 mt-1 z-50 rounded-md border border-white/10 bg-[#141417] shadow-xl overflow-hidden">
+          {list.map((w) => (
+            <button key={w.workspace_id} onClick={() => switchWs(w.workspace_id)}
+              data-testid={`ws-option-${w.workspace_id}`}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/5">
+              <span className="flex-1 min-w-0 text-xs text-white truncate">{w.name}</span>
+              {w.active && <Check className="w-3.5 h-3.5 text-gold" />}
+            </button>
+          ))}
+          <button onClick={create} data-testid="ws-create-btn"
+            className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-white/5 transition-colors hover:bg-white/5 text-gold">
+            <Plus className="w-3.5 h-3.5" /><span className="text-xs">New company</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SidebarContent({ onNavigate }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: company } = useFetch("/company");
   const isPro = company?.plan === "pro";
+  const isOwner = user?.role === "owner";
 
   return (
     <div className="flex flex-col h-full">
@@ -43,6 +106,8 @@ function SidebarContent({ onNavigate }) {
           </div>
         </div>
       </div>
+
+      <WorkspaceSwitcher onNavigate={onNavigate} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {NAV.map((item) => (
@@ -73,7 +138,7 @@ function SidebarContent({ onNavigate }) {
       </nav>
 
       <div className="px-3 pb-4">
-        {!isPro && (
+        {!isPro && isOwner && (
           <button
             data-testid="sidebar-upgrade-btn"
             onClick={() => { navigate("/billing"); onNavigate?.(); }}

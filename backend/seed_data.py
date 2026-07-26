@@ -1,33 +1,24 @@
-"""Rich demo seed data for Kalun — fictional startup Northwind Robotics."""
+"""Per-workspace demo data template for Kalun — Northwind Robotics."""
+import uuid
+from datetime import datetime, timezone
 
 
-def build_seed():
+def build_workspace(workspace_id, name, owner_user_id):
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
 
     telemetry = {
         "kpis": [
-            {"label": "MRR", "value": "$248K", "unit": "", "delta": 8.4, "tone": "positive",
-             "spark": [188, 196, 205, 214, 229, 248]},
-            {"label": "Active Customers", "value": "412", "unit": "", "delta": 5.1, "tone": "positive",
-             "spark": [340, 356, 371, 388, 396, 412]},
-            {"label": "Net Revenue Retention", "value": "118%", "unit": "", "delta": 2.0, "tone": "positive",
-             "spark": [108, 110, 112, 114, 116, 118]},
-            {"label": "CAC Payback", "value": "11.2mo", "unit": "", "delta": -6.0, "tone": "positive",
-             "spark": [14, 13.5, 13, 12.4, 11.8, 11.2]},
-            {"label": "Churn (logo)", "value": "2.4%", "unit": "", "delta": 0.6, "tone": "negative",
-             "spark": [1.8, 1.9, 2.0, 2.1, 2.3, 2.4]},
-            {"label": "Pipeline", "value": "$1.9M", "unit": "", "delta": 12.0, "tone": "positive",
-             "spark": [1.3, 1.4, 1.5, 1.6, 1.7, 1.9]},
+            {"label": "MRR", "value": "$248K", "unit": "", "delta": 8.4, "tone": "positive", "spark": [188, 196, 205, 214, 229, 248]},
+            {"label": "Active Customers", "value": "412", "unit": "", "delta": 5.1, "tone": "positive", "spark": [340, 356, 371, 388, 396, 412]},
+            {"label": "Net Revenue Retention", "value": "118%", "unit": "", "delta": 2.0, "tone": "positive", "spark": [108, 110, 112, 114, 116, 118]},
+            {"label": "CAC Payback", "value": "11.2mo", "unit": "", "delta": -6.0, "tone": "positive", "spark": [14, 13.5, 13, 12.4, 11.8, 11.2]},
+            {"label": "Churn (logo)", "value": "2.4%", "unit": "", "delta": 0.6, "tone": "negative", "spark": [1.8, 1.9, 2.0, 2.1, 2.3, 2.4]},
+            {"label": "Pipeline", "value": "$1.9M", "unit": "", "delta": 12.0, "tone": "positive", "spark": [1.3, 1.4, 1.5, 1.6, 1.7, 1.9]},
         ],
-        "revenue_trend": [
-            {"month": m, "mrr": v, "target": t} for m, v, t in zip(
-                months, [188, 196, 205, 214, 229, 248], [190, 200, 210, 220, 235, 250])],
+        "revenue_trend": [{"month": m, "mrr": v, "target": t} for m, v, t in zip(months, [188, 196, 205, 214, 229, 248], [190, 200, 210, 220, 235, 250])],
         "funnel": [
-            {"stage": "Leads", "value": 1240},
-            {"stage": "Qualified", "value": 486},
-            {"stage": "Demo", "value": 214},
-            {"stage": "Proposal", "value": 96},
-            {"stage": "Closed Won", "value": 41},
+            {"stage": "Leads", "value": 1240}, {"stage": "Qualified", "value": 486},
+            {"stage": "Demo", "value": 214}, {"stage": "Proposal", "value": 96}, {"stage": "Closed Won", "value": 41},
         ],
         "risks": [
             {"id": "r1", "name": "Key AWS cost spike", "likelihood": 3, "impact": 4, "category": "Finance"},
@@ -40,30 +31,22 @@ def build_seed():
     }
 
     financials = {
-        "mrr": "$248K", "arr": "$2.98M", "runway_months": 17, "burn": "$182K",
-        "cash": "$3.1M", "gross_margin": "74%",
-        "revenue_series": [
-            {"month": m, "revenue": r, "expenses": e} for m, r, e in zip(
-                months, [188, 196, 205, 214, 229, 248], [220, 224, 228, 232, 236, 240])],
-        "burn_series": [
-            {"month": m, "burn": b} for m, b in zip(months, [172, 174, 176, 178, 180, 182])],
+        "mrr": "$248K", "arr": "$2.98M", "runway_months": 17, "burn": "$182K", "cash": "$3.1M", "gross_margin": "74%",
+        "revenue_series": [{"month": m, "revenue": r, "expenses": e} for m, r, e in zip(months, [188, 196, 205, 214, 229, 248], [220, 224, 228, 232, 236, 240])],
+        "burn_series": [{"month": m, "burn": b} for m, b in zip(months, [172, 174, 176, 178, 180, 182])],
         "scenarios": [
             {"name": "Base", "runway": 17, "desc": "Current burn, 8% MoM growth held."},
             {"name": "Aggressive Hire", "runway": 12, "desc": "+6 hires in Q3, faster GTM."},
             {"name": "Efficient", "runway": 23, "desc": "Freeze hiring, trim cloud 20%."},
         ],
         "expense_breakdown": [
-            {"name": "Payroll", "value": 62},
-            {"name": "Cloud/Infra", "value": 14},
-            {"name": "Sales & Mktg", "value": 12},
-            {"name": "G&A", "value": 7},
-            {"name": "R&D Tools", "value": 5},
+            {"name": "Payroll", "value": 62}, {"name": "Cloud/Infra", "value": 14},
+            {"name": "Sales & Mktg", "value": 12}, {"name": "G&A", "value": 7}, {"name": "R&D Tools", "value": 5},
         ],
     }
 
     briefing = {
-        "date": "Monday",
-        "greeting": "Good morning",
+        "date": "Monday", "greeting": "Good morning",
         "headline": "Revenue is ahead of plan, but capacity risk is rising on engineering.",
         "ai_summary": None,
         "metrics": [
@@ -89,34 +72,17 @@ def build_seed():
     }
 
     decisions = [
-        {"id": "d1", "title": "Approve $40K annual infra reservation", "category": "Finance",
-         "description": "Reserved-capacity plan for the inference cluster.",
-         "recommendation": "Approve — pays back in 4.2 months and cuts cloud spend 18%.",
-         "confidence": 92, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
-        {"id": "d2", "title": "Hire second GTM engineer", "category": "People",
-         "description": "Backfill pipeline load; Maya is at 118% utilization.",
-         "recommendation": "Approve conditional — start after Acme closes to protect runway.",
-         "confidence": 74, "status": "pending", "owner": None, "due": "This week", "impact": "Medium"},
-        {"id": "d3", "title": "Sign off Acme discount to 12%", "category": "Sales",
-         "description": "Enterprise deal, $96K ARR, 3-yr term requested.",
-         "recommendation": "Approve at 10% with 3-yr lock — protects ACV and sets a defensible floor.",
-         "confidence": 81, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
-        {"id": "d4", "title": "Sunset legacy v1 API", "category": "Product",
-         "description": "18% of infra cost, used by 6 customers.",
-         "recommendation": "Delegate migration plan; deprecate in 90 days with comms.",
-         "confidence": 68, "status": "pending", "owner": None, "due": "Next week", "impact": "Medium"},
-        {"id": "d5", "title": "Q3 board deck narrative", "category": "Strategy",
-         "description": "Lead with efficiency or growth?",
-         "recommendation": "Lead with efficient growth — NRR 118% + improving CAC payback is the story.",
-         "confidence": 88, "status": "approved", "owner": "You", "due": "Done", "impact": "High"},
+        {"id": "d1", "title": "Approve $40K annual infra reservation", "category": "Finance", "description": "Reserved-capacity plan for the inference cluster.", "recommendation": "Approve — pays back in 4.2 months and cuts cloud spend 18%.", "confidence": 92, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
+        {"id": "d2", "title": "Hire second GTM engineer", "category": "People", "description": "Backfill pipeline load; Maya is at 118% utilization.", "recommendation": "Approve conditional — start after Acme closes to protect runway.", "confidence": 74, "status": "pending", "owner": None, "due": "This week", "impact": "Medium"},
+        {"id": "d3", "title": "Sign off Acme discount to 12%", "category": "Sales", "description": "Enterprise deal, $96K ARR, 3-yr term requested.", "recommendation": "Approve at 10% with 3-yr lock — protects ACV and sets a defensible floor.", "confidence": 81, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
+        {"id": "d4", "title": "Sunset legacy v1 API", "category": "Product", "description": "18% of infra cost, used by 6 customers.", "recommendation": "Delegate migration plan; deprecate in 90 days with comms.", "confidence": 68, "status": "pending", "owner": None, "due": "Next week", "impact": "Medium"},
+        {"id": "d5", "title": "Q3 board deck narrative", "category": "Strategy", "description": "Lead with efficiency or growth?", "recommendation": "Lead with efficient growth — NRR 118% + improving CAC payback is the story.", "confidence": 88, "status": "approved", "owner": "You", "due": "Done", "impact": "High"},
     ]
 
     tasks = {
         "columns": [
-            {"id": "backlog", "name": "Backlog"},
-            {"id": "in_progress", "name": "In Progress"},
-            {"id": "review", "name": "Review"},
-            {"id": "done", "name": "Done"},
+            {"id": "backlog", "name": "Backlog"}, {"id": "in_progress", "name": "In Progress"},
+            {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"},
         ],
         "items": [
             {"id": "t1", "title": "Acme security questionnaire", "assignee": "Devin", "priority": "High", "column": "in_progress", "tag": "Sales", "due": "Wed", "progress": 60},
@@ -131,15 +97,9 @@ def build_seed():
     }
 
     reports = [
-        {"id": "rep1", "title": "Sales Performance", "type": "Sales", "period": "This week",
-         "summary": "41 closed-won, $96K in late-stage pipeline. Win rate 22%, up 3pts.",
-         "metrics": [{"label": "Closed", "value": "41"}, {"label": "Win rate", "value": "22%"}, {"label": "ACV", "value": "$7.2K"}]},
-        {"id": "rep2", "title": "Production / Uptime", "type": "Production", "period": "This week",
-         "summary": "99.98% uptime. One p2 incident (inference latency), resolved in 22m.",
-         "metrics": [{"label": "Uptime", "value": "99.98%"}, {"label": "Incidents", "value": "1"}, {"label": "MTTR", "value": "22m"}]},
-        {"id": "rep3", "title": "Procurement", "type": "Procurement", "period": "This month",
-         "summary": "Cloud commit renewal pending. 2 vendor contracts up for review.",
-         "metrics": [{"label": "Open POs", "value": "6"}, {"label": "Spend", "value": "$41K"}, {"label": "Savings", "value": "$7K"}]},
+        {"id": "rep1", "title": "Sales Performance", "type": "Sales", "period": "This week", "summary": "41 closed-won, $96K in late-stage pipeline. Win rate 22%, up 3pts.", "metrics": [{"label": "Closed", "value": "41"}, {"label": "Win rate", "value": "22%"}, {"label": "ACV", "value": "$7.2K"}]},
+        {"id": "rep2", "title": "Production / Uptime", "type": "Production", "period": "This week", "summary": "99.98% uptime. One p2 incident (inference latency), resolved in 22m.", "metrics": [{"label": "Uptime", "value": "99.98%"}, {"label": "Incidents", "value": "1"}, {"label": "MTTR", "value": "22m"}]},
+        {"id": "rep3", "title": "Procurement", "type": "Procurement", "period": "This month", "summary": "Cloud commit renewal pending. 2 vendor contracts up for review.", "metrics": [{"label": "Open POs", "value": "6"}, {"label": "Spend", "value": "$41K"}, {"label": "Savings", "value": "$7K"}]},
     ]
 
     team = {
@@ -151,8 +111,7 @@ def build_seed():
             {"name": "Sara Kim", "role": "Account Executive", "utilization": 95, "status": "high", "capacity": 40, "allocated": 38},
             {"name": "Tom Wells", "role": "Support Lead", "utilization": 64, "status": "available", "capacity": 40, "allocated": 26},
         ],
-        "avg_utilization": 90,
-        "overloaded_count": 1,
+        "avg_utilization": 90, "overloaded_count": 1,
     }
 
     calendar = {
@@ -162,8 +121,7 @@ def build_seed():
             {"id": "m3", "title": "1:1 with Maya", "time": "14:00", "duration": 30, "attendees": 2, "type": "1:1", "prep": "Address 118% utilization — redistribute or hire.", "importance": "high"},
             {"id": "m4", "title": "Investor update call", "time": "16:00", "duration": 30, "attendees": 3, "type": "Board", "prep": "Lead with NRR 118% and CAC payback trend.", "importance": "medium"},
         ],
-        "focus_hours": 3.5,
-        "meeting_hours": 2.25,
+        "focus_hours": 3.5, "meeting_hours": 2.25,
     }
 
     people = {
@@ -179,17 +137,19 @@ def build_seed():
     }
 
     integrations = [
-        {"id": "google", "name": "Google Workspace", "category": "Calendar & Email", "connected": True, "pro": True, "description": "Calendar, Gmail, Drive — meeting intelligence and doc sync."},
-        {"id": "stripe", "name": "Stripe", "category": "Finance", "connected": True, "pro": True, "description": "Revenue, MRR, churn and payment telemetry."},
-        {"id": "quickbooks", "name": "QuickBooks", "category": "Finance", "connected": False, "pro": True, "description": "Burn, runway and expense breakdown."},
-        {"id": "github", "name": "GitHub", "category": "Engineering", "connected": False, "pro": True, "description": "PR velocity, task sync and release tracking."},
-        {"id": "slack", "name": "Slack", "category": "Comms", "connected": False, "pro": True, "description": "Status pulls and delegation push."},
-        {"id": "salesforce", "name": "Salesforce", "category": "Sales", "connected": False, "pro": True, "description": "Pipeline, win rate and forecast."},
+        {"id": "google_calendar", "name": "Google Calendar", "category": "Calendar", "provider": "google", "oauth": True, "connected": False, "pro": True, "description": "Meeting intelligence — pull your real calendar into the cockpit."},
+        {"id": "gmail", "name": "Gmail", "category": "Email", "provider": "google", "oauth": True, "connected": False, "pro": True, "description": "Surface executive email signal and follow-ups."},
+        {"id": "quickbooks", "name": "QuickBooks", "category": "Finance", "provider": "quickbooks", "oauth": True, "connected": False, "pro": True, "description": "Real burn, runway and P&L from your books."},
+        {"id": "stripe", "name": "Stripe", "category": "Finance", "provider": "stripe", "oauth": False, "connected": True, "pro": True, "description": "Revenue, MRR, churn and payment telemetry."},
+        {"id": "github", "name": "GitHub", "category": "Engineering", "provider": "github", "oauth": False, "connected": False, "pro": True, "description": "PR velocity, task sync and release tracking."},
+        {"id": "slack", "name": "Slack", "category": "Comms", "provider": "slack", "oauth": False, "connected": False, "pro": True, "description": "Status pulls and delegation push."},
+        {"id": "salesforce", "name": "Salesforce", "category": "Sales", "provider": "salesforce", "oauth": False, "connected": False, "pro": True, "description": "Pipeline, win rate and forecast."},
     ]
 
     return {
-        "company_id": "kalun-demo",
-        "name": "Northwind Robotics",
+        "workspace_id": workspace_id,
+        "name": name,
+        "owner_user_id": owner_user_id,
         "plan": "free",
         "stage": "Series A",
         "employees": 24,
@@ -205,4 +165,7 @@ def build_seed():
         "calendar": calendar,
         "people": people,
         "integrations": integrations,
+        "google_tokens": None,
+        "quickbooks_tokens": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }

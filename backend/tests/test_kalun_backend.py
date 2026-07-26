@@ -48,7 +48,8 @@ def test_company_shape(auth):
     d = auth.get(f"{BASE_URL}/api/company").json()
     for k in ["name", "plan", "stage", "employees", "founded", "mission", "ceo_name"]:
         assert k in d
-    assert d["name"] == "Northwind Robotics"
+    assert isinstance(d["name"], str) and len(d["name"]) > 0
+    assert "workspace_id" in d
 
 
 def test_briefing_shape(auth):
@@ -178,7 +179,8 @@ def test_pro_plan_enables_gated_endpoints(auth):
     import pymongo
     m = pymongo.MongoClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
     dbn = os.environ.get("DB_NAME", "test_database")
-    m[dbn].company.update_one({"company_id": "kalun-demo"}, {"$set": {"plan": "pro"}})
+    ws_id = auth.get(f"{BASE_URL}/api/auth/me").json()["workspace_id"]
+    m[dbn].workspaces.update_one({"workspace_id": ws_id}, {"$set": {"plan": "pro"}})
     try:
         r = auth.post(f"{BASE_URL}/api/briefing/generate", timeout=90)
         assert r.status_code == 200, r.text[:500]

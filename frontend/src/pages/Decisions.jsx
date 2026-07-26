@@ -70,6 +70,8 @@ export default function Decisions() {
               </div>
 
               <div className="flex lg:flex-col gap-2 lg:w-40">
+                {data.can_act ? (
+                  <>
                 <button data-testid={`approve-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "approved")}
                   className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium py-2 transition-colors hover:bg-gold-hover disabled:opacity-50">
                   <Check className="w-4 h-4" /> Approve
@@ -82,6 +84,10 @@ export default function Decisions() {
                   className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-400 text-sm py-2 transition-colors hover:bg-white/5 hover:text-rose-400 disabled:opacity-50">
                   <X className="w-4 h-4" /> Reject
                 </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-zinc-600 lg:w-40 leading-relaxed">Only workspace owners can act on decisions.</p>
+                )}
               </div>
             </div>
           </GlassCard>
