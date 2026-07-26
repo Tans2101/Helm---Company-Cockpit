@@ -1,14 +1,18 @@
 import os
+import re
 import uuid
 import json
 import hmac
+import html
+import secrets
 import hashlib
 import asyncio
 import logging
+import time
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import resend
@@ -44,11 +48,29 @@ QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PRO_PRICE = 149.0
+# Prefer a dedicated secret; fall back to LLM key. Dev-only literal is last resort so
+# process restarts do not invalidate in-flight OAuth state.
+_STATE_SECRET = (os.environ.get("OAUTH_STATE_SECRET") or EMERGENT_LLM_KEY or "helm-oauth-state-dev-only").encode()
+# Comma-separated frontend origins for CORS + checkout redirect allowlist.
+_CORS_ORIGINS = [o.strip().rstrip("/") for o in os.environ.get(
+    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+).split(",") if o.strip()]
+# Keep Emergent preview frontends working without opening CORS to the entire internet.
+_CORS_ORIGIN_REGEX = os.environ.get(
+    "CORS_ORIGIN_REGEX",
+    r"https://([a-z0-9-]+\.)*(emergentagent\.com|emergent\.sh)",
+)
+DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "true").lower() in ("1", "true", "yes")
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("kalun")
+logger = logging.getLogger("helm")
+
+# In-memory join attempt tracker: user_id -> [timestamps]. Process-local is enough for preview.
+_JOIN_ATTEMPTS: dict[str, list[float]] = {}
+_JOIN_LIMIT = 8
+_JOIN_WINDOW_SEC = 600
 
 # ------------------------- Access packs / permissions -------------------------
 # Every employee can do daily work: read, move/create their tasks, ask Helm, post a daily update.
@@ -92,32 +114,80 @@ def perms_for(pack: str):
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
-_STATE_SECRET = (EMERGENT_LLM_KEY or "kalun-oauth-state").encode()
-
-
-def _sign_state(provider: str, workspace_id: str) -> str:
+def _sign_state(provider: str, workspace_id: str, user_id: str = "") -> str:
     ts = str(int(datetime.now(timezone.utc).timestamp()))
-    body = f"{provider}:{workspace_id}:{ts}"
-    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    body = f"{provider}:{workspace_id}:{ts}:{user_id}"
+    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
     return f"{body}:{sig}"
 
 
 def _verify_state(state: str, max_age: int = 600):
     try:
-        provider, workspace_id, ts, sig = state.split(":")
+        parts = state.split(":")
+        if len(parts) == 5:
+            provider, workspace_id, ts, user_id, sig = parts
+            body = f"{provider}:{workspace_id}:{ts}:{user_id}"
+        elif len(parts) == 4:
+            # Legacy states (pre user_id binding / truncated sig)
+            provider, workspace_id, ts, sig = parts
+            user_id = ""
+            body = f"{provider}:{workspace_id}:{ts}"
+        else:
+            return None
     except (ValueError, AttributeError):
         return None
-    body = f"{provider}:{workspace_id}:{ts}"
-    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
-    if not hmac.compare_digest(expected, sig):
+    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
+    # Accept both full and legacy truncated signatures during rollout.
+    if not (hmac.compare_digest(expected, sig) or hmac.compare_digest(expected[:16], sig)):
         return None
-    if int(datetime.now(timezone.utc).timestamp()) - int(ts) > max_age:
+    try:
+        age = int(datetime.now(timezone.utc).timestamp()) - int(ts)
+    except ValueError:
         return None
-    return provider, workspace_id
+    if age > max_age:
+        return None
+    return provider, workspace_id, user_id
+
+
+def _new_join_code() -> str:
+    """12-char hex join code (~48 bits). Longer than the old 6-char codes."""
+    return secrets.token_hex(6).upper()
+
+
+def _rate_limit_join(user_id: str):
+    now = time.time()
+    recent = [t for t in _JOIN_ATTEMPTS.get(user_id, []) if now - t < _JOIN_WINDOW_SEC]
+    if len(recent) >= _JOIN_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many join attempts. Try again later.")
+    recent.append(now)
+    _JOIN_ATTEMPTS[user_id] = recent
+
+
+def _origin_allowed(origin_url: str) -> bool:
+    """Allow checkout redirects only to configured frontends / Emergent previews."""
+    try:
+        parsed = urlparse(origin_url.strip())
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    if origin in _CORS_ORIGINS:
+        return True
+    try:
+        return bool(re.fullmatch(_CORS_ORIGIN_REGEX, origin))
+    except re.error:
+        return False
 
 
 # ------------------------- Email (Resend) -------------------------
 def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_url: str) -> str:
+    inviter_name = html.escape(inviter_name or "")
+    workspace_name = html.escape(workspace_name or "")
+    role = html.escape(role or "")
+    app_url = html.escape(app_url or "", quote=True)
     return f"""\
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
@@ -400,16 +470,24 @@ async def auth_me(user=Depends(get_user)):
                                       {"$set": {"active_workspace_id": membership["workspace_id"]}})
     if not membership:
         return {**base, "workspace_id": None, "needs_workspace": True, "role": None,
-                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None}
+                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None,
+                "onboarding_done": None}
     pack = pack_of(membership)
+    ws = await db.workspaces.find_one({"workspace_id": membership["workspace_id"]},
+                                      {"_id": 0, "onboarding_done": 1})
     return {**base, "workspace_id": membership["workspace_id"], "needs_workspace": False,
             "role": membership["role"], "pack": pack, "perms": sorted(perms_for(pack)),
-            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member")}
+            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member"),
+            "onboarding_done": (ws or {}).get("onboarding_done", True)}
 
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
     if token:
         await db.user_sessions.delete_one({"session_token": token})
     response.delete_cookie("session_token", path="/")
@@ -466,7 +544,11 @@ class JoinInput(BaseModel):
 
 @api_router.get("/workspaces/join-info")
 async def join_info(code: str, user=Depends(get_user)):
-    ws = await db.workspaces.find_one({"join_code": code.strip().upper()}, {"_id": 0, "name": 1, "workspace_id": 1})
+    _rate_limit_join(user["user_id"])
+    code = (code or "").strip().upper()
+    if not re.fullmatch(r"[A-F0-9]{6,16}", code):
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    ws = await db.workspaces.find_one({"join_code": code}, {"_id": 0, "name": 1, "workspace_id": 1})
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     return {"name": ws["name"], "workspace_id": ws["workspace_id"]}
@@ -474,7 +556,11 @@ async def join_info(code: str, user=Depends(get_user)):
 
 @api_router.post("/workspaces/join")
 async def join_workspace(payload: JoinInput, user=Depends(get_user)):
-    ws = await db.workspaces.find_one({"join_code": payload.code.strip().upper()}, {"_id": 0})
+    _rate_limit_join(user["user_id"])
+    code = (payload.code or "").strip().upper()
+    if not re.fullmatch(r"[A-F0-9]{6,16}", code):
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    ws = await db.workspaces.find_one({"join_code": code}, {"_id": 0})
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     ws_id = ws["workspace_id"]
@@ -485,6 +571,11 @@ async def join_workspace(payload: JoinInput, user=Depends(get_user)):
             "user_id": user["user_id"], "email": user["email"], "role": "member",
             "pack": "member", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
         })
+    elif existing.get("status") != "active":
+        await db.memberships.update_one(
+            {"membership_id": existing["membership_id"]},
+            {"$set": {"status": "active", "joined_at": datetime.now(timezone.utc).isoformat()}},
+        )
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -494,7 +585,7 @@ async def get_join_code(principal=Depends(require("members:invite"))):
     ws = await get_ws(principal["workspace_id"])
     code = ws.get("join_code")
     if not code:
-        code = uuid.uuid4().hex[:6].upper()
+        code = _new_join_code()
         await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {"join_code": code}})
     return {"join_code": code}
 
@@ -594,16 +685,27 @@ class TemplateInput(BaseModel):
 @api_router.post("/workspace/apply-template")
 async def apply_template(payload: TemplateInput, principal=Depends(require("workspace:edit"))):
     ws_id = principal["workspace_id"]
+    if payload.template not in ("sample", "clean"):
+        raise HTTPException(status_code=400, detail="Unknown template")
     if payload.template == "sample":
-        fresh = build_workspace(ws_id, (await get_ws(ws_id))["name"], principal["user_id"], empty=False)
-        fresh.pop("workspace_id", None)
-        fresh.pop("plan", None)
-        fresh.pop("created_at", None)
+        existing = await get_ws(ws_id)
+        fresh = build_workspace(ws_id, existing["name"], principal["user_id"], empty=False)
+        # Never wipe identity, billing, invite surface, or OAuth tokens on template apply.
+        for key in (
+            "workspace_id", "plan", "created_at", "join_code", "name", "owner_user_id",
+            "google_tokens", "quickbooks_tokens", "stripe_secret_key",
+        ):
+            fresh.pop(key, None)
+        fresh["onboarding_done"] = True
+        fresh["template"] = "sample"
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": fresh})
         await db.financial_entries.delete_many({"workspace_id": ws_id})
         await db.financial_entries.insert_many(sample_financial_entries(ws_id))
     else:
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"onboarding_done": True}})
+        await db.workspaces.update_one(
+            {"workspace_id": ws_id},
+            {"$set": {"onboarding_done": True, "template": "empty"}},
+        )
     return {"ok": True}
 
 
@@ -721,10 +823,18 @@ class FinEntryInput(BaseModel):
     note: Optional[str] = ""
 
 
-@api_router.post("/financials/entries")
-async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+def _validate_fin_entry(payload: FinEntryInput):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", payload.month or ""):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    if payload.amount < 0 or payload.amount > 1e12:
+        raise HTTPException(status_code=400, detail="amount out of range")
+
+
+@api_router.post("/financials/entries")
+async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    _validate_fin_entry(payload)
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
              "type": payload.type, "category": payload.category.strip() or "Other",
              "amount": round(payload.amount, 2), "month": payload.month, "recurring": payload.recurring,
@@ -740,6 +850,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finan
 
 @api_router.patch("/financials/entries/{entry_id}")
 async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    _validate_fin_entry(payload)
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
@@ -782,9 +893,16 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
 
 @api_router.post("/financials/import/stripe")
 async def import_stripe_revenue(principal=Depends(require("finance:write"))):
-    if not STRIPE_API_KEY:
-        raise HTTPException(status_code=400, detail="Stripe not configured")
-    stripe_sdk.api_key = STRIPE_API_KEY
+    """Import Stripe charges using the workspace's own key — never the platform billing key."""
+    ws = await get_ws(principal["workspace_id"])
+    workspace_key = (ws.get("stripe_secret_key") or "").strip()
+    if not workspace_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Connect a workspace Stripe secret key before importing revenue. "
+                   "Platform billing credentials cannot be used for tenant imports.",
+        )
+    stripe_sdk.api_key = workspace_key
     from collections import defaultdict
     by_month = defaultdict(float)
     try:
@@ -793,9 +911,9 @@ async def import_stripe_revenue(principal=Depends(require("finance:write"))):
             if ch.get("paid") and ch.get("status") == "succeeded" and not ch.get("refunded"):
                 dt = datetime.fromtimestamp(ch["created"], tz=timezone.utc)
                 by_month[dt.strftime("%Y-%m")] += (ch.get("amount", 0) / 100.0)
-    except Exception as e:
+    except Exception:
         logger.exception("stripe import failed")
-        raise HTTPException(status_code=400, detail=f"Stripe import failed: {e}")
+        raise HTTPException(status_code=400, detail="Stripe import failed. Check the workspace Stripe key.")
     now = datetime.now(timezone.utc).isoformat()
     docs = [{"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"], "type": "revenue",
              "category": "Stripe revenue", "amount": round(amt, 2), "month": month, "recurring": True,
@@ -1171,7 +1289,9 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     if not cfg["configured"]:
         return {"configured": False, "message": f"{provider.title()} OAuth credentials are not set yet. Add them in the backend .env to enable live connection."}
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
-              "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
+              "scope": cfg["scope"],
+              "state": _sign_state(provider, principal["workspace_id"], principal["user_id"]),
+              **cfg.get("extra", {})}
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
 
 
@@ -1185,6 +1305,15 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
     if not verified or verified[0] != provider:
         return RedirectResponse(f"{frontend}/integrations?error=state")
     workspace_id = verified[1]
+    # If state was bound to a user, require that same user to complete the callback.
+    bound_user = verified[2] if len(verified) > 2 else ""
+    if bound_user:
+        try:
+            actor = await _user_from_request(request)
+        except HTTPException:
+            return RedirectResponse(f"{frontend}/integrations?error=state")
+        if actor["user_id"] != bound_user:
+            return RedirectResponse(f"{frontend}/integrations?error=state")
     data = {"code": code, "client_id": cfg["client_id"], "client_secret": cfg["client_secret"],
             "redirect_uri": cfg["redirect_uri"], "grant_type": "authorization_code"}
     try:
@@ -1243,9 +1372,12 @@ async def billing_plans(principal=Depends(get_principal)):
 
 @api_router.post("/payments/checkout")
 async def create_checkout(payload: CheckoutInput, request: Request, principal=Depends(require("billing:manage"))):
+    origin = (payload.origin_url or "").strip().rstrip("/")
+    if not _origin_allowed(origin):
+        raise HTTPException(status_code=400, detail="origin_url is not an allowed frontend origin")
     stripe_checkout = get_stripe(request)
-    success_url = f"{payload.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{payload.origin_url}/payment/cancel"
+    success_url = f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/payment/cancel"
     req = CheckoutSessionRequest(amount=PRO_PRICE, currency="usd", success_url=success_url, cancel_url=cancel_url,
                                  metadata={"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "plan": "pro"})
     session = await stripe_checkout.create_checkout_session(req)
@@ -1254,9 +1386,18 @@ async def create_checkout(payload: CheckoutInput, request: Request, principal=De
 
 
 @api_router.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, request: Request):
+async def payment_status(session_id: str, request: Request, user=Depends(get_user)):
     record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not record:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    allowed = record.get("user_id") == user["user_id"]
+    if not allowed and record.get("workspace_id"):
+        mem = await db.memberships.find_one({
+            "workspace_id": record["workspace_id"], "user_id": user["user_id"], "status": "active",
+        }, {"_id": 0})
+        allowed = bool(mem)
+    if not allowed:
+        # Same status as missing — avoid leaking other workspaces' session ids.
         raise HTTPException(status_code=404, detail="Transaction not found")
     if record.get("payment_status") != "paid":
         try:
@@ -1276,8 +1417,9 @@ async def stripe_webhook(request: Request):
     body = await request.body()
     try:
         result = await get_stripe(request).handle_webhook(body, request.headers.get("Stripe-Signature"))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("stripe webhook failed")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
     if result.session_id and result.payment_status == "paid":
         rec = await db.payment_transactions.find_one({"session_id": result.session_id}, {"_id": 0})
         await db.payment_transactions.update_one({"session_id": result.session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"status": "completed", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
@@ -1288,6 +1430,8 @@ async def stripe_webhook(request: Request):
 
 @api_router.post("/demo/reset-plan")
 async def reset_plan(principal=Depends(require("billing:manage"))):
+    if not DEMO_RESET_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found")
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {"plan": "free"}})
     return {"ok": True}
 
@@ -1298,7 +1442,14 @@ async def root():
 
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origin_regex=".*", allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_CORS_ORIGINS,
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
+)
 
 
 @app.on_event("startup")
@@ -1306,6 +1457,8 @@ async def startup():
     await db.memberships.create_index([("user_id", 1), ("workspace_id", 1)])
     await db.memberships.create_index([("email", 1), ("status", 1)])
     await db.workspaces.create_index("workspace_id", unique=True)
+    await db.workspaces.create_index("join_code")
+    await db.user_sessions.create_index("session_token", unique=True)
 
 
 @app.on_event("shutdown")

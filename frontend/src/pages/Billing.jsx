@@ -4,8 +4,7 @@ import { Check, Sparkles, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
-import { cn } from "@/lib/utils";
+import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
 
 const FREE = ["Baseline dashboard & KPIs", "Limited AI (5 messages/day)", "Manual task board", "Read-only reports"];
 const PRO = [
@@ -18,28 +17,42 @@ const PRO = [
 ];
 
 export default function Billing() {
-  const { data, loading } = useFetch("/billing/plans");
+  const { data, loading, error, reload } = useFetch("/billing/plans");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data) return <LoadingScreen label="Loading plans" />;
+  if (loading) return <LoadingScreen label="Loading plans" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   const isPro = data.current_plan === "pro";
+  const canManage = !!data.can_manage;
 
   const upgrade = async () => {
+    if (!canManage) {
+      toast.error("Only a workspace owner can manage billing");
+      return;
+    }
     setBusy(true);
     try {
       const { data: res } = await api.post("/payments/checkout", { origin_url: window.location.origin });
       window.location.href = res.checkout_url;
     } catch (e) {
-      toast.error("Could not start checkout");
+      toast.error(e?.response?.data?.detail || "Could not start checkout");
       setBusy(false);
     }
   };
 
   const resetDemo = async () => {
-    await api.post("/demo/reset-plan");
-    toast.success("Reverted to Free (demo)");
-    setTimeout(() => window.location.reload(), 600);
+    if (!canManage) {
+      toast.error("Only a workspace owner can manage billing");
+      return;
+    }
+    try {
+      await api.post("/demo/reset-plan");
+      toast.success("Reverted to Free (demo)");
+      setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not reset plan");
+    }
   };
 
   return (
@@ -69,8 +82,10 @@ export default function Billing() {
           <div className="mt-6">
             {!isPro ? (
               <div className="text-center text-xs font-mono uppercase tracking-wide text-zinc-600 border border-white/10 rounded-md py-2.5">Current plan</div>
-            ) : (
+            ) : canManage ? (
               <button onClick={resetDemo} data-testid="reset-demo-btn" className="w-full border border-white/10 text-zinc-400 rounded-md py-2.5 text-sm hover:bg-white/5 transition-colors">Revert to Free (demo)</button>
+            ) : (
+              <div className="text-center text-xs font-mono uppercase tracking-wide text-zinc-600 border border-white/10 rounded-md py-2.5">Pro active</div>
             )}
           </div>
         </GlassCard>
@@ -93,13 +108,19 @@ export default function Billing() {
           <div className="mt-6">
             {isPro ? (
               <div className="text-center text-xs font-mono uppercase tracking-wide text-gold border border-gold/30 bg-gold/10 rounded-md py-2.5" data-testid="pro-active">Active — you're on Pro</div>
-            ) : (
+            ) : canManage ? (
               <button data-testid="upgrade-checkout-btn" onClick={upgrade} disabled={busy}
                 className="w-full bg-gold text-black font-medium rounded-md py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">
                 {busy ? "Starting checkout…" : `Upgrade to Pro — $${data.pro_price}/mo`}
               </button>
+            ) : (
+              <div className="text-center text-xs text-zinc-500 border border-white/10 rounded-md py-2.5 px-3">
+                Ask a workspace owner to upgrade billing.
+              </div>
             )}
-            <p className="text-center text-[11px] text-zinc-600 mt-3">Test mode · use card 4242 4242 4242 4242</p>
+            {canManage && !isPro && (
+              <p className="text-center text-[11px] text-zinc-600 mt-3">Test mode · use card 4242 4242 4242 4242</p>
+            )}
           </div>
         </GlassCard>
       </div>

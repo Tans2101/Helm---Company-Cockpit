@@ -89,3 +89,23 @@ export function EmptyState({ icon: Icon, title, body, action }) {
     </div>
   );
 }
+
+export function ErrorScreen({ title = "Couldn't load this view", body, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-32 px-6 fade-up">
+      <h3 className="text-xl text-white font-light tracking-tight">{title}</h3>
+      <p className="text-sm text-zinc-500 mt-2 max-w-sm leading-relaxed">
+        {body || "Something went wrong. Check your connection and try again."}
+      </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 rounded-md border border-white/10 text-white text-sm px-4 py-2 hover:bg-white/5 transition-colors"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}

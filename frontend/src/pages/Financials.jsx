@@ -7,7 +7,7 @@ import {
 import { Plus, Trash2, Wallet, DownloadCloud, X, PenLine, History } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
@@ -32,7 +32,7 @@ const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
 const emptyForm = () => ({ type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(), recurring: true, note: "" });
 
 export default function Financials() {
-  const { data, loading, reload } = useFetch("/financials");
+  const { data, loading, error, reload } = useFetch("/financials");
   const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -41,7 +41,8 @@ export default function Financials() {
   const [cash, setCash] = useState("");
   const [gm, setGm] = useState("");
 
-  if (loading || !data) return <LoadingScreen label="Loading financials" />;
+  if (loading) return <LoadingScreen label="Loading financials" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
 
   const canWrite = data.can_write;
   const finActs = (activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const trustColor = (s) => (s >= 90 ? "text-emerald-400" : s >= 80 ? "text-gold" : "text-amber-400");
@@ -11,13 +11,14 @@ const QUALITIES = ["A", "A-", "B+", "B", "C"];
 const emptyForm = () => ({ name: "", role: "", department: "", trust_score: 80, quality: "B+", tasks_done: 0, tenure: "New" });
 
 export default function People() {
-  const { data, loading, reload } = useFetch("/people");
+  const { data, loading, error, reload } = useFetch("/people");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading roster" />;
+  if (loading) return <LoadingScreen label="Loading roster" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   const canWrite = data.can_write;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };

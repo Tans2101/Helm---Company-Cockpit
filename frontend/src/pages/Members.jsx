@@ -4,13 +4,13 @@ import { UserPlus, User, Trash2, Mail, Copy, Link2 } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, LoadingScreen, ErrorScreen } from "@/components/kit";
 import { PACKS, packMeta, hasPerm } from "@/lib/access";
 import { cn } from "@/lib/utils";
 
 export default function Members() {
   const { user } = useAuth();
-  const { data, loading, reload } = useFetch("/members");
+  const { data, loading, error, reload } = useFetch("/members");
   const canInvite = hasPerm(user, "members:invite");
   const canManageOwners = hasPerm(user, "members:manage");
   const { data: codeData } = useFetch(canInvite ? "/workspaces/join-code" : null);
@@ -19,7 +19,8 @@ export default function Members() {
   const [pack, setPack] = useState("member");
   const [busy, setBusy] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading team" />;
+  if (loading) return <LoadingScreen label="Loading team" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   // exec can assign any pack except owner; owner can assign any
   const packOptions = PACKS.filter((p) => p.id !== "owner" || canManageOwners);
 

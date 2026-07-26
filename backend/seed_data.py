@@ -3,6 +3,7 @@
 Financials are NOT stored here — they are computed from the `financial_entries`
 collection so the finance team can log data straight into Helm.
 """
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -177,7 +178,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         "stage": "Series A", "employees": 24 if not empty else 0, "founded": "2022",
         "mission": "Autonomous inspection robots for industrial sites." if not empty else "",
         "onboarding_done": not empty, "template": "empty" if empty else "sample",
-        "join_code": uuid.uuid4().hex[:6].upper(),
+        "join_code": secrets.token_hex(6).upper(),
         "financial_settings": {"cash": 0 if empty else 3100000, "gross_margin": None if empty else 74, "currency": "usd"},
         "briefing": briefing, "decisions": decisions, "telemetry": telemetry,
         "tasks": tasks, "reports": reports, "team": team, "calendar": calendar,
