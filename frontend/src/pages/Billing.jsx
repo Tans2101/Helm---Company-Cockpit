@@ -4,6 +4,7 @@ import { Check, Sparkles, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
+import { openPaddleCheckout } from "@/lib/paddle";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
 
 const FREE = ["Baseline dashboard & KPIs", "Limited AI (5 messages/day)", "Manual task board", "Read-only reports"];
@@ -11,7 +12,7 @@ const PRO = [
   "AI Morning Briefing & synthesis",
   "Full Decision Center with recommendations",
   "Weekly CEO Pack (AI-generated)",
-  "Live integrations (Google, Stripe, QuickBooks, GitHub)",
+  "Live integrations (Google, QuickBooks, GitHub)",
   "Unlimited Ask Helm",
   "Scenario planning & risk matrix",
 ];
@@ -34,9 +35,11 @@ export default function Billing() {
     setBusy(true);
     try {
       const { data: res } = await api.post("/payments/checkout", { origin_url: window.location.origin });
-      window.location.href = res.checkout_url;
+      await openPaddleCheckout(res);
+      // Overlay stays on-page; hosted checkout redirects away.
+      setBusy(false);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not start checkout");
+      toast.error(e?.response?.data?.detail || e?.message || "Could not start Paddle checkout");
       setBusy(false);
     }
   };
@@ -64,7 +67,7 @@ export default function Billing() {
       <div className="text-center mb-10 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Plans</p>
         <h1 className="text-3xl md:text-4xl font-light tracking-tight text-white">Run your company from one command center.</h1>
-        <p className="text-zinc-500 mt-3">Upgrade to unlock the full CEO Operating System.</p>
+        <p className="text-zinc-500 mt-3">Upgrade to unlock the full CEO Operating System. Billed securely with Paddle.</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -109,7 +112,7 @@ export default function Billing() {
             {isPro ? (
               <div className="text-center text-xs font-mono uppercase tracking-wide text-gold border border-gold/30 bg-gold/10 rounded-md py-2.5" data-testid="pro-active">Active — you're on Pro</div>
             ) : canManage ? (
-              <button data-testid="upgrade-checkout-btn" onClick={upgrade} disabled={busy}
+              <button data-testid="upgrade-checkout-btn" onClick={upgrade} disabled={busy || data.paddle_configured === false}
                 className="w-full bg-gold text-black font-medium rounded-md py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">
                 {busy ? "Starting checkout…" : `Upgrade to Pro — $${data.pro_price}/mo`}
               </button>
@@ -119,7 +122,11 @@ export default function Billing() {
               </div>
             )}
             {canManage && !isPro && (
-              <p className="text-center text-[11px] text-zinc-600 mt-3">Test mode · use card 4242 4242 4242 4242</p>
+              <p className="text-center text-[11px] text-zinc-600 mt-3">
+                {data.paddle_configured === false
+                  ? "Paddle credentials are not configured yet."
+                  : `Checkout via Paddle · ${data.paddle_env || "sandbox"}`}
+              </p>
             )}
           </div>
         </GlassCard>

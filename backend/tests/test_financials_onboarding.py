@@ -235,15 +235,11 @@ class TestFinSettings:
                      json={"cash": prev_cash, "gross_margin": prev_gm})
 
 
-# ------------------------- Stripe import: graceful 400 -------------------------
-class TestStripeImport:
-    def test_stripe_import_returns_400_not_500(self):
+# ------------------------- Stripe import removed (Paddle for billing) -------------------------
+class TestStripeImportRemoved:
+    def test_stripe_import_endpoint_gone(self):
         r = requests.post(f"{API}/financials/import/stripe", headers=H(OWNER))
-        # Either 400 (auth error / invalid key) or 200 if it magically works with 0 records
-        assert r.status_code in (200, 400), f"unexpected {r.status_code}: {r.text}"
-        if r.status_code == 400:
-            body = r.json()
-            assert "detail" in body
+        assert r.status_code == 404, f"unexpected {r.status_code}: {r.text}"
 
 
 # ------------------------- Authorization matrix -------------------------

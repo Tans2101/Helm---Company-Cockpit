@@ -50,3 +50,16 @@ def test_join_rate_limit():
         server._rate_limit_join(uid)
     assert ei.value.status_code == 429
     server._JOIN_ATTEMPTS.pop(uid, None)
+
+
+def test_paddle_signature_verification(monkeypatch):
+    secret = "pdl_ntfset_test_secret"
+    monkeypatch.setattr(server, "PADDLE_WEBHOOK_SECRET", secret)
+    body = b'{"event_type":"transaction.completed","data":{"id":"txn_test"}}'
+    ts = str(int(__import__("time").time()))
+    signed = f"{ts}:{body.decode()}"
+    sig = __import__("hmac").new(secret.encode(), signed.encode(), __import__("hashlib").sha256).hexdigest()
+    header = f"ts={ts};h1={sig}"
+    assert server._verify_paddle_signature(body, header) is True
+    assert server._verify_paddle_signature(body, f"ts={ts};h1=deadbeef") is False
+    assert server._verify_paddle_signature(body, None) is False

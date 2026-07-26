@@ -16,7 +16,6 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 import resend
-import stripe as stripe_sdk
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
@@ -25,9 +24,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse,
-)
 
 from seed_data import build_workspace, sample_financial_entries
 
@@ -39,7 +35,6 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
@@ -48,6 +43,13 @@ QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PRO_PRICE = 149.0
+# Paddle Billing (Helm Pro). Sandbox by default.
+PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
+PADDLE_CLIENT_TOKEN = os.environ.get('PADDLE_CLIENT_TOKEN', '')
+PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
+PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
+PADDLE_ENV = (os.environ.get('PADDLE_ENV', 'sandbox') or 'sandbox').lower()
+PADDLE_API_BASE = "https://api.paddle.com" if PADDLE_ENV == "production" else "https://sandbox-api.paddle.com"
 # Prefer a dedicated secret; fall back to LLM key. Dev-only literal is last resort so
 # process restarts do not invalidate in-flight OAuth state.
 _STATE_SECRET = (os.environ.get("OAUTH_STATE_SECRET") or EMERGENT_LLM_KEY or "helm-oauth-state-dev-only").encode()
@@ -693,7 +695,7 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
         # Never wipe identity, billing, invite surface, or OAuth tokens on template apply.
         for key in (
             "workspace_id", "plan", "created_at", "join_code", "name", "owner_user_id",
-            "google_tokens", "quickbooks_tokens", "stripe_secret_key",
+            "google_tokens", "quickbooks_tokens",
         ):
             fresh.pop(key, None)
         fresh["onboarding_done"] = True
@@ -889,42 +891,6 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
                        f"Updated cash to {fmt_money(payload.cash)}" + (f" — runway now {runway}mo" if runway else ""),
                        {"cash": payload.cash, "runway_months": runway})
     return {"ok": True}
-
-
-@api_router.post("/financials/import/stripe")
-async def import_stripe_revenue(principal=Depends(require("finance:write"))):
-    """Import Stripe charges using the workspace's own key — never the platform billing key."""
-    ws = await get_ws(principal["workspace_id"])
-    workspace_key = (ws.get("stripe_secret_key") or "").strip()
-    if not workspace_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Connect a workspace Stripe secret key before importing revenue. "
-                   "Platform billing credentials cannot be used for tenant imports.",
-        )
-    stripe_sdk.api_key = workspace_key
-    from collections import defaultdict
-    by_month = defaultdict(float)
-    try:
-        charges = await asyncio.to_thread(lambda: stripe_sdk.Charge.list(limit=100))
-        for ch in charges.get("data", []):
-            if ch.get("paid") and ch.get("status") == "succeeded" and not ch.get("refunded"):
-                dt = datetime.fromtimestamp(ch["created"], tz=timezone.utc)
-                by_month[dt.strftime("%Y-%m")] += (ch.get("amount", 0) / 100.0)
-    except Exception:
-        logger.exception("stripe import failed")
-        raise HTTPException(status_code=400, detail="Stripe import failed. Check the workspace Stripe key.")
-    now = datetime.now(timezone.utc).isoformat()
-    docs = [{"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"], "type": "revenue",
-             "category": "Stripe revenue", "amount": round(amt, 2), "month": month, "recurring": True,
-             "note": "Imported from Stripe", "source": "stripe", "created_by": principal["user_id"], "created_at": now}
-            for month, amt in by_month.items()]
-    if docs:
-        await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
-        await db.financial_entries.insert_many(docs)
-        await log_activity(principal, "financials", "import.stripe",
-                           f"Imported {len(docs)} month(s) of Stripe revenue ({fmt_money(sum(by_month.values()))})")
-    return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 
 
 @api_router.get("/tasks")
@@ -1355,19 +1321,117 @@ async def google_calendar_events(principal=Depends(get_principal)):
     return {"events": r.json().get("items", [])}
 
 
-# ------------------------- Payments -------------------------
+# ------------------------- Payments (Paddle Billing) -------------------------
 class CheckoutInput(BaseModel):
     origin_url: str
 
 
-def get_stripe(request: Request) -> StripeCheckout:
-    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=f"{str(request.base_url)}api/webhook/stripe")
+def _paddle_configured() -> bool:
+    return bool(PADDLE_API_KEY and PADDLE_PRICE_ID and PADDLE_CLIENT_TOKEN)
+
+
+def _verify_paddle_signature(raw_body: bytes, signature_header: Optional[str]) -> bool:
+    """Verify Paddle-Signature: ts=...;h1=... against PADDLE_WEBHOOK_SECRET."""
+    if not PADDLE_WEBHOOK_SECRET or not signature_header:
+        return False
+    parts = {}
+    for item in signature_header.split(";"):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            parts[k.strip()] = v.strip()
+    ts, sig = parts.get("ts"), parts.get("h1")
+    if not ts or not sig:
+        return False
+    try:
+        age = abs(int(datetime.now(timezone.utc).timestamp()) - int(ts))
+    except ValueError:
+        return False
+    if age > 300:
+        return False
+    signed = f"{ts}:{raw_body.decode('utf-8')}"
+    expected = hmac.new(PADDLE_WEBHOOK_SECRET.encode(), signed.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
+async def _paddle_create_transaction(session_id: str, workspace_id: str, user_id: str, email: str, origin: str):
+    payload = {
+        "items": [{"price_id": PADDLE_PRICE_ID, "quantity": 1}],
+        "collection_mode": "automatic",
+        "currency_code": "USD",
+        "custom_data": {
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+            "user_id": user_id,
+            "plan": "pro",
+        },
+        "checkout": {
+            "url": f"{origin}/payment/success?session_id={session_id}",
+        },
+    }
+    # Prefill email when possible (Paddle accepts customer.email on some flows via custom checkout).
+    if email:
+        payload["custom_data"]["email"] = email
+    headers = {
+        "Authorization": f"Bearer {PADDLE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        r = await hc.post(f"{PADDLE_API_BASE}/transactions", headers=headers, json=payload)
+    if r.status_code >= 400:
+        logger.error("paddle create transaction failed: %s %s", r.status_code, r.text[:500])
+        raise HTTPException(status_code=400, detail="Could not start Paddle checkout. Check Paddle credentials/price id.")
+    data = r.json().get("data") or {}
+    checkout = data.get("checkout") or {}
+    return {
+        "paddle_transaction_id": data.get("id"),
+        "checkout_url": checkout.get("url"),
+    }
+
+
+async def _mark_payment_paid(session_id: Optional[str] = None, paddle_transaction_id: Optional[str] = None,
+                             workspace_id: Optional[str] = None, subscription_id: Optional[str] = None):
+    query = {}
+    if session_id:
+        query["session_id"] = session_id
+    elif paddle_transaction_id:
+        query["paddle_transaction_id"] = paddle_transaction_id
+    else:
+        return None
+    rec = await db.payment_transactions.find_one(query, {"_id": 0})
+    now = datetime.now(timezone.utc).isoformat()
+    update = {"status": "completed", "payment_status": "paid", "updated_at": now}
+    if paddle_transaction_id:
+        update["paddle_transaction_id"] = paddle_transaction_id
+    if subscription_id:
+        update["paddle_subscription_id"] = subscription_id
+    if rec:
+        await db.payment_transactions.update_one(
+            {"session_id": rec["session_id"], "payment_status": {"$ne": "paid"}},
+            {"$set": update},
+        )
+        workspace_id = workspace_id or rec.get("workspace_id")
+    elif workspace_id:
+        # Webhook arrived before/without our local row — still upgrade the workspace.
+        pass
+    if workspace_id:
+        ws_set = {"plan": "pro"}
+        if subscription_id:
+            ws_set["paddle_subscription_id"] = subscription_id
+        await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": ws_set})
+    return rec
 
 
 @api_router.get("/billing/plans")
 async def billing_plans(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["pack"])}
+    return {
+        "current_plan": c["plan"],
+        "pro_price": PRO_PRICE,
+        "can_manage": "billing:manage" in perms_for(principal["pack"]),
+        "provider": "paddle",
+        "paddle_configured": _paddle_configured(),
+        "paddle_env": PADDLE_ENV,
+    }
 
 
 @api_router.post("/payments/checkout")
@@ -1375,18 +1439,58 @@ async def create_checkout(payload: CheckoutInput, request: Request, principal=De
     origin = (payload.origin_url or "").strip().rstrip("/")
     if not _origin_allowed(origin):
         raise HTTPException(status_code=400, detail="origin_url is not an allowed frontend origin")
-    stripe_checkout = get_stripe(request)
-    success_url = f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin}/payment/cancel"
-    req = CheckoutSessionRequest(amount=PRO_PRICE, currency="usd", success_url=success_url, cancel_url=cancel_url,
-                                 metadata={"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "plan": "pro"})
-    session = await stripe_checkout.create_checkout_session(req)
-    await db.payment_transactions.insert_one({"session_id": session.session_id, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "amount": PRO_PRICE, "currency": "usd", "plan": "pro", "status": "initiated", "payment_status": "pending", "created_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()})
-    return {"checkout_url": session.url, "session_id": session.session_id}
+    if not _paddle_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Paddle is not configured. Set PADDLE_API_KEY, PADDLE_CLIENT_TOKEN, and PADDLE_PRICE_ID.",
+        )
+    session_id = f"pay_{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        paddle_tx = await _paddle_create_transaction(
+            session_id, principal["workspace_id"], principal["user_id"], principal.get("email") or "", origin,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("paddle checkout failed")
+        raise HTTPException(status_code=400, detail="Could not start Paddle checkout")
+    await db.payment_transactions.insert_one({
+        "session_id": session_id,
+        "provider": "paddle",
+        "paddle_transaction_id": paddle_tx.get("paddle_transaction_id"),
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "amount": PRO_PRICE,
+        "currency": "usd",
+        "plan": "pro",
+        "status": "initiated",
+        "payment_status": "pending",
+        "created_at": now,
+        "updated_at": now,
+    })
+    return {
+        "provider": "paddle",
+        "session_id": session_id,
+        "checkout_url": paddle_tx.get("checkout_url"),
+        "paddle_transaction_id": paddle_tx.get("paddle_transaction_id"),
+        "client_token": PADDLE_CLIENT_TOKEN,
+        "price_id": PADDLE_PRICE_ID,
+        "paddle_env": PADDLE_ENV,
+        "success_url": f"{origin}/payment/success?session_id={session_id}",
+        "cancel_url": f"{origin}/payment/cancel",
+        "customer_email": principal.get("email"),
+        "custom_data": {
+            "session_id": session_id,
+            "workspace_id": principal["workspace_id"],
+            "user_id": principal["user_id"],
+            "plan": "pro",
+        },
+    }
 
 
 @api_router.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, request: Request, user=Depends(get_user)):
+async def payment_status(session_id: str, user=Depends(get_user)):
     record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -1397,34 +1501,69 @@ async def payment_status(session_id: str, request: Request, user=Depends(get_use
         }, {"_id": 0})
         allowed = bool(mem)
     if not allowed:
-        # Same status as missing — avoid leaking other workspaces' session ids.
         raise HTTPException(status_code=404, detail="Transaction not found")
-    if record.get("payment_status") != "paid":
+    # Optionally refresh from Paddle if still pending and we have an API key + txn id.
+    if record.get("payment_status") != "paid" and PADDLE_API_KEY and record.get("paddle_transaction_id"):
         try:
-            status: CheckoutStatusResponse = await get_stripe(request).get_checkout_status(session_id)
-            if status.payment_status == "paid" or status.status == "complete":
-                await db.payment_transactions.update_one({"session_id": session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"status": "completed", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
-                if record.get("workspace_id"):
-                    await db.workspaces.update_one({"workspace_id": record["workspace_id"]}, {"$set": {"plan": "pro"}})
-                record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+            headers = {"Authorization": f"Bearer {PADDLE_API_KEY}"}
+            async with httpx.AsyncClient(timeout=20.0) as hc:
+                r = await hc.get(f"{PADDLE_API_BASE}/transactions/{record['paddle_transaction_id']}", headers=headers)
+            if r.status_code == 200:
+                pdata = (r.json().get("data") or {})
+                status = pdata.get("status")
+                if status in ("paid", "completed"):
+                    custom = pdata.get("custom_data") or {}
+                    await _mark_payment_paid(
+                        session_id=session_id,
+                        paddle_transaction_id=pdata.get("id"),
+                        workspace_id=custom.get("workspace_id") or record.get("workspace_id"),
+                        subscription_id=(pdata.get("subscription_id") or None),
+                    )
+                    record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         except Exception:
-            logger.exception("stripe status check failed")
-    return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"]}
+            logger.exception("paddle status check failed")
+    return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"],
+            "provider": record.get("provider", "paddle")}
 
 
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    body = await request.body()
+@api_router.post("/webhook/paddle")
+async def paddle_webhook(request: Request):
+    raw = await request.body()
+    if not _verify_paddle_signature(raw, request.headers.get("Paddle-Signature")):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
     try:
-        result = await get_stripe(request).handle_webhook(body, request.headers.get("Stripe-Signature"))
+        event = json.loads(raw.decode("utf-8"))
     except Exception:
-        logger.exception("stripe webhook failed")
-        raise HTTPException(status_code=400, detail="Invalid webhook")
-    if result.session_id and result.payment_status == "paid":
-        rec = await db.payment_transactions.find_one({"session_id": result.session_id}, {"_id": 0})
-        await db.payment_transactions.update_one({"session_id": result.session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"status": "completed", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
-        if rec and rec.get("workspace_id"):
-            await db.workspaces.update_one({"workspace_id": rec["workspace_id"]}, {"$set": {"plan": "pro"}})
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    event_type = event.get("event_type") or event.get("eventType") or ""
+    data = event.get("data") or {}
+    custom = data.get("custom_data") or {}
+    session_id = custom.get("session_id")
+    workspace_id = custom.get("workspace_id")
+    paddle_tx_id = data.get("id") if str(data.get("id") or "").startswith("txn_") else data.get("transaction_id")
+    subscription_id = data.get("subscription_id") or (data.get("id") if str(data.get("id") or "").startswith("sub_") else None)
+
+    if event_type in ("transaction.completed", "transaction.paid"):
+        await _mark_payment_paid(
+            session_id=session_id,
+            paddle_transaction_id=paddle_tx_id if str(paddle_tx_id or "").startswith("txn_") else data.get("id"),
+            workspace_id=workspace_id,
+            subscription_id=data.get("subscription_id"),
+        )
+    elif event_type in ("subscription.activated", "subscription.created"):
+        # custom_data may live on the subscription or related transaction
+        await _mark_payment_paid(
+            session_id=session_id,
+            workspace_id=workspace_id,
+            subscription_id=data.get("id") if str(data.get("id") or "").startswith("sub_") else subscription_id,
+        )
+    elif event_type in ("subscription.canceled", "subscription.past_due"):
+        ws_id = workspace_id
+        if not ws_id and subscription_id:
+            ws = await db.workspaces.find_one({"paddle_subscription_id": data.get("id")}, {"_id": 0, "workspace_id": 1})
+            ws_id = (ws or {}).get("workspace_id")
+        if ws_id and event_type == "subscription.canceled":
+            await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"plan": "free"}})
     return {"status": "ok"}
 
 

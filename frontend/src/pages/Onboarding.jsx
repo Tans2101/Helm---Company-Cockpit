@@ -56,7 +56,7 @@ export default function Onboarding() {
             Begin with an empty cockpit and make it yours. Log your financials, invite your team, and connect your tools — Helm builds your command center around real data.
           </p>
           <ul className="mt-4 space-y-1.5">
-            {["Log financials in Helm", "Invite your finance team", "Connect Stripe, Google & more"].map((f) => (
+            {["Log financials in Helm", "Invite your finance team", "Connect Google, QuickBooks & more"].map((f) => (
               <li key={f} className="flex items-center gap-2 text-xs text-zinc-400"><Check className="w-3.5 h-3.5 text-zinc-600" />{f}</li>
             ))}
           </ul>

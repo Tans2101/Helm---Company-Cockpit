@@ -8,7 +8,7 @@ import { PageHeader, GlassCard, ProBadge, LoadingScreen, ErrorScreen } from "@/c
 import { cn } from "@/lib/utils";
 
 const ICONS = {
-  google_calendar: Calendar, gmail: Mail, stripe: DollarSign, quickbooks: Building2,
+  google_calendar: Calendar, gmail: Mail, paddle: DollarSign, quickbooks: Building2,
   github: Github, slack: MessageSquare, salesforce: Cloud,
 };
 
