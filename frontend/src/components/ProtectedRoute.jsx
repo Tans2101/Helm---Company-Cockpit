@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import WorkspaceGate from "@/pages/WorkspaceGate";
 
 export default function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -14,5 +15,6 @@ export default function ProtectedRoute() {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  if (user.needs_workspace) return <WorkspaceGate />;
   return <AppLayout />;
 }

@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
   FileText, Users2, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus,
+  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -13,6 +13,7 @@ import { ProBadge } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const NAV = [
+  { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
   { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
@@ -23,7 +24,7 @@ const NAV = [
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/app/people", label: "People", icon: Contact, id: "people" },
   { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
-  { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:manage" },
+  { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:invite" },
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 

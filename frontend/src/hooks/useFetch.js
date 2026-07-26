@@ -8,6 +8,7 @@ export function useFetch(path, deps = []) {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!path) { setLoading(false); return; }
     let mounted = true;
     setLoading(true);
     api.get(path)

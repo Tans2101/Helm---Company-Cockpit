@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
+import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock, Users } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, LoadingScreen, ProBadge, Delta } from "@/components/kit";
@@ -157,6 +157,28 @@ export default function Briefing() {
           </div>
         </GlassCard>
       </div>
+
+      {data.team_updates && data.team_updates.length > 0 && (
+        <GlassCard className="p-5 mt-4 fade-up" data-testid="briefing-team-updates">
+          <div className="flex items-center gap-1.5 mb-4">
+            <Users className="w-4 h-4 text-gold" />
+            <SectionLabel>Today's team updates</SectionLabel>
+            <span className="font-mono text-xs text-gold ml-auto">{data.team_updates.length}</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {data.team_updates.map((u, i) => (
+              <div key={i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`team-update-${i}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white">{u.user_name}</span>
+                  {u.blocker && <span className="text-[10px] text-amber-400 bg-amber-400/10 rounded px-1.5 py-0.5 font-mono uppercase tracking-wide">Blocked</span>}
+                  <span className="text-[10px] text-zinc-600 ml-auto font-mono">{u.ago}</span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">{u.text}</p>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      )}
     </div>
   );
 }

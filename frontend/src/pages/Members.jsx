@@ -1,28 +1,27 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, Shield, User, Trash2, Mail, Crown, DollarSign, Users2, LineChart } from "lucide-react";
+import { UserPlus, User, Trash2, Mail, Copy, Link2 } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
+import { PACKS, packMeta, hasPerm } from "@/lib/access";
 import { cn } from "@/lib/utils";
 
-const PACKS = [
-  { id: "owner", label: "Owner", icon: Crown, style: "text-gold bg-gold/10 border-gold/20", desc: "Full control — runs the company, billing & access." },
-  { id: "exec", label: "Executive", icon: LineChart, style: "text-violet-300 bg-violet-400/10 border-violet-400/20", desc: "Full read + can decide. No billing or access control." },
-  { id: "finance", label: "Finance", icon: DollarSign, style: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20", desc: "Reads everything, writes financials." },
-  { id: "hr", label: "People / HR", icon: Users2, style: "text-sky-300 bg-sky-400/10 border-sky-400/20", desc: "Reads everything, manages the roster & headcount." },
-  { id: "member", label: "Member", icon: Shield, style: "text-zinc-300 bg-white/5 border-white/10", desc: "Read access + can move tasks and ask Helm." },
-];
-const packMeta = (id) => PACKS.find((p) => p.id === id) || PACKS[4];
-
 export default function Members() {
+  const { user } = useAuth();
   const { data, loading, reload } = useFetch("/members");
+  const canInvite = hasPerm(user, "members:invite");
+  const canManageOwners = hasPerm(user, "members:manage");
+  const { data: codeData } = useFetch(canInvite ? "/workspaces/join-code" : null);
+
   const [email, setEmail] = useState("");
   const [pack, setPack] = useState("member");
   const [busy, setBusy] = useState(false);
 
   if (loading || !data) return <LoadingScreen label="Loading team" />;
-  const canManage = (data.my_pack || data.my_role) === "owner";
+  // exec can assign any pack except owner; owner can assign any
+  const packOptions = PACKS.filter((p) => p.id !== "owner" || canManageOwners);
 
   const invite = async () => {
     if (!email.trim()) return;
@@ -49,12 +48,16 @@ export default function Members() {
     catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
+  const copyCode = () => {
+    if (codeData?.join_code) { navigator.clipboard?.writeText(codeData.join_code); toast.success("Invite code copied"); }
+  };
+
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Team & Access" subtitle="Invite your team with the right access pack. Each pack decides where they land and what they can change — operators keep facts current, the CEO reads the briefing." />
+      <PageHeader title="Team & Access" subtitle="Everyone works in one company workspace. Invite teammates with the right access pack — it decides where they land and what they can change." />
 
-      {canManage && (
-        <GlassCard className="p-5 mb-6 fade-up">
+      {canInvite && (
+        <GlassCard className="p-5 mb-4 fade-up">
           <div className="flex items-center gap-1.5 mb-3 text-gold">
             <UserPlus className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Invite a teammate</span>
@@ -68,7 +71,7 @@ export default function Members() {
             </div>
             <select data-testid="invite-pack-select" value={pack} onChange={(e) => setPack(e.target.value)}
               className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40">
-              {PACKS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              {packOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             <button data-testid="invite-submit-btn" onClick={invite} disabled={busy}
               className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 transition-colors hover:bg-gold-hover disabled:opacity-60">
@@ -79,9 +82,22 @@ export default function Members() {
         </GlassCard>
       )}
 
+      {canInvite && codeData?.join_code && (
+        <GlassCard className="p-4 mb-6 fade-up flex items-center gap-3" data-testid="join-code-card">
+          <Link2 className="w-4 h-4 text-gold shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-zinc-400">Open invite code — share to let anyone join as a Member</p>
+            <p className="font-mono text-lg text-white tracking-[0.3em] mt-0.5" data-testid="join-code-value">{codeData.join_code}</p>
+          </div>
+          <button data-testid="copy-join-code" onClick={copyCode} className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"><Copy className="w-3.5 h-3.5" /> Copy</button>
+        </GlassCard>
+      )}
+
       <div className="space-y-2">
         {data.members.map((m) => {
           const meta = packMeta(m.pack || m.role);
+          const targetIsOwner = (m.pack || m.role) === "owner";
+          const canEditThis = canInvite && !m.is_self && (!targetIsOwner || canManageOwners);
           return (
           <GlassCard key={m.membership_id} className="p-4 fade-up" data-testid={`member-row-${m.email}`}>
             <div className="flex items-center gap-3">
@@ -105,17 +121,19 @@ export default function Members() {
               <span className={cn("inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide rounded px-2 py-1 border", meta.style)} data-testid={`member-pack-${m.email}`}>
                 <meta.icon className="w-3 h-3" />{meta.label}
               </span>
-              {canManage && !m.is_self && (
+              {canEditThis && (
                 <div className="flex items-center gap-1">
                   <select value={m.pack || m.role} onChange={(e) => changePack(m, e.target.value)}
                     data-testid={`pack-select-${m.email}`}
                     className="text-[11px] text-zinc-300 bg-[#141417] border border-white/10 rounded px-2 py-1 focus:outline-none focus:border-gold/40">
-                    {PACKS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    {PACKS.filter((p) => p.id !== "owner" || canManageOwners).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
-                  <button onClick={() => remove(m)} data-testid={`remove-${m.email}`}
-                    className="text-zinc-600 hover:text-rose-400 p-1.5 rounded transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canManageOwners && (
+                    <button onClick={() => remove(m)} data-testid={`remove-${m.email}`}
+                      className="text-zinc-600 hover:text-rose-400 p-1.5 rounded transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -51,22 +51,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kalun")
 
 # ------------------------- Access packs / permissions -------------------------
-BASE_PERMS = {"read", "tasks:move", "ask:use"}
+# Every employee can do daily work: read, move/create their tasks, ask Helm, post a daily update.
+BASE_PERMS = {"read", "tasks:move", "tasks:create", "ask:use", "updates:write"}
 PACK_PERMS = {
     "member": BASE_PERMS,
     "finance": BASE_PERMS | {"finance:write"},
     "hr": BASE_PERMS | {"people:write"},
-    "exec": BASE_PERMS | {"decisions:act", "briefing:generate", "reports:pack"},
+    "sales": BASE_PERMS | {"sales:write"},
+    "ops": BASE_PERMS | {"ops:write"},
+    "exec": BASE_PERMS | {
+        "decisions:act", "briefing:generate", "reports:pack",
+        "members:invite", "tasks:assign",
+    },
     "owner": BASE_PERMS | {
-        "finance:write", "people:write", "decisions:act", "briefing:generate",
-        "reports:pack", "integrations:manage", "billing:manage", "members:manage",
-        "workspace:edit",
+        "finance:write", "people:write", "sales:write", "ops:write",
+        "decisions:act", "briefing:generate", "reports:pack",
+        "integrations:manage", "billing:manage",
+        "members:invite", "members:manage", "tasks:assign", "workspace:edit",
     },
 }
-PACK_HOME = {"owner": "/app", "exec": "/app", "member": "/app",
-             "finance": "/app/financials", "hr": "/app/people"}
+# Where each pack lands after login. Operators start on their lane or "My Day".
+PACK_HOME = {"owner": "/app", "exec": "/app", "member": "/app/me",
+             "finance": "/app/financials", "hr": "/app/people",
+             "sales": "/app/me", "ops": "/app/me"}
 PACK_LABEL = {"owner": "Owner", "exec": "Executive", "finance": "Finance",
-              "hr": "People/HR", "member": "Member"}
+              "hr": "People/HR", "sales": "Sales", "ops": "Operations", "member": "Member"}
 VALID_PACKS = set(PACK_PERMS.keys())
 
 
@@ -187,22 +196,16 @@ async def _activate_invites(user):
 
 
 async def _bootstrap(user):
-    """Ensure the user belongs to at least one workspace; create one seeded if not."""
+    """Activate any pending email invites for this user. No silent company creation —
+    genuinely new users choose to create a company or join via code (see /auth/me)."""
     await _activate_invites(user)
-    m = await db.memberships.find_one({"user_id": user["user_id"], "status": "active"}, {"_id": 0})
-    if m:
-        return
-    ws_id = f"ws_{uuid.uuid4().hex[:12]}"
-    first = (user.get("name") or "My").split(" ")[0]
-    doc = build_workspace(ws_id, f"{first}'s Company", user["user_id"], empty=True)
-    await db.workspaces.insert_one(doc)
-    await db.memberships.insert_one({
-        "membership_id": f"mem_{uuid.uuid4().hex[:12]}",
-        "workspace_id": ws_id, "user_id": user["user_id"], "email": user["email"],
-        "role": "owner", "pack": "owner", "status": "active",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
+
+
+async def get_user(request: Request):
+    """Authenticated user, invites activated — but does NOT require a workspace."""
+    user = await _user_from_request(request)
+    await _activate_invites(user)
+    return user
 
 
 async def get_principal(request: Request):
@@ -381,9 +384,26 @@ async def process_session(payload: SessionInput, response: Response):
 
 
 @api_router.get("/auth/me")
-async def auth_me(principal=Depends(get_principal)):
-    pack = principal["pack"]
-    return {**principal, "perms": sorted(perms_for(pack)),
+async def auth_me(user=Depends(get_user)):
+    base = {"user_id": user["user_id"], "email": user["email"],
+            "name": user.get("name"), "picture": user.get("picture")}
+    active = user.get("active_workspace_id")
+    membership = None
+    if active:
+        membership = await db.memberships.find_one(
+            {"user_id": user["user_id"], "workspace_id": active, "status": "active"}, {"_id": 0})
+    if not membership:
+        membership = await db.memberships.find_one(
+            {"user_id": user["user_id"], "status": "active"}, {"_id": 0})
+        if membership:
+            await db.users.update_one({"user_id": user["user_id"]},
+                                      {"$set": {"active_workspace_id": membership["workspace_id"]}})
+    if not membership:
+        return {**base, "workspace_id": None, "needs_workspace": True, "role": None,
+                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None}
+    pack = pack_of(membership)
+    return {**base, "workspace_id": membership["workspace_id"], "needs_workspace": False,
+            "role": membership["role"], "pack": pack, "perms": sorted(perms_for(pack)),
             "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member")}
 
 
@@ -427,17 +447,56 @@ class CreateWsInput(BaseModel):
 
 
 @api_router.post("/workspaces")
-async def create_workspace(payload: CreateWsInput, principal=Depends(get_principal)):
+async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
-    doc = build_workspace(ws_id, payload.name.strip() or "New Company", principal["user_id"], empty=True)
+    doc = build_workspace(ws_id, payload.name.strip() or "New Company", user["user_id"], empty=True)
     await db.workspaces.insert_one(doc)
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
-        "user_id": principal["user_id"], "email": principal["email"], "role": "owner",
+        "user_id": user["user_id"], "email": user["email"], "role": "owner",
         "pack": "owner", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    await db.users.update_one({"user_id": principal["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
+
+
+class JoinInput(BaseModel):
+    code: str
+
+
+@api_router.get("/workspaces/join-info")
+async def join_info(code: str, user=Depends(get_user)):
+    ws = await db.workspaces.find_one({"join_code": code.strip().upper()}, {"_id": 0, "name": 1, "workspace_id": 1})
+    if not ws:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    return {"name": ws["name"], "workspace_id": ws["workspace_id"]}
+
+
+@api_router.post("/workspaces/join")
+async def join_workspace(payload: JoinInput, user=Depends(get_user)):
+    ws = await db.workspaces.find_one({"join_code": payload.code.strip().upper()}, {"_id": 0})
+    if not ws:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    ws_id = ws["workspace_id"]
+    existing = await db.memberships.find_one({"workspace_id": ws_id, "user_id": user["user_id"]})
+    if not existing:
+        await db.memberships.insert_one({
+            "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
+            "user_id": user["user_id"], "email": user["email"], "role": "member",
+            "pack": "member", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
+    return {"ok": True, "workspace_id": ws_id}
+
+
+@api_router.get("/workspaces/join-code")
+async def get_join_code(principal=Depends(require("members:invite"))):
+    ws = await get_ws(principal["workspace_id"])
+    code = ws.get("join_code")
+    if not code:
+        code = uuid.uuid4().hex[:6].upper()
+        await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {"join_code": code}})
+    return {"join_code": code}
 
 
 @api_router.get("/members")
@@ -449,7 +508,7 @@ async def list_members(principal=Depends(get_principal)):
         out.append({
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
             "pack": pack_of(m), "status": m["status"], "name": (u or {}).get("name"),
-            "picture": (u or {}).get("picture"),
+            "picture": (u or {}).get("picture"), "user_id": m.get("user_id"),
             "is_self": m.get("user_id") == principal["user_id"],
         })
     return {"members": out, "my_role": principal["role"], "my_pack": principal["pack"]}
@@ -461,10 +520,12 @@ class InviteInput(BaseModel):
 
 
 @api_router.post("/members/invite")
-async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:manage"))):
+async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:invite"))):
     if payload.pack not in VALID_PACKS:
         raise HTTPException(status_code=400, detail="Unknown access pack")
     pack = payload.pack
+    if pack == "owner" and "members:manage" not in perms_for(principal["pack"]):
+        raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
     role = "owner" if pack == "owner" else "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
@@ -488,7 +549,7 @@ class RoleInput(BaseModel):
 
 
 @api_router.patch("/members/{membership_id}")
-async def update_member_role(membership_id: str, payload: RoleInput, principal=Depends(require("members:manage"))):
+async def update_member_role(membership_id: str, payload: RoleInput, principal=Depends(require("members:invite"))):
     m = await db.memberships.find_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not m:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -496,6 +557,9 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
         raise HTTPException(status_code=400, detail="You cannot change your own access")
     if payload.pack not in VALID_PACKS:
         raise HTTPException(status_code=400, detail="Unknown access pack")
+    is_owner_admin = "members:manage" in perms_for(principal["pack"])
+    if (pack_of(m) == "owner" or payload.pack == "owner") and not is_owner_admin:
+        raise HTTPException(status_code=403, detail="Only an owner can change owner access")
     pack = payload.pack
     role = "owner" if pack == "owner" else "member"
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role, "pack": pack}})
@@ -561,6 +625,11 @@ async def briefing(principal=Depends(get_principal)):
     acts = await db.activities.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(5)
     act_items = [{"title": a["summary"], "detail": f"{a['actor_name']} · {_rel_time(a['created_at'])}", "tone": "neutral"} for a in acts]
     b["what_changed"] = act_items + list(b.get("what_changed", []))
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).sort("updated_at", -1).to_list(50)
+    b["team_updates"] = [{"user_name": u.get("user_name"), "text": u.get("text"),
+                          "blocker": u.get("blocker", False), "mood": u.get("mood"),
+                          "ago": _rel_time(u.get("updated_at", ""))} for u in ups]
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
 
 
@@ -743,7 +812,54 @@ async def import_stripe_revenue(principal=Depends(require("finance:write"))):
 @api_router.get("/tasks")
 async def tasks(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return c["tasks"]
+    t = dict(c["tasks"])
+    t["can_create"] = "tasks:create" in perms_for(principal["pack"])
+    t["can_assign"] = "tasks:assign" in perms_for(principal["pack"])
+    t["my_user_id"] = principal["user_id"]
+    return t
+
+
+@api_router.get("/tasks/me")
+async def my_tasks(principal=Depends(get_principal)):
+    c = await get_ws(principal["workspace_id"])
+    items = [t for t in c["tasks"]["items"] if t.get("assignee_user_id") == principal["user_id"]]
+    return {"items": items, "columns": c["tasks"]["columns"]}
+
+
+class TaskInput(BaseModel):
+    title: str
+    priority: str = "Medium"
+    tag: str = "General"
+    due: str = ""
+    column: str = "backlog"
+    assignee_user_id: Optional[str] = None
+
+
+@api_router.post("/tasks")
+async def create_task(payload: TaskInput, principal=Depends(require("tasks:create"))):
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+    c = await get_ws(principal["workspace_id"])
+    t = c["tasks"]
+    assignee_uid = principal["user_id"]
+    assignee_name = principal.get("name") or principal.get("email") or "Me"
+    if payload.assignee_user_id and payload.assignee_user_id != principal["user_id"]:
+        if "tasks:assign" not in perms_for(principal["pack"]):
+            raise HTTPException(status_code=403, detail="You can only create tasks for yourself")
+        member = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "user_id": payload.assignee_user_id, "status": "active"}, {"_id": 0})
+        if not member:
+            raise HTTPException(status_code=404, detail="Assignee is not in this workspace")
+        u = await db.users.find_one({"user_id": payload.assignee_user_id}, {"_id": 0, "name": 1})
+        assignee_uid = payload.assignee_user_id
+        assignee_name = (u or {}).get("name") or member["email"]
+    item = {"id": f"t_{uuid.uuid4().hex[:8]}", "title": payload.title.strip(),
+            "assignee": assignee_name, "assignee_user_id": assignee_uid,
+            "priority": payload.priority if payload.priority in ("High", "Medium", "Low") else "Medium",
+            "column": payload.column or "backlog", "tag": (payload.tag or "General").strip(),
+            "due": (payload.due or "").strip(), "progress": 0}
+    t["items"].append(item)
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+    return {"ok": True, "task": item}
 
 
 class TaskMove(BaseModel):
@@ -754,12 +870,66 @@ class TaskMove(BaseModel):
 async def move_task(task_id: str, payload: TaskMove, principal=Depends(require("tasks:move"))):
     c = await get_ws(principal["workspace_id"])
     t = c["tasks"]
-    for item in t["items"]:
-        if item["id"] == task_id:
-            item["column"] = payload.column
-            break
+    target = next((i for i in t["items"] if i["id"] == task_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Task not found")
+    owns = target.get("assignee_user_id") == principal["user_id"]
+    if target.get("assignee_user_id") and not owns and "tasks:assign" not in perms_for(principal["pack"]):
+        raise HTTPException(status_code=403, detail="You can only move your own tasks")
+    target["column"] = payload.column
+    if payload.column == "done":
+        target["progress"] = 100
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
     return {"ok": True}
+
+
+# ------------------------- Daily updates -------------------------
+class UpdateInput(BaseModel):
+    text: str
+    blocker: bool = False
+    mood: Optional[str] = None
+
+
+@api_router.get("/updates/me")
+async def my_update(principal=Depends(get_principal)):
+    day = datetime.now(timezone.utc).date().isoformat()
+    u = await db.updates.find_one({"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "day": day}, {"_id": 0})
+    return {"update": u, "day": day}
+
+
+@api_router.get("/updates/today")
+async def todays_updates(principal=Depends(get_principal)):
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = await db.updates.find({"workspace_id": principal["workspace_id"], "day": day}, {"_id": 0}).sort("updated_at", -1).to_list(50)
+    for u in ups:
+        u["ago"] = _rel_time(u.get("updated_at", ""))
+    return {"updates": ups, "day": day}
+
+
+@api_router.post("/updates")
+async def post_update(payload: UpdateInput, principal=Depends(require("updates:write"))):
+    if not payload.text.strip():
+        raise HTTPException(status_code=400, detail="Update text is required")
+    day = datetime.now(timezone.utc).date().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+    text = payload.text.strip()[:600]
+    name = principal.get("name") or principal.get("email") or "Someone"
+    summary = f'Update from {name}: "{text[:90]}"' + (" — blocked" if payload.blocker else "")
+    existing = await db.updates.find_one({"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "day": day}, {"_id": 0})
+    if existing:
+        await db.updates.update_one({"update_id": existing["update_id"]},
+                                    {"$set": {"text": text, "blocker": payload.blocker, "mood": payload.mood, "updated_at": now}})
+        if existing.get("activity_id"):
+            await db.activities.update_one({"activity_id": existing["activity_id"]}, {"$set": {"summary": summary, "created_at": now}})
+        return {"ok": True, "edited": True}
+    act = await log_activity(principal, "updates", "daily.update", summary, {"blocker": payload.blocker})
+    doc = {"update_id": f"upd_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
+           "user_id": principal["user_id"], "user_name": name, "day": day, "text": text,
+           "blocker": payload.blocker, "mood": payload.mood, "activity_id": act["activity_id"],
+           "created_at": now, "updated_at": now}
+    await db.updates.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "edited": False, "update": doc}
 
 
 @api_router.get("/reports")
