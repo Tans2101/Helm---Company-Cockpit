@@ -22,7 +22,7 @@ const NAV = [
   { to: "/team", label: "Team Bandwidth", icon: Users2, id: "team" },
   { to: "/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/people", label: "People", icon: Contact, id: "people" },
-  { to: "/ask", label: "Ask Kalun", icon: MessageSquareText, id: "ask" },
+  { to: "/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
   { to: "/members", label: "Team & Access", icon: UsersRound, id: "members" },
   { to: "/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
@@ -101,7 +101,7 @@ function SidebarContent({ onNavigate }) {
             <span className="font-mono text-gold text-sm font-medium">K</span>
           </div>
           <div>
-            <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Kalun</p>
+            <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Helm</p>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mt-1">CEO Operating System</p>
           </div>
         </div>
@@ -188,7 +188,7 @@ export default function AppLayout() {
           <div className="w-7 h-7 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
             <span className="font-mono text-gold text-xs">K</span>
           </div>
-          <span className="text-white font-semibold text-sm">Kalun</span>
+          <span className="text-white font-semibold text-sm">Helm</span>
         </div>
         <button data-testid="mobile-menu-btn" onClick={() => setMobileOpen(true)} className="text-white">
           <Menu className="w-5 h-5" />

@@ -67,7 +67,7 @@ export default function Briefing() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <SectionLabel>Kalun's synthesis</SectionLabel>
+              <SectionLabel>Helm's synthesis</SectionLabel>
               {!data.is_pro && <ProBadge />}
             </div>
             {data.ai_summary ? (

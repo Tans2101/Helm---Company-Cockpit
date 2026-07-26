@@ -72,7 +72,7 @@ export default function Members() {
               {busy ? "Inviting…" : "Invite"}
             </button>
           </div>
-          <p className="text-xs text-zinc-600 mt-2">Existing Kalun users join instantly. New emails join automatically the first time they sign in with Google.</p>
+          <p className="text-xs text-zinc-600 mt-2">Existing Helm users join instantly. New emails join automatically the first time they sign in with Google.</p>
         </GlassCard>
       )}
 

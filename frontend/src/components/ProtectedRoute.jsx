@@ -9,7 +9,7 @@ export default function ProtectedRoute() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b]">
         <div className="w-7 h-7 rounded-full border-2 border-gold/30 border-t-gold animate-spin mb-5" />
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Kalun</p>
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Helm</p>
       </div>
     );
   }

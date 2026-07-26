@@ -16,7 +16,7 @@ export default function Team() {
 
   return (
     <div>
-      <PageHeader title="Team Bandwidth" subtitle="Utilization across the team — Kalun flags overload before it becomes attrition." />
+      <PageHeader title="Team Bandwidth" subtitle="Utilization across the team — Helm flags overload before it becomes attrition." />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">

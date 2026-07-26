@@ -13,7 +13,7 @@ const PRO = [
   "Full Decision Center with recommendations",
   "Weekly CEO Pack (AI-generated)",
   "Live integrations (Google, Stripe, QuickBooks, GitHub)",
-  "Unlimited Ask Kalun",
+  "Unlimited Ask Helm",
   "Scenario planning & risk matrix",
 ];
 

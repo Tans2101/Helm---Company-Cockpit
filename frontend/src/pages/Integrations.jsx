@@ -73,7 +73,7 @@ export default function Integrations() {
 
   return (
     <div>
-      <PageHeader title="Integrations" subtitle="Kalun pulls status and KPIs in, pushes work out. Employees stay in their tools — you stay in the cockpit." />
+      <PageHeader title="Integrations" subtitle="Helm pulls status and KPIs in, pushes work out. Employees stay in their tools — you stay in the cockpit." />
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {data.integrations.map((it) => {

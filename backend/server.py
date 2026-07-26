@@ -96,14 +96,14 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 <tr><td style="padding:32px 36px 8px 36px;">
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">K</td>
-<td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Kalun</td>
+<td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Helm</td>
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
 <h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{inviter_name} invited you to<br><span style="color:#c9a962;">{workspace_name}</span></h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Kalun — the CEO Operating System. Sign in with Google to see the morning briefing, decisions, financials and more.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm — the CEO Operating System. Sign in with Google to see the morning briefing, decisions, financials and more.</p>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
-<a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Kalun &rarr;</a>
+<a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Helm &rarr;</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
@@ -120,7 +120,7 @@ async def send_invite_email(to_email: str, inviter_name: str, workspace_name: st
     resend.api_key = RESEND_API_KEY
     params = {
         "from": SENDER_EMAIL, "to": [to_email],
-        "subject": f"{inviter_name} invited you to {workspace_name} on Kalun",
+        "subject": f"{inviter_name} invited you to {workspace_name} on Helm",
         "html": _invite_email_html(inviter_name, workspace_name, role, app_url),
     }
     try:
@@ -410,7 +410,7 @@ async def generate_briefing(principal=Depends(require("briefing:generate"))):
     context = {"company": c["name"], "metrics": b["metrics"], "what_changed": b["what_changed"],
                "decisions": b["what_to_decide"], "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn", "cash"]}}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"briefing-{c['workspace_id']}",
-                   system_message=("You are Kalun, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, and end with a confident recommendation. No fluff, no lists.")
+                   system_message=("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, and end with a confident recommendation. No fluff, no lists.")
                    ).with_model("anthropic", "claude-sonnet-4-6")
     text = await chat.send_message(UserMessage(text=f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite the CEO's morning briefing."))
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"briefing.ai_summary": text}})
@@ -494,7 +494,7 @@ async def weekly_pack(principal=Depends(require("reports:pack"))):
     context = {"company": c["name"], "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn"]},
                "kpis": c["telemetry"]["kpis"], "reports": [{"title": r["title"], "summary": r["summary"]} for r in c["reports"]]}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"pack-{c['workspace_id']}",
-                   system_message=("You are Kalun, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
+                   system_message=("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
                    ).with_model("anthropic", "claude-sonnet-4-6")
     text = await chat.send_message(UserMessage(text=f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack."))
     return {"content": text}
@@ -520,7 +520,7 @@ async def people(principal=Depends(get_principal)):
     return c["people"]
 
 
-# ------------------------- Ask Kalun -------------------------
+# ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
 
@@ -546,7 +546,7 @@ async def ask_kalun(payload: AskInput, principal=Depends(require("ask:use"))):
                "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn", "cash", "gross_margin"]},
                "kpis": c["telemetry"]["kpis"], "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"], "risks": c["telemetry"]["risks"]}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ask-{c['workspace_id']}-{principal['user_id']}",
-                   system_message=(f"You are Kalun, the CEO's executive AI chief-of-staff for {c['name']} (a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}")
+                   system_message=(f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} (a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}")
                    ).with_model("anthropic", "claude-sonnet-4-6")
 
     async def gen():
@@ -766,7 +766,7 @@ async def reset_plan(principal=Depends(require("billing:manage"))):
 
 @api_router.get("/")
 async def root():
-    return {"service": "Kalun CEO Operating System"}
+    return {"service": "Helm CEO Operating System"}
 
 
 app.include_router(api_router)

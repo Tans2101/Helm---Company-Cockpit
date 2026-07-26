@@ -26,7 +26,7 @@ export default function Login() {
             <span className="font-mono text-gold font-medium">K</span>
           </div>
           <div>
-            <p className="text-white font-semibold tracking-tight leading-none">Kalun</p>
+            <p className="text-white font-semibold tracking-tight leading-none">Helm</p>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mt-1">CEO Operating System</p>
           </div>
         </div>
@@ -37,7 +37,7 @@ export default function Login() {
             Run your company from one command center.
           </h1>
           <p className="text-zinc-400 text-base md:text-lg mt-6 leading-relaxed">
-            Kalun pulls status and KPIs in, pushes work out, and answers the only question that matters —
+            Helm pulls status and KPIs in, pushes work out, and answers the only question that matters —
             <span className="text-white"> what does the CEO need to know right now?</span>
           </p>
           <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-zinc-500">
@@ -47,7 +47,7 @@ export default function Login() {
             <span className="text-zinc-700">·</span>
             <span>Runway & burn</span>
             <span className="text-zinc-700">·</span>
-            <span>Ask Kalun</span>
+            <span>Ask Helm</span>
           </div>
         </div>
 

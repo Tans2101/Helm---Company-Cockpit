@@ -59,7 +59,7 @@ export default function Decisions() {
                 <div className="mt-4 rounded-lg border border-gold/20 bg-gold/[0.04] p-3">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-gold" />
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-gold">Kalun recommends</span>
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-gold">Helm recommends</span>
                     <span className="ml-auto font-mono text-xs text-gold">{d.confidence}% confidence</span>
                   </div>
                   <p className="text-sm text-zinc-200 leading-relaxed">{d.recommendation}</p>

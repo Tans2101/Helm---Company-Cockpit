@@ -74,7 +74,7 @@ export default function AskKalun() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)]">
-      <PageHeader title="Ask Kalun" subtitle="Your executive AI chief-of-staff — grounded in your live company data." />
+      <PageHeader title="Ask Helm" subtitle="Your executive AI chief-of-staff — grounded in your live company data." />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-6">
         {messages.length === 0 && (
@@ -115,7 +115,7 @@ export default function AskKalun() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Ask Kalun anything about your company…"
+            placeholder="Ask Helm anything about your company…"
             className="flex-1 bg-transparent text-white text-sm placeholder:text-zinc-600 focus:outline-none py-1.5"
           />
           <button data-testid="ask-send-btn" onClick={() => send()} disabled={streaming || !input.trim()}

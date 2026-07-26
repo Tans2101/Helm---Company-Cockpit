@@ -1,4 +1,4 @@
-"""Per-workspace demo data template for Kalun — Northwind Robotics."""
+"""Per-workspace demo data template for Helm — Northwind Robotics."""
 import uuid
 from datetime import datetime, timezone
 
