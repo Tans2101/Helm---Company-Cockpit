@@ -1364,11 +1364,10 @@ async def _paddle_create_transaction(session_id: str, workspace_id: str, user_id
             "user_id": user_id,
             "plan": "pro",
         },
-        "checkout": {
-            "url": f"{origin}/payment/success?session_id={session_id}",
-        },
     }
-    # Prefill email when possible (Paddle accepts customer.email on some flows via custom checkout).
+    # Optional: payment-link base URL must be an approved Paddle domain.
+    if origin:
+        payload["checkout"] = {"url": origin}
     if email:
         payload["custom_data"]["email"] = email
     headers = {
