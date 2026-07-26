@@ -25,7 +25,7 @@ export default function Members() {
     setBusy(true);
     try {
       const { data: res } = await api.post("/members/invite", { email: email.trim(), role });
-      toast.success(res.auto_joined ? "Member added" : "Invitation created");
+      toast.success(res.auto_joined ? "Member added instantly" : res.email_sent ? "Invitation email sent" : "Invitation created — they'll join on first sign-in");
       setEmail("");
       reload();
     } catch (e) {

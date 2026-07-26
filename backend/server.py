@@ -3,6 +3,7 @@ import uuid
 import json
 import hmac
 import hashlib
+import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -10,6 +11,7 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
+import resend
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
@@ -38,6 +40,8 @@ GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
 QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PRO_PRICE = 149.0
 
 app = FastAPI()
@@ -80,6 +84,51 @@ def _verify_state(state: str, max_age: int = 600):
     if int(datetime.now(timezone.utc).timestamp()) - int(ts) > max_age:
         return None
     return provider, workspace_id
+
+
+# ------------------------- Email (Resend) -------------------------
+def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_url: str) -> str:
+    return f"""\
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
+<tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="background:#121214;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
+<tr><td style="padding:32px 36px 8px 36px;">
+<table cellpadding="0" cellspacing="0"><tr>
+<td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">K</td>
+<td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Kalun</td>
+</tr></table>
+<p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
+<h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{inviter_name} invited you to<br><span style="color:#c9a962;">{workspace_name}</span></h1>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Kalun — the CEO Operating System. Sign in with Google to see the morning briefing, decisions, financials and more.</p>
+<table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
+<td style="background:#c9a962;border-radius:8px;">
+<a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Kalun &rarr;</a>
+</td></tr></table>
+</td></tr>
+<tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
+<p style="color:#52525b;font-size:12px;margin:0;line-height:1.6;">Know what matters before your first meeting.<br>If you didn't expect this invite, you can ignore this email.</p>
+</td></tr>
+</table>
+</td></tr></table></body></html>"""
+
+
+async def send_invite_email(to_email: str, inviter_name: str, workspace_name: str, role: str, app_url: str):
+    if not RESEND_API_KEY:
+        logger.info("RESEND_API_KEY not set — skipping invite email to %s", to_email)
+        return {"sent": False, "reason": "no_key"}
+    resend.api_key = RESEND_API_KEY
+    params = {
+        "from": SENDER_EMAIL, "to": [to_email],
+        "subject": f"{inviter_name} invited you to {workspace_name} on Kalun",
+        "html": _invite_email_html(inviter_name, workspace_name, role, app_url),
+    }
+    try:
+        email = await asyncio.to_thread(resend.Emails.send, params)
+        return {"sent": True, "id": (email or {}).get("id")}
+    except Exception:
+        logger.exception("resend send failed")
+        return {"sent": False, "reason": "error"}
 
 
 # ------------------------- Auth / principal -------------------------
@@ -289,7 +338,7 @@ class InviteInput(BaseModel):
 
 
 @api_router.post("/members/invite")
-async def invite_member(payload: InviteInput, principal=Depends(require("members:manage"))):
+async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:manage"))):
     role = "owner" if payload.role == "owner" else "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
@@ -302,7 +351,10 @@ async def invite_member(payload: InviteInput, principal=Depends(require("members
         "role": role, "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"ok": True, "auto_joined": bool(existing_user)}
+    ws = await get_ws(principal["workspace_id"])
+    app_url = str(request.base_url).rstrip("/")
+    email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], role, app_url)
+    return {"ok": True, "auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False)}
 
 
 class RoleInput(BaseModel):

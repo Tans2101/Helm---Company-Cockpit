@@ -39,6 +39,10 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 ## Pending credentials (to go live)
 - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (enable Calendar + Gmail APIs, add redirect URI /api/oauth/google/callback).
 - QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET (Intuit app, redirect /api/oauth/quickbooks/callback).
+- RESEND_API_KEY + SENDER_EMAIL (verified domain) to send real invitation emails. Until set, invites are created but emails no-op (logged).
+
+## Implemented (2026-07-26) — Email invitations
+- Resend integration: owner invites now send a branded (dark/gold) HTML "you've been added to Kalun" email via Resend. send_invite_email() runs non-blocking (asyncio.to_thread) and degrades gracefully to a no-op when RESEND_API_KEY is empty. invite response returns email_sent flag; Members UI toast reflects instant-join / email-sent / pending-invite.
 
 ## Backlog
 - P1: Real integrations (Google Calendar, QuickBooks, GitHub sync, Slack push).
