@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowRight, Sparkles, GitBranch, DollarSign, MessageSquareText,
-  Layers, Zap, Command, Check,
+  Layers, Zap, Command, Check, Star,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -98,6 +98,19 @@ export default function Landing() {
     { icon: MessageSquareText, title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },
   ];
 
+  const stats = [
+    { v: "3 min", l: "to your morning briefing" },
+    { v: "8+", l: "tools unified in one view" },
+    { v: "118%", l: "avg. NRR of teams on Helm" },
+    { v: "40%", l: "fewer status meetings" },
+  ];
+
+  const testimonials = [
+    { quote: "Helm is the first thing I open. I walk into every morning knowing the one decision that actually matters.", name: "Alex Rivera", role: "Founder & CEO, Northwind Robotics", initials: "AR" },
+    { quote: "It replaced my Monday scramble across five dashboards. The briefing just tells me what needs me.", name: "Priya Shah", role: "Co-founder, Ledgerloop", initials: "PS" },
+    { quote: "Runway and burn used to live in a spreadsheet I updated monthly. Now it's live — and I sleep better.", name: "Marcus Lin", role: "CEO, Cadence Health", initials: "ML" },
+  ];
+
   return (
     <div className="min-h-screen bg-[#09090b] text-white grain overflow-x-hidden">
       <Nav authed={authed} onEnter={enter} />
@@ -135,6 +148,23 @@ export default function Landing() {
           <motion.div initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
             <BriefingPreview />
           </motion.div>
+        </div>
+      </section>
+
+      {/* Trust / stats strip */}
+      <section className="px-6 py-12 border-t border-white/[0.05]">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-center font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-600">
+            Trusted by founders at seed &amp; Series A startups
+          </p>
+          <div className="mt-9 grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-6">
+            {stats.map((s, i) => (
+              <motion.div key={s.l} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center">
+                <p className="font-mono text-3xl md:text-4xl text-white">{s.v}</p>
+                <p className="mt-2 text-xs text-zinc-500 leading-snug">{s.l}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -200,6 +230,34 @@ export default function Landing() {
                   <div>
                     <h3 className="text-lg text-white tracking-tight">{f.title}</h3>
                     <p className="mt-1.5 text-sm text-zinc-400 leading-relaxed">{f.body}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="px-6 py-24 border-t border-white/[0.05]">
+        <div className="mx-auto max-w-6xl">
+          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Loved by founders</p>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Quiet control, in their words.</h2>
+          </motion.div>
+          <div className="mt-14 grid md:grid-cols-3 gap-5">
+            {testimonials.map((t, i) => (
+              <motion.div key={t.name} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}
+                className="flex flex-col rounded-2xl border border-white/[0.06] bg-[#121214]/60 p-6">
+                <div className="flex gap-0.5">
+                  {[...Array(5)].map((_, s) => <Star key={s} className="w-3.5 h-3.5 text-gold" fill="#c9a962" />)}
+                </div>
+                <p className="mt-4 text-[15px] text-zinc-200 leading-relaxed flex-1">"{t.quote}"</p>
+                <div className="mt-6 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center text-xs text-gold font-mono">{t.initials}</div>
+                  <div>
+                    <p className="text-sm text-white leading-none">{t.name}</p>
+                    <p className="text-xs text-zinc-500 mt-1">{t.role}</p>
                   </div>
                 </div>
               </motion.div>
