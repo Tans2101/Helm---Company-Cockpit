@@ -92,3 +92,10 @@ frontend/node_modules/.cache/default-development/15.pack
 frontend/node_modules/.cache/default-development/16.pack
 frontend/node_modules/.cache/default-development/10.pack
 frontend/node_modules/.cache/default-development/14.pack
+
+# Local runtime
+.data/
+.local/
+.logs/
+frontend/.env
+backend/.env

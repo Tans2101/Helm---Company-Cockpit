@@ -52,6 +52,11 @@ PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
 PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = (os.environ.get('PADDLE_ENV', 'sandbox') or 'sandbox').lower()
 PADDLE_API_BASE = "https://api.paddle.com" if PADDLE_ENV == "production" else "https://sandbox-api.paddle.com"
+# Local / Cursor runs: skip Emergent Google OAuth and use demo login.
+ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
+# Cookie flags: Secure+None for https cross-site (Emergent); Lax for local http.
+_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
+_COOKIE_SAMESITE = "none" if _COOKIE_SECURE else "lax"
 # Prefer a dedicated secret; fall back to LLM key. Dev-only literal is last resort so
 # process restarts do not invalidate in-flight OAuth state.
 _STATE_SECRET = (os.environ.get("OAUTH_STATE_SECRET") or EMERGENT_LLM_KEY or "helm-oauth-state-dev-only").encode()
@@ -424,6 +429,50 @@ class SessionInput(BaseModel):
     session_id: str
 
 
+class DemoLoginInput(BaseModel):
+    name: Optional[str] = "Demo Founder"
+    email: Optional[EmailStr] = "founder@helm.demo"
+
+
+def _set_session_cookie(response: Response, session_token: str):
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        path="/",
+        max_age=7 * 24 * 60 * 60,
+    )
+
+
+async def _issue_session(response: Response, email: str, name: Optional[str] = None, picture: Optional[str] = None,
+                         session_token: Optional[str] = None):
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name or existing.get("name"), "picture": picture if picture is not None else existing.get("picture")}},
+        )
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    await _bootstrap(user)
+    token = session_token or secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one({
+        "user_id": user_id, "session_token": token,
+        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    _set_session_cookie(response, token)
+    return {"ok": True, "user_id": user_id, "email": email, "session_token": token}
+
+
 @api_router.post("/auth/session")
 async def process_session(payload: SessionInput, response: Response):
     async with httpx.AsyncClient() as hc:
@@ -434,27 +483,32 @@ async def process_session(payload: SessionInput, response: Response):
     if r.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid session id")
     data = r.json()
-    email = data["email"]
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": data.get("name"), "picture": data.get("picture")}})
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name"), "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    await _bootstrap(user)
-    session_token = data["session_token"]
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="none", path="/", max_age=7 * 24 * 60 * 60)
-    return {"ok": True, "user_id": user_id, "email": email}
+    return await _issue_session(
+        response,
+        email=data["email"],
+        name=data.get("name"),
+        picture=data.get("picture"),
+        session_token=data.get("session_token"),
+    )
+
+
+@api_router.post("/auth/demo-login")
+async def demo_login(payload: DemoLoginInput, response: Response):
+    """Local/dev login that does not depend on Emergent Google OAuth."""
+    if not ALLOW_DEMO_LOGIN:
+        raise HTTPException(status_code=404, detail="Demo login disabled")
+    email = (str(payload.email or "founder@example.com")).strip().lower()
+    name = (payload.name or "Demo Founder").strip() or "Demo Founder"
+    return await _issue_session(response, email=email, name=name)
+
+
+@api_router.get("/auth/config")
+async def auth_config():
+    return {
+        "demo_login": ALLOW_DEMO_LOGIN,
+        "google_oauth": not ALLOW_DEMO_LOGIN,
+        "provider": "demo" if ALLOW_DEMO_LOGIN else "emergent_google",
+    }
 
 
 @api_router.get("/auth/me")
@@ -494,7 +548,12 @@ async def logout(request: Request, response: Response):
             token = auth[7:]
     if token:
         await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/")
+    response.delete_cookie(
+        "session_token",
+        path="/",
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+    )
     return {"ok": True}
 
 
