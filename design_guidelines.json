@@ -1,5 +1,5 @@
 {
-  "project_name": "Kalun - CEO Operating System",
+  "project_name": "Helm - CEO Operating System",
   "theme": "dark",
   "typography": {
     "font_families": {
@@ -59,7 +59,7 @@
     "metric_card": "High-density data card. `bg-[#121214] border border-white/5 rounded-lg p-4`. Values in `DM Mono`.",
     "briefing_panel": "Primary focal point. Contains \"What changed, what to decide, what to delegate\". Slightly elevated surface with glassmorphism.",
     "button": "Primary: `bg-[#c9a962] text-black hover:bg-[#e5c57f] font-medium rounded-md`. Secondary: `border border-white/10 text-white hover:bg-white/5 rounded-md`.",
-    "chat_interface": "'Ask Kalun' AI chat. Needs a distinct input area, minimal bubbles, and an executive tone. AI recommendations highlighted with a champagne gold border or icon.",
+    "chat_interface": "'Ask Helm' AI chat. Needs a distinct input area, minimal bubbles, and an executive tone. AI recommendations highlighted with a champagne gold border or icon.",
     "risk_matrix": "Grid or scatter plot charting risks vs. impact. Use Recharts with custom tooltips.",
     "kanban_board": "For Tasks section. Columns with border collapse styling, minimal card design, high density."
   },
@@ -104,7 +104,7 @@
   "instructions_to_main_agent": [
     "Build a Next.js or React SPA layout (depending on framework setup) utilizing Tailwind CSS.",
     "Set the global background to `#09090b` and text to `#ffffff`.",
-    "Implement a fixed sidebar on the left (`w-[260px]`) and a main content area. Make sure to use Lucide React icons for the navigation items (Home, Decisions, Telemetry, Financials, Tasks, Reports, Team, Calendar, People, Ask Kalun, Integrations).",
+    "Implement a fixed sidebar on the left (`w-[260px]`) and a main content area. Make sure to use Lucide React icons for the navigation items (Home, Decisions, Telemetry, Financials, Tasks, Reports, Team, Calendar, People, Ask Helm, Integrations).",
     "For the 'Morning Executive Briefing' module, build an elevated glassmorphic card that highlights 3 key areas: What changed, What to decide, What to delegate.",
     "Implement high-density metric cards using `DM Mono` for numbers. Align data points precisely.",
     "Do not use generic Shadcn default styles; customize borders to `border-white/5` and use `#c9a962` as the primary action color.",

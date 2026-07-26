@@ -5,7 +5,7 @@ import { Sparkles, Send, CheckCircle2, Circle, AlertTriangle, Plus, ArrowUpRight
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const MOODS = [
@@ -24,9 +24,9 @@ const colStyle = {
 
 export default function MyDay() {
   const { user } = useAuth();
-  const { data: mine, loading: l1, reload: reloadMine } = useFetch("/updates/me");
-  const { data: tasks, loading: l2, reload: reloadTasks } = useFetch("/tasks/me");
-  const { data: today, loading: l3, reload: reloadToday } = useFetch("/updates/today");
+  const { data: mine, loading: l1, error: e1, reload: reloadMine } = useFetch("/updates/me");
+  const { data: tasks, loading: l2, error: e2, reload: reloadTasks } = useFetch("/tasks/me");
+  const { data: today, loading: l3, error: e3, reload: reloadToday } = useFetch("/updates/today");
 
   const [text, setText] = useState("");
   const [blocker, setBlocker] = useState(false);
@@ -45,6 +45,9 @@ export default function MyDay() {
   }, [mine]);
 
   if (l1 || l2 || l3) return <LoadingScreen label="Assembling your day" />;
+  if (e1 || e2 || e3 || !mine || !tasks || !today) {
+    return <ErrorScreen onRetry={() => { reloadMine(); reloadTasks(); reloadToday(); }} />;
+  }
 
   const first = user?.name?.split(" ")[0] || "there";
   const hasPosted = !!mine?.update;

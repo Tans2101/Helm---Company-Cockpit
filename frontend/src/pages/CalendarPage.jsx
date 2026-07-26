@@ -1,6 +1,6 @@
 import { Clock, Users, Sparkles } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const typeStyle = {
@@ -11,9 +11,17 @@ const typeStyle = {
 };
 
 export default function CalendarPage() {
-  const { data, loading } = useFetch("/calendar");
-  if (loading || !data) return <LoadingScreen label="Loading calendar" />;
-  if (data.meetings.length === 0) return <div><PageHeader title="Calendar" subtitle="Meeting intelligence — walk into every meeting prepared." /><EmptyState title="No meetings yet" body="Connect Google Calendar to bring your schedule and meeting prep into Helm." /></div>;
+  const { data, loading, error, reload } = useFetch("/calendar");
+  if (loading) return <LoadingScreen label="Loading calendar" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
+  if (data.meetings.length === 0) {
+    return (
+      <div>
+        <PageHeader title="Calendar" subtitle="Meeting intelligence — walk into every meeting prepared." />
+        <EmptyState title="No meetings yet" body="Connect Google Calendar to bring your schedule and meeting prep into Helm." />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -47,7 +55,7 @@ export default function CalendarPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="text-white font-medium">{m.title}</h3>
-                  <span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", typeStyle[m.type])}>{m.type}</span>
+                  <span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", typeStyle[m.type] || "text-zinc-400 bg-white/5")}>{m.type}</span>
                   <span className="text-[11px] text-zinc-600 flex items-center gap-1"><Users className="w-3 h-3" />{m.attendees}</span>
                 </div>
                 <div className="flex items-start gap-1.5 mt-2">

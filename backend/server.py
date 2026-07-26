@@ -1,18 +1,21 @@
 import os
+import re
 import uuid
 import json
 import hmac
+import html
+import secrets
 import hashlib
 import asyncio
 import logging
+import time
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import resend
-import stripe as stripe_sdk
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
@@ -21,9 +24,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse,
-)
 
 from seed_data import build_workspace, sample_financial_entries
 
@@ -35,7 +35,6 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
@@ -43,12 +42,44 @@ QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
-PRO_PRICE = 149.0
+# Display price for Helm Pro. Keep in sync with the Paddle price (USD major units).
+# Current live price pri_01kssnhhqe71k6720sw7bp302a is $8.00 (unit_price.amount=800).
+PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
+# Paddle Billing (Helm Pro). Sandbox by default.
+PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
+PADDLE_CLIENT_TOKEN = os.environ.get('PADDLE_CLIENT_TOKEN', '')
+PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
+PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
+PADDLE_ENV = (os.environ.get('PADDLE_ENV', 'sandbox') or 'sandbox').lower()
+PADDLE_API_BASE = "https://api.paddle.com" if PADDLE_ENV == "production" else "https://sandbox-api.paddle.com"
+# Local / Cursor runs: skip Emergent Google OAuth and use demo login.
+ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
+# Cookie flags: Secure+None for https cross-site (Emergent); Lax for local http.
+_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
+_COOKIE_SAMESITE = "none" if _COOKIE_SECURE else "lax"
+# Prefer a dedicated secret; fall back to LLM key. Dev-only literal is last resort so
+# process restarts do not invalidate in-flight OAuth state.
+_STATE_SECRET = (os.environ.get("OAUTH_STATE_SECRET") or EMERGENT_LLM_KEY or "helm-oauth-state-dev-only").encode()
+# Comma-separated frontend origins for CORS + checkout redirect allowlist.
+_CORS_ORIGINS = [o.strip().rstrip("/") for o in os.environ.get(
+    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+).split(",") if o.strip()]
+# Keep Emergent preview frontends working without opening CORS to the entire internet.
+_CORS_ORIGIN_REGEX = os.environ.get(
+    "CORS_ORIGIN_REGEX",
+    r"https://([a-z0-9-]+\.)*(emergentagent\.com|emergent\.sh)",
+)
+DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "true").lower() in ("1", "true", "yes")
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("kalun")
+logger = logging.getLogger("helm")
+
+# In-memory join attempt tracker: user_id -> [timestamps]. Process-local is enough for preview.
+_JOIN_ATTEMPTS: dict[str, list[float]] = {}
+_JOIN_LIMIT = 8
+_JOIN_WINDOW_SEC = 600
 
 # ------------------------- Access packs / permissions -------------------------
 # Every employee can do daily work: read, move/create their tasks, ask Helm, post a daily update.
@@ -92,32 +123,80 @@ def perms_for(pack: str):
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
-_STATE_SECRET = (EMERGENT_LLM_KEY or "kalun-oauth-state").encode()
-
-
-def _sign_state(provider: str, workspace_id: str) -> str:
+def _sign_state(provider: str, workspace_id: str, user_id: str = "") -> str:
     ts = str(int(datetime.now(timezone.utc).timestamp()))
-    body = f"{provider}:{workspace_id}:{ts}"
-    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    body = f"{provider}:{workspace_id}:{ts}:{user_id}"
+    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
     return f"{body}:{sig}"
 
 
 def _verify_state(state: str, max_age: int = 600):
     try:
-        provider, workspace_id, ts, sig = state.split(":")
+        parts = state.split(":")
+        if len(parts) == 5:
+            provider, workspace_id, ts, user_id, sig = parts
+            body = f"{provider}:{workspace_id}:{ts}:{user_id}"
+        elif len(parts) == 4:
+            # Legacy states (pre user_id binding / truncated sig)
+            provider, workspace_id, ts, sig = parts
+            user_id = ""
+            body = f"{provider}:{workspace_id}:{ts}"
+        else:
+            return None
     except (ValueError, AttributeError):
         return None
-    body = f"{provider}:{workspace_id}:{ts}"
-    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
-    if not hmac.compare_digest(expected, sig):
+    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
+    # Accept both full and legacy truncated signatures during rollout.
+    if not (hmac.compare_digest(expected, sig) or hmac.compare_digest(expected[:16], sig)):
         return None
-    if int(datetime.now(timezone.utc).timestamp()) - int(ts) > max_age:
+    try:
+        age = int(datetime.now(timezone.utc).timestamp()) - int(ts)
+    except ValueError:
         return None
-    return provider, workspace_id
+    if age > max_age:
+        return None
+    return provider, workspace_id, user_id
+
+
+def _new_join_code() -> str:
+    """12-char hex join code (~48 bits). Longer than the old 6-char codes."""
+    return secrets.token_hex(6).upper()
+
+
+def _rate_limit_join(user_id: str):
+    now = time.time()
+    recent = [t for t in _JOIN_ATTEMPTS.get(user_id, []) if now - t < _JOIN_WINDOW_SEC]
+    if len(recent) >= _JOIN_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many join attempts. Try again later.")
+    recent.append(now)
+    _JOIN_ATTEMPTS[user_id] = recent
+
+
+def _origin_allowed(origin_url: str) -> bool:
+    """Allow checkout redirects only to configured frontends / Emergent previews."""
+    try:
+        parsed = urlparse(origin_url.strip())
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    if origin in _CORS_ORIGINS:
+        return True
+    try:
+        return bool(re.fullmatch(_CORS_ORIGIN_REGEX, origin))
+    except re.error:
+        return False
 
 
 # ------------------------- Email (Resend) -------------------------
 def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_url: str) -> str:
+    inviter_name = html.escape(inviter_name or "")
+    workspace_name = html.escape(workspace_name or "")
+    role = html.escape(role or "")
+    app_url = html.escape(app_url or "", quote=True)
     return f"""\
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
@@ -125,7 +204,7 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 <table width="480" cellpadding="0" cellspacing="0" style="background:#121214;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
 <tr><td style="padding:32px 36px 8px 36px;">
 <table cellpadding="0" cellspacing="0"><tr>
-<td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">K</td>
+<td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">H</td>
 <td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Helm</td>
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
@@ -350,6 +429,50 @@ class SessionInput(BaseModel):
     session_id: str
 
 
+class DemoLoginInput(BaseModel):
+    name: Optional[str] = "Demo Founder"
+    email: Optional[EmailStr] = "founder@helm.demo"
+
+
+def _set_session_cookie(response: Response, session_token: str):
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+        path="/",
+        max_age=7 * 24 * 60 * 60,
+    )
+
+
+async def _issue_session(response: Response, email: str, name: Optional[str] = None, picture: Optional[str] = None,
+                         session_token: Optional[str] = None):
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name or existing.get("name"), "picture": picture if picture is not None else existing.get("picture")}},
+        )
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    await _bootstrap(user)
+    token = session_token or secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one({
+        "user_id": user_id, "session_token": token,
+        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    _set_session_cookie(response, token)
+    return {"ok": True, "user_id": user_id, "email": email, "session_token": token}
+
+
 @api_router.post("/auth/session")
 async def process_session(payload: SessionInput, response: Response):
     async with httpx.AsyncClient() as hc:
@@ -360,27 +483,32 @@ async def process_session(payload: SessionInput, response: Response):
     if r.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid session id")
     data = r.json()
-    email = data["email"]
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": data.get("name"), "picture": data.get("picture")}})
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name"), "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    await _bootstrap(user)
-    session_token = data["session_token"]
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True, samesite="none", path="/", max_age=7 * 24 * 60 * 60)
-    return {"ok": True, "user_id": user_id, "email": email}
+    return await _issue_session(
+        response,
+        email=data["email"],
+        name=data.get("name"),
+        picture=data.get("picture"),
+        session_token=data.get("session_token"),
+    )
+
+
+@api_router.post("/auth/demo-login")
+async def demo_login(payload: DemoLoginInput, response: Response):
+    """Local/dev login that does not depend on Emergent Google OAuth."""
+    if not ALLOW_DEMO_LOGIN:
+        raise HTTPException(status_code=404, detail="Demo login disabled")
+    email = (str(payload.email or "founder@example.com")).strip().lower()
+    name = (payload.name or "Demo Founder").strip() or "Demo Founder"
+    return await _issue_session(response, email=email, name=name)
+
+
+@api_router.get("/auth/config")
+async def auth_config():
+    return {
+        "demo_login": ALLOW_DEMO_LOGIN,
+        "google_oauth": not ALLOW_DEMO_LOGIN,
+        "provider": "demo" if ALLOW_DEMO_LOGIN else "emergent_google",
+    }
 
 
 @api_router.get("/auth/me")
@@ -400,19 +528,32 @@ async def auth_me(user=Depends(get_user)):
                                       {"$set": {"active_workspace_id": membership["workspace_id"]}})
     if not membership:
         return {**base, "workspace_id": None, "needs_workspace": True, "role": None,
-                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None}
+                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None,
+                "onboarding_done": None}
     pack = pack_of(membership)
+    ws = await db.workspaces.find_one({"workspace_id": membership["workspace_id"]},
+                                      {"_id": 0, "onboarding_done": 1})
     return {**base, "workspace_id": membership["workspace_id"], "needs_workspace": False,
             "role": membership["role"], "pack": pack, "perms": sorted(perms_for(pack)),
-            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member")}
+            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member"),
+            "onboarding_done": (ws or {}).get("onboarding_done", True)}
 
 
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
     if token:
         await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/")
+    response.delete_cookie(
+        "session_token",
+        path="/",
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+    )
     return {"ok": True}
 
 
@@ -466,7 +607,11 @@ class JoinInput(BaseModel):
 
 @api_router.get("/workspaces/join-info")
 async def join_info(code: str, user=Depends(get_user)):
-    ws = await db.workspaces.find_one({"join_code": code.strip().upper()}, {"_id": 0, "name": 1, "workspace_id": 1})
+    _rate_limit_join(user["user_id"])
+    code = (code or "").strip().upper()
+    if not re.fullmatch(r"[A-F0-9]{6,16}", code):
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    ws = await db.workspaces.find_one({"join_code": code}, {"_id": 0, "name": 1, "workspace_id": 1})
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     return {"name": ws["name"], "workspace_id": ws["workspace_id"]}
@@ -474,7 +619,11 @@ async def join_info(code: str, user=Depends(get_user)):
 
 @api_router.post("/workspaces/join")
 async def join_workspace(payload: JoinInput, user=Depends(get_user)):
-    ws = await db.workspaces.find_one({"join_code": payload.code.strip().upper()}, {"_id": 0})
+    _rate_limit_join(user["user_id"])
+    code = (payload.code or "").strip().upper()
+    if not re.fullmatch(r"[A-F0-9]{6,16}", code):
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+    ws = await db.workspaces.find_one({"join_code": code}, {"_id": 0})
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     ws_id = ws["workspace_id"]
@@ -485,6 +634,11 @@ async def join_workspace(payload: JoinInput, user=Depends(get_user)):
             "user_id": user["user_id"], "email": user["email"], "role": "member",
             "pack": "member", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
         })
+    elif existing.get("status") != "active":
+        await db.memberships.update_one(
+            {"membership_id": existing["membership_id"]},
+            {"$set": {"status": "active", "joined_at": datetime.now(timezone.utc).isoformat()}},
+        )
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -494,7 +648,7 @@ async def get_join_code(principal=Depends(require("members:invite"))):
     ws = await get_ws(principal["workspace_id"])
     code = ws.get("join_code")
     if not code:
-        code = uuid.uuid4().hex[:6].upper()
+        code = _new_join_code()
         await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {"join_code": code}})
     return {"join_code": code}
 
@@ -594,16 +748,27 @@ class TemplateInput(BaseModel):
 @api_router.post("/workspace/apply-template")
 async def apply_template(payload: TemplateInput, principal=Depends(require("workspace:edit"))):
     ws_id = principal["workspace_id"]
+    if payload.template not in ("sample", "clean"):
+        raise HTTPException(status_code=400, detail="Unknown template")
     if payload.template == "sample":
-        fresh = build_workspace(ws_id, (await get_ws(ws_id))["name"], principal["user_id"], empty=False)
-        fresh.pop("workspace_id", None)
-        fresh.pop("plan", None)
-        fresh.pop("created_at", None)
+        existing = await get_ws(ws_id)
+        fresh = build_workspace(ws_id, existing["name"], principal["user_id"], empty=False)
+        # Never wipe identity, billing, invite surface, or OAuth tokens on template apply.
+        for key in (
+            "workspace_id", "plan", "created_at", "join_code", "name", "owner_user_id",
+            "google_tokens", "quickbooks_tokens",
+        ):
+            fresh.pop(key, None)
+        fresh["onboarding_done"] = True
+        fresh["template"] = "sample"
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": fresh})
         await db.financial_entries.delete_many({"workspace_id": ws_id})
         await db.financial_entries.insert_many(sample_financial_entries(ws_id))
     else:
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"onboarding_done": True}})
+        await db.workspaces.update_one(
+            {"workspace_id": ws_id},
+            {"$set": {"onboarding_done": True, "template": "empty"}},
+        )
     return {"ok": True}
 
 
@@ -721,10 +886,18 @@ class FinEntryInput(BaseModel):
     note: Optional[str] = ""
 
 
-@api_router.post("/financials/entries")
-async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+def _validate_fin_entry(payload: FinEntryInput):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", payload.month or ""):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    if payload.amount < 0 or payload.amount > 1e12:
+        raise HTTPException(status_code=400, detail="amount out of range")
+
+
+@api_router.post("/financials/entries")
+async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    _validate_fin_entry(payload)
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
              "type": payload.type, "category": payload.category.strip() or "Other",
              "amount": round(payload.amount, 2), "month": payload.month, "recurring": payload.recurring,
@@ -740,6 +913,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finan
 
 @api_router.patch("/financials/entries/{entry_id}")
 async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    _validate_fin_entry(payload)
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
@@ -778,35 +952,6 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
                        f"Updated cash to {fmt_money(payload.cash)}" + (f" — runway now {runway}mo" if runway else ""),
                        {"cash": payload.cash, "runway_months": runway})
     return {"ok": True}
-
-
-@api_router.post("/financials/import/stripe")
-async def import_stripe_revenue(principal=Depends(require("finance:write"))):
-    if not STRIPE_API_KEY:
-        raise HTTPException(status_code=400, detail="Stripe not configured")
-    stripe_sdk.api_key = STRIPE_API_KEY
-    from collections import defaultdict
-    by_month = defaultdict(float)
-    try:
-        charges = await asyncio.to_thread(lambda: stripe_sdk.Charge.list(limit=100))
-        for ch in charges.get("data", []):
-            if ch.get("paid") and ch.get("status") == "succeeded" and not ch.get("refunded"):
-                dt = datetime.fromtimestamp(ch["created"], tz=timezone.utc)
-                by_month[dt.strftime("%Y-%m")] += (ch.get("amount", 0) / 100.0)
-    except Exception as e:
-        logger.exception("stripe import failed")
-        raise HTTPException(status_code=400, detail=f"Stripe import failed: {e}")
-    now = datetime.now(timezone.utc).isoformat()
-    docs = [{"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"], "type": "revenue",
-             "category": "Stripe revenue", "amount": round(amt, 2), "month": month, "recurring": True,
-             "note": "Imported from Stripe", "source": "stripe", "created_by": principal["user_id"], "created_at": now}
-            for month, amt in by_month.items()]
-    if docs:
-        await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
-        await db.financial_entries.insert_many(docs)
-        await log_activity(principal, "financials", "import.stripe",
-                           f"Imported {len(docs)} month(s) of Stripe revenue ({fmt_money(sum(by_month.values()))})")
-    return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 
 
 @api_router.get("/tasks")
@@ -1060,7 +1205,7 @@ async def ask_history(principal=Depends(get_principal)):
 
 
 @api_router.post("/ask")
-async def ask_kalun(payload: AskInput, principal=Depends(require("ask:use"))):
+async def ask_helm(payload: AskInput, principal=Depends(require("ask:use"))):
     c = await get_ws(principal["workspace_id"])
     is_pro = c["plan"] == "pro"
     if not is_pro:
@@ -1171,7 +1316,9 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     if not cfg["configured"]:
         return {"configured": False, "message": f"{provider.title()} OAuth credentials are not set yet. Add them in the backend .env to enable live connection."}
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
-              "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
+              "scope": cfg["scope"],
+              "state": _sign_state(provider, principal["workspace_id"], principal["user_id"]),
+              **cfg.get("extra", {})}
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
 
 
@@ -1185,6 +1332,15 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
     if not verified or verified[0] != provider:
         return RedirectResponse(f"{frontend}/integrations?error=state")
     workspace_id = verified[1]
+    # If state was bound to a user, require that same user to complete the callback.
+    bound_user = verified[2] if len(verified) > 2 else ""
+    if bound_user:
+        try:
+            actor = await _user_from_request(request)
+        except HTTPException:
+            return RedirectResponse(f"{frontend}/integrations?error=state")
+        if actor["user_id"] != bound_user:
+            return RedirectResponse(f"{frontend}/integrations?error=state")
     data = {"code": code, "client_id": cfg["client_id"], "client_secret": cfg["client_secret"],
             "redirect_uri": cfg["redirect_uri"], "grant_type": "authorization_code"}
     try:
@@ -1226,68 +1382,255 @@ async def google_calendar_events(principal=Depends(get_principal)):
     return {"events": r.json().get("items", [])}
 
 
-# ------------------------- Payments -------------------------
+# ------------------------- Payments (Paddle Billing) -------------------------
 class CheckoutInput(BaseModel):
     origin_url: str
 
 
-def get_stripe(request: Request) -> StripeCheckout:
-    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=f"{str(request.base_url)}api/webhook/stripe")
+def _paddle_configured() -> bool:
+    return bool(PADDLE_API_KEY and PADDLE_PRICE_ID and PADDLE_CLIENT_TOKEN)
+
+
+def _verify_paddle_signature(raw_body: bytes, signature_header: Optional[str]) -> bool:
+    """Verify Paddle-Signature: ts=...;h1=... against PADDLE_WEBHOOK_SECRET."""
+    if not PADDLE_WEBHOOK_SECRET or not signature_header:
+        return False
+    parts = {}
+    for item in signature_header.split(";"):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            parts[k.strip()] = v.strip()
+    ts, sig = parts.get("ts"), parts.get("h1")
+    if not ts or not sig:
+        return False
+    try:
+        age = abs(int(datetime.now(timezone.utc).timestamp()) - int(ts))
+    except ValueError:
+        return False
+    if age > 300:
+        return False
+    signed = f"{ts}:{raw_body.decode('utf-8')}"
+    expected = hmac.new(PADDLE_WEBHOOK_SECRET.encode(), signed.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
+async def _paddle_create_transaction(session_id: str, workspace_id: str, user_id: str, email: str, origin: str):
+    payload = {
+        "items": [{"price_id": PADDLE_PRICE_ID, "quantity": 1}],
+        "collection_mode": "automatic",
+        "currency_code": "USD",
+        "custom_data": {
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+            "user_id": user_id,
+            "plan": "pro",
+        },
+    }
+    # Optional: payment-link base URL must be an approved Paddle domain.
+    if origin:
+        payload["checkout"] = {"url": origin}
+    if email:
+        payload["custom_data"]["email"] = email
+    headers = {
+        "Authorization": f"Bearer {PADDLE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        r = await hc.post(f"{PADDLE_API_BASE}/transactions", headers=headers, json=payload)
+    if r.status_code >= 400:
+        logger.error("paddle create transaction failed: %s %s", r.status_code, r.text[:500])
+        raise HTTPException(status_code=400, detail="Could not start Paddle checkout. Check Paddle credentials/price id.")
+    data = r.json().get("data") or {}
+    checkout = data.get("checkout") or {}
+    return {
+        "paddle_transaction_id": data.get("id"),
+        "checkout_url": checkout.get("url"),
+    }
+
+
+async def _mark_payment_paid(session_id: Optional[str] = None, paddle_transaction_id: Optional[str] = None,
+                             workspace_id: Optional[str] = None, subscription_id: Optional[str] = None):
+    query = {}
+    if session_id:
+        query["session_id"] = session_id
+    elif paddle_transaction_id:
+        query["paddle_transaction_id"] = paddle_transaction_id
+    else:
+        return None
+    rec = await db.payment_transactions.find_one(query, {"_id": 0})
+    now = datetime.now(timezone.utc).isoformat()
+    update = {"status": "completed", "payment_status": "paid", "updated_at": now}
+    if paddle_transaction_id:
+        update["paddle_transaction_id"] = paddle_transaction_id
+    if subscription_id:
+        update["paddle_subscription_id"] = subscription_id
+    if rec:
+        await db.payment_transactions.update_one(
+            {"session_id": rec["session_id"], "payment_status": {"$ne": "paid"}},
+            {"$set": update},
+        )
+        workspace_id = workspace_id or rec.get("workspace_id")
+    elif workspace_id:
+        # Webhook arrived before/without our local row — still upgrade the workspace.
+        pass
+    if workspace_id:
+        ws_set = {"plan": "pro"}
+        if subscription_id:
+            ws_set["paddle_subscription_id"] = subscription_id
+        await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": ws_set})
+    return rec
 
 
 @api_router.get("/billing/plans")
 async def billing_plans(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["pack"])}
+    return {
+        "current_plan": c["plan"],
+        "pro_price": PRO_PRICE,
+        "can_manage": "billing:manage" in perms_for(principal["pack"]),
+        "provider": "paddle",
+        "paddle_configured": _paddle_configured(),
+        "paddle_env": PADDLE_ENV,
+    }
 
 
 @api_router.post("/payments/checkout")
 async def create_checkout(payload: CheckoutInput, request: Request, principal=Depends(require("billing:manage"))):
-    stripe_checkout = get_stripe(request)
-    success_url = f"{payload.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{payload.origin_url}/payment/cancel"
-    req = CheckoutSessionRequest(amount=PRO_PRICE, currency="usd", success_url=success_url, cancel_url=cancel_url,
-                                 metadata={"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "plan": "pro"})
-    session = await stripe_checkout.create_checkout_session(req)
-    await db.payment_transactions.insert_one({"session_id": session.session_id, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "amount": PRO_PRICE, "currency": "usd", "plan": "pro", "status": "initiated", "payment_status": "pending", "created_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()})
-    return {"checkout_url": session.url, "session_id": session.session_id}
+    origin = (payload.origin_url or "").strip().rstrip("/")
+    if not _origin_allowed(origin):
+        raise HTTPException(status_code=400, detail="origin_url is not an allowed frontend origin")
+    if not _paddle_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Paddle is not configured. Set PADDLE_API_KEY, PADDLE_CLIENT_TOKEN, and PADDLE_PRICE_ID.",
+        )
+    session_id = f"pay_{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        paddle_tx = await _paddle_create_transaction(
+            session_id, principal["workspace_id"], principal["user_id"], principal.get("email") or "", origin,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("paddle checkout failed")
+        raise HTTPException(status_code=400, detail="Could not start Paddle checkout")
+    await db.payment_transactions.insert_one({
+        "session_id": session_id,
+        "provider": "paddle",
+        "paddle_transaction_id": paddle_tx.get("paddle_transaction_id"),
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "amount": PRO_PRICE,
+        "currency": "usd",
+        "plan": "pro",
+        "status": "initiated",
+        "payment_status": "pending",
+        "created_at": now,
+        "updated_at": now,
+    })
+    return {
+        "provider": "paddle",
+        "session_id": session_id,
+        "checkout_url": paddle_tx.get("checkout_url"),
+        "paddle_transaction_id": paddle_tx.get("paddle_transaction_id"),
+        "client_token": PADDLE_CLIENT_TOKEN,
+        "price_id": PADDLE_PRICE_ID,
+        "paddle_env": PADDLE_ENV,
+        "success_url": f"{origin}/payment/success?session_id={session_id}",
+        "cancel_url": f"{origin}/payment/cancel",
+        "customer_email": principal.get("email"),
+        "custom_data": {
+            "session_id": session_id,
+            "workspace_id": principal["workspace_id"],
+            "user_id": principal["user_id"],
+            "plan": "pro",
+        },
+    }
 
 
 @api_router.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, request: Request):
+async def payment_status(session_id: str, user=Depends(get_user)):
     record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    if record.get("payment_status") != "paid":
+    allowed = record.get("user_id") == user["user_id"]
+    if not allowed and record.get("workspace_id"):
+        mem = await db.memberships.find_one({
+            "workspace_id": record["workspace_id"], "user_id": user["user_id"], "status": "active",
+        }, {"_id": 0})
+        allowed = bool(mem)
+    if not allowed:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    # Optionally refresh from Paddle if still pending and we have an API key + txn id.
+    if record.get("payment_status") != "paid" and PADDLE_API_KEY and record.get("paddle_transaction_id"):
         try:
-            status: CheckoutStatusResponse = await get_stripe(request).get_checkout_status(session_id)
-            if status.payment_status == "paid" or status.status == "complete":
-                await db.payment_transactions.update_one({"session_id": session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"status": "completed", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
-                if record.get("workspace_id"):
-                    await db.workspaces.update_one({"workspace_id": record["workspace_id"]}, {"$set": {"plan": "pro"}})
-                record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+            headers = {"Authorization": f"Bearer {PADDLE_API_KEY}"}
+            async with httpx.AsyncClient(timeout=20.0) as hc:
+                r = await hc.get(f"{PADDLE_API_BASE}/transactions/{record['paddle_transaction_id']}", headers=headers)
+            if r.status_code == 200:
+                pdata = (r.json().get("data") or {})
+                status = pdata.get("status")
+                if status in ("paid", "completed"):
+                    custom = pdata.get("custom_data") or {}
+                    await _mark_payment_paid(
+                        session_id=session_id,
+                        paddle_transaction_id=pdata.get("id"),
+                        workspace_id=custom.get("workspace_id") or record.get("workspace_id"),
+                        subscription_id=(pdata.get("subscription_id") or None),
+                    )
+                    record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         except Exception:
-            logger.exception("stripe status check failed")
-    return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"]}
+            logger.exception("paddle status check failed")
+    return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"],
+            "provider": record.get("provider", "paddle")}
 
 
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    body = await request.body()
+@api_router.post("/webhook/paddle")
+async def paddle_webhook(request: Request):
+    raw = await request.body()
+    if not _verify_paddle_signature(raw, request.headers.get("Paddle-Signature")):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
     try:
-        result = await get_stripe(request).handle_webhook(body, request.headers.get("Stripe-Signature"))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    if result.session_id and result.payment_status == "paid":
-        rec = await db.payment_transactions.find_one({"session_id": result.session_id}, {"_id": 0})
-        await db.payment_transactions.update_one({"session_id": result.session_id, "payment_status": {"$ne": "paid"}}, {"$set": {"status": "completed", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
-        if rec and rec.get("workspace_id"):
-            await db.workspaces.update_one({"workspace_id": rec["workspace_id"]}, {"$set": {"plan": "pro"}})
+        event = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    event_type = event.get("event_type") or event.get("eventType") or ""
+    data = event.get("data") or {}
+    custom = data.get("custom_data") or {}
+    session_id = custom.get("session_id")
+    workspace_id = custom.get("workspace_id")
+    paddle_tx_id = data.get("id") if str(data.get("id") or "").startswith("txn_") else data.get("transaction_id")
+    subscription_id = data.get("subscription_id") or (data.get("id") if str(data.get("id") or "").startswith("sub_") else None)
+
+    if event_type in ("transaction.completed", "transaction.paid"):
+        await _mark_payment_paid(
+            session_id=session_id,
+            paddle_transaction_id=paddle_tx_id if str(paddle_tx_id or "").startswith("txn_") else data.get("id"),
+            workspace_id=workspace_id,
+            subscription_id=data.get("subscription_id"),
+        )
+    elif event_type in ("subscription.activated", "subscription.created"):
+        # custom_data may live on the subscription or related transaction
+        await _mark_payment_paid(
+            session_id=session_id,
+            workspace_id=workspace_id,
+            subscription_id=data.get("id") if str(data.get("id") or "").startswith("sub_") else subscription_id,
+        )
+    elif event_type in ("subscription.canceled", "subscription.past_due"):
+        ws_id = workspace_id
+        if not ws_id and subscription_id:
+            ws = await db.workspaces.find_one({"paddle_subscription_id": data.get("id")}, {"_id": 0, "workspace_id": 1})
+            ws_id = (ws or {}).get("workspace_id")
+        if ws_id and event_type == "subscription.canceled":
+            await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"plan": "free"}})
     return {"status": "ok"}
 
 
 @api_router.post("/demo/reset-plan")
 async def reset_plan(principal=Depends(require("billing:manage"))):
+    if not DEMO_RESET_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found")
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {"plan": "free"}})
     return {"ok": True}
 
@@ -1298,7 +1641,14 @@ async def root():
 
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origin_regex=".*", allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_CORS_ORIGINS,
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
+)
 
 
 @app.on_event("startup")
@@ -1306,6 +1656,8 @@ async def startup():
     await db.memberships.create_index([("user_id", 1), ("workspace_id", 1)])
     await db.memberships.create_index([("email", 1), ("status", 1)])
     await db.workspaces.create_index("workspace_id", unique=True)
+    await db.workspaces.create_index("join_code")
+    await db.user_sessions.create_index("session_token", unique=True)
 
 
 @app.on_event("shutdown")

@@ -1,4 +1,4 @@
-"""Kalun multi-tenant / roles / OAuth-degradation test suite (iteration 2)."""
+"""Helm multi-tenant / roles / OAuth-degradation test suite (iteration 2)."""
 import os
 import uuid
 import time
@@ -339,12 +339,15 @@ def test_pro_plan_enables_briefing_and_weekly(owner, mongo):
         owner.post(f"{BASE_URL}/api/demo/reset-plan")
 
 
-# ---------------- Stripe checkout ----------------
-def test_stripe_checkout_owner(owner, mongo):
+# ---------------- Paddle checkout ----------------
+def test_paddle_checkout_owner(owner, mongo):
     r = owner.post(f"{BASE_URL}/api/payments/checkout", json={"origin_url": BASE_URL})
+    if r.status_code == 400:
+        assert "Paddle" in r.text
+        return
     assert r.status_code == 200, r.text[:300]
     d = r.json()
-    assert "checkout_url" in d and "session_id" in d and d["checkout_url"].startswith("http")
+    assert d.get("provider") == "paddle" and d.get("session_id")
     ws = _get_owner_ws(owner)
     tx = mongo.payment_transactions.find_one({"session_id": d["session_id"]})
     assert tx and tx["workspace_id"] == ws

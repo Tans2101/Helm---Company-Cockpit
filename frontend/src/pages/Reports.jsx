@@ -4,15 +4,16 @@ import { useNavigate } from "react-router-dom";
 import { FileText, Sparkles, Lock, Download } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ProBadge, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, ProBadge, EmptyState } from "@/components/kit";
 
 export default function Reports() {
-  const { data, loading } = useFetch("/reports");
+  const { data, loading, error, reload } = useFetch("/reports");
   const [pack, setPack] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data) return <LoadingScreen label="Loading reports" />;
+  if (loading) return <LoadingScreen label="Loading reports" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   if (data.reports.length === 0) return <div><PageHeader title="Reports" subtitle="Sales, production and procurement — plus the AI Weekly CEO Pack." /><EmptyState title="No reports yet" body="Reports build as your data and integrations come online." /></div>;
 
   const generatePack = async () => {

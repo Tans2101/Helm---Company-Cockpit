@@ -4,10 +4,10 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Plus, Trash2, Wallet, DownloadCloud, X, PenLine, History } from "lucide-react";
+import { Plus, Trash2, Wallet, X, PenLine, History } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
@@ -32,7 +32,7 @@ const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
 const emptyForm = () => ({ type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(), recurring: true, note: "" });
 
 export default function Financials() {
-  const { data, loading, reload } = useFetch("/financials");
+  const { data, loading, error, reload } = useFetch("/financials");
   const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -41,7 +41,8 @@ export default function Financials() {
   const [cash, setCash] = useState("");
   const [gm, setGm] = useState("");
 
-  if (loading || !data) return <LoadingScreen label="Loading financials" />;
+  if (loading) return <LoadingScreen label="Loading financials" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
 
   const canWrite = data.can_write;
   const finActs = (activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
@@ -78,17 +79,6 @@ export default function Financials() {
     finally { setBusy(false); }
   };
 
-  const importStripe = async () => {
-    setBusy(true);
-    try {
-      const { data: res } = await api.post("/financials/import/stripe");
-      toast.success(`Imported ${res.months_imported} month(s) — ${fmt(res.total)} from Stripe`);
-      reload();
-      reloadActs();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Stripe import needs a live Stripe key"); }
-    finally { setBusy(false); }
-  };
-
   const openSettings = () => {
     setCash(String(data.settings?.cash ?? ""));
     setGm(data.settings?.gross_margin != null ? String(data.settings.gross_margin) : "");
@@ -102,35 +92,24 @@ export default function Financials() {
     { label: "Gross Margin", value: data.gross_margin },
   ];
 
-  const actions = (
+  const actions = canWrite ? (
     <div className="flex items-center gap-2">
-      {(data.can_manage || canWrite) && (
-        <button data-testid="import-stripe-btn" onClick={importStripe} disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60">
-          <DownloadCloud className="w-4 h-4" /> Import from Stripe
-        </button>
-      )}
-      {canWrite && (
-        <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
-          <Plus className="w-4 h-4" /> Log entry
-        </button>
-      )}
+      <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
+        className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
+        <Plus className="w-4 h-4" /> Log entry
+      </button>
     </div>
-  );
+  ) : null;
 
   return (
     <div>
-      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={canWrite || data.can_manage ? actions : null} />
+      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
 
       {!data.has_data ? (
         <EmptyState icon={Wallet} title="No financials logged yet"
-          body="Log your revenue and expenses — or import from Stripe — and Helm computes MRR, ARR, runway and burn automatically."
+          body="Log your revenue and expenses and Helm computes MRR, ARR, runway and burn automatically."
           action={canWrite ? (
-            <div className="flex gap-2">
-              <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Log first entry</button>
-              <button onClick={importStripe} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2 hover:bg-white/5"><DownloadCloud className="w-4 h-4" /> Import from Stripe</button>
-            </div>
+            <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Log first entry</button>
           ) : <p className="text-sm text-zinc-600">Ask a workspace owner or finance teammate to add data.</p>}
         />
       ) : (

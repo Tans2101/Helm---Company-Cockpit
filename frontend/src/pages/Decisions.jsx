@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Check, X, Share2, Sparkles, ShieldCheck } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
@@ -14,10 +14,11 @@ const statusStyle = {
 };
 
 export default function Decisions() {
-  const { data, loading, setData } = useFetch("/decisions");
+  const { data, loading, error, reload, setData } = useFetch("/decisions");
   const [busy, setBusy] = useState(null);
 
-  if (loading || !data) return <LoadingScreen label="Loading decisions" />;
+  if (loading) return <LoadingScreen label="Loading decisions" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   if (data.decisions.length === 0) return <div><PageHeader title="Decision Center" subtitle="Approvals, follow-ups and AI recommendations." /><EmptyState title="No decisions yet" body="When something needs your call, it surfaces here with an AI recommendation and confidence score." /></div>;
 
   const act = async (id, action, owner) => {
@@ -87,7 +88,7 @@ export default function Decisions() {
                 </button>
                   </>
                 ) : (
-                  <p className="text-xs text-zinc-600 lg:w-40 leading-relaxed">Only workspace owners can act on decisions.</p>
+                  <p className="text-xs text-zinc-600 lg:w-40 leading-relaxed">Only owners and executives can act on decisions.</p>
                 )}
               </div>
             </div>

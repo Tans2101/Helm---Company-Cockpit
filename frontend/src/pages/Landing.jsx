@@ -86,7 +86,7 @@ export default function Landing() {
   ];
 
   const steps = [
-    { n: "01", title: "Pulls it in", body: "Helm connects to Google, Stripe, QuickBooks and GitHub — your team keeps their tools, you get the signal." },
+    { n: "01", title: "Pulls it in", body: "Helm connects to Google, QuickBooks and GitHub — your team keeps their tools, you get the signal." },
     { n: "02", title: "Synthesizes", body: "Every morning it distills finance, sales, people and risk into a three-line briefing. Signal over noise." },
     { n: "03", title: "You decide & delegate", body: "Approve, follow up, or hand off in a click — then Helm tracks whether the outcome actually landed." },
   ];

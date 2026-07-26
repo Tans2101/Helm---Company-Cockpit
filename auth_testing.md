@@ -1,4 +1,4 @@
-See integration playbook. Auth-gated testing steps for Kalun (Emergent Google Auth).
+See integration playbook. Auth-gated testing steps for Helm (Emergent Google Auth).
 
 Create test user + session:
 mongosh --eval "

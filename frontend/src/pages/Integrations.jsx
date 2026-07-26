@@ -4,16 +4,16 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Lock, Check, ExternalLink, KeyRound } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, ProBadge, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, ProBadge, LoadingScreen, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const ICONS = {
-  google_calendar: Calendar, gmail: Mail, stripe: DollarSign, quickbooks: Building2,
+  google_calendar: Calendar, gmail: Mail, paddle: DollarSign, quickbooks: Building2,
   github: Github, slack: MessageSquare, salesforce: Cloud,
 };
 
 export default function Integrations() {
-  const { data, loading, reload } = useFetch("/integrations");
+  const { data, loading, error, reload } = useFetch("/integrations");
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
@@ -29,7 +29,8 @@ export default function Integrations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
-  if (loading || !data) return <LoadingScreen label="Loading integrations" />;
+  if (loading) return <LoadingScreen label="Loading integrations" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
 
   const gate = () => {
     if (!data.can_manage) { toast.error("Only workspace owners can manage integrations"); return false; }

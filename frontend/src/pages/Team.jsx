@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
@@ -9,10 +9,12 @@ const statusStyle = {
   healthy: { label: "Healthy", color: "text-emerald-400", bar: "bg-emerald-400" },
   available: { label: "Available", color: "text-sky-400", bar: "bg-sky-400" },
 };
+const fallbackStatus = { label: "Unknown", color: "text-zinc-400", bar: "bg-zinc-500" };
 
 export default function Team() {
-  const { data, loading } = useFetch("/team");
-  if (loading || !data) return <LoadingScreen label="Loading bandwidth" />;
+  const { data, loading, error, reload } = useFetch("/team");
+  if (loading) return <LoadingScreen label="Loading bandwidth" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   if (data.members.length === 0) return <div><PageHeader title="Team Bandwidth" subtitle="Utilization across the team — Helm flags overload early." /><EmptyState title="No team members yet" body="Add your team or connect your tools to see utilization and overload flags." /></div>;
 
   return (
@@ -40,7 +42,7 @@ export default function Team() {
       <SectionLabel className="mb-4">Utilization by person</SectionLabel>
       <div className="space-y-2.5">
         {data.members.slice().sort((a,b) => b.utilization - a.utilization).map((m) => {
-          const s = statusStyle[m.status];
+          const s = statusStyle[m.status] || fallbackStatus;
           return (
             <GlassCard key={m.name} className="p-4 fade-up" data-testid={`member-${m.name}`}>
               <div className="flex items-center gap-4">

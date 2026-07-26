@@ -3,7 +3,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ZAxis,
 } from "recharts";
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, Delta, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, Delta, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
@@ -36,8 +36,9 @@ function Sparkline({ data }) {
 const riskColor = (score) => (score >= 15 ? "#ef4444" : score >= 8 ? "#f59e0b" : "#10b981");
 
 export default function Telemetry() {
-  const { data, loading } = useFetch("/telemetry");
-  if (loading || !data) return <LoadingScreen label="Loading telemetry" />;
+  const { data, loading, error, reload } = useFetch("/telemetry");
+  if (loading) return <LoadingScreen label="Loading telemetry" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
   if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs, growth trends and the company risk matrix." /><EmptyState title="No telemetry yet" body="Log financials and connect your tools — your KPIs and risk matrix build from real data." /></div>;
 
   const riskData = data.risks.map((r) => ({ ...r, x: r.likelihood, y: r.impact, z: r.likelihood * r.impact }));

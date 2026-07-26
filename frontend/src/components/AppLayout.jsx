@@ -59,7 +59,7 @@ function WorkspaceSwitcher({ onNavigate }) {
       <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 transition-colors hover:border-white/10">
         <div className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center text-[11px] text-gold font-mono shrink-0">
-          {active.name?.[0]?.toUpperCase() || "K"}
+          {active.name?.[0]?.toUpperCase() || "H"}
         </div>
         <div className="flex-1 min-w-0 text-left">
           <p className="text-xs text-white truncate">{active.name}</p>
@@ -99,7 +99,7 @@ function SidebarContent({ onNavigate }) {
       <div className="px-6 py-6 border-b border-white/5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold text-sm font-medium">K</span>
+            <span className="font-mono text-gold text-sm font-medium">H</span>
           </div>
           <div>
             <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Helm</p>
@@ -187,7 +187,7 @@ export default function AppLayout() {
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-[#09090b]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold text-xs">K</span>
+            <span className="font-mono text-gold text-xs">H</span>
           </div>
           <span className="text-white font-semibold text-sm">Helm</span>
         </div>

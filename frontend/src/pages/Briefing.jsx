@@ -1,23 +1,22 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock, Users } from "lucide-react";
+import { ArrowUpRight, Sparkles, Send, UserCheck, Lock, Users } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, SectionLabel, LoadingScreen, ProBadge, Delta } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, ProBadge, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
-import Onboarding from "@/pages/Onboarding";
 
 const toneDot = { positive: "bg-emerald-400", negative: "bg-rose-400", neutral: "bg-zinc-500" };
 
 export default function Briefing() {
-  const { data, loading, setData } = useFetch("/briefing");
+  const { data, loading, error, reload, setData } = useFetch("/briefing");
   const { data: company } = useFetch("/company");
   const [genLoading, setGenLoading] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data || !company) return <LoadingScreen label="Assembling briefing" />;
-  if (company.onboarding_done === false) return <Onboarding />;
+  if (loading) return <LoadingScreen label="Assembling briefing" />;
+  if (error || !data) return <ErrorScreen onRetry={reload} />;
 
   const generate = async () => {
     setGenLoading(true);
@@ -26,8 +25,15 @@ export default function Briefing() {
       setData({ ...data, ai_summary: res.ai_summary });
       toast.success("Briefing synthesized");
     } catch (e) {
-      toast.error("Upgrade to Pro to generate AI briefings");
-      navigate("/app/billing");
+      const status = e?.response?.status;
+      if (status === 402) {
+        toast.error("Upgrade to Pro to generate AI briefings");
+        navigate("/app/billing");
+      } else if (status === 403) {
+        toast.error("You don't have permission to generate briefings");
+      } else {
+        toast.error("Could not generate briefing");
+      }
     } finally {
       setGenLoading(false);
     }
