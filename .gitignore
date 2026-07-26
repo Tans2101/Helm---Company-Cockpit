@@ -82,7 +82,9 @@ memory/test_credentials.md
 android-sdk/
 .env
 .env.*
+!.env.example
 *.env
+!*.env.example
 credentials.json
 *.key
 .credentials
