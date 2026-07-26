@@ -1,5 +1,5 @@
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const trustColor = (s) => (s >= 90 ? "text-emerald-400" : s >= 80 ? "text-gold" : "text-amber-400");
@@ -7,6 +7,7 @@ const trustColor = (s) => (s >= 90 ? "text-emerald-400" : s >= 80 ? "text-gold" 
 export default function People() {
   const { data, loading } = useFetch("/people");
   if (loading || !data) return <LoadingScreen label="Loading roster" />;
+  if (data.people.length === 0) return <div><PageHeader title="People" subtitle="Roster, trust scores and quality." /><EmptyState title="No people yet" body="Your roster with trust scores and quality drill-down will appear here." /></div>;
 
   return (
     <div>

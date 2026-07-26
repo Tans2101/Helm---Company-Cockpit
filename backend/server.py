@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 
 import httpx
 import resend
+import stripe as stripe_sdk
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
@@ -24,7 +25,7 @@ from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionRequest, CheckoutStatusResponse,
 )
 
-from seed_data import build_workspace
+from seed_data import build_workspace, sample_financial_entries
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -50,7 +51,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kalun")
 
 # ------------------------- Roles / permissions -------------------------
-MEMBER_PERMS = {"read", "tasks:move", "ask:use"}
+MEMBER_PERMS = {"read", "tasks:move", "ask:use", "finance:write"}
 OWNER_PERMS = MEMBER_PERMS | {
     "decisions:act", "briefing:generate", "reports:pack", "integrations:manage",
     "billing:manage", "members:manage", "workspace:edit",
@@ -173,7 +174,7 @@ async def _bootstrap(user):
         return
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
     first = (user.get("name") or "My").split(" ")[0]
-    doc = build_workspace(ws_id, f"{first}'s Company", user["user_id"])
+    doc = build_workspace(ws_id, f"{first}'s Company", user["user_id"], empty=True)
     await db.workspaces.insert_one(doc)
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}",
@@ -220,6 +221,73 @@ async def get_ws(workspace_id: str):
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     return ws
+
+
+# ------------------------- Financials (computed from entries) -------------------------
+def fmt_money(n):
+    n = float(n or 0)
+    neg = n < 0
+    a = abs(n)
+    if a >= 1_000_000:
+        s = f"${a/1_000_000:.2f}M"
+    elif a >= 1_000:
+        s = f"${a/1_000:.0f}K"
+    else:
+        s = f"${a:,.0f}"
+    return f"-{s}" if neg else s
+
+
+async def compute_financials(workspace_id: str):
+    from collections import defaultdict
+    ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
+    settings = (ws or {}).get("financial_settings") or {"cash": 0, "gross_margin": None, "currency": "usd"}
+    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    rev_by, exp_by, rec_by = defaultdict(float), defaultdict(float), defaultdict(float)
+    exp_cat = defaultdict(float)
+    for e in entries:
+        if e["type"] == "revenue":
+            rev_by[e["month"]] += e["amount"]
+            if e.get("recurring"):
+                rec_by[e["month"]] += e["amount"]
+        else:
+            exp_by[e["month"]] += e["amount"]
+            exp_cat[e.get("category") or "Other"] += e["amount"]
+    months = sorted(set(list(rev_by) + list(exp_by)))
+    last = months[-6:]
+
+    def lbl(m):
+        return datetime.strptime(m, "%Y-%m").strftime("%b")
+
+    revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
+    burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
+    latest = months[-1] if months else None
+    mrr_val = (rec_by[latest] if latest and rec_by[latest] > 0 else (rev_by[latest] if latest else 0))
+    cash = settings.get("cash") or 0
+    net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
+    avg_burn = sum(net) / len(net) if net else 0
+    runway = round(cash / avg_burn, 1) if avg_burn > 0 else None
+    burn_val = (exp_by[latest] - rev_by[latest]) if latest else 0
+    total_exp = sum(exp_cat.values())
+    expense_breakdown = ([{"name": k, "value": round(v / total_exp * 100)} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])] if total_exp else [])
+    gm = settings.get("gross_margin")
+    scenarios = []
+    if runway:
+        scenarios = [
+            {"name": "Base", "runway": runway, "desc": "Current net burn held."},
+            {"name": "Efficient", "runway": round(cash / (avg_burn * 0.8), 1), "desc": "Trim burn 20%."},
+            {"name": "Aggressive Hire", "runway": round(cash / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
+        ]
+    mrr_delta = 0
+    if len(revenue_series) >= 2 and revenue_series[-2]["revenue"] > 0:
+        mrr_delta = round((revenue_series[-1]["revenue"] - revenue_series[-2]["revenue"]) / revenue_series[-2]["revenue"] * 100, 1)
+    return {
+        "mrr": fmt_money(mrr_val), "arr": fmt_money(mrr_val * 12), "runway_months": runway,
+        "burn": fmt_money(burn_val), "cash": fmt_money(cash), "gross_margin": f"{gm}%" if gm else "—",
+        "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
+        "expense_breakdown": expense_breakdown, "settings": settings,
+        "mrr_delta": mrr_delta, "spark": [r["revenue"] for r in revenue_series],
+        "burn_tone": "negative" if burn_val > 0 else "positive", "has_data": bool(entries),
+    }
 
 
 # ------------------------- Auth routes -------------------------
@@ -307,7 +375,7 @@ class CreateWsInput(BaseModel):
 @api_router.post("/workspaces")
 async def create_workspace(payload: CreateWsInput, principal=Depends(get_principal)):
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
-    doc = build_workspace(ws_id, payload.name.strip() or "New Company", principal["user_id"])
+    doc = build_workspace(ws_id, payload.name.strip() or "New Company", principal["user_id"], empty=True)
     await db.workspaces.insert_one(doc)
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
@@ -390,14 +458,45 @@ async def company(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     return {"name": c["name"], "plan": c["plan"], "stage": c["stage"], "employees": c["employees"],
             "founded": c["founded"], "mission": c["mission"], "ceo_name": principal.get("name") or "CEO",
-            "role": principal["role"], "workspace_id": c["workspace_id"]}
+            "role": principal["role"], "workspace_id": c["workspace_id"],
+            "onboarding_done": c.get("onboarding_done", True), "template": c.get("template", "sample")}
+
+
+class TemplateInput(BaseModel):
+    template: str  # sample | clean
+
+
+@api_router.post("/workspace/apply-template")
+async def apply_template(payload: TemplateInput, principal=Depends(require("workspace:edit"))):
+    ws_id = principal["workspace_id"]
+    if payload.template == "sample":
+        fresh = build_workspace(ws_id, (await get_ws(ws_id))["name"], principal["user_id"], empty=False)
+        fresh.pop("workspace_id", None)
+        fresh.pop("plan", None)
+        fresh.pop("created_at", None)
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": fresh})
+        await db.financial_entries.delete_many({"workspace_id": ws_id})
+        await db.financial_entries.insert_many(sample_financial_entries(ws_id))
+    else:
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"onboarding_done": True}})
+    return {"ok": True}
 
 
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    b = c["briefing"]
+    b = dict(c["briefing"])
     is_pro = c["plan"] == "pro"
+    fin = await compute_financials(c["workspace_id"])
+    metrics = [
+        {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"], "tone": "positive"},
+        {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—", "delta": 0, "tone": "neutral"},
+        {"label": "Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"]},
+    ]
+    nrr = b.get("nrr")
+    if nrr:
+        metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
+    b["metrics"] = metrics
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
 
 
@@ -407,8 +506,8 @@ async def generate_briefing(principal=Depends(require("briefing:generate"))):
     if c["plan"] != "pro":
         raise HTTPException(status_code=403, detail="Pro required")
     b = c["briefing"]
-    context = {"company": c["name"], "metrics": b["metrics"], "what_changed": b["what_changed"],
-               "decisions": b["what_to_decide"], "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn", "cash"]}}
+    context = {"company": c["name"], "metrics": b.get("what_to_decide"), "what_changed": b["what_changed"],
+               "decisions": b["what_to_decide"], "financials": await compute_financials(c["workspace_id"])}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"briefing-{c['workspace_id']}",
                    system_message=("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, and end with a confident recommendation. No fluff, no lists.")
                    ).with_model("anthropic", "claude-sonnet-4-6")
@@ -449,13 +548,108 @@ async def decision_action(decision_id: str, payload: DecisionAction, principal=D
 @api_router.get("/telemetry")
 async def telemetry(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return c["telemetry"]
+    tel = dict(c["telemetry"])
+    fin = await compute_financials(c["workspace_id"])
+    kpis = [dict(k) for k in tel.get("kpis", [])]
+    for k in kpis:
+        if k["label"] == "MRR":
+            k["value"] = fin["mrr"]
+            k["delta"] = fin["mrr_delta"]
+            if fin["spark"]:
+                k["spark"] = fin["spark"]
+    tel["kpis"] = kpis
+    if fin["revenue_series"]:
+        tel["revenue_trend"] = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)} for r in fin["revenue_series"]]
+    return tel
 
 
 @api_router.get("/financials")
 async def financials(principal=Depends(get_principal)):
-    c = await get_ws(principal["workspace_id"])
-    return c["financials"]
+    fin = await compute_financials(principal["workspace_id"])
+    entries = await db.financial_entries.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("month", -1).to_list(5000)
+    return {**fin, "entries": entries, "can_write": "finance:write" in perms_for(principal["role"]),
+            "can_manage": "integrations:manage" in perms_for(principal["role"])}
+
+
+class FinEntryInput(BaseModel):
+    type: str
+    category: str
+    amount: float
+    month: str
+    recurring: bool = False
+    note: Optional[str] = ""
+
+
+@api_router.post("/financials/entries")
+async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    if payload.type not in ("revenue", "expense"):
+        raise HTTPException(status_code=400, detail="type must be revenue or expense")
+    entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
+             "type": payload.type, "category": payload.category.strip() or "Other",
+             "amount": round(payload.amount, 2), "month": payload.month, "recurring": payload.recurring,
+             "note": (payload.note or "").strip(), "source": "manual", "created_by": principal["user_id"],
+             "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.financial_entries.insert_one(entry)
+    entry.pop("_id", None)
+    return {"ok": True, "entry": entry}
+
+
+@api_router.patch("/financials/entries/{entry_id}")
+async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require("finance:write"))):
+    res = await db.financial_entries.update_one(
+        {"id": entry_id, "workspace_id": principal["workspace_id"]},
+        {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
+                  "amount": round(payload.amount, 2), "month": payload.month,
+                  "recurring": payload.recurring, "note": (payload.note or "").strip()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"ok": True}
+
+
+@api_router.delete("/financials/entries/{entry_id}")
+async def delete_fin_entry(entry_id: str, principal=Depends(require("finance:write"))):
+    await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
+    return {"ok": True}
+
+
+class FinSettingsInput(BaseModel):
+    cash: float
+    gross_margin: Optional[float] = None
+
+
+@api_router.put("/financials/settings")
+async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require("finance:write"))):
+    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
+                                   {"$set": {"financial_settings.cash": round(payload.cash, 2),
+                                             "financial_settings.gross_margin": payload.gross_margin}})
+    return {"ok": True}
+
+
+@api_router.post("/financials/import/stripe")
+async def import_stripe_revenue(principal=Depends(require("finance:write"))):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=400, detail="Stripe not configured")
+    stripe_sdk.api_key = STRIPE_API_KEY
+    from collections import defaultdict
+    by_month = defaultdict(float)
+    try:
+        charges = await asyncio.to_thread(lambda: stripe_sdk.Charge.list(limit=100))
+        for ch in charges.get("data", []):
+            if ch.get("paid") and ch.get("status") == "succeeded" and not ch.get("refunded"):
+                dt = datetime.fromtimestamp(ch["created"], tz=timezone.utc)
+                by_month[dt.strftime("%Y-%m")] += (ch.get("amount", 0) / 100.0)
+    except Exception as e:
+        logger.exception("stripe import failed")
+        raise HTTPException(status_code=400, detail=f"Stripe import failed: {e}")
+    await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
+    now = datetime.now(timezone.utc).isoformat()
+    docs = [{"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"], "type": "revenue",
+             "category": "Stripe revenue", "amount": round(amt, 2), "month": month, "recurring": True,
+             "note": "Imported from Stripe", "source": "stripe", "created_by": principal["user_id"], "created_at": now}
+            for month, amt in by_month.items()]
+    if docs:
+        await db.financial_entries.insert_many(docs)
+    return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 
 
 @api_router.get("/tasks")
@@ -491,7 +685,7 @@ async def weekly_pack(principal=Depends(require("reports:pack"))):
     c = await get_ws(principal["workspace_id"])
     if c["plan"] != "pro":
         raise HTTPException(status_code=403, detail="Pro required")
-    context = {"company": c["name"], "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn"]},
+    context = {"company": c["name"], "financials": await compute_financials(c["workspace_id"]),
                "kpis": c["telemetry"]["kpis"], "reports": [{"title": r["title"], "summary": r["summary"]} for r in c["reports"]]}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"pack-{c['workspace_id']}",
                    system_message=("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
@@ -543,7 +737,7 @@ async def ask_kalun(payload: AskInput, principal=Depends(require("ask:use"))):
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     context = {"company": c["name"], "stage": c["stage"], "employees": c["employees"],
-               "financials": {k: c["financials"][k] for k in ["mrr", "arr", "runway_months", "burn", "cash", "gross_margin"]},
+               "financials": await compute_financials(c["workspace_id"]),
                "kpis": c["telemetry"]["kpis"], "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"], "risks": c["telemetry"]["risks"]}
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ask-{c['workspace_id']}-{principal['user_id']}",
                    system_message=(f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} (a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}")

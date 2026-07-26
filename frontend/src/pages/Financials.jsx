@@ -1,12 +1,19 @@
+import { useState } from "react";
+import { toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { Plus, Trash2, Wallet, DownloadCloud, X, PenLine } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { api } from "@/lib/api";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
-const PIE = ["#c9a962", "#8b7a4a", "#6b6b74", "#3f3f46", "#27272a"];
+const PIE = ["#c9a962", "#8b7a4a", "#6b6b74", "#3f3f46", "#27272a", "#52525b"];
+const REV_CATS = ["Subscriptions", "Enterprise", "Services", "Other"];
+const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", "Other"];
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -20,107 +27,267 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
+const emptyForm = () => ({ type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(), recurring: true, note: "" });
+
 export default function Financials() {
-  const { data, loading } = useFetch("/financials");
+  const { data, loading, reload } = useFetch("/financials");
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm());
+  const [busy, setBusy] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [cash, setCash] = useState("");
+  const [gm, setGm] = useState("");
+
   if (loading || !data) return <LoadingScreen label="Loading financials" />;
 
+  const canWrite = data.can_write;
+
+  const submitEntry = async () => {
+    if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
+    setBusy(true);
+    try {
+      await api.post("/financials/entries", { ...form, amount: parseFloat(form.amount) });
+      toast.success("Entry logged");
+      setForm(emptyForm());
+      setShowForm(false);
+      reload();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
+    finally { setBusy(false); }
+  };
+
+  const del = async (id) => {
+    try { await api.delete(`/financials/entries/${id}`); reload(); toast.success("Entry removed"); }
+    catch (e) { toast.error("Could not delete"); }
+  };
+
+  const saveSettings = async () => {
+    setBusy(true);
+    try {
+      await api.put("/financials/settings", { cash: parseFloat(cash || 0), gross_margin: gm ? parseFloat(gm) : null });
+      toast.success("Updated");
+      setShowSettings(false);
+      reload();
+    } catch (e) { toast.error("Could not save"); }
+    finally { setBusy(false); }
+  };
+
+  const importStripe = async () => {
+    setBusy(true);
+    try {
+      const { data: res } = await api.post("/financials/import/stripe");
+      toast.success(`Imported ${res.months_imported} month(s) — ${fmt(res.total)} from Stripe`);
+      reload();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Stripe import needs a live Stripe key"); }
+    finally { setBusy(false); }
+  };
+
+  const openSettings = () => {
+    setCash(String(data.settings?.cash ?? ""));
+    setGm(data.settings?.gross_margin != null ? String(data.settings.gross_margin) : "");
+    setShowSettings(true);
+  };
+
   const headline = [
-    { label: "MRR", value: data.mrr },
-    { label: "ARR", value: data.arr },
-    { label: "Runway", value: `${data.runway_months}mo` },
-    { label: "Monthly Burn", value: data.burn },
-    { label: "Cash", value: data.cash },
+    { label: "MRR", value: data.mrr }, { label: "ARR", value: data.arr },
+    { label: "Runway", value: data.runway_months ? `${data.runway_months}mo` : "—" },
+    { label: "Net Burn", value: data.burn }, { label: "Cash", value: data.cash },
     { label: "Gross Margin", value: data.gross_margin },
   ];
 
+  const actions = (
+    <div className="flex items-center gap-2">
+      {(data.can_manage || canWrite) && (
+        <button data-testid="import-stripe-btn" onClick={importStripe} disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60">
+          <DownloadCloud className="w-4 h-4" /> Import from Stripe
+        </button>
+      )}
+      {canWrite && (
+        <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
+          className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
+          <Plus className="w-4 h-4" /> Log entry
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div>
-      <PageHeader title="Financials" subtitle="Revenue, runway, burn and scenario planning — the numbers that decide how long you have to win." />
+      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={canWrite || data.can_manage ? actions : null} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {headline.map((h, i) => (
-          <GlassCard key={h.label} className="p-4 fade-up" style={{ animationDelay: `${i*40}ms` }} data-testid={`fin-${h.label}`}>
-            <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">{h.label}</p>
-            <p className="font-mono text-2xl text-white mt-2">{h.value}</p>
+      {!data.has_data ? (
+        <EmptyState icon={Wallet} title="No financials logged yet"
+          body="Log your revenue and expenses — or import from Stripe — and Helm computes MRR, ARR, runway and burn automatically."
+          action={canWrite ? (
+            <div className="flex gap-2">
+              <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Log first entry</button>
+              <button onClick={importStripe} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2 hover:bg-white/5"><DownloadCloud className="w-4 h-4" /> Import from Stripe</button>
+            </div>
+          ) : <p className="text-sm text-zinc-600">Ask a workspace owner or finance teammate to add data.</p>}
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            {headline.map((h) => (
+              <GlassCard key={h.label} className="p-4 fade-up" data-testid={`fin-${h.label}`}>
+                <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">{h.label}</p>
+                <p className="font-mono text-2xl text-white mt-2">{h.value}</p>
+              </GlassCard>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-4 mb-6">
+            <GlassCard className="p-5 lg:col-span-2 fade-up">
+              <SectionLabel className="mb-4">Revenue vs Expenses</SectionLabel>
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={data.revenue_series} margin={{ left: -8, right: 8, top: 8 }}>
+                  <defs><linearGradient id="rev" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={GOLD} stopOpacity={0.35} /><stop offset="100%" stopColor={GOLD} stopOpacity={0} /></linearGradient></defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke={GOLD} strokeWidth={2} fill="url(#rev)" />
+                  <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#71717a" strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </GlassCard>
+
+            <GlassCard className="p-5 fade-up">
+              <div className="flex items-center justify-between mb-2">
+                <SectionLabel>Cash & margin</SectionLabel>
+                {canWrite && <button data-testid="edit-settings-btn" onClick={openSettings} className="text-zinc-500 hover:text-gold"><PenLine className="w-3.5 h-3.5" /></button>}
+              </div>
+              {data.expense_breakdown.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={170}>
+                    <PieChart><Pie data={data.expense_breakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={2} stroke="none">{data.expense_breakdown.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip content={<ChartTooltip />} /></PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-1 mt-1">
+                    {data.expense_breakdown.map((e, i) => (
+                      <div key={e.name} className="flex items-center gap-2 text-xs"><span className="w-2 h-2 rounded-sm" style={{ background: PIE[i % PIE.length] }} /><span className="text-zinc-400 flex-1">{e.name}</span><span className="font-mono text-zinc-300">{e.value}%</span></div>
+                    ))}
+                  </div>
+                </>
+              ) : <p className="text-sm text-zinc-600 py-8 text-center">Log expenses to see the breakdown.</p>}
+            </GlassCard>
+          </div>
+
+          {data.scenarios.length > 0 && (
+            <div className="grid lg:grid-cols-3 gap-4 mb-6">
+              <GlassCard className="p-5 lg:col-span-2 fade-up">
+                <SectionLabel className="mb-4">Monthly Net Burn</SectionLabel>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.burn_series} margin={{ left: -8, right: 8 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+                    <Bar dataKey="burn" name="Net burn" fill={GOLD} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </GlassCard>
+              <GlassCard className="p-5 fade-up">
+                <SectionLabel className="mb-4">Runway Scenarios</SectionLabel>
+                <div className="space-y-3">
+                  {data.scenarios.map((s) => (
+                    <div key={s.name} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`scenario-${s.name}`}>
+                      <div className="flex items-center justify-between"><span className="text-sm text-white">{s.name}</span><span className="font-mono text-gold text-sm">{s.runway}mo</span></div>
+                      <p className="text-xs text-zinc-500 mt-1">{s.desc}</p>
+                      <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-gold/70 rounded-full" style={{ width: `${Math.min(s.runway / 36 * 100, 100)}%` }} /></div>
+                    </div>
+                  ))}
+                </div>
+              </GlassCard>
+            </div>
+          )}
+
+          {/* Ledger */}
+          <GlassCard className="p-5 fade-up">
+            <SectionLabel className="mb-4">Ledger · {data.entries.length} entries</SectionLabel>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
+                    <th className="py-2 pr-4 font-medium">Month</th><th className="py-2 pr-4 font-medium">Type</th>
+                    <th className="py-2 pr-4 font-medium">Category</th><th className="py-2 pr-4 font-medium text-right">Amount</th>
+                    <th className="py-2 pr-4 font-medium">Source</th><th className="py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.entries.map((e) => (
+                    <tr key={e.id} className="border-b border-white/[0.03]" data-testid={`entry-${e.id}`}>
+                      <td className="py-2.5 pr-4 font-mono text-zinc-400">{e.month}</td>
+                      <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-emerald-400 bg-emerald-400/10" : "text-rose-400 bg-rose-400/10")}>{e.type}</span></td>
+                      <td className="py-2.5 pr-4 text-zinc-300">{e.category}{e.recurring && <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>}</td>
+                      <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount)}</td>
+                      <td className="py-2.5 pr-4"><span className="text-[10px] font-mono text-zinc-600">{e.source}</span></td>
+                      <td className="py-2.5 text-right">{canWrite && <button onClick={() => del(e.id)} data-testid={`del-${e.id}`} className="text-zinc-600 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </GlassCard>
-        ))}
-      </div>
+        </>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-4 mb-6">
-        <GlassCard className="p-5 lg:col-span-2 fade-up">
-          <SectionLabel className="mb-4">Revenue vs Expenses ($K)</SectionLabel>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={data.revenue_series} margin={{ left: -18, right: 8, top: 8 }}>
-              <defs>
-                <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="revenue" name="Revenue" stroke={GOLD} strokeWidth={2} fill="url(#rev)" />
-              <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#71717a" strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </GlassCard>
-
-        <GlassCard className="p-5 fade-up">
-          <SectionLabel className="mb-4">Expense Breakdown</SectionLabel>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={data.expense_breakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={2} stroke="none">
-                {data.expense_breakdown.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-1.5 mt-2">
-            {data.expense_breakdown.map((e, i) => (
-              <div key={e.name} className="flex items-center gap-2 text-xs">
-                <span className="w-2 h-2 rounded-sm" style={{ background: PIE[i % PIE.length] }} />
-                <span className="text-zinc-400 flex-1">{e.name}</span>
-                <span className="font-mono text-zinc-300">{e.value}%</span>
+      {/* Add entry drawer */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
+          <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="entry-form">
+            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Log a financial entry</h3><button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 flex gap-2">
+                {["revenue", "expense"].map((t) => (
+                  <button key={t} data-testid={`type-${t}`} onClick={() => setForm((f) => ({ ...f, type: t, category: t === "revenue" ? REV_CATS[0] : EXP_CATS[0] }))}
+                    className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-gold/10 border-gold/40 text-white" : "border-white/10 text-zinc-400 hover:bg-white/5")}>{t}</button>
+                ))}
               </div>
-            ))}
-          </div>
-        </GlassCard>
-      </div>
+              <label className="col-span-2 text-xs text-zinc-500">Category
+                <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                  {(form.type === "revenue" ? REV_CATS : EXP_CATS).map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label className="text-xs text-zinc-500">Amount (USD)
+                <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              </label>
+              <label className="text-xs text-zinc-500">Month
+                <input data-testid="entry-month" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              </label>
+              {form.type === "revenue" && (
+                <label className="col-span-2 flex items-center gap-2 text-sm text-zinc-300 mt-1">
+                  <input data-testid="entry-recurring" type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} className="accent-gold w-4 h-4" />
+                  Recurring (counts toward MRR)
+                </label>
+              )}
+              <label className="col-span-2 text-xs text-zinc-500">Note (optional)
+                <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              </label>
+            </div>
+            <button data-testid="submit-entry-btn" onClick={submitEntry} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save entry"}</button>
+          </GlassCard>
+        </div>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-4">
-        <GlassCard className="p-5 lg:col-span-2 fade-up">
-          <SectionLabel className="mb-4">Monthly Burn ($K)</SectionLabel>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={data.burn_series} margin={{ left: -18, right: 8 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-              <Bar dataKey="burn" name="Burn" fill={GOLD} radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </GlassCard>
-
-        <GlassCard className="p-5 fade-up">
-          <SectionLabel className="mb-4">Runway Scenarios</SectionLabel>
-          <div className="space-y-3">
-            {data.scenarios.map((s) => (
-              <div key={s.name} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`scenario-${s.name}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white">{s.name}</span>
-                  <span className="font-mono text-gold text-sm">{s.runway}mo</span>
-                </div>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{s.desc}</p>
-                <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
-                  <div className="h-full bg-gold/70 rounded-full" style={{ width: `${Math.min(s.runway/24*100,100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-      </div>
+      {/* Settings drawer */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowSettings(false)} />
+          <GlassCard className="relative w-full max-w-sm m-4 rounded-2xl p-6" data-testid="settings-form">
+            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Cash & margin</h3><button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
+            <label className="text-xs text-zinc-500 block">Cash in bank (USD)
+              <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            </label>
+            <label className="text-xs text-zinc-500 block mt-3">Gross margin % (optional)
+              <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            </label>
+            <button data-testid="save-settings-btn" onClick={saveSettings} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+          </GlassCard>
+        </div>
+      )}
     </div>
   );
 }

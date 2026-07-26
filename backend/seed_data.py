@@ -1,11 +1,48 @@
-"""Per-workspace demo data template for Helm — Northwind Robotics."""
+"""Per-workspace data template for Helm — Northwind Robotics sample + empty scaffold.
+
+Financials are NOT stored here — they are computed from the `financial_entries`
+collection so the finance team can log data straight into Helm.
+"""
 import uuid
 from datetime import datetime, timezone
 
 
-def build_workspace(workspace_id, name, owner_user_id):
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+def last_n_months(n):
+    now = datetime.now(timezone.utc)
+    y, m = now.year, now.month
+    out = []
+    for i in range(n - 1, -1, -1):
+        mm, yy = m - i, y
+        while mm <= 0:
+            mm += 12
+            yy -= 1
+        out.append(f"{yy:04d}-{mm:02d}")
+    return out
 
+
+def sample_financial_entries(workspace_id):
+    """6 months of recurring revenue + categorized expenses (in USD)."""
+    REV = [188, 196, 205, 214, 229, 248]
+    EXP = [396, 404, 412, 420, 425, 430]
+    cats = {"Payroll": 0.62, "Cloud/Infra": 0.14, "Sales & Mktg": 0.12, "G&A": 0.07, "R&D Tools": 0.05}
+    now = datetime.now(timezone.utc).isoformat()
+    entries = []
+    for month, rev, exp in zip(last_n_months(6), REV, EXP):
+        entries.append({
+            "id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": workspace_id, "type": "revenue",
+            "category": "Subscriptions", "amount": rev * 1000, "month": month, "recurring": True,
+            "note": "Recurring subscription revenue", "source": "manual", "created_by": "seed", "created_at": now,
+        })
+        for cat, pct in cats.items():
+            entries.append({
+                "id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": workspace_id, "type": "expense",
+                "category": cat, "amount": round(exp * 1000 * pct), "month": month, "recurring": True,
+                "note": "", "source": "manual", "created_by": "seed", "created_at": now,
+            })
+    return entries
+
+
+def build_workspace(workspace_id, name, owner_user_id, empty=False):
     telemetry = {
         "kpis": [
             {"label": "MRR", "value": "$248K", "unit": "", "delta": 8.4, "tone": "positive", "spark": [188, 196, 205, 214, 229, 248]},
@@ -15,8 +52,7 @@ def build_workspace(workspace_id, name, owner_user_id):
             {"label": "Churn (logo)", "value": "2.4%", "unit": "", "delta": 0.6, "tone": "negative", "spark": [1.8, 1.9, 2.0, 2.1, 2.3, 2.4]},
             {"label": "Pipeline", "value": "$1.9M", "unit": "", "delta": 12.0, "tone": "positive", "spark": [1.3, 1.4, 1.5, 1.6, 1.7, 1.9]},
         ],
-        "revenue_trend": [{"month": m, "mrr": v, "target": t} for m, v, t in zip(months, [188, 196, 205, 214, 229, 248], [190, 200, 210, 220, 235, 250])],
-        "funnel": [
+        "revenue_trend": [], "funnel": [
             {"stage": "Leads", "value": 1240}, {"stage": "Qualified", "value": 486},
             {"stage": "Demo", "value": 214}, {"stage": "Proposal", "value": 96}, {"stage": "Closed Won", "value": 41},
         ],
@@ -30,31 +66,10 @@ def build_workspace(workspace_id, name, owner_user_id):
         ],
     }
 
-    financials = {
-        "mrr": "$248K", "arr": "$2.98M", "runway_months": 17, "burn": "$182K", "cash": "$3.1M", "gross_margin": "74%",
-        "revenue_series": [{"month": m, "revenue": r, "expenses": e} for m, r, e in zip(months, [188, 196, 205, 214, 229, 248], [220, 224, 228, 232, 236, 240])],
-        "burn_series": [{"month": m, "burn": b} for m, b in zip(months, [172, 174, 176, 178, 180, 182])],
-        "scenarios": [
-            {"name": "Base", "runway": 17, "desc": "Current burn, 8% MoM growth held."},
-            {"name": "Aggressive Hire", "runway": 12, "desc": "+6 hires in Q3, faster GTM."},
-            {"name": "Efficient", "runway": 23, "desc": "Freeze hiring, trim cloud 20%."},
-        ],
-        "expense_breakdown": [
-            {"name": "Payroll", "value": 62}, {"name": "Cloud/Infra", "value": 14},
-            {"name": "Sales & Mktg", "value": 12}, {"name": "G&A", "value": 7}, {"name": "R&D Tools", "value": 5},
-        ],
-    }
-
     briefing = {
         "date": "Monday", "greeting": "Good morning",
         "headline": "Revenue is ahead of plan, but capacity risk is rising on engineering.",
-        "ai_summary": None,
-        "metrics": [
-            {"label": "MRR", "value": "$248K", "delta": 8.4, "tone": "positive"},
-            {"label": "Runway", "value": "17mo", "delta": 0, "tone": "neutral"},
-            {"label": "Burn", "value": "$182K", "delta": 1.1, "tone": "negative"},
-            {"label": "NRR", "value": "118%", "delta": 2.0, "tone": "positive"},
-        ],
+        "ai_summary": None, "nrr": {"value": "118%", "delta": 2.0, "tone": "positive"},
         "what_changed": [
             {"title": "Acme Corp enterprise deal moved to Proposal", "detail": "$96K ARR. Champion confirmed budget; legal review next.", "tone": "positive"},
             {"title": "Churn ticked to 2.4%", "detail": "Two SMB logos lost to pricing. Both flagged low usage 30 days prior.", "tone": "negative"},
@@ -146,26 +161,26 @@ def build_workspace(workspace_id, name, owner_user_id):
         {"id": "salesforce", "name": "Salesforce", "category": "Sales", "provider": "salesforce", "oauth": False, "connected": False, "pro": True, "description": "Pipeline, win rate and forecast."},
     ]
 
+    if empty:
+        telemetry = {"kpis": [], "revenue_trend": [], "funnel": [], "risks": []}
+        briefing = {"date": "Today", "greeting": "Good morning", "headline": "Your cockpit is ready. Start by logging your financials and adding your team.",
+                    "ai_summary": None, "nrr": None, "what_changed": [], "what_to_decide": [], "what_to_delegate": []}
+        decisions = []
+        tasks = {"columns": [{"id": "backlog", "name": "Backlog"}, {"id": "in_progress", "name": "In Progress"}, {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"}], "items": []}
+        reports = []
+        team = {"members": [], "avg_utilization": 0, "overloaded_count": 0}
+        calendar = {"meetings": [], "focus_hours": 0, "meeting_hours": 0}
+        people = {"people": [], "avg_trust": 0}
+
     return {
-        "workspace_id": workspace_id,
-        "name": name,
-        "owner_user_id": owner_user_id,
-        "plan": "free",
-        "stage": "Series A",
-        "employees": 24,
-        "founded": "2022",
-        "mission": "Autonomous inspection robots for industrial sites.",
-        "briefing": briefing,
-        "decisions": decisions,
-        "telemetry": telemetry,
-        "financials": financials,
-        "tasks": tasks,
-        "reports": reports,
-        "team": team,
-        "calendar": calendar,
-        "people": people,
-        "integrations": integrations,
-        "google_tokens": None,
-        "quickbooks_tokens": None,
+        "workspace_id": workspace_id, "name": name, "owner_user_id": owner_user_id, "plan": "free",
+        "stage": "Series A", "employees": 24 if not empty else 0, "founded": "2022",
+        "mission": "Autonomous inspection robots for industrial sites." if not empty else "",
+        "onboarding_done": not empty, "template": "empty" if empty else "sample",
+        "financial_settings": {"cash": 0 if empty else 3100000, "gross_margin": None if empty else 74, "currency": "usd"},
+        "briefing": briefing, "decisions": decisions, "telemetry": telemetry,
+        "tasks": tasks, "reports": reports, "team": team, "calendar": calendar,
+        "people": people, "integrations": integrations,
+        "google_tokens": None, "quickbooks_tokens": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

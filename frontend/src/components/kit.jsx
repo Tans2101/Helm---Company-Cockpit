@@ -74,3 +74,18 @@ export function LoadingScreen({ label = "Loading" }) {
     </div>
   );
 }
+
+export function EmptyState({ icon: Icon, title, body, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-24 px-6 fade-up">
+      {Icon && (
+        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-5">
+          <Icon className="w-6 h-6 text-gold" />
+        </div>
+      )}
+      <h3 className="text-xl text-white font-light tracking-tight">{title}</h3>
+      {body && <p className="text-sm text-zinc-500 mt-2 max-w-sm leading-relaxed">{body}</p>}
+      {action && <div className="mt-6">{action}</div>}
+    </div>
+  );
+}

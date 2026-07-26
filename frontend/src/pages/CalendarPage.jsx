@@ -13,6 +13,7 @@ const typeStyle = {
 export default function CalendarPage() {
   const { data, loading } = useFetch("/calendar");
   if (loading || !data) return <LoadingScreen label="Loading calendar" />;
+  if (data.meetings.length === 0) return <div><PageHeader title="Calendar" subtitle="Meeting intelligence — walk into every meeting prepared." /><EmptyState title="No meetings yet" body="Connect Google Calendar to bring your schedule and meeting prep into Helm." /></div>;
 
   return (
     <div>

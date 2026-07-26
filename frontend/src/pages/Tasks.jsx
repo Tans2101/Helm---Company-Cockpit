@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { GripVertical } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const priorityStyle = {
@@ -17,6 +17,7 @@ export default function Tasks() {
   const [dragId, setDragId] = useState(null);
 
   if (loading || !data) return <LoadingScreen label="Loading board" />;
+  if (data.items.length === 0) return <div><PageHeader title="Tasks" subtitle="Delegate, track and sync work across your team." /><EmptyState title="No tasks yet" body="Delegated work and follow-ups will appear on your board here." /></div>;
 
   const move = async (taskId, column) => {
     const items = data.items.map((t) => (t.id === taskId ? { ...t, column } : t));

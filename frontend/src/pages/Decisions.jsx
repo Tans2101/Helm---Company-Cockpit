@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Check, X, Share2, Sparkles, ShieldCheck } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
@@ -18,6 +18,7 @@ export default function Decisions() {
   const [busy, setBusy] = useState(null);
 
   if (loading || !data) return <LoadingScreen label="Loading decisions" />;
+  if (data.decisions.length === 0) return <div><PageHeader title="Decision Center" subtitle="Approvals, follow-ups and AI recommendations." /><EmptyState title="No decisions yet" body="When something needs your call, it surfaces here with an AI recommendation and confidence score." /></div>;
 
   const act = async (id, action, owner) => {
     setBusy(id);

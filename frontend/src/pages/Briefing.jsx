@@ -6,6 +6,7 @@ import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, LoadingScreen, ProBadge, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import Onboarding from "@/pages/Onboarding";
 
 const toneDot = { positive: "bg-emerald-400", negative: "bg-rose-400", neutral: "bg-zinc-500" };
 
@@ -15,7 +16,8 @@ export default function Briefing() {
   const [genLoading, setGenLoading] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data) return <LoadingScreen label="Assembling briefing" />;
+  if (loading || !data || !company) return <LoadingScreen label="Assembling briefing" />;
+  if (company.onboarding_done === false) return <Onboarding />;
 
   const generate = async () => {
     setGenLoading(true);
