@@ -114,8 +114,8 @@ class TestApplyTemplate:
         assert len(fin["entries"]) >= 30
 
 
-# ------------------------- Financial Entry CRUD (owner + member) -------------------------
-@pytest.mark.parametrize("token,label", [(OWNER, "owner"), (MEMBER, "member")])
+# ------------------------- Financial Entry CRUD (owner) -------------------------
+@pytest.mark.parametrize("token,label", [(OWNER, "owner")])
 class TestFinEntryCRUD:
     def test_create_edit_delete_entry(self, token, label):
         payload = {"type": "revenue", "category": f"TEST_{label}_cat",
@@ -243,15 +243,14 @@ class TestStripeImport:
 
 # ------------------------- Authorization matrix -------------------------
 class TestFinancePermissions:
-    def test_member_can_write_finance(self):
-        # sanity: member GET works
+    def test_member_cannot_write_finance(self):
+        # general members are read-only on financials; finance pack writes
         r = requests.get(f"{API}/financials", headers=H(MEMBER))
         assert r.status_code == 200
-        assert r.json()["can_write"] is True
-        # can settings update
+        assert r.json()["can_write"] is False
         r = requests.put(f"{API}/financials/settings", headers=H(MEMBER),
                         json={"cash": 3_100_000.0, "gross_margin": 68})
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     def test_fresh_user_apply_sample_then_verify(self):
         """Owner (fresh) applies sample template, verifies data materialized."""

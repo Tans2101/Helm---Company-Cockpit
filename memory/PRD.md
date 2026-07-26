@@ -42,11 +42,18 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 
 ## Implemented (2026-07-26) — Onboarding + Entry-driven Financials + Stripe import
 - Empty-state onboarding: new workspaces start empty; CEO chooses "Explore with sample data" (loads Northwind + 36 financial entries) or "Start clean". POST /api/workspace/apply-template.
-- Financials are now entry-driven and REAL: finance team logs revenue/expense entries in Helm (POST/PATCH/DELETE /api/financials/entries, PUT /api/financials/settings for cash & margin). New permission finance:write granted to owner + member.
+- Financials are now entry-driven and REAL: finance team logs revenue/expense entries in Helm (POST/PATCH/DELETE /api/financials/entries, PUT /api/financials/settings for cash & margin). Permission finance:write for owner + finance pack.
 - compute_financials() aggregates entries → MRR/ARR/net-burn/runway/expense-breakdown/scenarios, which flow into Telemetry (MRR KPI + revenue trend) and the Briefing metrics — one source of truth across the cockpit.
 - Stripe revenue import: POST /api/financials/import/stripe pulls succeeded charges → monthly recurring revenue entries (needs a real Stripe key; degrades to a clean 400 on the shared shim key, no data loss on empty result).
 - Empty states across all modules (EmptyState in kit); Financials ledger UI with add/edit(delete)/import + cash/margin editor.
 - Tested: backend 99/99 pytest (run -n 0), frontend 100%. Flow-through verified live (adding an entry moved MRR $248K→$256K). No open bugs.
+
+## Implemented (2026-07-26) — Access packs (department operator roles)
+- Access packs replace binary owner/member: `owner`, `exec`, `finance`, `hr`, `member`.
+- `/auth/me` returns `role`, `perms[]`, `modules[]`, `home`. Restricted packs (finance/hr) only see their workbench modules; API + sidebar + route guards enforce the same map.
+- Finance writes (`finance:write`) limited to owner + finance pack (general members are read-only on financials).
+- Activity log: finance entry/settings/import writes append `activity_events` and prepend into Briefing `what_changed` so CEO sees live operator updates.
+- Team & Access invite/change-role UI supports all packs; AuthCallback lands operators on their home (finance → Financials, hr → People).
 
 ## Known follow-ups (from code review, non-blocking)
 - compute_financials MRR falls back to total revenue when no entry is marked recurring (label could mislead for one-off-only revenue).

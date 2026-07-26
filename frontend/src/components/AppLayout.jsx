@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, Navigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { ProBadge } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { canAccessModule, homeFor, PACK_LABELS } from "@/lib/access";
 
 const NAV = [
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
@@ -62,7 +63,7 @@ function WorkspaceSwitcher({ onNavigate }) {
         </div>
         <div className="flex-1 min-w-0 text-left">
           <p className="text-xs text-white truncate">{active.name}</p>
-          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {active.plan}</p>
+          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{PACK_LABELS[active.role] || active.role} · {active.plan}</p>
         </div>
         <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
       </button>
@@ -92,6 +93,7 @@ function SidebarContent({ onNavigate }) {
   const { data: company } = useFetch("/company");
   const isPro = company?.plan === "pro";
   const isOwner = user?.role === "owner";
+  const visibleNav = NAV.filter((item) => canAccessModule(user?.role, item.id));
 
   return (
     <div className="flex flex-col h-full">
@@ -110,7 +112,7 @@ function SidebarContent({ onNavigate }) {
       <WorkspaceSwitcher onNavigate={onNavigate} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV.map((item) => (
+        {visibleNav.map((item) => (
           <NavLink
             key={item.id}
             to={item.to}
@@ -161,7 +163,7 @@ function SidebarContent({ onNavigate }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
-            <p className="text-[10px] text-zinc-600 truncate">{isPro ? "Pro plan" : "Free plan"}</p>
+            <p className="text-[10px] text-zinc-600 truncate">{PACK_LABELS[user?.role] || user?.role || "Member"}{isPro ? " · Pro" : " · Free"}</p>
           </div>
           <button data-testid="logout-btn" onClick={logout} className="text-zinc-500 hover:text-white transition-colors">
             <LogOut className="w-4 h-4" />
@@ -174,6 +176,26 @@ function SidebarContent({ onNavigate }) {
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user } = useAuth();
+  const location = useLocation();
+
+  // Map path → module id for route guards
+  const pathModule = (() => {
+    const p = location.pathname.replace(/\/$/, "") || "/app";
+    if (p === "/app") return "briefing";
+    const seg = p.split("/")[2];
+    const map = {
+      decisions: "decisions", telemetry: "telemetry", financials: "financials",
+      tasks: "tasks", reports: "reports", team: "team", calendar: "calendar",
+      people: "people", ask: "ask", members: "members", integrations: "integrations",
+      billing: "billing",
+    };
+    return map[seg] || null;
+  })();
+
+  if (user && pathModule && !canAccessModule(user.role, pathModule)) {
+    return <Navigate to={homeFor(user)} replace />;
+  }
 
   return (
     <div className="min-h-screen grain">

@@ -50,16 +50,61 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kalun")
 
-# ------------------------- Roles / permissions -------------------------
-MEMBER_PERMS = {"read", "tasks:move", "ask:use", "finance:write"}
-OWNER_PERMS = MEMBER_PERMS | {
-    "decisions:act", "briefing:generate", "reports:pack", "integrations:manage",
-    "billing:manage", "members:manage", "workspace:edit",
+# ------------------------- Roles / permissions (access packs) -------------------------
+# Packs are presets: owner runs the company; exec sees everything; finance/hr are
+# department operators; member is a general teammate (read + light work).
+ACCESS_PACKS = ("owner", "exec", "finance", "hr", "member")
+
+COMMON = {"read", "tasks:move", "ask:use"}
+PACK_PERMS = {
+    "owner": COMMON | {
+        "decisions:act", "briefing:generate", "reports:pack", "integrations:manage",
+        "billing:manage", "members:manage", "workspace:edit", "finance:write", "people:write",
+    },
+    "exec": COMMON | {"decisions:act", "briefing:generate", "reports:pack"},
+    "finance": COMMON | {"finance:write"},
+    "hr": COMMON | {"people:write"},
+    "member": set(COMMON),
+}
+
+# Empty set = all modules. Restricted packs only see their workbench + shared tools.
+PACK_MODULES = {
+    "owner": set(),
+    "exec": set(),
+    "member": set(),
+    "finance": {"briefing", "financials", "tasks", "ask"},
+    "hr": {"briefing", "people", "team", "tasks", "ask"},
+}
+
+PACK_HOME = {
+    "owner": "/app",
+    "exec": "/app",
+    "member": "/app",
+    "finance": "/app/financials",
+    "hr": "/app/people",
 }
 
 
+def normalize_role(role: Optional[str]) -> str:
+    r = (role or "member").strip().lower()
+    return r if r in ACCESS_PACKS else "member"
+
+
 def perms_for(role: str):
-    return OWNER_PERMS if role == "owner" else MEMBER_PERMS
+    return set(PACK_PERMS.get(normalize_role(role), PACK_PERMS["member"]))
+
+
+def modules_for(role: str):
+    return set(PACK_MODULES.get(normalize_role(role), set()))
+
+
+def can_access_module(role: str, module: str) -> bool:
+    mods = modules_for(role)
+    return (not mods) or (module in mods)
+
+
+def home_for(role: str) -> str:
+    return PACK_HOME.get(normalize_role(role), "/app")
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
@@ -201,10 +246,14 @@ async def get_principal(request: Request):
             await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": active}})
     if not membership:
         raise HTTPException(status_code=403, detail="No workspace")
+    role = normalize_role(membership.get("role"))
     return {
         "user_id": user["user_id"], "email": user["email"], "name": user.get("name"),
         "picture": user.get("picture"), "workspace_id": membership["workspace_id"],
-        "role": membership["role"],
+        "role": role,
+        "perms": sorted(perms_for(role)),
+        "modules": sorted(modules_for(role)),
+        "home": home_for(role),
     }
 
 
@@ -214,6 +263,43 @@ def require(action: str):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
         return principal
     return dep
+
+
+def require_module(module: str):
+    async def dep(principal=Depends(get_principal)):
+        if not can_access_module(principal["role"], module):
+            raise HTTPException(status_code=403, detail=f"Your role cannot access {module}")
+        return principal
+    return dep
+
+
+async def record_activity(workspace_id: str, principal: dict, module: str, action: str,
+                          summary: str, tone: str = "neutral", detail: Optional[str] = None):
+    """Append an activity event and surface it on the CEO Briefing what_changed feed."""
+    now = datetime.now(timezone.utc).isoformat()
+    actor = principal.get("name") or principal.get("email") or "Teammate"
+    event = {
+        "id": f"act_{uuid.uuid4().hex[:10]}",
+        "workspace_id": workspace_id,
+        "actor_user_id": principal["user_id"],
+        "actor_name": actor,
+        "module": module,
+        "action": action,
+        "summary": summary,
+        "detail": detail or f"{actor} · {module}",
+        "tone": tone,
+        "created_at": now,
+    }
+    await db.activity_events.insert_one(event)
+    item = {"title": summary, "detail": event["detail"], "tone": tone, "source": "activity", "at": now}
+    ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "briefing.what_changed": 1})
+    changed = list(((ws or {}).get("briefing") or {}).get("what_changed") or [])
+    changed = [item] + [c for c in changed if not (c.get("source") == "activity" and c.get("title") == summary)]
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {"briefing.what_changed": changed[:12]}},
+    )
+    return event
 
 
 async def get_ws(workspace_id: str):
@@ -389,16 +475,18 @@ async def create_workspace(payload: CreateWsInput, principal=Depends(get_princip
 
 @api_router.get("/members")
 async def list_members(principal=Depends(get_principal)):
+    if not can_access_module(principal["role"], "members"):
+        raise HTTPException(status_code=403, detail="Your role cannot access members")
     mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(100)
     out = []
     for m in mems:
         u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
         out.append({
-            "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
+            "membership_id": m["membership_id"], "email": m["email"], "role": normalize_role(m.get("role")),
             "status": m["status"], "name": (u or {}).get("name"), "picture": (u or {}).get("picture"),
             "is_self": m.get("user_id") == principal["user_id"],
         })
-    return {"members": out, "my_role": principal["role"]}
+    return {"members": out, "my_role": principal["role"], "packs": list(ACCESS_PACKS)}
 
 
 class InviteInput(BaseModel):
@@ -408,7 +496,7 @@ class InviteInput(BaseModel):
 
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:manage"))):
-    role = "owner" if payload.role == "owner" else "member"
+    role = normalize_role(payload.role)
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
     if existing:
@@ -423,7 +511,7 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     ws = await get_ws(principal["workspace_id"])
     app_url = str(request.base_url).rstrip("/")
     email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], role, app_url)
-    return {"ok": True, "auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False)}
+    return {"ok": True, "auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False), "role": role}
 
 
 class RoleInput(BaseModel):
@@ -437,9 +525,9 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
         raise HTTPException(status_code=404, detail="Member not found")
     if m.get("user_id") == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot change your own role")
-    role = "owner" if payload.role == "owner" else "member"
+    role = normalize_role(payload.role)
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role}})
-    return {"ok": True}
+    return {"ok": True, "role": role}
 
 
 @api_router.delete("/members/{membership_id}")
@@ -484,7 +572,7 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
 
 
 @api_router.get("/briefing")
-async def briefing(principal=Depends(get_principal)):
+async def briefing(principal=Depends(require_module("briefing"))):
     c = await get_ws(principal["workspace_id"])
     b = dict(c["briefing"])
     is_pro = c["plan"] == "pro"
@@ -518,7 +606,7 @@ async def generate_briefing(principal=Depends(require("briefing:generate"))):
 
 
 @api_router.get("/decisions")
-async def decisions(principal=Depends(get_principal)):
+async def decisions(principal=Depends(require_module("decisions"))):
     c = await get_ws(principal["workspace_id"])
     return {"decisions": c["decisions"], "is_pro": c["plan"] == "pro", "can_act": "decisions:act" in perms_for(principal["role"])}
 
@@ -547,7 +635,7 @@ async def decision_action(decision_id: str, payload: DecisionAction, principal=D
 
 
 @api_router.get("/telemetry")
-async def telemetry(principal=Depends(get_principal)):
+async def telemetry(principal=Depends(require_module("telemetry"))):
     c = await get_ws(principal["workspace_id"])
     tel = dict(c["telemetry"])
     fin = await compute_financials(c["workspace_id"])
@@ -565,7 +653,7 @@ async def telemetry(principal=Depends(get_principal)):
 
 
 @api_router.get("/financials")
-async def financials(principal=Depends(get_principal)):
+async def financials(principal=Depends(require_module("financials"))):
     fin = await compute_financials(principal["workspace_id"])
     entries = await db.financial_entries.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("month", -1).to_list(5000)
     return {**fin, "entries": entries, "can_write": "finance:write" in perms_for(principal["role"]),
@@ -592,6 +680,12 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finan
              "created_at": datetime.now(timezone.utc).isoformat()}
     await db.financial_entries.insert_one(entry)
     entry.pop("_id", None)
+    tone = "positive" if payload.type == "revenue" else "negative"
+    await record_activity(
+        principal["workspace_id"], principal, "financials", "create",
+        f"Logged {payload.type} · {fmt_money(payload.amount)} ({payload.category.strip() or 'Other'})",
+        tone=tone, detail=f"{principal.get('name') or 'Finance'} added a {payload.month} {payload.type} entry",
+    )
     return {"ok": True, "entry": entry}
 
 
@@ -604,12 +698,24 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
                   "recurring": payload.recurring, "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
+    await record_activity(
+        principal["workspace_id"], principal, "financials", "update",
+        f"Updated {payload.type} · {fmt_money(payload.amount)} ({payload.category.strip() or 'Other'})",
+        tone="neutral", detail=f"{principal.get('name') or 'Finance'} edited a ledger entry",
+    )
     return {"ok": True}
 
 
 @api_router.delete("/financials/entries/{entry_id}")
 async def delete_fin_entry(entry_id: str, principal=Depends(require("finance:write"))):
+    existing = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
+    label = (existing or {}).get("category") or "entry"
+    await record_activity(
+        principal["workspace_id"], principal, "financials", "delete",
+        f"Removed finance entry · {label}",
+        tone="negative", detail=f"{principal.get('name') or 'Finance'} deleted a ledger entry",
+    )
     return {"ok": True}
 
 
@@ -623,6 +729,11 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
                                    {"$set": {"financial_settings.cash": round(payload.cash, 2),
                                              "financial_settings.gross_margin": payload.gross_margin}})
+    await record_activity(
+        principal["workspace_id"], principal, "financials", "settings",
+        f"Updated cash position to {fmt_money(payload.cash)}",
+        tone="neutral", detail=f"{principal.get('name') or 'Finance'} updated financial settings",
+    )
     return {"ok": True}
 
 
@@ -650,11 +761,16 @@ async def import_stripe_revenue(principal=Depends(require("finance:write"))):
     if docs:
         await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
         await db.financial_entries.insert_many(docs)
+        await record_activity(
+            principal["workspace_id"], principal, "financials", "import",
+            f"Imported Stripe revenue · {len(docs)} month(s)",
+            tone="positive", detail=f"{principal.get('name') or 'Finance'} synced Stripe charges",
+        )
     return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 
 
 @api_router.get("/tasks")
-async def tasks(principal=Depends(get_principal)):
+async def tasks(principal=Depends(require_module("tasks"))):
     c = await get_ws(principal["workspace_id"])
     return c["tasks"]
 
@@ -676,7 +792,7 @@ async def move_task(task_id: str, payload: TaskMove, principal=Depends(require("
 
 
 @api_router.get("/reports")
-async def reports(principal=Depends(get_principal)):
+async def reports(principal=Depends(require_module("reports"))):
     c = await get_ws(principal["workspace_id"])
     return {"reports": c["reports"], "is_pro": c["plan"] == "pro"}
 
@@ -696,13 +812,13 @@ async def weekly_pack(principal=Depends(require("reports:pack"))):
 
 
 @api_router.get("/team")
-async def team(principal=Depends(get_principal)):
+async def team(principal=Depends(require_module("team"))):
     c = await get_ws(principal["workspace_id"])
     return c["team"]
 
 
 @api_router.get("/calendar")
-async def calendar(principal=Depends(get_principal)):
+async def calendar(principal=Depends(require_module("calendar"))):
     c = await get_ws(principal["workspace_id"])
     data = dict(c["calendar"])
     data["live"] = bool(c.get("google_tokens"))
@@ -710,7 +826,7 @@ async def calendar(principal=Depends(get_principal)):
 
 
 @api_router.get("/people")
-async def people(principal=Depends(get_principal)):
+async def people(principal=Depends(require_module("people"))):
     c = await get_ws(principal["workspace_id"])
     return c["people"]
 
@@ -721,13 +837,15 @@ class AskInput(BaseModel):
 
 
 @api_router.get("/ask/history")
-async def ask_history(principal=Depends(get_principal)):
+async def ask_history(principal=Depends(require_module("ask"))):
     msgs = await db.chat_messages.find({"workspace_id": principal["workspace_id"], "user_id": principal["user_id"]}, {"_id": 0}).sort("created_at", 1).to_list(200)
     return {"messages": msgs}
 
 
 @api_router.post("/ask")
 async def ask_kalun(payload: AskInput, principal=Depends(require("ask:use"))):
+    if not can_access_module(principal["role"], "ask"):
+        raise HTTPException(status_code=403, detail="Your role cannot access ask")
     c = await get_ws(principal["workspace_id"])
     is_pro = c["plan"] == "pro"
     if not is_pro:
@@ -798,6 +916,8 @@ def _provider_config(provider: str, base_url: str):
 
 @api_router.get("/integrations")
 async def integrations(principal=Depends(get_principal)):
+    if not can_access_module(principal["role"], "integrations"):
+        raise HTTPException(status_code=403, detail="Your role cannot access integrations")
     c = await get_ws(principal["workspace_id"])
     ints = []
     for i in c["integrations"]:
@@ -904,6 +1024,8 @@ def get_stripe(request: Request) -> StripeCheckout:
 
 @api_router.get("/billing/plans")
 async def billing_plans(principal=Depends(get_principal)):
+    if not can_access_module(principal["role"], "billing"):
+        raise HTTPException(status_code=403, detail="Your role cannot access billing")
     c = await get_ws(principal["workspace_id"])
     return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["role"])}
 

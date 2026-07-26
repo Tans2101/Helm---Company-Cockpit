@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { api } from "@/lib/api";
+import { homeFor } from "@/lib/access";
 
 export default function AuthCallback() {
   const hasProcessed = useRef(false);
@@ -10,12 +11,15 @@ export default function AuthCallback() {
     const hash = window.location.hash || "";
     const sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
     (async () => {
+      let dest = "/app";
       try {
         if (sid) await api.post("/auth/session", { session_id: sid });
+        const { data } = await api.get("/auth/me");
+        dest = homeFor(data);
       } catch (e) {
         // ignore, redirect will re-check
       }
-      window.location.replace("/app");
+      window.location.replace(dest);
     })();
   }, []);
 
