@@ -282,7 +282,8 @@ async def compute_financials(workspace_id: str):
         mrr_delta = round((revenue_series[-1]["revenue"] - revenue_series[-2]["revenue"]) / revenue_series[-2]["revenue"] * 100, 1)
     return {
         "mrr": fmt_money(mrr_val), "arr": fmt_money(mrr_val * 12), "runway_months": runway,
-        "burn": fmt_money(burn_val), "cash": fmt_money(cash), "gross_margin": f"{gm}%" if gm else "—",
+        "burn": fmt_money(burn_val), "cash": fmt_money(cash),
+        "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
         "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
         "expense_breakdown": expense_breakdown, "settings": settings,
         "mrr_delta": mrr_delta, "spark": [r["revenue"] for r in revenue_series],
@@ -641,13 +642,13 @@ async def import_stripe_revenue(principal=Depends(require("finance:write"))):
     except Exception as e:
         logger.exception("stripe import failed")
         raise HTTPException(status_code=400, detail=f"Stripe import failed: {e}")
-    await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
     now = datetime.now(timezone.utc).isoformat()
     docs = [{"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"], "type": "revenue",
              "category": "Stripe revenue", "amount": round(amt, 2), "month": month, "recurring": True,
              "note": "Imported from Stripe", "source": "stripe", "created_by": principal["user_id"], "created_at": now}
             for month, amt in by_month.items()]
     if docs:
+        await db.financial_entries.delete_many({"workspace_id": principal["workspace_id"], "source": "stripe"})
         await db.financial_entries.insert_many(docs)
     return {"ok": True, "months_imported": len(docs), "total": round(sum(by_month.values()), 2)}
 

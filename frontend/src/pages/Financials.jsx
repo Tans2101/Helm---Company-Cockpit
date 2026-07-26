@@ -58,6 +58,7 @@ export default function Financials() {
   };
 
   const del = async (id) => {
+    if (!window.confirm("Remove this entry? This can't be undone.")) return;
     try { await api.delete(`/financials/entries/${id}`); reload(); toast.success("Entry removed"); }
     catch (e) { toast.error("Could not delete"); }
   };

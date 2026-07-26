@@ -40,6 +40,18 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 - Data-only providers: Stripe (connected), GitHub/Slack/Salesforce (toggles).
 - Tested: backend 100% (84 pytest, run with -n 0), frontend 100%. No open bugs.
 
+## Implemented (2026-07-26) — Onboarding + Entry-driven Financials + Stripe import
+- Empty-state onboarding: new workspaces start empty; CEO chooses "Explore with sample data" (loads Northwind + 36 financial entries) or "Start clean". POST /api/workspace/apply-template.
+- Financials are now entry-driven and REAL: finance team logs revenue/expense entries in Helm (POST/PATCH/DELETE /api/financials/entries, PUT /api/financials/settings for cash & margin). New permission finance:write granted to owner + member.
+- compute_financials() aggregates entries → MRR/ARR/net-burn/runway/expense-breakdown/scenarios, which flow into Telemetry (MRR KPI + revenue trend) and the Briefing metrics — one source of truth across the cockpit.
+- Stripe revenue import: POST /api/financials/import/stripe pulls succeeded charges → monthly recurring revenue entries (needs a real Stripe key; degrades to a clean 400 on the shared shim key, no data loss on empty result).
+- Empty states across all modules (EmptyState in kit); Financials ledger UI with add/edit(delete)/import + cash/margin editor.
+- Tested: backend 99/99 pytest (run -n 0), frontend 100%. Flow-through verified live (adding an entry moved MRR $248K→$256K). No open bugs.
+
+## Known follow-ups (from code review, non-blocking)
+- compute_financials MRR falls back to total revenue when no entry is marked recurring (label could mislead for one-off-only revenue).
+- avg net burn ignores net-positive months (fine while burning).
+
 ## Pending credentials (to go live)
 - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (enable Calendar + Gmail APIs, add redirect URI /api/oauth/google/callback).
 - QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET (Intuit app, redirect /api/oauth/quickbooks/callback).
