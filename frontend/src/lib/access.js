@@ -5,6 +5,8 @@ export const PACK_LABELS = {
   exec: "Executive",
   finance: "Finance",
   hr: "HR",
+  sales: "Sales",
+  ops: "Ops",
   member: "Member",
 };
 
@@ -15,6 +17,8 @@ export const PACK_MODULES = {
   member: [],
   finance: ["briefing", "financials", "tasks", "ask"],
   hr: ["briefing", "people", "team", "tasks", "ask"],
+  sales: ["briefing", "telemetry", "tasks", "ask"],
+  ops: ["briefing", "telemetry", "tasks", "team", "ask"],
 };
 
 export const PACK_HOME = {
@@ -23,6 +27,8 @@ export const PACK_HOME = {
   member: "/app",
   finance: "/app/financials",
   hr: "/app/people",
+  sales: "/app/telemetry",
+  ops: "/app/tasks",
 };
 
 export function normalizeRole(role) {

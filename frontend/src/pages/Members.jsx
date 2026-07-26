@@ -7,19 +7,21 @@ import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import { PACK_LABELS } from "@/lib/access";
 
-const PACKS = ["owner", "exec", "finance", "hr", "member"];
+const PACKS = ["owner", "exec", "finance", "hr", "sales", "ops", "member"];
 
 const roleStyle = {
   owner: "text-gold bg-gold/10 border-gold/20",
   exec: "text-violet-300 bg-violet-400/10 border-violet-400/20",
   finance: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
   hr: "text-amber-300 bg-amber-400/10 border-amber-400/20",
+  sales: "text-sky-300 bg-sky-400/10 border-sky-400/20",
+  ops: "text-orange-300 bg-orange-400/10 border-orange-400/20",
   member: "text-sky-400 bg-sky-400/10 border-sky-400/20",
 };
 
 function RoleIcon({ role }) {
   if (role === "owner") return <Crown className="w-3 h-3" />;
-  if (role === "finance" || role === "hr") return <Briefcase className="w-3 h-3" />;
+  if (["finance", "hr", "sales", "ops"].includes(role)) return <Briefcase className="w-3 h-3" />;
   return <Shield className="w-3 h-3" />;
 }
 
@@ -60,7 +62,7 @@ export default function Members() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Team & Access" subtitle="Invite teammates with an access pack — Finance writes the books, HR owns people, Executives see the full cockpit, Owner runs the company." />
+      <PageHeader title="Team & Access" subtitle="Invite teammates with an access pack — Finance, HR, Sales, and Ops write their lane; Executives see the full cockpit; Owner runs the company." />
 
       {isOwner && (
         <GlassCard className="p-5 mb-6 fade-up">

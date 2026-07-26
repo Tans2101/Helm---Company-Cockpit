@@ -49,11 +49,17 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 - Tested: backend 99/99 pytest (run -n 0), frontend 100%. Flow-through verified live (adding an entry moved MRR $248K→$256K). No open bugs.
 
 ## Implemented (2026-07-26) — Access packs (department operator roles)
-- Access packs replace binary owner/member: `owner`, `exec`, `finance`, `hr`, `member`.
-- `/auth/me` returns `role`, `perms[]`, `modules[]`, `home`. Restricted packs (finance/hr) only see their workbench modules; API + sidebar + route guards enforce the same map.
+- Access packs replace binary owner/member: `owner`, `exec`, `finance`, `hr`, `sales`, `ops`, `member`.
+- `/auth/me` returns `role`, `perms[]`, `modules[]`, `home`. Restricted packs only see their workbench modules; API + sidebar + route guards enforce the same map.
 - Finance writes (`finance:write`) limited to owner + finance pack (general members are read-only on financials).
-- Activity log: finance entry/settings/import writes append `activity_events` and prepend into Briefing `what_changed` so CEO sees live operator updates.
-- Team & Access invite/change-role UI supports all packs; AuthCallback lands operators on their home (finance → Financials, hr → People).
+- Activity log: department writes append `activity_events` and prepend into Briefing `what_changed` so CEO sees live operator updates.
+- Team & Access invite/change-role UI supports all packs; AuthCallback lands operators on their home (finance → Financials, hr → People, sales → Telemetry, ops → Tasks).
+
+## Implemented (2026-07-26) — HR / Sales / Ops operator loops
+- HR: People CRUD (`POST/PATCH/DELETE /people`) with `people:write`; syncs `employees` headcount + Team Bandwidth roster; Briefing shows Headcount metric + activity.
+- Sales: `PUT /telemetry/sales` updates Pipeline / Active Customers KPIs + funnel; activity → Briefing.
+- Ops: Risk CRUD on `/telemetry/risks`; activity → Briefing.
+- Telemetry + People UIs expose write controls based on pack permissions.
 
 ## Known follow-ups (from code review, non-blocking)
 - compute_financials MRR falls back to total revenue when no entry is marked recurring (label could mislead for one-off-only revenue).

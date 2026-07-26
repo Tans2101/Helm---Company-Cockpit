@@ -51,19 +51,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kalun")
 
 # ------------------------- Roles / permissions (access packs) -------------------------
-# Packs are presets: owner runs the company; exec sees everything; finance/hr are
-# department operators; member is a general teammate (read + light work).
-ACCESS_PACKS = ("owner", "exec", "finance", "hr", "member")
+# Packs are presets: owner runs the company; exec sees everything; department
+# operators (finance/hr/sales/ops) write their lane; member is general read + light work.
+ACCESS_PACKS = ("owner", "exec", "finance", "hr", "sales", "ops", "member")
 
 COMMON = {"read", "tasks:move", "ask:use"}
 PACK_PERMS = {
     "owner": COMMON | {
         "decisions:act", "briefing:generate", "reports:pack", "integrations:manage",
-        "billing:manage", "members:manage", "workspace:edit", "finance:write", "people:write",
+        "billing:manage", "members:manage", "workspace:edit",
+        "finance:write", "people:write", "sales:write", "ops:write",
     },
     "exec": COMMON | {"decisions:act", "briefing:generate", "reports:pack"},
     "finance": COMMON | {"finance:write"},
     "hr": COMMON | {"people:write"},
+    "sales": COMMON | {"sales:write"},
+    "ops": COMMON | {"ops:write"},
     "member": set(COMMON),
 }
 
@@ -74,6 +77,8 @@ PACK_MODULES = {
     "member": set(),
     "finance": {"briefing", "financials", "tasks", "ask"},
     "hr": {"briefing", "people", "team", "tasks", "ask"},
+    "sales": {"briefing", "telemetry", "tasks", "ask"},
+    "ops": {"briefing", "telemetry", "tasks", "team", "ask"},
 }
 
 PACK_HOME = {
@@ -82,6 +87,8 @@ PACK_HOME = {
     "member": "/app",
     "finance": "/app/financials",
     "hr": "/app/people",
+    "sales": "/app/telemetry",
+    "ops": "/app/tasks",
 }
 
 
@@ -581,6 +588,7 @@ async def briefing(principal=Depends(require_module("briefing"))):
         {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"], "tone": "positive"},
         {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—", "delta": 0, "tone": "neutral"},
         {"label": "Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"]},
+        {"label": "Headcount", "value": str(c.get("employees") or 0), "delta": 0, "tone": "neutral"},
     ]
     nrr = b.get("nrr")
     if nrr:
@@ -649,7 +657,137 @@ async def telemetry(principal=Depends(require_module("telemetry"))):
     tel["kpis"] = kpis
     if fin["revenue_series"]:
         tel["revenue_trend"] = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)} for r in fin["revenue_series"]]
+    perms = perms_for(principal["role"])
+    tel["can_write_sales"] = "sales:write" in perms
+    tel["can_write_ops"] = "ops:write" in perms
     return tel
+
+
+class SalesSnapshotInput(BaseModel):
+    pipeline: str
+    pipeline_delta: Optional[float] = None
+    customers: Optional[str] = None
+    customers_delta: Optional[float] = None
+    funnel: Optional[list] = None
+
+
+@api_router.put("/telemetry/sales")
+async def update_sales_snapshot(payload: SalesSnapshotInput, principal=Depends(require("sales:write"))):
+    c = await get_ws(principal["workspace_id"])
+    tel = dict(c.get("telemetry") or {})
+    kpis = [dict(k) for k in tel.get("kpis") or []]
+
+    def upsert_kpi(label, value, delta):
+        for k in kpis:
+            if k.get("label") == label:
+                k["value"] = value
+                if delta is not None:
+                    k["delta"] = delta
+                    k["tone"] = "positive" if delta >= 0 else "negative"
+                return
+        kpis.append({"label": label, "value": value, "unit": "", "delta": delta or 0,
+                     "tone": "positive" if (delta or 0) >= 0 else "negative", "spark": []})
+
+    upsert_kpi("Pipeline", payload.pipeline.strip(), payload.pipeline_delta)
+    if payload.customers is not None and str(payload.customers).strip():
+        upsert_kpi("Active Customers", str(payload.customers).strip(), payload.customers_delta)
+    tel["kpis"] = kpis
+    if payload.funnel is not None:
+        clean = []
+        for row in payload.funnel:
+            if not isinstance(row, dict):
+                continue
+            stage = str(row.get("stage") or "").strip()
+            if not stage:
+                continue
+            try:
+                value = int(row.get("value") or 0)
+            except (TypeError, ValueError):
+                value = 0
+            clean.append({"stage": stage, "value": value})
+        tel["funnel"] = clean
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"telemetry": tel}})
+    await record_activity(
+        principal["workspace_id"], principal, "telemetry", "sales",
+        f"Updated sales pipeline to {payload.pipeline.strip()}",
+        tone="positive", detail=f"{principal.get('name') or 'Sales'} refreshed pipeline / funnel",
+    )
+    return {"ok": True}
+
+
+class RiskInput(BaseModel):
+    name: str
+    likelihood: int
+    impact: int
+    category: str = "Ops"
+
+
+@api_router.post("/telemetry/risks")
+async def add_risk(payload: RiskInput, principal=Depends(require("ops:write"))):
+    if not (1 <= payload.likelihood <= 5 and 1 <= payload.impact <= 5):
+        raise HTTPException(status_code=400, detail="likelihood and impact must be 1–5")
+    c = await get_ws(principal["workspace_id"])
+    tel = dict(c.get("telemetry") or {})
+    risks = list(tel.get("risks") or [])
+    risk = {"id": f"r_{uuid.uuid4().hex[:8]}", "name": payload.name.strip(),
+            "likelihood": payload.likelihood, "impact": payload.impact,
+            "category": payload.category.strip() or "Ops"}
+    risks.append(risk)
+    tel["risks"] = risks
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"telemetry": tel}})
+    await record_activity(
+        principal["workspace_id"], principal, "telemetry", "risk_create",
+        f"Flagged risk · {risk['name']}",
+        tone="negative", detail=f"{principal.get('name') or 'Ops'} added a {risk['category']} risk",
+    )
+    return {"ok": True, "risk": risk}
+
+
+@api_router.patch("/telemetry/risks/{risk_id}")
+async def edit_risk(risk_id: str, payload: RiskInput, principal=Depends(require("ops:write"))):
+    if not (1 <= payload.likelihood <= 5 and 1 <= payload.impact <= 5):
+        raise HTTPException(status_code=400, detail="likelihood and impact must be 1–5")
+    c = await get_ws(principal["workspace_id"])
+    tel = dict(c.get("telemetry") or {})
+    risks = list(tel.get("risks") or [])
+    found = False
+    for r in risks:
+        if r.get("id") == risk_id:
+            r["name"] = payload.name.strip()
+            r["likelihood"] = payload.likelihood
+            r["impact"] = payload.impact
+            r["category"] = payload.category.strip() or "Ops"
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Risk not found")
+    tel["risks"] = risks
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"telemetry": tel}})
+    await record_activity(
+        principal["workspace_id"], principal, "telemetry", "risk_update",
+        f"Updated risk · {payload.name.strip()}",
+        tone="neutral", detail=f"{principal.get('name') or 'Ops'} updated risk scoring",
+    )
+    return {"ok": True}
+
+
+@api_router.delete("/telemetry/risks/{risk_id}")
+async def delete_risk(risk_id: str, principal=Depends(require("ops:write"))):
+    c = await get_ws(principal["workspace_id"])
+    tel = dict(c.get("telemetry") or {})
+    risks = list(tel.get("risks") or [])
+    kept = [r for r in risks if r.get("id") != risk_id]
+    if len(kept) == len(risks):
+        raise HTTPException(status_code=404, detail="Risk not found")
+    name = next((r.get("name") for r in risks if r.get("id") == risk_id), "risk")
+    tel["risks"] = kept
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"telemetry": tel}})
+    await record_activity(
+        principal["workspace_id"], principal, "telemetry", "risk_delete",
+        f"Cleared risk · {name}",
+        tone="positive", detail=f"{principal.get('name') or 'Ops'} removed a risk",
+    )
+    return {"ok": True}
 
 
 @api_router.get("/financials")
@@ -828,7 +966,121 @@ async def calendar(principal=Depends(require_module("calendar"))):
 @api_router.get("/people")
 async def people(principal=Depends(require_module("people"))):
     c = await get_ws(principal["workspace_id"])
-    return c["people"]
+    block = c.get("people") or {"people": [], "avg_trust": 0}
+    roster = list(block.get("people") or [])
+    avg = round(sum(int(p.get("trust_score") or 0) for p in roster) / len(roster)) if roster else 0
+    return {
+        "people": roster,
+        "avg_trust": avg,
+        "headcount": len(roster),
+        "can_write": "people:write" in perms_for(principal["role"]),
+    }
+
+
+class PersonInput(BaseModel):
+    name: str
+    role: str
+    department: str
+    trust_score: int = 80
+    quality: str = "B+"
+    tasks_done: int = 0
+    tenure: str = "0y"
+
+
+def _normalize_person(payload: PersonInput, existing_id: Optional[str] = None):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    trust = max(0, min(100, int(payload.trust_score)))
+    return {
+        "id": existing_id or f"p_{uuid.uuid4().hex[:8]}",
+        "name": name,
+        "role": payload.role.strip() or "Teammate",
+        "department": payload.department.strip() or "General",
+        "trust_score": trust,
+        "quality": payload.quality.strip() or "B+",
+        "tasks_done": max(0, int(payload.tasks_done or 0)),
+        "tenure": payload.tenure.strip() or "0y",
+    }
+
+
+async def _persist_roster(workspace_id: str, roster: list):
+    avg = round(sum(int(p.get("trust_score") or 0) for p in roster) / len(roster)) if roster else 0
+    ws = await get_ws(workspace_id)
+    team = dict(ws.get("team") or {"members": [], "avg_utilization": 0, "overloaded_count": 0})
+    by_name = {m.get("name"): m for m in (team.get("members") or []) if m.get("name")}
+    synced = []
+    for p in roster:
+        existing = by_name.get(p["name"])
+        if existing:
+            synced.append({**existing, "role": p.get("role") or existing.get("role")})
+        else:
+            synced.append({
+                "name": p["name"], "role": p.get("role") or "Teammate",
+                "utilization": 70, "status": "healthy", "capacity": 40, "allocated": 28,
+            })
+    overloaded = sum(1 for m in synced if (m.get("utilization") or 0) >= 100)
+    avg_util = round(sum(m.get("utilization") or 0 for m in synced) / len(synced)) if synced else 0
+    team = {"members": synced, "avg_utilization": avg_util, "overloaded_count": overloaded}
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {
+            "people": {"people": roster, "avg_trust": avg},
+            "employees": len(roster),
+            "team": team,
+        }},
+    )
+    return avg
+
+
+@api_router.post("/people")
+async def add_person(payload: PersonInput, principal=Depends(require("people:write"))):
+    c = await get_ws(principal["workspace_id"])
+    roster = list((c.get("people") or {}).get("people") or [])
+    person = _normalize_person(payload)
+    roster.append(person)
+    await _persist_roster(principal["workspace_id"], roster)
+    await record_activity(
+        principal["workspace_id"], principal, "people", "create",
+        f"Added {person['name']} · {person['role']} ({person['department']})",
+        tone="positive", detail=f"{principal.get('name') or 'HR'} updated the roster · headcount {len(roster)}",
+    )
+    return {"ok": True, "person": person, "headcount": len(roster)}
+
+
+@api_router.patch("/people/{person_id}")
+async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require("people:write"))):
+    c = await get_ws(principal["workspace_id"])
+    roster = list((c.get("people") or {}).get("people") or [])
+    idx = next((i for i, p in enumerate(roster) if p.get("id") == person_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    person = _normalize_person(payload, existing_id=person_id)
+    roster[idx] = person
+    await _persist_roster(principal["workspace_id"], roster)
+    await record_activity(
+        principal["workspace_id"], principal, "people", "update",
+        f"Updated {person['name']} · {person['department']}",
+        tone="neutral", detail=f"{principal.get('name') or 'HR'} edited roster details",
+    )
+    return {"ok": True, "person": person}
+
+
+@api_router.delete("/people/{person_id}")
+async def delete_person(person_id: str, principal=Depends(require("people:write"))):
+    c = await get_ws(principal["workspace_id"])
+    roster = list((c.get("people") or {}).get("people") or [])
+    target = next((p for p in roster if p.get("id") == person_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Person not found")
+    roster = [p for p in roster if p.get("id") != person_id]
+    await _persist_roster(principal["workspace_id"], roster)
+    await record_activity(
+        principal["workspace_id"], principal, "people", "delete",
+        f"Removed {target.get('name')} from roster",
+        tone="negative", detail=f"{principal.get('name') or 'HR'} · headcount now {len(roster)}",
+    )
+    return {"ok": True, "headcount": len(roster)}
 
 
 # ------------------------- Ask Helm -------------------------
