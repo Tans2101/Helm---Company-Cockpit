@@ -95,6 +95,16 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 - Frontend: src/lib/paddle.js loads Paddle.js v2 + Initialize once; Billing.jsx primary CTA opens Paddle overlay checkout with customData {workspace_id, user_id, checkout_nonce}; "Secure checkout by Paddle".
 - Tested: 7 Paddle tests (signature reject, provision, idempotency, nonce-binding, config auth-gating). NOTE: preview ingress/WAF returns 403 on programmatic POSTs to /api/webhook/paddle — webhook tests run against localhost:8001; deployed env is unaffected. Full suite 152 passed.
 
+## Implemented (2026-08-03) — No dead ends (real data everywhere)
+- Goal: a clean company sees THEIR OWN data in every module (usability/workingness over new features).
+- Decisions: real CRUD — POST/PATCH/DELETE /api/decisions (owner/exec via decisions:act) + existing /action. Frontend New-decision form, edit/delete. confidence clamped 0-100.
+- Telemetry: computed from real financials/people/tasks (MRR/ARR/Runway/Net Burn only when entries exist, + Headcount + Open Tasks always). Funnel/Risk sections hidden when empty (sales/ops write loops deferred).
+- Team Bandwidth: computed from active memberships + their open assigned tasks + today's daily update (utilization, open_tasks, posted_today, blocked). No more demo names.
+- Reports: 3 computed cards (Financial Snapshot, Team Pulse, Execution) from real data; Weekly CEO Pack stays Pro.
+- Calendar: "Connect Google Calendar" CTA when not connected/no meetings.
+- Onboarding: GET /api/onboarding/checklist (financials, people, invite, first update) → "Finish setting up Helm" card on Briefing.
+- Tested: 170/170 backend green (added test_computed_and_decisions.py, 18 tests) + frontend flows verified (iteration_5.json). Google-only auth retained by user choice.
+
 ## Backlog (updated)
 - P1: Sales pipeline + Ops risk WRITE loops (packs/nav exist; editors deferred).
 - P1: Department-lead-scoped invites (finance invites finance, etc.).

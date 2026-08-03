@@ -702,9 +702,10 @@ class DecisionInput(BaseModel):
 
 
 def _decision_fields(p: "DecisionInput"):
+    conf = None if p.confidence is None else max(0, min(100, int(p.confidence)))
     return {"title": p.title.strip(), "category": p.category.strip() or "General",
             "description": p.description.strip(), "recommendation": (p.recommendation or "").strip(),
-            "confidence": p.confidence, "due": p.due.strip() or "—",
+            "confidence": conf, "due": p.due.strip() or "—",
             "impact": p.impact if p.impact in ("High", "Medium", "Low") else "Medium"}
 
 
