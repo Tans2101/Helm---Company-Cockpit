@@ -1738,7 +1738,10 @@ _WORKSPACE_COLLECTIONS = (
 def _strip_sensitive(doc: dict) -> dict:
     if not doc:
         return doc
-    out = {k: v for k, v in doc.items() if k not in ("password", "password_hash", "oauth_session_token_enc")}
+    out = {k: v for k, v in doc.items() if k not in (
+        "password", "password_hash", "oauth_session_token_enc",
+        "google_tokens", "quickbooks_tokens",
+    )}
     return out
 
 
@@ -1785,15 +1788,17 @@ async def export_account(user=Depends(get_user)):
 
 @api_router.delete("/account")
 async def delete_account(user=Depends(get_user)):
-    owned = await db.memberships.find(
-        {"user_id": user["user_id"], "status": "active", "role": "owner"}, {"_id": 0}).to_list(50)
+    memberships = await db.memberships.find(
+        {"user_id": user["user_id"], "status": "active"}, {"_id": 0}).to_list(50)
+    owned = [m for m in memberships if m.get("role") == "owner" or pack_of(m) == "owner"]
     sole_owner = []
     for m in owned:
-        others = await db.memberships.count_documents({
-            "workspace_id": m["workspace_id"], "status": "active", "role": "owner",
-            "user_id": {"$ne": user["user_id"]},
-        })
-        if others == 0:
+        others = await db.memberships.find(
+            {"workspace_id": m["workspace_id"], "status": "active", "user_id": {"$ne": user["user_id"]}},
+            {"_id": 0},
+        ).to_list(50)
+        other_owners = [o for o in others if o.get("role") == "owner" or pack_of(o) == "owner"]
+        if not other_owners:
             sole_owner.append(m["workspace_id"])
     if sole_owner:
         raise HTTPException(
