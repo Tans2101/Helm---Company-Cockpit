@@ -242,8 +242,9 @@ export default function Landing() {
       <section className="px-6 py-24 border-t border-white/[0.05]">
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Loved by founders</p>
-            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Quiet control, in their words.</h2>
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Illustrative examples</p>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">What quiet control can feel like.</h2>
+            <p className="mt-3 text-sm text-zinc-500 max-w-xl">Composite scenarios for product storytelling — not verified customer testimonials.</p>
           </motion.div>
           <div className="mt-14 grid md:grid-cols-3 gap-5">
             {testimonials.map((t, i) => (
@@ -289,14 +290,18 @@ export default function Landing() {
       </section>
 
       <footer className="px-6 py-10 border-t border-white/[0.05]">
-        <div className="mx-auto max-w-6xl flex items-center justify-between">
+        <div className="mx-auto max-w-6xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center">
               <span className="font-mono text-gold text-xs">H</span>
             </div>
             <span className="text-sm text-zinc-500">Helm — CEO Operating System</span>
           </div>
-          <Link to="/login" className="text-sm text-zinc-500 hover:text-white transition-colors">Sign in</Link>
+          <div className="flex items-center gap-5 text-sm text-zinc-500">
+            <Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+            <Link to="/terms" className="hover:text-white transition-colors">Terms</Link>
+            <Link to="/login" className="hover:text-white transition-colors">Sign in</Link>
+          </div>
         </div>
       </footer>
     </div>

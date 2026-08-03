@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -23,7 +23,7 @@ export default function Login() {
       <div className="relative flex flex-col justify-between p-10 md:p-16 border-r border-white/5 z-10">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold font-medium">K</span>
+            <span className="font-mono text-gold font-medium">H</span>
           </div>
           <div>
             <p className="text-white font-semibold tracking-tight leading-none">Helm</p>
@@ -71,6 +71,12 @@ export default function Login() {
             Continue with Google
             <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
           </button>
+
+          <p className="mt-4 text-center text-xs text-zinc-600">
+            <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
+            <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
+          </p>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />

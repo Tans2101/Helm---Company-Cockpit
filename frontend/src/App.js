@@ -4,8 +4,12 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthCallback from "@/components/AuthCallback";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import CookieNotice from "@/components/CookieNotice";
 import Login from "@/pages/Login";
 import Landing from "@/pages/Landing";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 import Briefing from "@/pages/Briefing";
 import MyDay from "@/pages/MyDay";
 import Pipeline from "@/pages/Pipeline";
@@ -17,12 +21,13 @@ import Reports from "@/pages/Reports";
 import Team from "@/pages/Team";
 import CalendarPage from "@/pages/CalendarPage";
 import People from "@/pages/People";
-import AskKalun from "@/pages/AskKalun";
+import AskHelm from "@/pages/AskHelm";
 import Members from "@/pages/Members";
 import Integrations from "@/pages/Integrations";
 import Billing from "@/pages/Billing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
+import AccountSettings from "@/pages/AccountSettings";
 
 function AppRouter() {
   const location = useLocation();
@@ -33,6 +38,8 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
       <Route path="/app" element={<ProtectedRoute />}>
@@ -47,10 +54,11 @@ function AppRouter() {
         <Route path="team" element={<Team />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="people" element={<People />} />
-        <Route path="ask" element={<AskKalun />} />
+        <Route path="ask" element={<AskHelm />} />
         <Route path="members" element={<Members />} />
         <Route path="integrations" element={<Integrations />} />
         <Route path="billing" element={<Billing />} />
+        <Route path="settings" element={<AccountSettings />} />
       </Route>
     </Routes>
   );
@@ -60,11 +68,14 @@ function App() {
   return (
     <div className="App">
       <AuthProvider>
-        <BrowserRouter>
-          <AppRouter />
-        </BrowserRouter>
+        <ErrorBoundary>
+          <BrowserRouter>
+            <AppRouter />
+            <CookieNotice />
+            <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
+          </BrowserRouter>
+        </ErrorBoundary>
       </AuthProvider>
-      <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
     </div>
   );
 }
