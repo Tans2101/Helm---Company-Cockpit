@@ -45,9 +45,12 @@ export default function Team() {
             <GlassCard key={m.name} className="p-4 fade-up" data-testid={`member-${m.name}`}>
               <div className="flex items-center gap-4">
                 <div className="w-9 h-9 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center text-sm text-gold shrink-0">{m.name[0]}</div>
-                <div className="w-40 shrink-0">
-                  <p className="text-sm text-white">{m.name}</p>
-                  <p className="text-xs text-zinc-500">{m.role}</p>
+                <div className="w-48 shrink-0">
+                  <p className="text-sm text-white flex items-center gap-1.5">{m.name}
+                    {m.blocked ? <span className="text-[9px] font-mono uppercase text-amber-400 bg-amber-400/10 rounded px-1 py-0.5">blocked</span>
+                      : m.posted_today ? <span className="text-[9px] font-mono uppercase text-emerald-400 bg-emerald-400/10 rounded px-1 py-0.5">updated</span> : null}
+                  </p>
+                  <p className="text-xs text-zinc-500">{m.role} · {m.open_tasks} open</p>
                 </div>
                 <div className="flex-1">
                   <div className="h-2 rounded-full bg-white/5 overflow-hidden">

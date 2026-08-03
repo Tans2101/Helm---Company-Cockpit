@@ -83,6 +83,7 @@ export default function Telemetry() {
         </GlassCard>
 
         {/* Funnel */}
+        {data.funnel.length > 0 && (
         <GlassCard className="p-5 fade-up">
           <SectionLabel className="mb-4">Sales Funnel</SectionLabel>
           <ResponsiveContainer width="100%" height={240}>
@@ -97,9 +98,11 @@ export default function Telemetry() {
             </BarChart>
           </ResponsiveContainer>
         </GlassCard>
+        )}
       </div>
 
       {/* Risk matrix */}
+      {data.risks.length > 0 && (
       <GlassCard className="p-5 fade-up">
         <div className="flex items-center justify-between mb-4">
           <SectionLabel>Risk Matrix</SectionLabel>
@@ -138,6 +141,7 @@ export default function Telemetry() {
           </div>
         </div>
       </GlassCard>
+      )}
     </div>
   );
 }

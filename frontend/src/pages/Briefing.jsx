@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock, Users } from "lucide-react";
+import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock, Users, CheckCircle2, Circle } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, LoadingScreen, ProBadge, Delta } from "@/components/kit";
@@ -13,6 +13,7 @@ const toneDot = { positive: "bg-emerald-400", negative: "bg-rose-400", neutral: 
 export default function Briefing() {
   const { data, loading, setData } = useFetch("/briefing");
   const { data: company } = useFetch("/company");
+  const { data: checklist } = useFetch("/onboarding/checklist");
   const [genLoading, setGenLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -44,6 +45,27 @@ export default function Briefing() {
           <p className="text-zinc-400 mt-3 max-w-2xl text-base md:text-lg leading-relaxed">{data.headline}</p>
         </div>
       </div>
+
+      {checklist && !checklist.complete && (
+        <GlassCard glow className="p-5 mb-6 fade-up border-gold/20" data-testid="onboarding-checklist">
+          <div className="flex items-center gap-1.5 mb-3">
+            <Sparkles className="w-4 h-4 text-gold" />
+            <SectionLabel>Finish setting up Helm</SectionLabel>
+            <span className="ml-auto font-mono text-xs text-zinc-500">{checklist.steps.filter((s) => s.done).length}/{checklist.steps.length}</span>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {checklist.steps.map((s) => (
+              <button key={s.id} data-testid={`setup-${s.id}`} onClick={() => navigate(s.route)}
+                className={cn("flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                  s.done ? "border-emerald-400/20 bg-emerald-400/[0.04]" : "border-white/10 bg-white/[0.02] hover:border-gold/30")}>
+                {s.done ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <Circle className="w-4 h-4 text-zinc-600 shrink-0" />}
+                <span className={cn("text-sm", s.done ? "text-zinc-500 line-through" : "text-zinc-200")}>{s.label}</span>
+                {!s.done && <ArrowUpRight className="w-3.5 h-3.5 text-gold ml-auto shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </GlassCard>
+      )}
 
       {/* Top metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">

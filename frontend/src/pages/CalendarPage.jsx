@@ -1,6 +1,7 @@
-import { Clock, Users, Sparkles } from "lucide-react";
+import { Clock, Users, Sparkles, CalendarPlus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const typeStyle = {
@@ -12,8 +13,27 @@ const typeStyle = {
 
 export default function CalendarPage() {
   const { data, loading } = useFetch("/calendar");
+  const navigate = useNavigate();
   if (loading || !data) return <LoadingScreen label="Loading calendar" />;
-  if (data.meetings.length === 0) return <div><PageHeader title="Calendar" subtitle="Meeting intelligence — walk into every meeting prepared." /><EmptyState title="No meetings yet" body="Connect Google Calendar to bring your schedule and meeting prep into Helm." /></div>;
+
+  if (!data.meetings || data.meetings.length === 0) {
+    return (
+      <div>
+        <PageHeader title="Calendar" subtitle="Meeting intelligence — walk into every meeting prepared." />
+        <EmptyState
+          icon={CalendarPlus}
+          title={data.live ? "No meetings on your calendar" : "Connect Google Calendar"}
+          body={data.live ? "Your Google Calendar is connected — meetings will appear here as they're scheduled." : "Bring your real schedule and AI meeting prep into Helm by connecting Google Calendar."}
+          action={!data.live ? (
+            <button data-testid="connect-calendar-btn" onClick={() => navigate("/app/integrations")}
+              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover">
+              <CalendarPlus className="w-4 h-4" /> Connect Google Calendar
+            </button>
+          ) : null}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

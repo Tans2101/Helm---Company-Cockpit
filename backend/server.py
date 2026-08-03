@@ -691,22 +691,105 @@ async def decision_action(decision_id: str, payload: DecisionAction, principal=D
     return {"ok": True, "decisions": decisions}
 
 
+class DecisionInput(BaseModel):
+    title: str
+    category: str = "General"
+    description: str = ""
+    recommendation: Optional[str] = ""
+    confidence: Optional[int] = None
+    due: str = ""
+    impact: str = "Medium"
+
+
+def _decision_fields(p: "DecisionInput"):
+    return {"title": p.title.strip(), "category": p.category.strip() or "General",
+            "description": p.description.strip(), "recommendation": (p.recommendation or "").strip(),
+            "confidence": p.confidence, "due": p.due.strip() or "—",
+            "impact": p.impact if p.impact in ("High", "Medium", "Low") else "Medium"}
+
+
+@api_router.post("/decisions")
+async def create_decision(payload: DecisionInput, principal=Depends(require("decisions:act"))):
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+    c = await get_ws(principal["workspace_id"])
+    d = {"id": f"d_{uuid.uuid4().hex[:8]}", "status": "pending", "owner": None, **_decision_fields(payload)}
+    decisions = c["decisions"] + [d]
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    await log_activity(principal, "decisions", "decision.create", f"New decision: {d['title']}")
+    return {"ok": True, "decision": d}
+
+
+@api_router.patch("/decisions/{decision_id}")
+async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require("decisions:act"))):
+    c = await get_ws(principal["workspace_id"])
+    decisions = c["decisions"]
+    found = None
+    for d in decisions:
+        if d["id"] == decision_id:
+            d.update(_decision_fields(payload))
+            found = d
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    return {"ok": True}
+
+
+@api_router.delete("/decisions/{decision_id}")
+async def delete_decision(decision_id: str, principal=Depends(require("decisions:act"))):
+    c = await get_ws(principal["workspace_id"])
+    decisions = [d for d in c["decisions"] if d["id"] != decision_id]
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    return {"ok": True}
+
+
+@api_router.get("/onboarding/checklist")
+async def onboarding_checklist(principal=Depends(get_principal)):
+    c = await get_ws(principal["workspace_id"])
+    ws = c["workspace_id"]
+    has_fin = await db.financial_entries.count_documents({"workspace_id": ws}) > 0
+    people_n = len(c["people"]["people"])
+    members_n = await db.memberships.count_documents({"workspace_id": ws, "status": "active"})
+    day = datetime.now(timezone.utc).date().isoformat()
+    has_update = await db.updates.count_documents({"workspace_id": ws, "user_id": principal["user_id"], "day": day}) > 0
+    steps = [
+        {"id": "financials", "label": "Add your financials", "done": has_fin, "route": "/app/financials"},
+        {"id": "people", "label": "Add your team roster", "done": people_n > 0, "route": "/app/people"},
+        {"id": "invite", "label": "Invite a teammate", "done": members_n > 1, "route": "/app/members"},
+        {"id": "update", "label": "Post your first daily update", "done": has_update, "route": "/app/me"},
+    ]
+    return {"steps": steps, "complete": all(s["done"] for s in steps)}
+
+
 @api_router.get("/telemetry")
 async def telemetry(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    tel = dict(c["telemetry"])
     fin = await compute_financials(c["workspace_id"])
-    kpis = [dict(k) for k in tel.get("kpis", [])]
-    for k in kpis:
-        if k["label"] == "MRR":
-            k["value"] = fin["mrr"]
-            k["delta"] = fin["mrr_delta"]
-            if fin["spark"]:
-                k["spark"] = fin["spark"]
-    tel["kpis"] = kpis
-    if fin["revenue_series"]:
-        tel["revenue_trend"] = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)} for r in fin["revenue_series"]]
-    return tel
+    items = c["tasks"]["items"]
+    open_tasks = len([t for t in items if t.get("column") != "done"])
+    headcount = c.get("employees") or len(c["people"]["people"])
+    kpis = []
+    if fin["has_data"]:
+        kpis += [
+            {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"],
+             "tone": "positive" if fin["mrr_delta"] >= 0 else "negative", "spark": fin["spark"]},
+            {"label": "ARR", "value": fin["arr"], "delta": 0, "tone": "neutral", "spark": fin["spark"]},
+            {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—",
+             "delta": 0, "tone": "neutral", "spark": []},
+            {"label": "Net Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"],
+             "spark": [b["burn"] for b in fin["burn_series"]]},
+        ]
+    kpis += [
+        {"label": "Headcount", "value": str(headcount), "delta": 0, "tone": "neutral", "spark": []},
+        {"label": "Open Tasks", "value": str(open_tasks), "delta": 0, "tone": "neutral", "spark": []},
+    ]
+    revenue_trend = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)}
+                     for r in fin["revenue_series"]]
+    tel = c.get("telemetry") or {}
+    return {"kpis": kpis, "revenue_trend": revenue_trend,
+            "funnel": tel.get("funnel") or [], "risks": tel.get("risks") or [],
+            "expense_breakdown": fin["expense_breakdown"]}
 
 
 @api_router.get("/financials")
@@ -940,7 +1023,33 @@ async def post_update(payload: UpdateInput, principal=Depends(require("updates:w
 @api_router.get("/reports")
 async def reports(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"reports": c["reports"], "is_pro": c["plan"] == "pro"}
+    fin = await compute_financials(c["workspace_id"])
+    items = c["tasks"]["items"]
+    done = len([t for t in items if t.get("column") == "done"])
+    inprog = len([t for t in items if t.get("column") == "in_progress"])
+    openc = len([t for t in items if t.get("column") != "done"])
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
+    blocked = len([u for u in ups if u.get("blocker")])
+    headcount = c.get("employees") or len(c["people"]["people"])
+    reports = [
+        {"id": "fin", "title": "Financial Snapshot", "type": "Finance", "period": "Live",
+         "summary": f"MRR {fin['mrr']} · ARR {fin['arr']} · runway {fin['runway_months'] or '—'}mo · net burn {fin['burn']}.",
+         "metrics": [{"label": "MRR", "value": fin["mrr"]},
+                     {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—"},
+                     {"label": "Burn", "value": fin["burn"]}]},
+        {"id": "team", "title": "Team Pulse", "type": "People", "period": "Today",
+         "summary": f"{headcount} people · {len(ups)} daily update(s) today · {blocked} blocked.",
+         "metrics": [{"label": "Headcount", "value": str(headcount)},
+                     {"label": "Updates", "value": str(len(ups))},
+                     {"label": "Blocked", "value": str(blocked)}]},
+        {"id": "exec", "title": "Execution", "type": "Delivery", "period": "Live",
+         "summary": f"{done} shipped · {inprog} in progress · {openc} open across the board.",
+         "metrics": [{"label": "Shipped", "value": str(done)},
+                     {"label": "In progress", "value": str(inprog)},
+                     {"label": "Open", "value": str(openc)}]},
+    ]
+    return {"reports": reports, "is_pro": c["plan"] == "pro"}
 
 
 @api_router.post("/reports/weekly-pack")
@@ -960,7 +1069,27 @@ async def weekly_pack(principal=Depends(require("reports:pack"))):
 @api_router.get("/team")
 async def team(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return c["team"]
+    mems = await db.memberships.find({"workspace_id": c["workspace_id"], "status": "active"}, {"_id": 0}).to_list(200)
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = {u["user_id"]: u for u in await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)}
+    items = c["tasks"]["items"]
+    members, total, overloaded = [], 0, 0
+    for m in mems:
+        uid = m.get("user_id")
+        u = await db.users.find_one({"user_id": uid}, {"_id": 0, "name": 1}) if uid else None
+        name = (u or {}).get("name") or m["email"]
+        open_t = len([t for t in items if t.get("assignee_user_id") == uid and t.get("column") != "done"])
+        util = min(open_t * 25, 130)
+        status = ("overloaded" if util >= 100 else "high" if util >= 70 else "healthy" if util >= 30 else "available")
+        if util >= 100:
+            overloaded += 1
+        total += util
+        upd = ups.get(uid)
+        members.append({"name": name, "role": PACK_LABEL.get(pack_of(m), "Member"), "utilization": util,
+                        "status": status, "open_tasks": open_t,
+                        "posted_today": bool(upd), "blocked": bool(upd and upd.get("blocker"))})
+    avg = round(total / len(members)) if members else 0
+    return {"members": members, "avg_utilization": avg, "overloaded_count": overloaded}
 
 
 @api_router.get("/calendar")
