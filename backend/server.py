@@ -43,6 +43,11 @@ QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
+PADDLE_CLIENT_TOKEN = os.environ.get('PADDLE_CLIENT_TOKEN', '')
+PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
+PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
+PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PRO_PRICE = 149.0
 
 app = FastAPI()
@@ -1238,7 +1243,9 @@ def get_stripe(request: Request) -> StripeCheckout:
 @api_router.get("/billing/plans")
 async def billing_plans(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"current_plan": c["plan"], "pro_price": PRO_PRICE, "can_manage": "billing:manage" in perms_for(principal["pack"])}
+    return {"current_plan": c["plan"], "pro_price": PRO_PRICE,
+            "can_manage": "billing:manage" in perms_for(principal["pack"]),
+            "paddle_ready": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID)}
 
 
 @api_router.post("/payments/checkout")
@@ -1292,11 +1299,97 @@ async def reset_plan(principal=Depends(require("billing:manage"))):
     return {"ok": True}
 
 
+# ------------------------- Paddle Billing -------------------------
+def _verify_paddle_signature(raw: bytes, signature: str) -> bool:
+    """Verify Paddle-Signature (ts=<unix>;h1=<hex>[;h1=...]) over `ts:<raw body>`."""
+    if not signature or not PADDLE_WEBHOOK_SECRET:
+        return False
+    parts = {}
+    for part in signature.split(";"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            parts.setdefault(k, []).append(v)
+    ts = (parts.get("ts") or [None])[0]
+    h1s = parts.get("h1") or []
+    if not ts or not h1s:
+        return False
+    try:
+        if abs(datetime.now(timezone.utc).timestamp() - int(ts)) > 300:
+            return False
+    except ValueError:
+        return False
+    signed = f"{ts}:".encode() + raw
+    expected = hmac.new(PADDLE_WEBHOOK_SECRET.encode(), signed, hashlib.sha256).hexdigest()
+    return any(hmac.compare_digest(expected, h) for h in h1s)
+
+
+@api_router.post("/billing/paddle/config")
+async def paddle_config(principal=Depends(require("billing:manage"))):
+    if not (PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID):
+        raise HTTPException(status_code=400, detail="Paddle is not configured")
+    nonce = uuid.uuid4().hex
+    await db.paddle_intents.insert_one({
+        "_id": nonce, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"],
+        "price_id": PADDLE_PRICE_ID, "used": False, "created_at": datetime.now(timezone.utc),
+    })
+    return {"client_token": PADDLE_CLIENT_TOKEN, "price_id": PADDLE_PRICE_ID,
+            "environment": PADDLE_ENV, "checkout_nonce": nonce,
+            "workspace_id": principal["workspace_id"], "user_id": principal["user_id"],
+            "email": principal.get("email")}
+
+
+async def _paddle_provision(event):
+    data = event.get("data") or {}
+    custom = data.get("custom_data") or {}
+    nonce = custom.get("checkout_nonce")
+    workspace_id = custom.get("workspace_id")
+    user_id = custom.get("user_id")
+    if not (nonce and workspace_id and user_id):
+        return
+    intent = await db.paddle_intents.find_one({"_id": nonce})
+    if not intent or intent.get("workspace_id") != workspace_id or intent.get("user_id") != user_id:
+        return
+    await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": {
+        "plan": "pro", "billing_provider": "paddle",
+        "paddle_subscription_id": data.get("subscription_id") or data.get("id"),
+        "paddle_customer_id": data.get("customer_id"),
+        "paddle_last_event_at": event.get("occurred_at"),
+    }})
+    await db.paddle_intents.update_one({"_id": nonce}, {"$set": {"used": True}})
+
+
+@api_router.post("/webhook/paddle")
+async def paddle_webhook(request: Request):
+    raw = await request.body()
+    sig = request.headers.get("Paddle-Signature", "")
+    if not raw or not _verify_paddle_signature(raw, sig):
+        raise HTTPException(status_code=400, detail="Invalid Paddle signature")
+    event = json.loads(raw)
+    event_id = event.get("event_id")
+    event_type = event.get("event_type")
+    if not event_id:
+        raise HTTPException(status_code=400, detail="Missing event_id")
+    try:
+        await db.paddle_events.insert_one({"_id": event_id, "type": event_type, "received_at": datetime.now(timezone.utc)})
+    except Exception as e:
+        if "e11000" in str(e).lower() or "duplicate key" in str(e).lower():
+            return {"received": True}
+        raise
+    if event_type == "transaction.completed":
+        await _paddle_provision(event)
+    elif event_type in ("subscription.created", "subscription.activated", "subscription.updated"):
+        if (event.get("data") or {}).get("status") == "active":
+            await _paddle_provision(event)
+    elif event_type in ("subscription.canceled", "subscription.paused", "subscription.past_due"):
+        data = event.get("data") or {}
+        await db.workspaces.update_one({"paddle_subscription_id": data.get("id")},
+                                       {"$set": {"billing_status": data.get("status")}})
+    return {"received": True}
+
+
 @api_router.get("/")
 async def root():
     return {"service": "Helm CEO Operating System"}
-
-
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origin_regex=".*", allow_methods=["*"], allow_headers=["*"])
 
@@ -1306,6 +1399,7 @@ async def startup():
     await db.memberships.create_index([("user_id", 1), ("workspace_id", 1)])
     await db.memberships.create_index([("email", 1), ("status", 1)])
     await db.workspaces.create_index("workspace_id", unique=True)
+    await db.paddle_intents.create_index("created_at", expireAfterSeconds=3600)
 
 
 @app.on_event("shutdown")

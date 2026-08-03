@@ -55,6 +55,9 @@ def ensure_fresh_user():
         db.financial_entries.delete_many({"workspace_id": {"$in": ws_ids}})
         db.memberships.delete_many({"user_id": "test-user-new"})
     db.users.update_one({"user_id": "test-user-new"}, {"$unset": {"active_workspace_id": ""}})
+    # New behavior (iteration 5): no silent auto-workspace. A fresh owner explicitly
+    # creates an empty company. Do that here so the onboarding-empty tests have a company.
+    requests.post(f"{API}/workspaces", headers=H("test_session_new"), json={"name": "Fresh CEO's Company"})
     yield
     client.close()
 

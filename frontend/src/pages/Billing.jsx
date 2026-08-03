@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, Sparkles, ArrowLeft } from "lucide-react";
+import { Check, Sparkles, ArrowLeft, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
+import { initPaddle } from "@/lib/paddle";
 import { GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ export default function Billing() {
   if (loading || !data) return <LoadingScreen label="Loading plans" />;
   const isPro = data.current_plan === "pro";
 
-  const upgrade = async () => {
+  const upgradeStripe = async () => {
     setBusy(true);
     try {
       const { data: res } = await api.post("/payments/checkout", { origin_url: window.location.origin });
@@ -35,6 +36,31 @@ export default function Billing() {
       setBusy(false);
     }
   };
+
+  const upgradePaddle = async () => {
+    setBusy(true);
+    try {
+      const { data: cfg } = await api.post("/billing/paddle/config");
+      const Paddle = await initPaddle(cfg.client_token, cfg.environment, (ev) => {
+        if (ev?.name === "checkout.completed") {
+          toast.success("Payment received — activating Pro…");
+          setTimeout(() => window.location.reload(), 4500);
+        }
+      });
+      Paddle.Checkout.open({
+        settings: { displayMode: "overlay", theme: "dark" },
+        items: [{ priceId: cfg.price_id, quantity: 1 }],
+        customData: { workspace_id: cfg.workspace_id, user_id: cfg.user_id, checkout_nonce: cfg.checkout_nonce },
+        ...(cfg.email ? { customer: { email: cfg.email } } : {}),
+      });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not start Paddle checkout");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const upgrade = () => (data.paddle_ready ? upgradePaddle() : upgradeStripe());
 
   const resetDemo = async () => {
     await api.post("/demo/reset-plan");
@@ -99,7 +125,13 @@ export default function Billing() {
                 {busy ? "Starting checkout…" : `Upgrade to Pro — $${data.pro_price}/mo`}
               </button>
             )}
-            <p className="text-center text-[11px] text-zinc-600 mt-3">Test mode · use card 4242 4242 4242 4242</p>
+            {!isPro && data.paddle_ready ? (
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-600 mt-3">
+                <ShieldCheck className="w-3.5 h-3.5 text-gold/70" /> Secure checkout by Paddle
+              </div>
+            ) : (
+              !isPro && <p className="text-center text-[11px] text-zinc-600 mt-3">Test mode · use card 4242 4242 4242 4242</p>
+            )}
           </div>
         </GlassCard>
       </div>

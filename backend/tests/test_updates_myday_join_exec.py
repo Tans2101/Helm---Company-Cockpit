@@ -221,7 +221,8 @@ def test_owner_can_assign_to_workspace_member(owner):
 
 # ------------- Invite/join UX -------------
 def test_workspaces_join_info_valid(owner):
-    r = owner.get(f"{BASE_URL}/api/workspaces/join-info", params={"code": "D672C1"})
+    code = owner.get(f"{BASE_URL}/api/workspaces/join-code").json()["join_code"]
+    r = owner.get(f"{BASE_URL}/api/workspaces/join-info", params={"code": code})
     assert r.status_code == 200
     assert r.json()["workspace_id"] == WS_ID
 
@@ -239,13 +240,15 @@ def test_member_forbidden_join_code(member):
 def test_owner_gets_join_code(owner):
     r = owner.get(f"{BASE_URL}/api/workspaces/join-code")
     assert r.status_code == 200
-    assert r.json()["join_code"] == "D672C1"
+    code = r.json()["join_code"]
+    assert isinstance(code, str) and len(code) == 6
 
 
-def test_exec_can_get_join_code(exec_ctx):
+def test_exec_can_get_join_code(exec_ctx, owner):
+    owner_code = owner.get(f"{BASE_URL}/api/workspaces/join-code").json()["join_code"]
     r = exec_ctx["session"].get(f"{BASE_URL}/api/workspaces/join-code")
     assert r.status_code == 200
-    assert r.json()["join_code"] == "D672C1"
+    assert r.json()["join_code"] == owner_code
 
 
 def test_needs_workspace_new_user(mongo):
@@ -299,8 +302,9 @@ def test_join_by_code_flow(mongo):
         # invalid code
         r = s.post(f"{BASE_URL}/api/workspaces/join", json={"code": "NOTREAL"})
         assert r.status_code == 404
-        # valid code
-        r = s.post(f"{BASE_URL}/api/workspaces/join", json={"code": "D672C1"})
+        # valid code (fetched dynamically)
+        code = _sess(OWNER_TOKEN).get(f"{BASE_URL}/api/workspaces/join-code").json()["join_code"]
+        r = s.post(f"{BASE_URL}/api/workspaces/join", json={"code": code})
         assert r.status_code == 200
         assert r.json()["workspace_id"] == WS_ID
         d = s.get(f"{BASE_URL}/api/auth/me").json()

@@ -70,3 +70,34 @@ Solo founder/CEO of a small startup who wants synthesis over raw data — one co
 ## Next Tasks
 - Wire a first real integration (Google Calendar) behind Pro.
 - Add scheduled morning-briefing generation + notification.
+
+## Implemented (2026-07-26) — Access Packs + Activity Log + People (Phases 0/1/3)
+- Access packs replace binary owner/member: owner, exec, finance, hr, sales, ops, member. Each maps to a permission set + default home route. `pack_of()` keeps legacy owner/member rows backward-compatible. /auth/me returns pack, perms[], default_route, pack_label.
+- Finance writes restricted to finance/owner/exec (member is read-only now).
+- Activity Log: `activities` collection + `log_activity()`. Financial + People writes append an activity; GET /api/activities; CEO Briefing "what changed" prepends the last 5 activities.
+- People CRUD (POST/PATCH/DELETE /api/people, people:write) with headcount sync to workspace.employees + avg_trust recompute.
+- Members: invite/patch carry a pack (owner-only can grant owner); list returns pack + user_id + my_pack.
+- Tested: 26 backend tests (test_packs_activity_people.py + updated suites), all green.
+
+## Implemented (2026-07-26) — Employee workspace (My Day + Daily Updates + Tasks + Join UX)
+- Product shift: Helm is ONE company workspace for EVERY employee, not a CEO-only cockpit.
+- My Day (`/app/me`, default home for member/sales/ops): daily-update composer, "my tasks", team-updates strip. Owner/exec still land on Briefing.
+- Daily Updates: `updates` collection, one-per-user-per-day (editable). POST /api/updates, GET /api/updates/me, GET /api/updates/today. Rolls up into Briefing what_changed[0] + a new `team_updates` array ("Today's team updates" section).
+- Tasks personal + departmental: /api/tasks returns can_create/can_assign/my_user_id; POST /api/tasks (member → self; tasks:assign → assign to any workspace member); GET /api/tasks/me; move_task enforces ownership; move to done sets progress 100.
+- Invite/join UX that can't fail: brand-new user with no membership → needs_workspace (WorkspaceGate: Create company OR Join with code). No more silent auto-CEO. Self-serve POST /api/workspaces works without a membership. Join by code: /api/workspaces/join-info, /join, /join-code (members:invite). build_workspace adds a 6-char join_code.
+- Who-can-invite: owner = full incl. promote-to-owner; exec = members:invite + assign any pack EXCEPT owner (cannot change owners). members:manage (owner-only) required to remove members / touch owners.
+- Frontend: src/lib/access.js (pack meta + hasPerm), MyDay.jsx, WorkspaceGate.jsx, Members/Tasks/Briefing/AppLayout/ProtectedRoute/AuthCallback updated.
+- Tested: 26 backend tests (test_updates_myday_join_exec.py), all green.
+
+## Implemented (2026-08-03) — Paddle Billing (live)
+- Paddle Billing added ALONGSIDE Stripe (Stripe retained). LIVE keys in backend/.env (PADDLE_API_KEY, PADDLE_CLIENT_TOKEN, PADDLE_PRICE_ID, PADDLE_WEBHOOK_SECRET, PADDLE_ENV=production).
+- Backend: POST /api/billing/paddle/config (billing:manage) mints a nonce bound to workspace+user (paddle_intents, 1h TTL); POST /api/webhook/paddle verifies Paddle-Signature HMAC (ts:body), idempotent via paddle_events unique _id, provisions plan=pro on transaction.completed / active subscription; nonce-binding prevents cross-workspace provisioning. billing/plans returns paddle_ready.
+- Frontend: src/lib/paddle.js loads Paddle.js v2 + Initialize once; Billing.jsx primary CTA opens Paddle overlay checkout with customData {workspace_id, user_id, checkout_nonce}; "Secure checkout by Paddle".
+- Tested: 7 Paddle tests (signature reject, provision, idempotency, nonce-binding, config auth-gating). NOTE: preview ingress/WAF returns 403 on programmatic POSTs to /api/webhook/paddle — webhook tests run against localhost:8001; deployed env is unaffected. Full suite 152 passed.
+
+## Backlog (updated)
+- P1: Sales pipeline + Ops risk WRITE loops (packs/nav exist; editors deferred).
+- P1: Department-lead-scoped invites (finance invites finance, etc.).
+- P1: Real integrations (Google Calendar, QuickBooks, GitHub sync, Slack push).
+- P2: Scheduled morning-briefing email (Resend) + CEO approval notifications; Ask Helm multi-turn memory.
+- P2: Manager pack (team-subset scoping); CORS allowlist hardening; expired-session cleanup.

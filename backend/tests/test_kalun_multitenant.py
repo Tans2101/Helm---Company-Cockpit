@@ -48,7 +48,10 @@ def fresh_user(mongo):
     mongo.user_sessions.insert_one({"user_id": uid, "session_token": tok,
                                     "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
                                     "created_at": datetime.now(timezone.utc).isoformat()})
-    yield {"user_id": uid, "email": email, "session": _sess(tok)}
+    s = _sess(tok)
+    # New behavior: no silent auto-workspace — a fresh owner creates their company.
+    s.post(f"{BASE_URL}/api/workspaces", json={"name": "Iso Co"})
+    yield {"user_id": uid, "email": email, "session": s}
     # cleanup
     mongo.user_sessions.delete_one({"session_token": tok})
     mems = list(mongo.memberships.find({"user_id": uid}))
