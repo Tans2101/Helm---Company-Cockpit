@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
   FileText, Users2, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun,
+  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -210,6 +210,12 @@ export default function AppLayout() {
 
       <main className="lg:pl-[260px] relative z-10">
         <div className="px-5 md:px-10 py-8 md:py-12 max-w-[1500px]">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  );
+}
           <Outlet />
         </div>
       </main>

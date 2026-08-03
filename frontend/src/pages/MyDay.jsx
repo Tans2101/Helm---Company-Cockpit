@@ -34,6 +34,7 @@ export default function MyDay() {
   const [busy, setBusy] = useState(false);
   const [showTask, setShowTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskDue, setTaskDue] = useState("");
   const [taskBusy, setTaskBusy] = useState(false);
 
   useEffect(() => {
@@ -64,9 +65,9 @@ export default function MyDay() {
     if (!taskTitle.trim()) return;
     setTaskBusy(true);
     try {
-      await api.post("/tasks", { title: taskTitle.trim(), tag: "Personal", column: "backlog" });
+      await api.post("/tasks", { title: taskTitle.trim(), tag: "Personal", column: "backlog", due: taskDue });
       toast.success("Task added");
-      setTaskTitle(""); setShowTask(false);
+      setTaskTitle(""); setTaskDue(""); setShowTask(false);
       reloadTasks();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not add task"); }
     finally { setTaskBusy(false); }
@@ -161,6 +162,8 @@ export default function MyDay() {
               <input data-testid="myday-task-input" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="What do you need to get done?"
                 className="flex-1 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40 placeholder:text-zinc-600" />
+              <input data-testid="myday-task-due" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)}
+                className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-2 focus:outline-none focus:border-gold/40" />
               <button data-testid="myday-task-save" onClick={addTask} disabled={taskBusy}
                 className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60">{taskBusy ? "…" : "Add"}</button>
             </div>

@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import Landing from "@/pages/Landing";
 import Briefing from "@/pages/Briefing";
 import MyDay from "@/pages/MyDay";
+import Pipeline from "@/pages/Pipeline";
 import Decisions from "@/pages/Decisions";
 import Telemetry from "@/pages/Telemetry";
 import Financials from "@/pages/Financials";
@@ -37,6 +38,7 @@ function AppRouter() {
       <Route path="/app" element={<ProtectedRoute />}>
         <Route index element={<Briefing />} />
         <Route path="me" element={<MyDay />} />
+        <Route path="sales" element={<Pipeline />} />
         <Route path="decisions" element={<Decisions />} />
         <Route path="telemetry" element={<Telemetry />} />
         <Route path="financials" element={<Financials />} />

@@ -141,8 +141,8 @@ export default function Tasks() {
                   {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-zinc-500">Due
-                <input data-testid="task-due" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} placeholder="Fri" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-zinc-500">Due date
+                <input data-testid="task-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500 col-span-2">Tag
                 <input data-testid="task-tag" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} placeholder="Growth" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
