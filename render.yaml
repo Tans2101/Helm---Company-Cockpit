@@ -1,0 +1,60 @@
+# Render Blueprint — Helm API
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: helm-api
+    runtime: python
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: helm
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "none"
+      - key: ALLOW_DEMO_LOGIN
+        value: "false"
+      - key: DEMO_RESET_ENABLED
+        value: "false"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-20250514
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_CLIENT_TOKEN
+        sync: false
+      - key: PADDLE_PRICE_ID
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_ENV
+        value: production
+      - key: PRO_PRICE
+        value: "8"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SENDER_EMAIL
+        sync: false

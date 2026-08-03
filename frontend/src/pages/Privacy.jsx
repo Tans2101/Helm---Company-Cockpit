@@ -27,8 +27,9 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Authentication</h2>
             <p>
-              Helm uses Google sign-in via Emergent’s authentication service. When you sign in, we receive basic account
-              details such as your name, email address, and profile picture to create and secure your session.
+              Helm uses Google sign-in through Helm’s own OAuth integration with Google. When you sign in, we receive basic account
+              details such as your name, email address, and profile picture to create and secure your session. The same Google
+              account maps to the same Helm user on every login.
             </p>
           </section>
 

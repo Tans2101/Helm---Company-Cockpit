@@ -1,9 +1,11 @@
 import os
+import re
 import uuid
 import json
 import html
 import hmac
 import hashlib
+import secrets
 import asyncio
 import logging
 from pathlib import Path
@@ -22,8 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-
+import llm as helm_llm
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 
 ROOT_DIR = Path(__file__).parent
@@ -44,7 +45,7 @@ APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # legacy fallback only; prefer ANTHROPIC_API_KEY
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
@@ -83,6 +84,10 @@ def _client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
 
 
 def _check_join_rate_limit(ip: str):
@@ -137,7 +142,7 @@ def perms_for(pack: str):
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
-_STATE_SECRET = (EMERGENT_LLM_KEY or "kalun-oauth-state").encode()
+_STATE_SECRET = (OAUTH_STATE_SECRET or SESSION_SECRET or "helm-oauth-state").encode()
 
 
 def _sign_state(provider: str, workspace_id: str) -> str:
@@ -237,9 +242,18 @@ async def _user_from_request(request: Request):
 
 async def _activate_invites(user):
     """Attach any pending email invites to this user (join inviting workspace)."""
+    email = _normalize_email(user.get("email") or "")
+    if not email:
+        return
     await db.memberships.update_many(
-        {"email": user["email"], "status": "invited"},
+        {"email": email, "status": "invited"},
         {"$set": {"user_id": user["user_id"], "status": "active",
+                  "joined_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    # Legacy mixed-case invite emails
+    await db.memberships.update_many(
+        {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}, "status": "invited"},
+        {"$set": {"user_id": user["user_id"], "email": email, "status": "active",
                   "joined_at": datetime.now(timezone.utc).isoformat()}},
     )
 
@@ -399,92 +413,161 @@ class SessionInput(BaseModel):
     session_id: str
 
 
-@api_router.post("/auth/session")
-async def process_session(payload: SessionInput, response: Response):
-    async with httpx.AsyncClient() as hc:
-        r = await hc.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": payload.session_id},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session id")
-    data = r.json()
-    email = data["email"]
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
+async def _find_user_by_identity(email: str, google_sub: Optional[str] = None):
+    """Stable identity: Google sub first, then normalized email (incl. legacy mixed-case)."""
+    if google_sub:
+        by_sub = await db.users.find_one({"google_sub": google_sub}, {"_id": 0})
+        if by_sub:
+            return by_sub
+    if not email:
+        return None
+    by_email = await db.users.find_one({"email": email}, {"_id": 0})
+    if by_email:
+        return by_email
+    # Legacy rows may have mixed-case emails from Emergent auth
+    return await db.users.find_one(
+        {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}, {"_id": 0}
+    )
+
+
+async def _upsert_google_user(*, email: str, name: Optional[str], picture: Optional[str], google_sub: Optional[str]):
+    email = _normalize_email(email)
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account email is required")
+    existing = await _find_user_by_identity(email, google_sub)
+    now = datetime.now(timezone.utc).isoformat()
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": data.get("name"), "picture": data.get("picture")}})
+        updates = {"email": email, "name": name or existing.get("name"), "picture": picture or existing.get("picture")}
+        if google_sub:
+            updates["google_sub"] = google_sub
+        await db.users.update_one({"user_id": user_id}, {"$set": updates})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name"), "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "google_sub": google_sub, "created_at": now,
         })
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     await _bootstrap(user)
-    session_token = data["session_token"]
+    return user
+
+
+async def _issue_session(response: Response, user_id: str) -> str:
+    session_token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     await db.user_sessions.insert_one({
         "user_id": user_id, "session_token": session_token,
         "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
     })
     set_session_cookie(response, session_token)
-    return {"ok": True, "user_id": user_id, "email": email}
+    return session_token
+
+
+def _auth_redirect_uri(request: Request) -> str:
+    return f"{str(request.base_url).rstrip('/')}/api/auth/google/callback"
 
 
 @api_router.get("/auth/config")
 async def auth_config():
-    """Public flags so the login page can offer demo vs Emergent Google."""
     return {
-        "demo_login": ALLOW_DEMO_LOGIN,
-        "google_oauth": not ALLOW_DEMO_LOGIN,
-        "provider": "demo" if ALLOW_DEMO_LOGIN else "emergent_google",
+        "demo_login": False,
+        "google_oauth": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+        "provider": "google",
+        "ai_ready": helm_llm.anthropic_configured(),
     }
 
 
+@api_router.post("/auth/session")
+async def process_session_removed():
+    raise HTTPException(
+        status_code=410,
+        detail="Emergent session auth is retired. Use Google sign-in via /api/auth/google/login.",
+    )
+
+
 @api_router.post("/auth/demo-login")
-async def demo_login(response: Response):
-    if not ALLOW_DEMO_LOGIN:
-        raise HTTPException(status_code=403, detail="Demo login is disabled")
-    email = "demo@helm.local"
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": "Demo CEO", "picture": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    await _bootstrap(user)
-    session_token = f"demo_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token,
-        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    set_session_cookie(response, session_token)
-    return {"ok": True, "user_id": user_id, "email": email}
+async def demo_login_removed():
+    raise HTTPException(status_code=410, detail="Demo login is disabled for production.")
 
 
 @api_router.get("/auth/google/login")
 async def google_login(request: Request, redirect: Optional[str] = None):
-    """Start native Google OAuth (integrations-style). Login UI still uses Emergent by default."""
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         raise HTTPException(status_code=400, detail="Google OAuth not configured")
-    dest = redirect or (f"{APP_URL}/app" if APP_URL else f"{str(request.base_url).rstrip('/')}/app")
+    dest = redirect or (f"{APP_URL}/app" if APP_URL else "/app")
     state = jwt.encode(
         {"redirect": dest, "ts": int(datetime.now(timezone.utc).timestamp())},
         OAUTH_STATE_SECRET, algorithm="HS256",
     )
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": f"{str(request.base_url).rstrip('/')}/api/auth/google/callback",
-        "response_type": "code", "scope": "openid email profile",
-        "state": state, "access_type": "offline", "prompt": "consent",
+        "redirect_uri": _auth_redirect_uri(request),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
     }
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}")
+
+
+@api_router.get("/auth/google/callback")
+async def google_callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    fail = f"{APP_URL or ''}/login?error=oauth"
+    if error or not code or not state:
+        return RedirectResponse(fail)
+    try:
+        payload = jwt.decode(state, OAUTH_STATE_SECRET, algorithms=["HS256"])
+    except Exception:
+        return RedirectResponse(fail)
+    dest = payload.get("redirect") or (f"{APP_URL}/app" if APP_URL else "/app")
+    try:
+        async with httpx.AsyncClient(timeout=30) as hc:
+            token_res = await hc.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": _auth_redirect_uri(request),
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_res.status_code >= 400:
+                logger.error("google token error: %s", token_res.text[:400])
+                return RedirectResponse(fail)
+            tokens = token_res.json()
+            access = tokens.get("access_token")
+            if not access:
+                return RedirectResponse(fail)
+            info_res = await hc.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {access}"},
+            )
+            if info_res.status_code >= 400:
+                logger.error("google userinfo error: %s", info_res.text[:400])
+                return RedirectResponse(fail)
+            info = info_res.json()
+        user = await _upsert_google_user(
+            email=info.get("email"),
+            name=info.get("name"),
+            picture=info.get("picture"),
+            google_sub=info.get("sub"),
+        )
+        response = RedirectResponse(dest)
+        await _issue_session(response, user["user_id"])
+        return response
+    except HTTPException:
+        return RedirectResponse(fail)
+    except Exception:
+        logger.exception("google oauth callback failed")
+        return RedirectResponse(fail)
 
 
 @api_router.get("/auth/me")
@@ -764,13 +847,15 @@ async def generate_briefing(principal=Depends(require("briefing:generate"))):
     c = await get_ws(principal["workspace_id"])
     if c["plan"] != "pro":
         raise HTTPException(status_code=403, detail="Pro required")
+    if not helm_llm.anthropic_configured():
+        raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     b = c["briefing"]
     context = {"company": c["name"], "metrics": b.get("what_to_decide"), "what_changed": b["what_changed"],
                "decisions": b["what_to_decide"], "financials": await compute_financials(c["workspace_id"])}
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"briefing-{c['workspace_id']}",
-                   system_message=("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, and end with a confident recommendation. No fluff, no lists.")
-                   ).with_model("anthropic", "claude-sonnet-4-6")
-    text = await chat.send_message(UserMessage(text=f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite the CEO's morning briefing."))
+    system = ("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. "
+              "Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, "
+              "and end with a confident recommendation. No fluff, no lists.")
+    text = await helm_llm.complete(system, f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite the CEO's morning briefing.")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"briefing.ai_summary": text}})
     return {"ai_summary": text}
 
@@ -1225,12 +1310,13 @@ async def weekly_pack(principal=Depends(require("reports:pack"))):
     c = await get_ws(principal["workspace_id"])
     if c["plan"] != "pro":
         raise HTTPException(status_code=403, detail="Pro required")
+    if not helm_llm.anthropic_configured():
+        raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     context = {"company": c["name"], "financials": await compute_financials(c["workspace_id"]),
                "kpis": c["telemetry"]["kpis"], "reports": [{"title": r["title"], "summary": r["summary"]} for r in c["reports"]]}
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"pack-{c['workspace_id']}",
-                   system_message=("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
-                   ).with_model("anthropic", "claude-sonnet-4-6")
-    text = await chat.send_message(UserMessage(text=f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack."))
+    system = ("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: "
+              "Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
+    text = await helm_llm.complete(system, f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack.")
     return {"content": text}
 
 
@@ -1392,24 +1478,26 @@ async def ask_helm(payload: AskInput, principal=Depends(require("ask:use"))):
         count = await db.chat_messages.count_documents({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "day": today})
         if count >= 5:
             raise HTTPException(status_code=402, detail="Free plan limited to 5 messages/day. Upgrade to Pro for unlimited.")
+    if not helm_llm.anthropic_configured():
+        raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     context = {"company": c["name"], "stage": c["stage"], "employees": c["employees"],
                "financials": await compute_financials(c["workspace_id"]),
                "kpis": c["telemetry"]["kpis"], "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"], "risks": c["telemetry"]["risks"]}
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ask-{c['workspace_id']}-{principal['user_id']}",
-                   system_message=(f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} (a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}")
-                   ).with_model("anthropic", "claude-sonnet-4-6")
+    system = (
+        f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} "
+        f"(a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: "
+        f"direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, "
+        f"signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}"
+    )
 
     async def gen():
         collected = ""
         try:
-            async for ev in chat.stream_message(UserMessage(text=payload.message)):
-                if isinstance(ev, TextDelta):
-                    collected += ev.content
-                    yield ev.content
-                elif isinstance(ev, StreamDone):
-                    break
+            async for chunk in helm_llm.stream_text(system, payload.message):
+                collected += chunk
+                yield chunk
         except Exception:
             logger.exception("chat stream error")
             if not collected:
@@ -1888,6 +1976,7 @@ app.add_middleware(
 async def _ensure_indexes():
     specs = [
         (db.users, [("email", 1)], {"unique": True}),
+        (db.users, [("google_sub", 1)], {"unique": True, "sparse": True}),
         (db.memberships, [("user_id", 1), ("workspace_id", 1)], {}),
         (db.memberships, [("email", 1), ("status", 1)], {}),
         (db.workspaces, [("workspace_id", 1)], {"unique": True}),

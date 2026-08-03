@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 
+/**
+ * Legacy Emergent hash callback (`#session_id=`). Production Google OAuth sets
+ * the session cookie on /api/auth/google/callback and redirects to /app directly.
+ */
 export default function AuthCallback() {
   const hasProcessed = useRef(false);
 
@@ -10,15 +14,17 @@ export default function AuthCallback() {
     const hash = window.location.hash || "";
     const sid = new URLSearchParams(hash.replace(/^#/, "")).get("session_id");
     (async () => {
-      let dest = "/app";
-      try {
-        if (sid) await api.post("/auth/session", { session_id: sid });
-        const { data } = await api.get("/auth/me");
-        if (data?.default_route) dest = data.default_route;
-      } catch (e) {
-        // ignore, redirect will re-check
+      if (!sid) {
+        window.location.replace("/login");
+        return;
       }
-      window.location.replace(dest);
+      try {
+        await api.post("/auth/session", { session_id: sid });
+        const { data } = await api.get("/auth/me");
+        window.location.replace(data?.default_route || "/app");
+      } catch (e) {
+        window.location.replace("/login?error=session");
+      }
     })();
   }, []);
 
@@ -26,7 +32,7 @@ export default function AuthCallback() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b]">
       <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin mb-6" />
       <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Helm</p>
-      <p className="text-zinc-500 text-sm mt-2">Know what matters before your first meeting</p>
+      <p className="text-zinc-500 text-sm mt-2">Finishing sign-in…</p>
     </div>
   );
 }

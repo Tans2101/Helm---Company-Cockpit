@@ -27,7 +27,7 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Account</h2>
             <p>
-              You must sign in with a valid Google account via Emergent authentication and keep your credentials secure.
+              You must sign in with a valid Google account and keep your credentials secure.
               You are responsible for activity under your account and for ensuring workspace members have appropriate access.
             </p>
           </section>

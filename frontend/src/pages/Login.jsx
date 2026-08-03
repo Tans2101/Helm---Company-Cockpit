@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/api";
+import { api, BACKEND_URL } from "@/lib/api";
 
 export default function Login() {
-  const { user, loading, checkAuth } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [demoEnabled, setDemoEnabled] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [googleReady, setGoogleReady] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
@@ -17,26 +16,19 @@ export default function Login() {
 
   useEffect(() => {
     api.get("/auth/config")
-      .then((r) => setDemoEnabled(!!r.data?.demo_login))
-      .catch(() => setDemoEnabled(false));
+      .then((r) => setGoogleReady(!!r.data?.google_oauth))
+      .catch(() => setGoogleReady(true));
   }, []);
 
   const handleGoogleLogin = () => {
-    // Emergent-hosted Google OAuth — works on Emergent previews, not on plain localhost.
-    const redirectUrl = window.location.origin + "/app";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-  };
-
-  const handleDemoLogin = async () => {
-    setBusy(true);
-    try {
-      await api.post("/auth/demo-login");
-      await checkAuth();
-      navigate("/app", { replace: true });
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Demo login failed — set ALLOW_DEMO_LOGIN=true in backend/.env");
-      setBusy(false);
+    setError("");
+    if (!googleReady) {
+      setError("Google sign-in is not configured on the server yet.");
+      return;
     }
+    const redirect = encodeURIComponent(`${window.location.origin}/app`);
+    const base = BACKEND_URL || window.location.origin;
+    window.location.href = `${base}/api/auth/google/login?redirect=${redirect}`;
   };
 
   return (
@@ -78,31 +70,21 @@ export default function Login() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
-          <p className="text-zinc-500 text-sm mt-2">Sign in to your executive command center.</p>
+          <p className="text-zinc-500 text-sm mt-2">Sign in with your Google account.</p>
 
-          {demoEnabled ? (
-            <button
-              data-testid="demo-login-btn"
-              onClick={handleDemoLogin}
-              disabled={busy}
-              className="group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover disabled:opacity-60"
-            >
-              {busy ? "Entering…" : "Enter as demo founder"}
-              {!busy && <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />}
-            </button>
-          ) : (
-            <button
-              data-testid="google-login-btn"
-              onClick={handleGoogleLogin}
-              className="group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12.24 10.4v3.28h4.56c-.2 1.18-1.4 3.46-4.56 3.46-2.75 0-4.99-2.28-4.99-5.09s2.24-5.09 4.99-5.09c1.56 0 2.61.67 3.21 1.24l2.19-2.11C16.36 3.9 14.5 3.1 12.24 3.1 7.9 3.1 4.4 6.6 4.4 10.94s3.5 7.84 7.84 7.84c4.53 0 7.53-3.18 7.53-7.66 0-.51-.06-.9-.13-1.29h-7.4z"/>
-              </svg>
-              Continue with Google
-              <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
-            </button>
-          )}
+          <button
+            data-testid="google-login-btn"
+            onClick={handleGoogleLogin}
+            className="group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M12.24 10.4v3.28h4.56c-.2 1.18-1.4 3.46-4.56 3.46-2.75 0-4.99-2.28-4.99-5.09s2.24-5.09 4.99-5.09c1.56 0 2.61.67 3.21 1.24l2.19-2.11C16.36 3.9 14.5 3.1 12.24 3.1 7.9 3.1 4.4 6.6 4.4 10.94s3.5 7.84 7.84 7.84c4.53 0 7.53-3.18 7.53-7.66 0-.51-.06-.9-.13-1.29h-7.4z"/>
+            </svg>
+            Continue with Google
+            <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
+          </button>
+
+          {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 
           <p className="mt-4 text-center text-xs text-zinc-600">
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
@@ -112,11 +94,7 @@ export default function Login() {
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>
-              {demoEnabled
-                ? "Local demo mode — no Emergent credits required."
-                : "Google sign-in uses Emergent auth (works on Emergent previews)."}
-            </span>
+            <span>Sign-in is handled by your Helm backend — same Google account always returns the same user.</span>
           </div>
         </div>
       </div>
