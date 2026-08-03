@@ -6,7 +6,7 @@ from typing import AsyncIterator, Optional
 
 from anthropic import AsyncAnthropic
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("EMERGENT_LLM_KEY") or ""
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or ""
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
 _client: Optional[AsyncAnthropic] = None

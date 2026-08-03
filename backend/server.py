@@ -45,7 +45,7 @@ APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # legacy fallback only; prefer ANTHROPIC_API_KEY
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # unused; kept so old envs don't crash on import
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
@@ -1957,16 +1957,15 @@ async def root():
 
 app.include_router(api_router)
 
-_cors_origins = CORS_ORIGINS or ([FRONTEND_URL] if FRONTEND_URL else [])
-_cors_regex = r"https://.*\.emergentagent\.com" if (not _cors_origins or any("emergentagent.com" in o for o in _cors_origins) or (FRONTEND_URL and "emergentagent.com" in FRONTEND_URL)) else None
-if FRONTEND_URL and "emergentagent.com" in FRONTEND_URL:
+_cors_origins = CORS_ORIGINS or ([FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"])
+# Only allow Emergent preview regex if explicitly listed — not by default.
+_cors_regex = None
+if any("emergentagent.com" in o for o in _cors_origins):
     _cors_regex = r"https://.*\.emergentagent\.com"
-if not _cors_origins and FRONTEND_URL:
-    _cors_origins = [FRONTEND_URL]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=_cors_origins or ["http://localhost:3000"],
+    allow_origins=_cors_origins,
     allow_origin_regex=_cors_regex,
     allow_methods=["*"],
     allow_headers=["*"],
