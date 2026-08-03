@@ -54,7 +54,7 @@ export default function MyDay() {
     setBusy(true);
     try {
       await api.post("/updates", { text: text.trim(), blocker, mood });
-      toast.success(hasPosted ? "Update saved" : "Update posted — the CEO will see it in the briefing");
+      toast.success(hasPosted ? "Note saved" : "Note shared with your team");
       reloadMine(); reloadToday();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not post"); }
     finally { setBusy(false); }
@@ -87,7 +87,7 @@ export default function MyDay() {
       <div className="mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">My Day</p>
         <h1 className="text-3xl md:text-5xl font-light tracking-tight text-white">Morning, {first}.</h1>
-        <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">Your workspace for today — work your tasks, then post one update so the whole company stays in sync.</p>
+        <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">Your workspace for today — work your tasks, then add a note so the whole company stays in sync.</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -98,8 +98,8 @@ export default function MyDay() {
               <Sparkles className="w-4 h-4 text-gold" />
             </div>
             <div>
-              <SectionLabel>Daily update</SectionLabel>
-              <p className="text-xs text-zinc-500 mt-0.5">{hasPosted ? "Posted today — edit anytime." : "One update, once a day."}</p>
+              <SectionLabel>Notes</SectionLabel>
+              <p className="text-xs text-zinc-500 mt-0.5">{hasPosted ? "Saved today — edit anytime." : "Jot down progress, a blocker, or an ask."}</p>
             </div>
           </div>
           <textarea data-testid="update-text" value={text} onChange={(e) => setText(e.target.value)} rows={4}
@@ -118,7 +118,7 @@ export default function MyDay() {
             </label>
             <button data-testid="submit-update-btn" onClick={submit} disabled={busy}
               className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2 transition-colors hover:bg-gold-hover disabled:opacity-60">
-              {busy ? "Saving…" : hasPosted ? "Save update" : "Post update"} <Send className="w-3.5 h-3.5" />
+              {busy ? "Saving…" : hasPosted ? "Save note" : "Post note"} <Send className="w-3.5 h-3.5" />
             </button>
           </div>
         </GlassCard>

@@ -6,9 +6,7 @@ import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
-const trustColor = (s) => (s >= 90 ? "text-emerald-400" : s >= 80 ? "text-gold" : "text-amber-400");
-const QUALITIES = ["A", "A-", "B+", "B", "C"];
-const emptyForm = () => ({ name: "", role: "", department: "", trust_score: 80, quality: "B+", tasks_done: 0, tenure: "New" });
+const emptyForm = () => ({ name: "", role: "", department: "", tasks_done: 0, tenure: "" });
 
 export default function People() {
   const { data, loading, reload } = useFetch("/people");
@@ -23,14 +21,14 @@ export default function People() {
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (p) => {
     setEditing(p.id);
-    setForm({ name: p.name, role: p.role, department: p.department, trust_score: p.trust_score, quality: p.quality, tasks_done: p.tasks_done, tenure: p.tenure });
+    setForm({ name: p.name, role: p.role, department: p.department, tasks_done: p.tasks_done, tenure: p.tenure });
     setShowForm(true);
   };
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     setBusy(true);
-    const payload = { ...form, trust_score: parseInt(form.trust_score) || 0, tasks_done: parseInt(form.tasks_done) || 0 };
+    const payload = { ...form, tasks_done: parseInt(form.tasks_done) || 0 };
     try {
       if (editing) { await api.patch(`/people/${editing}`, payload); toast.success("Person updated"); }
       else { await api.post("/people", payload); toast.success("Person added — headcount synced"); }
@@ -56,7 +54,7 @@ export default function People() {
   if (data.people.length === 0) {
     return (
       <div>
-        <PageHeader title="People" subtitle="Roster, trust scores and quality." action={action} />
+        <PageHeader title="People" subtitle="Your team roster — Helm keeps headcount in sync with the briefing." action={action} />
         <EmptyState title="No people yet" body="Add your team here — Helm keeps headcount in sync with the briefing."
           action={canWrite ? <button data-testid="empty-add-person-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add first person</button> : null} />
         {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, close: () => setShowForm(false) }} />}
@@ -66,20 +64,16 @@ export default function People() {
 
   return (
     <div>
-      <PageHeader title="People" subtitle="Roster, trust scores and quality — a drill-down into who delivers, consistently." action={action} />
+      <PageHeader title="People" subtitle="Your team roster — who does what, and how headcount tracks over time." action={action} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <GlassCard className="p-5 fade-up">
-          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Avg Trust Score</p>
-          <p className={cn("font-mono text-3xl mt-2", trustColor(data.avg_trust))}>{data.avg_trust}</p>
-        </GlassCard>
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Headcount</p>
           <p className="font-mono text-3xl text-white mt-2" data-testid="people-headcount">{data.people.length}</p>
         </GlassCard>
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Tasks Shipped</p>
-          <p className="font-mono text-3xl text-white mt-2">{data.people.reduce((a, p) => a + p.tasks_done, 0)}</p>
+          <p className="font-mono text-3xl text-white mt-2">{data.people.reduce((a, p) => a + (p.tasks_done || 0), 0)}</p>
         </GlassCard>
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Departments</p>
@@ -103,15 +97,10 @@ export default function People() {
                   <button onClick={() => del(p)} data-testid={`del-person-${p.id}`} className="text-zinc-600 hover:text-rose-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               )}
-              <div className="text-right">
-                <p className={cn("font-mono text-xl", trustColor(p.trust_score))}>{p.trust_score}</p>
-                <p className="text-[10px] text-zinc-600 uppercase tracking-wide">trust</p>
-              </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/5 text-center">
-              <div><p className="font-mono text-white text-sm">{p.quality}</p><p className="text-[10px] text-zinc-600">quality</p></div>
-              <div><p className="font-mono text-white text-sm">{p.tasks_done}</p><p className="text-[10px] text-zinc-600">shipped</p></div>
-              <div><p className="font-mono text-white text-sm">{p.tenure}</p><p className="text-[10px] text-zinc-600">tenure</p></div>
+            <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5 text-center">
+              <div><p className="font-mono text-white text-sm">{p.tasks_done || 0}</p><p className="text-[10px] text-zinc-600">shipped</p></div>
+              <div><p className="font-mono text-white text-sm">{p.tenure || "—"}</p><p className="text-[10px] text-zinc-600">tenure</p></div>
             </div>
           </GlassCard>
         ))}
@@ -138,14 +127,6 @@ function PersonForm({ form, setForm, submit, busy, editing, close }) {
           </label>
           <label className="text-xs text-zinc-500">Department
             <input data-testid="person-dept" value={form.department} onChange={set("department")} placeholder="Engineering" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-          </label>
-          <label className="text-xs text-zinc-500">Trust score
-            <input data-testid="person-trust" type="number" min="0" max="100" value={form.trust_score} onChange={set("trust_score")} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-          </label>
-          <label className="text-xs text-zinc-500">Quality
-            <select data-testid="person-quality" value={form.quality} onChange={set("quality")} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
-              {QUALITIES.map((q) => <option key={q} value={q}>{q}</option>)}
-            </select>
           </label>
           <label className="text-xs text-zinc-500">Tasks shipped
             <input data-testid="person-tasks" type="number" min="0" value={form.tasks_done} onChange={set("tasks_done")} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />

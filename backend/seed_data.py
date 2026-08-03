@@ -102,12 +102,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         "items": [
             {"id": "t1", "title": "Acme security questionnaire", "assignee": "Devin", "priority": "High", "column": "in_progress", "tag": "Sales", "due": "Wed", "progress": 60},
             {"id": "t2", "title": "SMB win-back email sequence", "assignee": "Maya", "priority": "High", "column": "backlog", "tag": "Growth", "due": "Thu", "progress": 0},
-            {"id": "t3", "title": "Inference cost dashboard", "assignee": "Priya", "priority": "Medium", "column": "in_progress", "tag": "Infra", "due": "Fri", "progress": 40},
-            {"id": "t4", "title": "SOC2 evidence collection", "assignee": "Devin", "priority": "High", "column": "review", "tag": "Compliance", "due": "Fri", "progress": 85},
-            {"id": "t5", "title": "Onboarding v2 rollout", "assignee": "Leo", "priority": "Medium", "column": "done", "tag": "Product", "due": "Mon", "progress": 100},
-            {"id": "t6", "title": "Q3 hiring plan draft", "assignee": "You", "priority": "Medium", "column": "backlog", "tag": "People", "due": "Next wk", "progress": 0},
-            {"id": "t7", "title": "Pricing experiment analysis", "assignee": "Maya", "priority": "Low", "column": "review", "tag": "Growth", "due": "Fri", "progress": 70},
-            {"id": "t8", "title": "Board deck v1", "assignee": "You", "priority": "High", "column": "in_progress", "tag": "Strategy", "due": "Thu", "progress": 30},
+            {"id": "t3", "title": "Board deck v1", "assignee": "You", "priority": "High", "column": "in_progress", "tag": "Strategy", "due": "Thu", "progress": 30},
         ],
     }
 

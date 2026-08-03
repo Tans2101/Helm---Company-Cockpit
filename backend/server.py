@@ -1098,6 +1098,19 @@ async def calendar(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     data = dict(c["calendar"])
     data["live"] = bool(c.get("google_tokens"))
+    # Upcoming deadlines from decisions that carry a real (YYYY-MM-DD) due date.
+    upcoming = []
+    for d in c.get("decisions", []):
+        due = (d.get("due") or "").strip()
+        try:
+            datetime.strptime(due, "%Y-%m-%d")
+        except ValueError:
+            continue
+        if d.get("status") == "pending":
+            upcoming.append({"id": d["id"], "title": d["title"], "date": due,
+                             "type": "Decision", "meta": d.get("category", "")})
+    upcoming.sort(key=lambda x: x["date"])
+    data["upcoming"] = upcoming
     return data
 
 

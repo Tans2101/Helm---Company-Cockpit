@@ -38,13 +38,11 @@ const riskColor = (score) => (score >= 15 ? "#ef4444" : score >= 8 ? "#f59e0b" :
 export default function Telemetry() {
   const { data, loading } = useFetch("/telemetry");
   if (loading || !data) return <LoadingScreen label="Loading telemetry" />;
-  if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs, growth trends and the company risk matrix." /><EmptyState title="No telemetry yet" body="Log financials and connect your tools — your KPIs and risk matrix build from real data." /></div>;
-
-  const riskData = data.risks.map((r) => ({ ...r, x: r.likelihood, y: r.impact, z: r.likelihood * r.impact }));
+  if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." /><EmptyState title="No telemetry yet" body="Log financials and add your team — your KPIs build from real data." /></div>;
 
   return (
     <div>
-      <PageHeader title="Telemetry" subtitle="Live KPIs, growth trends and the company risk matrix. Signal over noise." />
+      <PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data. Signal over noise." />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -100,48 +98,6 @@ export default function Telemetry() {
         </GlassCard>
         )}
       </div>
-
-      {/* Risk matrix */}
-      {data.risks.length > 0 && (
-      <GlassCard className="p-5 fade-up">
-        <div className="flex items-center justify-between mb-4">
-          <SectionLabel>Risk Matrix</SectionLabel>
-          <span className="text-xs text-zinc-600">Likelihood × Impact</span>
-        </div>
-        <div className="grid lg:grid-cols-2 gap-6">
-          <ResponsiveContainer width="100%" height={280}>
-            <ScatterChart margin={{ left: -8, bottom: 8 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-              <XAxis type="number" dataKey="x" name="Likelihood" domain={[0, 6]} ticks={[1,2,3,4,5]} stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} label={{ value: "Likelihood", position: "insideBottom", offset: -2, fill: "#52525b", fontSize: 10 }} />
-              <YAxis type="number" dataKey="y" name="Impact" domain={[0, 6]} ticks={[1,2,3,4,5]} stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} label={{ value: "Impact", angle: -90, position: "insideLeft", fill: "#52525b", fontSize: 10 }} />
-              <ZAxis dataKey="z" range={[80, 400]} />
-              <Tooltip content={({ active, payload }) => active && payload?.length ? (
-                <div className="rounded-md border border-white/10 bg-[#141417] px-3 py-2 text-xs">
-                  <p className="text-white">{payload[0].payload.name}</p>
-                  <p className="text-zinc-500 font-mono mt-0.5">L{payload[0].payload.x} · I{payload[0].payload.y}</p>
-                </div>
-              ) : null} />
-              <Scatter data={riskData}>
-                {riskData.map((r, i) => <Cell key={i} fill={riskColor(r.z)} fillOpacity={0.85} />)}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-          <div className="space-y-2">
-            {data.risks.slice().sort((a,b) => (b.likelihood*b.impact)-(a.likelihood*a.impact)).map((r) => {
-              const score = r.likelihood * r.impact;
-              return (
-                <div key={r.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5" data-testid={`risk-${r.id}`}>
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: riskColor(score) }} />
-                  <span className="text-sm text-white flex-1">{r.name}</span>
-                  <span className="text-[10px] font-mono uppercase text-zinc-600">{r.category}</span>
-                  <span className="font-mono text-xs" style={{ color: riskColor(score) }}>{score}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </GlassCard>
-      )}
     </div>
   );
 }

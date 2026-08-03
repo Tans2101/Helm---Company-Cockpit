@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, X, Share2, Sparkles, ShieldCheck, Plus, PenLine, Trash2 } from "lucide-react";
+import { Check, X, Sparkles, Plus, PenLine, Trash2 } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
@@ -16,6 +16,7 @@ const emptyForm = () => ({ title: "", category: "General", description: "", reco
 
 export default function Decisions() {
   const { data, loading, reload } = useFetch("/decisions");
+  const { data: membersData } = useFetch("/members");
   const [busy, setBusy] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -115,7 +116,10 @@ export default function Decisions() {
                     {canAct ? (
                       <>
                         <button data-testid={`approve-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "approved")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium py-2 transition-colors hover:bg-gold-hover disabled:opacity-50"><Check className="w-4 h-4" /> Approve</button>
-                        <button data-testid={`delegate-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "delegated", "Team")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-white text-sm py-2 transition-colors hover:bg-white/5 disabled:opacity-50"><Share2 className="w-4 h-4" /> Delegate</button>
+                        <select data-testid={`delegate-${d.id}`} disabled={busy === d.id} defaultValue="" onChange={(e) => e.target.value && act(d.id, "delegated", e.target.value)} className="flex-1 rounded-md border border-white/10 text-white text-sm py-2 px-2 bg-[#141417] transition-colors hover:bg-white/5 focus:outline-none focus:border-gold/40 disabled:opacity-50">
+                          <option value="">Delegate to…</option>
+                          {(membersData?.members || []).map((m) => <option key={m.membership_id} value={m.name || m.email}>{m.name || m.email}</option>)}
+                        </select>
                         <button data-testid={`reject-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "rejected")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-400 text-sm py-2 transition-colors hover:bg-white/5 hover:text-rose-400 disabled:opacity-50"><X className="w-4 h-4" /> Reject</button>
                       </>
                     ) : (
@@ -162,11 +166,8 @@ export default function Decisions() {
                   {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-zinc-500">Due
-                <input data-testid="decision-due" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} placeholder="This week" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-              </label>
-              <label className="text-xs text-zinc-500">Confidence %
-                <input data-testid="decision-confidence" type="number" min="0" max="100" value={form.confidence} onChange={(e) => setForm((f) => ({ ...f, confidence: e.target.value }))} placeholder="optional" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-zinc-500">Due date
+                <input data-testid="decision-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
             </div>
             <label className="text-xs text-zinc-500 block mt-3">Description
