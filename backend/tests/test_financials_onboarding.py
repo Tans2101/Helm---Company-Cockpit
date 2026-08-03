@@ -238,7 +238,8 @@ class TestFinSettings:
                      json={"cash": prev_cash, "gross_margin": prev_gm})
 
 
-# ------------------------- Stripe import: graceful 400 -------------------------
+# ------------------------- Stripe import removed -------------------------
+@pytest.mark.skip(reason="Stripe financial import removed")
 class TestStripeImport:
     def test_stripe_import_returns_400_not_500(self):
         r = requests.post(f"{API}/financials/import/stripe", headers=H(OWNER))

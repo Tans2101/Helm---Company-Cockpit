@@ -149,7 +149,8 @@ def test_ask_history_returns_messages(auth):
     assert "messages" in r.json()
 
 
-# ---- Stripe checkout ----
+# ---- Stripe checkout (removed — Paddle only) ----
+@pytest.mark.skip(reason="Stripe checkout removed; use Paddle billing tests")
 def test_checkout_creates_session(auth):
     r = auth.post(f"{BASE_URL}/api/payments/checkout",
                   json={"origin_url": "https://exec-cockpit.preview.emergentagent.com"})

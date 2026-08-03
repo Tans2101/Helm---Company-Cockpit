@@ -164,6 +164,14 @@ function SidebarContent({ onNavigate }) {
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
             <p className="text-[10px] text-zinc-600 truncate">{isPro ? "Pro plan" : "Free plan"}</p>
           </div>
+          <button
+            data-testid="settings-link"
+            onClick={() => { navigate("/app/settings"); onNavigate?.(); }}
+            className="text-zinc-500 hover:text-white transition-colors text-[10px] font-mono uppercase tracking-wide"
+            title="Settings"
+          >
+            Settings
+          </button>
           <button data-testid="logout-btn" onClick={logout} className="text-zinc-500 hover:text-white transition-colors">
             <LogOut className="w-4 h-4" />
           </button>

@@ -154,7 +154,7 @@ def test_invite_unregistered_email_creates_pending(owner, mongo):
 # ---------------- Role-based auth matrix ----------------
 OWNER_ONLY_ACTIONS = [
     ("POST", "/api/members/invite", {"email": "test_deny@example.com"}),
-    ("POST", "/api/payments/checkout", {"origin_url": BASE_URL}),
+    ("POST", "/api/billing/paddle/config", None),
     ("GET",  "/api/integrations/google/connect", None),
     ("POST", "/api/briefing/generate", None),
     ("POST", "/api/reports/weekly-pack", None),
@@ -342,7 +342,8 @@ def test_pro_plan_enables_briefing_and_weekly(owner, mongo):
         owner.post(f"{BASE_URL}/api/demo/reset-plan")
 
 
-# ---------------- Stripe checkout ----------------
+# ---------------- Stripe checkout (removed — Paddle only) ----------------
+@pytest.mark.skip(reason="Stripe checkout removed; use Paddle billing tests")
 def test_stripe_checkout_owner(owner, mongo):
     r = owner.post(f"{BASE_URL}/api/payments/checkout", json={"origin_url": BASE_URL})
     assert r.status_code == 200, r.text[:300]

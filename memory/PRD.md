@@ -1,13 +1,13 @@
-# Kalun — CEO Operating System (PRD)
+# Helm — CEO Operating System (PRD)
 
 ## Original Problem Statement
-A CEO-only cockpit for seed/Series A companies (~8–40 people). Answers "What does the CEO need to know right now?" Employees stay in their tools (Jira, Slack, Salesforce); Kalun pulls status/KPIs in and pushes work out. Wedge: a morning executive briefing from real company data. Tagline: "CEO Operating System." Dark "quiet control" aesthetic — graphite (#09090b) + champagne gold (#c9a962), DM Sans + DM Mono, fixed 260px sidebar, high-density glass cards.
+A CEO-only cockpit for seed/Series A companies (~8–40 people). Answers "What does the CEO need to know right now?" Employees stay in their tools (Jira, Slack, Salesforce); Helm pulls status/KPIs in and pushes work out. Wedge: a morning executive briefing from real company data. Tagline: "CEO Operating System." Dark "quiet control" aesthetic — graphite (#09090b) + champagne gold (#c9a962), DM Sans + DM Mono, fixed 260px sidebar, high-density glass cards.
 
 ## User Choices (v1)
 - Full UI shell with ALL modules + rich demo data
 - AI powered by Claude Sonnet 4.6 (Emergent Universal LLM key)
 - Emergent-managed Google login (auth)
-- Real Stripe test-mode for Pro upgrade; other integrations mocked
+- Paddle Billing for Pro upgrade ($8/mo default via `PRO_PRICE`); Stripe removed.
 - Pre-seeded fictional startup: Northwind Robotics (Series A, 24 people)
 
 ## Routing
@@ -17,8 +17,8 @@ A CEO-only cockpit for seed/Series A companies (~8–40 people). Answers "What d
 ## Architecture
 - Frontend: React 19 + react-router 7, Tailwind, Recharts, framer-motion, sonner. Fixed sidebar shell, per-module pages, SSE chat.
 - Backend: FastAPI + Motor (MongoDB). All routes under /api. Cookie/Bearer session auth.
-- AI: emergentintegrations LlmChat → claude-sonnet-4-6 (briefing synthesis, Weekly CEO Pack, Ask Kalun streaming).
-- Payments: emergentintegrations StripeCheckout (Flow B, shared test sandbox sk_test_emergent; Flow A blocked — default country PH unsupported). Pro = $149/mo.
+- AI: emergentintegrations LlmChat → claude-sonnet-4-6 (briefing synthesis, Weekly CEO Pack, Ask Helm streaming).
+- Payments: Paddle Billing (nonce checkout + webhook idempotency). Pro price from `PRO_PRICE` env.
 - Data: single seeded company doc `kalun-demo` in Mongo (seed_data.py).
 
 ## User Persona
