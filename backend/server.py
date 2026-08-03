@@ -432,6 +432,16 @@ async def process_session(payload: SessionInput, response: Response):
     return {"ok": True, "user_id": user_id, "email": email}
 
 
+@api_router.get("/auth/config")
+async def auth_config():
+    """Public flags so the login page can offer demo vs Emergent Google."""
+    return {
+        "demo_login": ALLOW_DEMO_LOGIN,
+        "google_oauth": not ALLOW_DEMO_LOGIN,
+        "provider": "demo" if ALLOW_DEMO_LOGIN else "emergent_google",
+    }
+
+
 @api_router.post("/auth/demo-login")
 async def demo_login(response: Response):
     if not ALLOW_DEMO_LOGIN:
@@ -460,6 +470,7 @@ async def demo_login(response: Response):
 
 @api_router.get("/auth/google/login")
 async def google_login(request: Request, redirect: Optional[str] = None):
+    """Start native Google OAuth (integrations-style). Login UI still uses Emergent by default."""
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         raise HTTPException(status_code=400, detail="Google OAuth not configured")
     dest = redirect or (f"{APP_URL}/app" if APP_URL else f"{str(request.base_url).rstrip('/')}/app")

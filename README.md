@@ -18,18 +18,31 @@ Before deploying to production, verify:
 
 ## Local development
 
+Google “Continue with Google” uses **Emergent’s hosted OAuth** (`auth.emergentagent.com`). That loop only works on Emergent previews. For localhost, enable demo login:
+
 ```bash
 # Backend
 cd backend
-cp .env.example .env   # fill in values
+cp .env.example .env
+# Required for local sign-in without Emergent:
+#   ALLOW_DEMO_LOGIN=true
+#   MONGO_URL=mongodb://localhost:27017
+#   DB_NAME=helm
+#   SESSION_SECRET=dev-secret
+#   FRONTEND_URL=http://localhost:3000
+#   CORS_ORIGINS=http://localhost:3000
+#   APP_URL=http://localhost:3000
 pip install -r requirements.txt
 uvicorn server:app --reload --port 8001
 
 # Frontend
 cd frontend
+echo 'REACT_APP_BACKEND_URL=http://localhost:8001' > .env
 yarn install
 yarn start
 ```
+
+Open http://localhost:3000/login and use **Enter as demo founder**.
 
 ## API overview
 
