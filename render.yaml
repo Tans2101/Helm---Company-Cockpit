@@ -66,6 +66,8 @@ services:
         value: claude-sonnet-4-20250514
       - key: CLERK_SECRET_KEY
         sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
       - key: CLERK_JWKS_URL
         value: https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json
       - key: GOOGLE_CLIENT_ID

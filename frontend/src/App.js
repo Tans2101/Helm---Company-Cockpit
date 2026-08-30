@@ -1,10 +1,11 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { ClerkProvider, useClerk } from "@clerk/clerk-react";
+import { useClerk } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthCallback from "@/components/AuthCallback";
 import ClerkHelmBridge from "@/components/ClerkHelmBridge";
+import ClerkProviderBootstrap from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -34,7 +35,7 @@ import AccountSettings from "@/pages/AccountSettings";
 
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
 
-const CLERK_KEY = getClerkPublishableKey();
+const HAS_CLERK = !!getClerkPublishableKey();
 
 function AppRouter() {
   const location = useLocation();
@@ -49,7 +50,7 @@ function AppRouter() {
       <Route path="/terms" element={<Terms />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
-      <Route path="/app" element={CLERK_KEY ? <ProtectedRouteClerk /> : <ProtectedRoute />}>
+      <Route path="/app" element={HAS_CLERK ? <ProtectedRouteClerk /> : <ProtectedRoute />}>
         <Route index element={<Briefing />} />
         <Route path="me" element={<MyDay />} />
         <Route path="sales" element={<Pipeline />} />
@@ -104,19 +105,10 @@ function HelmApp() {
 function App() {
   return (
     <div className="App">
-      {CLERK_KEY ? (
-        <ClerkProvider
-          publishableKey={CLERK_KEY}
-          signInUrl="/login"
-          signUpUrl="/login"
-          signInForceRedirectUrl="/app"
-          signUpForceRedirectUrl="/app"
-          signInFallbackRedirectUrl="/app"
-          signUpFallbackRedirectUrl="/app"
-          afterSignOutUrl="/"
-        >
+      {HAS_CLERK ? (
+        <ClerkProviderBootstrap>
           <ClerkAuthShell />
-        </ClerkProvider>
+        </ClerkProviderBootstrap>
       ) : (
         <HelmApp />
       )}

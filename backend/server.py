@@ -144,6 +144,7 @@ PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
 PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
+CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -341,12 +342,42 @@ async def send_invite_email(to_email: str, inviter_name: str, workspace_name: st
 
 
 # ------------------------- Auth / principal -------------------------
+def _looks_like_jwt(token: str) -> bool:
+    return token.count(".") == 2
+
+
+async def _user_from_clerk_jwt(token: str):
+    """Authenticate via Clerk session JWT (no Helm cookie required)."""
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=401, detail="Clerk is not configured")
+    try:
+        identity = await clerk_auth.verify_clerk_session_token(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except Exception:
+        logger.exception("clerk jwt auth failed")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid Clerk session — ensure Render CLERK_SECRET_KEY matches your Clerk publishable key",
+        )
+    user = await _upsert_clerk_user(
+        email=identity["email"],
+        name=identity.get("name"),
+        picture=identity.get("picture"),
+        clerk_id=identity["clerk_id"],
+    )
+    return user
+
+
 async def _user_from_request(request: Request):
+    auth = request.headers.get("Authorization", "")
+    bearer = auth[7:].strip() if auth.startswith("Bearer ") else ""
+    if bearer and _looks_like_jwt(bearer):
+        return await _user_from_clerk_jwt(bearer)
+
     token = request.cookies.get("session_token")
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:]
+    if not token and bearer:
+        token = bearer
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
@@ -631,9 +662,18 @@ async def auth_config():
     clerk_on = clerk_auth.clerk_configured()
     google_on = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET) and not clerk_on
     provider = "clerk" if clerk_on else ("google" if google_on else "none")
+    sk = clerk_auth.CLERK_SECRET_KEY
+    if sk.startswith("sk_live_"):
+        clerk_mode = "live"
+    elif sk.startswith("sk_test_"):
+        clerk_mode = "test"
+    else:
+        clerk_mode = "unknown"
     return {
         "demo_login": False,
         "clerk_enabled": clerk_on,
+        "clerk_secret_mode": clerk_mode if clerk_on else None,
+        "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),
@@ -2183,6 +2223,12 @@ async def setup_status():
         "frontend_url": FRONTEND_URL or None,
         "clerk_enabled": clerk_auth.clerk_configured(),
         "clerk_jwks_host": clerk_auth.CLERK_JWKS_URL.split("/")[2] if clerk_auth.CLERK_JWKS_URL else None,
+        "clerk_secret_mode": (
+            "live" if clerk_auth.CLERK_SECRET_KEY.startswith("sk_live_")
+            else "test" if clerk_auth.CLERK_SECRET_KEY.startswith("sk_test_")
+            else "unknown"
+        ) if clerk_auth.clerk_configured() else None,
+        "clerk_publishable_key_set": bool(CLERK_PUBLISHABLE_KEY),
         "mongo": mongo_ok,
         "mongo_source": MONGO_SOURCE,
         "mongo_url": _redact_mongo_url(mongo_url),

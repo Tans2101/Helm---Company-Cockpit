@@ -12,17 +12,10 @@ function domainFromPublishableKey(key) {
   }
 }
 
-/** Always use production pk_live for Helm — ignore test keys and wrong apps. */
+/** Build-time fallback — ClerkProviderBootstrap may override from /api/auth/config. */
 export function getClerkPublishableKey() {
   const env = (process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "").trim();
-  if (!env || env.startsWith("pk_test_")) {
-    return HELM_CLERK_PUBLISHABLE_KEY;
-  }
-  const domain = domainFromPublishableKey(env);
-  if (!domain || domain === "clerk.apexcoach.tech") {
-    return HELM_CLERK_PUBLISHABLE_KEY;
-  }
-  if (domain === "causal-caribou-2352.clerk.accounts.dev" && env.startsWith("pk_live_")) {
+  if (env && domainFromPublishableKey(env) !== "clerk.apexcoach.tech") {
     return env;
   }
   return HELM_CLERK_PUBLISHABLE_KEY;

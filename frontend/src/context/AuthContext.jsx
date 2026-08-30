@@ -13,8 +13,10 @@ export function AuthProvider({ children, onLogoutExtra }) {
       const { data } = await api.get("/auth/me");
       setUser(data);
       setSessionError("");
+      return data;
     } catch (e) {
       setUser(null);
+      throw e;
     } finally {
       setLoading(false);
     }
