@@ -6,10 +6,11 @@ import { useAuth } from "@/context/AuthContext";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
+import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";() {
+export default function Login() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
