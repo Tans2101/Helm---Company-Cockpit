@@ -351,7 +351,15 @@ async def _user_from_clerk_jwt(token: str):
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=401, detail="Clerk is not configured")
     try:
-        identity = await clerk_auth.verify_clerk_session_token(token)
+        payload = clerk_auth.decode_clerk_jwt(token)
+        clerk_id = payload.get("sub")
+        if not clerk_id:
+            raise ValueError("Clerk token missing sub")
+        existing = await db.users.find_one({"clerk_id": clerk_id}, {"_id": 0})
+        if existing:
+            await _bootstrap(existing)
+            return existing
+        identity = await clerk_auth.fetch_clerk_user_profile(clerk_id)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc))
     except Exception:
@@ -674,6 +682,7 @@ async def auth_config():
         "clerk_enabled": clerk_on,
         "clerk_secret_mode": clerk_mode if clerk_on else None,
         "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
+        "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),
@@ -2229,6 +2238,7 @@ async def setup_status():
             else "unknown"
         ) if clerk_auth.clerk_configured() else None,
         "clerk_publishable_key_set": bool(CLERK_PUBLISHABLE_KEY),
+        "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
         "mongo": mongo_ok,
         "mongo_source": MONGO_SOURCE,
         "mongo_url": _redact_mongo_url(mongo_url),

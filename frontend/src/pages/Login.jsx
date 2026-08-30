@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignIn, useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
@@ -10,8 +10,9 @@ import { LoadingScreen } from "@/components/kit";
 const CLERK_KEY = getClerkPublishableKey();
 
 export default function Login() {
-  const { user, loading, sessionError } = useAuth();
+  const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const { signOut } = useClerk();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,17 +20,36 @@ export default function Login() {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (clerkLoaded && isSignedIn && !user && !loading) {
+    if (clerkLoaded && isSignedIn && !user && !loading && !sessionError) {
       navigate("/app", { replace: true });
     }
-  }, [clerkLoaded, isSignedIn, user, loading, navigate]);
+  }, [clerkLoaded, isSignedIn, user, loading, sessionError, navigate]);
 
   if (!clerkLoaded || loading) {
     return <LoadingScreen label="Loading sign-in" />;
   }
 
-  if (isSignedIn && !user && !sessionError) {
-    return <LoadingScreen label="Finishing sign-in" />;
+  if (isSignedIn && !user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8">
+        <LoadingScreen label={sessionError ? "Sign-in problem" : "Finishing sign-in"} />
+        {sessionError && (
+          <div className="mt-6 max-w-md text-center space-y-4">
+            <p className="text-sm text-rose-400">{sessionError}</p>
+            <button
+              type="button"
+              className="text-sm text-gold hover:underline"
+              onClick={async () => {
+                clearSessionError();
+                await signOut();
+              }}
+            >
+              Sign out and try again
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -68,7 +88,8 @@ export default function Login() {
             <div className="mt-6" data-testid="clerk-sign-in">
               <SignIn
                 appearance={clerkAppearance}
-                routing="hash"
+                routing="path"
+                path="/login"
                 signUpUrl="/login"
                 forceRedirectUrl={`${window.location.origin}/app`}
                 fallbackRedirectUrl={`${window.location.origin}/app`}
@@ -76,10 +97,6 @@ export default function Login() {
             </div>
           ) : (
             <p className="mt-8 text-sm text-rose-400">Clerk is not configured on this deployment.</p>
-          )}
-
-          {sessionError && (
-            <p className="mt-4 text-sm text-rose-400">{sessionError}</p>
           )}
 
           <p className="mt-4 text-center text-xs text-zinc-600">

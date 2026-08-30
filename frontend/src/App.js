@@ -75,7 +75,7 @@ function AppRouter() {
 function ClerkAuthShell() {
   const { signOut } = useClerk();
   return (
-    <AuthProvider onLogoutExtra={() => signOut()}>
+    <AuthProvider onLogoutExtra={() => signOut()} deferInitialAuth>
       <ErrorBoundary>
         <BrowserRouter>
           <ClerkHelmBridge />

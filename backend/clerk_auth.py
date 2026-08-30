@@ -48,27 +48,40 @@ def _jwks() -> PyJWKClient:
     return _jwks_client
 
 
-async def verify_clerk_session_token(token: str) -> dict[str, Any]:
-    """Validate Clerk session JWT and return stable identity fields for Helm users."""
+async def clerk_api_ok() -> bool:
+    """True when CLERK_SECRET_KEY can reach the Clerk API (matches publishable key instance)."""
+    if not CLERK_SECRET_KEY:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                "https://api.clerk.com/v1/instance",
+                headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+            )
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
+def decode_clerk_jwt(token: str) -> dict[str, Any]:
+    """Verify signature + expiry; return JWT payload."""
     signing_key = _jwks().get_signing_key_from_jwt(token)
-    payload = jwt.decode(
+    return jwt.decode(
         token,
         signing_key.key,
         algorithms=["RS256"],
         options={"verify_aud": False},
     )
-    clerk_user_id = payload.get("sub")
-    if not clerk_user_id:
-        raise ValueError("Clerk token missing sub")
 
+
+async def fetch_clerk_user_profile(clerk_user_id: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(
             f"https://api.clerk.com/v1/users/{clerk_user_id}",
             headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
         )
     if r.status_code >= 400:
-        raise ValueError(f"Clerk user lookup failed ({r.status_code})")
-
+        raise ValueError(f"Clerk user lookup failed ({r.status_code}) — check CLERK_SECRET_KEY matches pk_live")
     data = r.json()
     emails = data.get("email_addresses") or []
     primary_id = data.get("primary_email_address_id")
@@ -76,17 +89,24 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     email = (primary or {}).get("email_address")
     if not email:
         raise ValueError("Clerk user has no email")
-
     first = (data.get("first_name") or "").strip()
     last = (data.get("last_name") or "").strip()
     name = f"{first} {last}".strip() or None
-
     return {
         "clerk_id": clerk_user_id,
         "email": email,
         "name": name,
         "picture": data.get("image_url"),
     }
+
+
+async def verify_clerk_session_token(token: str) -> dict[str, Any]:
+    """Validate Clerk session JWT and return stable identity fields for Helm users."""
+    payload = decode_clerk_jwt(token)
+    clerk_user_id = payload.get("sub")
+    if not clerk_user_id:
+        raise ValueError("Clerk token missing sub")
+    return await fetch_clerk_user_profile(clerk_user_id)
 
 
 async def ensure_allowed_origins() -> bool:

@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children, onLogoutExtra }) {
+export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState("");
@@ -29,8 +29,12 @@ export function AuthProvider({ children, onLogoutExtra }) {
       setLoading(false);
       return;
     }
-    checkAuth();
-  }, [checkAuth]);
+    if (deferInitialAuth) {
+      setLoading(false);
+      return;
+    }
+    checkAuth().catch(() => {});
+  }, [checkAuth, deferInitialAuth]);
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (e) {}

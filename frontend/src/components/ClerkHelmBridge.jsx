@@ -4,6 +4,17 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { setClerkTokenGetter } from "@/lib/api";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function clerkTokenWithRetry(getToken, attempts = 6) {
+  for (let i = 0; i < attempts; i += 1) {
+    const token = await getToken({ skipCache: true });
+    if (token) return token;
+    await sleep(200 * (i + 1));
+  }
+  return null;
+}
+
 /** Sync Clerk session → Helm user via /auth/me (accepts Clerk JWT bearer). */
 export default function ClerkHelmBridge() {
   const { isLoaded, isSignedIn, getToken } = useClerkAuth();
@@ -12,15 +23,29 @@ export default function ClerkHelmBridge() {
   const busy = useRef(false);
 
   useEffect(() => {
-    setClerkTokenGetter(() => (isSignedIn ? getToken({ skipCache: false }) : null));
+    setClerkTokenGetter(async () => {
+      if (!isSignedIn) return null;
+      return getToken({ skipCache: true });
+    });
     return () => setClerkTokenGetter(null);
   }, [isSignedIn, getToken]);
+
+  // Cookie session for returning users not signed in to Clerk this tab.
+  useEffect(() => {
+    if (!isLoaded || isSignedIn || user) return;
+    checkAuth().catch(() => {});
+  }, [isLoaded, isSignedIn, user, checkAuth]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || loading || user || busy.current) return;
     busy.current = true;
     (async () => {
       try {
+        const token = await clerkTokenWithRetry(getToken);
+        if (!token) {
+          setSessionError("Clerk session not ready — refresh and try again.");
+          return;
+        }
         await checkAuth();
         navigate("/app", { replace: true });
       } catch (e) {
@@ -35,7 +60,7 @@ export default function ClerkHelmBridge() {
         busy.current = false;
       }
     })();
-  }, [isLoaded, isSignedIn, loading, user, checkAuth, setSessionError, navigate]);
+  }, [isLoaded, isSignedIn, loading, user, getToken, checkAuth, setSessionError, navigate]);
 
   return null;
 }
