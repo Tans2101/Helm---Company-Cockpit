@@ -1,4 +1,19 @@
-/** True when Clerk has an active session (even if isSignedIn lags behind). */
-export function clerkSessionActive({ isSignedIn, userId, sessionId, session }) {
-  return Boolean(isSignedIn || userId || sessionId || session);
+/** True when Clerk has an active session (including pending right after email verify). */
+export function clerkSessionActive({
+  isSignedIn,
+  userId,
+  sessionId,
+  session,
+  sessionStatus,
+}) {
+  return Boolean(
+    isSignedIn
+    || userId
+    || sessionId
+    || session
+    || sessionStatus === "pending",
+  );
 }
+
+/** Clerk useAuth options — pending sessions must count as signed in for Helm exchange. */
+export const CLERK_AUTH_OPTS = { treatPendingAsSignedOut: false };

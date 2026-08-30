@@ -9,15 +9,15 @@ import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-import { clerkSessionActive } from "@/lib/clerkSession";() {
+import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId } = useClerkAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
   const { signOut } = useClerk();
   const navigate = useNavigate();
 
   const clerkReady = clerkLoaded && sessionLoaded;
-  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session });
+  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session, sessionStatus });
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
