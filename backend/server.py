@@ -32,7 +32,12 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+)
 db = client[os.environ['DB_NAME']]
 
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'change-me-in-production')
@@ -2029,7 +2034,7 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
 async def health():
     ok = True
     try:
-        await db.command("ping")
+        await asyncio.wait_for(db.command("ping"), timeout=3.0)
     except Exception:
         ok = False
     return {"status": "ok" if ok else "degraded", "mongo": ok}

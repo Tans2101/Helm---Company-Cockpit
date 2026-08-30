@@ -21,11 +21,11 @@ services:
       - key: OAUTH_STATE_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
+        value: https://helm-company-cockpit.vercel.app
       - key: APP_URL
-        sync: false
+        value: https://helm-company-cockpit.vercel.app
       - key: CORS_ORIGINS
-        sync: false
+        value: https://helm-company-cockpit.vercel.app
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE
