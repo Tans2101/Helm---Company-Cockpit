@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignInButton, useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BACKEND_URL } from "@/lib/api";
@@ -10,11 +10,12 @@ import { LoadingScreen } from "@/components/kit";
 const CLERK_KEY = getClerkPublishableKey();
 
 const signInBtnClass =
-  "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover";
+  "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover disabled:opacity-60 disabled:cursor-not-allowed";
 
 export default function Login() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const clerk = useClerk();
   const navigate = useNavigate();
   const [googleReady, setGoogleReady] = useState(true);
   const [clerkEnabled, setClerkEnabled] = useState(!!CLERK_KEY);
@@ -32,6 +33,24 @@ export default function Login() {
       })
       .catch(() => {});
   }, []);
+
+  const handleClerkSignIn = () => {
+    setError("");
+    clearSessionError();
+    if (!clerk.loaded) {
+      setError("Sign-in is still loading — try again in a second.");
+      return;
+    }
+    try {
+      clerk.openSignIn({
+        forceRedirectUrl: `${window.location.origin}/app`,
+        signUpForceRedirectUrl: `${window.location.origin}/app`,
+      });
+    } catch (e) {
+      console.error("Clerk sign-in failed", e);
+      setError("Could not open sign-in. Add this site in Clerk → Configure → Domains.");
+    }
+  };
 
   const handleGoogleLogin = () => {
     setError("");
@@ -82,16 +101,15 @@ export default function Login() {
 
           {clerkEnabled && CLERK_KEY ? (
             <div className="mt-8 space-y-4" data-testid="clerk-sign-in">
-              <SignInButton
-                mode="redirect"
-                forceRedirectUrl={`${window.location.origin}/app`}
-                signUpForceRedirectUrl={`${window.location.origin}/app`}
+              <button
+                type="button"
+                onClick={handleClerkSignIn}
+                disabled={!clerkLoaded}
+                className={signInBtnClass}
               >
-                <button type="button" className={signInBtnClass}>
-                  Continue to sign in
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                </button>
-              </SignInButton>
+                {clerkLoaded ? "Continue to sign in" : "Loading sign-in…"}
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </button>
               <p className="text-center text-xs text-zinc-500">
                 Google or email — powered by Clerk
               </p>
