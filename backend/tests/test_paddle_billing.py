@@ -124,3 +124,57 @@ def test_webhook_nonce_binding_blocks_cross_workspace(mongo):
     assert ws["plan"] == "free", "cross-workspace nonce must not provision"
     assert mongo.workspaces.find_one({"workspace_id": "ws_SOMEONE_ELSE"}) is None
     mongo.paddle_events.delete_one({"_id": eid})
+
+
+def test_webhook_subscription_canceled_downgrades(mongo):
+    sub_id = "sub_cancel_test"
+    mongo.workspaces.update_one(
+        {"workspace_id": WS_ID},
+        {"$set": {"plan": "pro", "paddle_subscription_id": sub_id, "subscription_status": "active"}},
+    )
+    eid = f"evt_{uuid.uuid4().hex[:10]}"
+    mongo.paddle_events.delete_one({"_id": eid})
+    body = json.dumps({
+        "event_id": eid, "event_type": "subscription.canceled", "occurred_at": "2026-08-30T00:00:00Z",
+        "data": {"id": sub_id},
+    }).encode()
+    r = requests.post(f"{LOCAL}/api/webhook/paddle", data=body, headers=_sign(body))
+    assert r.status_code == 200
+    ws = mongo.workspaces.find_one({"workspace_id": WS_ID})
+    assert ws["plan"] == "free"
+    assert ws.get("subscription_status") == "canceled"
+    mongo.paddle_events.delete_one({"_id": eid})
+    mongo.workspaces.update_one({"workspace_id": WS_ID}, {"$set": {"plan": "free"}, "$unset": {"paddle_subscription_id": ""}})
+
+
+def test_webhook_past_due_sets_status(mongo):
+    sub_id = "sub_pastdue_test"
+    mongo.workspaces.update_one(
+        {"workspace_id": WS_ID},
+        {"$set": {"plan": "pro", "paddle_subscription_id": sub_id, "subscription_status": "active"}},
+    )
+    eid = f"evt_{uuid.uuid4().hex[:10]}"
+    body = json.dumps({
+        "event_id": eid, "event_type": "subscription.past_due", "occurred_at": "2026-08-30T00:00:00Z",
+        "data": {"id": sub_id},
+    }).encode()
+    r = requests.post(f"{LOCAL}/api/webhook/paddle", data=body, headers=_sign(body))
+    assert r.status_code == 200
+    ws = mongo.workspaces.find_one({"workspace_id": WS_ID})
+    assert ws.get("subscription_status") == "past_due"
+    mongo.paddle_events.delete_one({"_id": eid})
+    mongo.workspaces.update_one(
+        {"workspace_id": WS_ID},
+        {"$set": {"plan": "free", "subscription_status": "active"}, "$unset": {"paddle_subscription_id": ""}},
+    )
+
+
+def test_portal_requires_billing_manage():
+    r = requests.post(f"{BASE_URL}/api/payments/paddle/portal", headers=_h(MEMBER_TOKEN))
+    assert r.status_code == 403
+
+
+def test_portal_requires_customer(mongo):
+    mongo.workspaces.update_one({"workspace_id": WS_ID}, {"$unset": {"paddle_customer_id": ""}})
+    r = requests.post(f"{BASE_URL}/api/payments/paddle/portal", headers=_h(OWNER_TOKEN))
+    assert r.status_code == 400

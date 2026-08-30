@@ -86,7 +86,7 @@ export default function Landing() {
   ];
 
   const steps = [
-    { n: "01", title: "Pulls it in", body: "Helm connects to Google, Stripe, QuickBooks and GitHub — your team keeps their tools, you get the signal." },
+    { n: "01", title: "Pulls it in", body: "Helm connects to Google, QuickBooks, Paddle and GitHub — your team keeps their tools, you get the signal." },
     { n: "02", title: "Synthesizes", body: "Every morning it distills finance, sales, people and risk into a three-line briefing. Signal over noise." },
     { n: "03", title: "You decide & delegate", body: "Approve, follow up, or hand off in a click — then Helm tracks whether the outcome actually landed." },
   ];
@@ -155,7 +155,7 @@ export default function Landing() {
       <section className="px-6 py-12 border-t border-white/[0.05]">
         <div className="mx-auto max-w-6xl">
           <p className="text-center font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-600">
-            Trusted by founders at seed &amp; Series A startups
+            Illustrative outcomes — not verified customer metrics
           </p>
           <div className="mt-9 grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-6">
             {stats.map((s, i) => (

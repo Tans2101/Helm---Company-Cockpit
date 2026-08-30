@@ -30,7 +30,8 @@ export default function CookieNotice() {
     >
       <div className="mx-auto max-w-3xl flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-white/10 bg-[#141417]/95 backdrop-blur-xl px-4 py-3.5 shadow-2xl">
         <p className="flex-1 text-sm text-zinc-300 leading-relaxed">
-          Helm uses cookies for sign-in sessions and basic preferences. See our{" "}
+          Helm uses cookies for sign-in sessions and basic preferences. We may also load third-party analytics scripts
+          (PostHog / Emergent) as described in our{" "}
           <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>.
         </p>
         <button

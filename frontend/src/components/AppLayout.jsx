@@ -16,6 +16,7 @@ const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
+  { to: "/app/sales", label: "Pipeline", icon: Briefcase, id: "sales", perm: "sales:write" },
   { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
   { to: "/app/financials", label: "Financials", icon: DollarSign, id: "financials" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
@@ -91,8 +92,10 @@ function SidebarContent({ onNavigate }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: company } = useFetch("/company");
+  const { data: billing } = useFetch("/billing/plans");
   const isPro = company?.plan === "pro";
   const isOwner = user?.role === "owner";
+  const pastDue = billing?.subscription_status === "past_due";
 
   return (
     <div className="flex flex-col h-full">
@@ -183,9 +186,16 @@ function SidebarContent({ onNavigate }) {
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: billing } = useFetch("/billing/plans");
+  const pastDue = billing?.subscription_status === "past_due";
 
   return (
     <div className="min-h-screen grain">
+      {pastDue && (
+        <div className="lg:pl-[260px] bg-amber-500/10 border-b border-amber-500/30 px-5 py-2.5 text-center text-sm text-amber-200" data-testid="global-past-due-banner">
+          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Pro access.
+        </div>
+      )}
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] flex-col bg-[#09090b] border-r border-white/5 z-40">
         <SidebarContent />

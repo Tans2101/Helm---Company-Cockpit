@@ -155,7 +155,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         {"id": "google_calendar", "name": "Google Calendar", "category": "Calendar", "provider": "google", "oauth": True, "connected": False, "pro": True, "description": "Meeting intelligence — pull your real calendar into the cockpit."},
         {"id": "gmail", "name": "Gmail", "category": "Email", "provider": "google", "oauth": True, "connected": False, "pro": True, "description": "Surface executive email signal and follow-ups."},
         {"id": "quickbooks", "name": "QuickBooks", "category": "Finance", "provider": "quickbooks", "oauth": True, "connected": False, "pro": True, "description": "Real burn, runway and P&L from your books."},
-        {"id": "stripe", "name": "Stripe", "category": "Finance", "provider": "stripe", "oauth": False, "connected": True, "pro": True, "description": "Revenue, MRR, churn and payment telemetry."},
+        {"id": "paddle", "name": "Paddle", "category": "Finance", "provider": "paddle", "oauth": False, "connected": False, "pro": True, "description": "Subscription billing and revenue telemetry."},
         {"id": "github", "name": "GitHub", "category": "Engineering", "provider": "github", "oauth": False, "connected": False, "pro": True, "description": "PR velocity, task sync and release tracking."},
         {"id": "slack", "name": "Slack", "category": "Comms", "provider": "slack", "oauth": False, "connected": False, "pro": True, "description": "Status pulls and delegation push."},
         {"id": "salesforce", "name": "Salesforce", "category": "Sales", "provider": "salesforce", "oauth": False, "connected": False, "pro": True, "description": "Pipeline, win rate and forecast."},

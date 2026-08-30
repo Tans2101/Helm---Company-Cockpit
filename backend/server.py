@@ -41,10 +41,13 @@ ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", 
 DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "false").lower() in ("1", "true", "yes")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
 COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax")
-OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET") or SESSION_SECRET
+OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
+if not OAUTH_STATE_SECRET:
+    OAUTH_STATE_SECRET = SESSION_SECRET
 APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX", "").strip() or None
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')  # unused; kept so old envs don't crash on import
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
@@ -124,7 +127,7 @@ PACK_PERMS = {
 # Where each pack lands after login. Operators start on their lane or "My Day".
 PACK_HOME = {"owner": "/app", "exec": "/app", "member": "/app/me",
              "finance": "/app/financials", "hr": "/app/people",
-             "sales": "/app/me", "ops": "/app/me"}
+             "sales": "/app/sales", "ops": "/app/me"}
 PACK_LABEL = {"owner": "Owner", "exec": "Executive", "finance": "Finance",
               "hr": "People/HR", "sales": "Sales", "ops": "Operations", "member": "Member"}
 VALID_PACKS = set(PACK_PERMS.keys())
@@ -143,7 +146,24 @@ def perms_for(pack: str):
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
-_STATE_SECRET = (OAUTH_STATE_SECRET or SESSION_SECRET or "helm-oauth-state").encode()
+if not os.environ.get("OAUTH_STATE_SECRET") and COOKIE_SECURE and SESSION_SECRET == "change-me-in-production":
+    logger.warning("Set OAUTH_STATE_SECRET and SESSION_SECRET in production")
+
+_STATE_SECRET = OAUTH_STATE_SECRET.encode()
+
+
+def _allowed_auth_redirect(url: str) -> bool:
+    """Only allow post-login redirects to our frontend origins (open-redirect guard)."""
+    if not url:
+        return False
+    if url.startswith("/") and not url.startswith("//"):
+        return True
+    bases = {APP_URL.rstrip("/")} if APP_URL else set()
+    bases.update(o.rstrip("/") for o in CORS_ORIGINS if o)
+    for base in bases:
+        if url == base or url.startswith(base + "/"):
+            return True
+    return False
 
 
 def _sign_state(provider: str, workspace_id: str) -> str:
@@ -492,7 +512,7 @@ async def _issue_session(response: Response, user_id: str) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     await db.user_sessions.insert_one({
         "user_id": user_id, "session_token": session_token,
-        "expires_at": expires_at.isoformat(), "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at, "created_at": datetime.now(timezone.utc),
     })
     set_session_cookie(response, session_token)
     return session_token
@@ -557,6 +577,8 @@ async def google_login(request: Request, redirect: Optional[str] = None):
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         raise HTTPException(status_code=400, detail="Google OAuth not configured")
     dest = redirect or (f"{APP_URL}/app" if APP_URL else "/app")
+    if not _allowed_auth_redirect(dest):
+        raise HTTPException(status_code=400, detail="Invalid redirect URL")
     state = jwt.encode(
         {"redirect": dest, "ts": int(datetime.now(timezone.utc).timestamp())},
         OAUTH_STATE_SECRET, algorithm="HS256",
@@ -588,6 +610,8 @@ async def google_callback(
     except Exception:
         return RedirectResponse(fail)
     dest = payload.get("redirect") or (f"{APP_URL}/app" if APP_URL else "/app")
+    if not _allowed_auth_redirect(dest):
+        return RedirectResponse(fail)
     try:
         async with httpx.AsyncClient(timeout=30) as hc:
             token_res = await hc.post(
@@ -2031,9 +2055,8 @@ async def api_root():
 app.include_router(api_router)
 
 _cors_origins = CORS_ORIGINS or ([FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"])
-# Only allow Emergent preview regex if explicitly listed — not by default.
-_cors_regex = None
-if any("emergentagent.com" in o for o in _cors_origins):
+_cors_regex = CORS_ORIGIN_REGEX
+if not _cors_regex and any("emergentagent.com" in o for o in _cors_origins):
     _cors_regex = r"https://.*\.emergentagent\.com"
 app.add_middleware(
     CORSMiddleware,
@@ -2053,6 +2076,9 @@ async def _ensure_indexes():
         (db.memberships, [("user_id", 1), ("workspace_id", 1)], {}),
         (db.memberships, [("email", 1), ("status", 1)], {}),
         (db.workspaces, [("workspace_id", 1)], {"unique": True}),
+        (db.workspaces, [("join_code", 1)], {"unique": True, "sparse": True}),
+        (db.user_sessions, [("session_token", 1)], {"unique": True}),
+        (db.user_sessions, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.paddle_events, [("_id", 1)], {"unique": True}),
         (db.paddle_intents, [("_id", 1)], {"unique": True}),
         (db.paddle_intents, [("created_at", 1)], {"expireAfterSeconds": 3600}),

@@ -3,12 +3,21 @@ import { toast } from "sonner";
 import { Download, Trash2, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useFetch } from "@/hooks/useFetch";
 import { PageHeader, GlassCard } from "@/components/kit";
 
 export default function AccountSettings() {
   const { user, logout } = useAuth();
+  const { data: company } = useFetch("/company");
   const isOwner = user?.role === "owner";
   const [busy, setBusy] = useState(null);
+  const [confirmAccount, setConfirmAccount] = useState("");
+  const [confirmWorkspace, setConfirmWorkspace] = useState("");
+  const [showAccountConfirm, setShowAccountConfirm] = useState(false);
+  const [showWorkspaceConfirm, setShowWorkspaceConfirm] = useState(false);
+
+  const emailConfirm = (user?.email || "").trim().toLowerCase();
+  const workspaceConfirm = (company?.name || "").trim();
 
   const exportData = async () => {
     setBusy("export");
@@ -32,7 +41,14 @@ export default function AccountSettings() {
   };
 
   const deleteAccount = async () => {
-    if (!window.confirm("Delete your account permanently? This cannot be undone.")) return;
+    if (!showAccountConfirm) {
+      setShowAccountConfirm(true);
+      return;
+    }
+    if (confirmAccount.trim().toLowerCase() !== emailConfirm) {
+      toast.error("Type your email exactly to confirm");
+      return;
+    }
     setBusy("account");
     try {
       await api.delete("/account");
@@ -45,7 +61,14 @@ export default function AccountSettings() {
   };
 
   const deleteWorkspace = async () => {
-    if (!window.confirm("Delete this entire workspace and all its data? This cannot be undone.")) return;
+    if (!showWorkspaceConfirm) {
+      setShowWorkspaceConfirm(true);
+      return;
+    }
+    if (confirmWorkspace.trim() !== workspaceConfirm) {
+      toast.error("Type the workspace name exactly to confirm");
+      return;
+    }
     setBusy("workspace");
     try {
       await api.delete("/workspaces/current");
@@ -90,13 +113,27 @@ export default function AccountSettings() {
         <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
           Permanently remove your user account. You will be signed out.
         </p>
+        {showAccountConfirm && (
+          <div className="mb-4">
+            <label className="block text-xs text-zinc-500 mb-1.5">
+              Type <span className="text-zinc-300">{user?.email}</span> to confirm
+            </label>
+            <input
+              data-testid="confirm-account-input"
+              value={confirmAccount}
+              onChange={(e) => setConfirmAccount(e.target.value)}
+              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+              placeholder={user?.email}
+            />
+          </div>
+        )}
         <button
           data-testid="delete-account-btn"
           onClick={deleteAccount}
           disabled={!!busy}
           className="rounded-md border border-rose-500/40 text-rose-400 text-sm font-medium px-4 py-2.5 transition-colors hover:bg-rose-500/10 disabled:opacity-60"
         >
-          {busy === "account" ? "Deleting…" : "Delete account"}
+          {busy === "account" ? "Deleting…" : showAccountConfirm ? "Confirm delete account" : "Delete account"}
         </button>
       </GlassCard>
 
@@ -109,13 +146,27 @@ export default function AccountSettings() {
           <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
             As owner, you can permanently delete the current company workspace and all of its data for every member.
           </p>
+          {showWorkspaceConfirm && (
+            <div className="mb-4">
+              <label className="block text-xs text-zinc-500 mb-1.5">
+                Type <span className="text-zinc-300">{company?.name || "workspace name"}</span> to confirm
+              </label>
+              <input
+                data-testid="confirm-workspace-input"
+                value={confirmWorkspace}
+                onChange={(e) => setConfirmWorkspace(e.target.value)}
+                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                placeholder={company?.name}
+              />
+            </div>
+          )}
           <button
             data-testid="delete-workspace-btn"
             onClick={deleteWorkspace}
             disabled={!!busy}
             className="rounded-md border border-rose-500/40 text-rose-400 text-sm font-medium px-4 py-2.5 transition-colors hover:bg-rose-500/10 disabled:opacity-60"
           >
-            {busy === "workspace" ? "Deleting…" : "Delete workspace"}
+            {busy === "workspace" ? "Deleting…" : showWorkspaceConfirm ? "Confirm delete workspace" : "Delete workspace"}
           </button>
         </GlassCard>
       )}

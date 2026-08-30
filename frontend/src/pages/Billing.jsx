@@ -167,7 +167,8 @@ export default function Billing() {
       </div>
 
       <p className="text-center text-[11px] text-zinc-600 mt-8 leading-relaxed">
-        Payments processed by Paddle (Merchant of Record). Cancel anytime.{" "}
+        Payments processed by Paddle (Merchant of Record). Subscriptions renew automatically each billing period until you cancel
+        in the Paddle customer portal. Cancel anytime.{" "}
         <Link to="/terms" className="text-zinc-500 hover:text-zinc-300 transition-colors">Terms</Link>
         {" · "}
         <Link to="/privacy" className="text-zinc-500 hover:text-zinc-300 transition-colors">Privacy</Link>

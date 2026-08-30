@@ -27,8 +27,8 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Authentication</h2>
             <p>
-              Helm uses Google sign-in through Helm’s own OAuth integration with Google. When you sign in, we receive basic account
-              details such as your name, email address, and profile picture to create and secure your session. The same Google
+              Helm uses Clerk or Google sign-in (depending on your deployment). When you sign in, we receive basic account
+              details such as your name, email address, and profile picture to create and secure your session. The same
               account maps to the same Helm user on every login.
             </p>
           </section>
@@ -62,8 +62,17 @@ export default function Privacy() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">AI / LLM processing</h2>
             <p>
               Features such as Ask Helm, briefings, and recommendations may send relevant company data you provide or sync
-              to large language models (including Claude) via Emergent’s AI infrastructure. That context is used to generate
+              to large language models (including Claude via Anthropic). That context is used to generate
               responses for your workspace. Do not submit data you are not authorized to process with third-party AI providers.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg text-white font-normal tracking-tight mb-2">Analytics</h2>
+            <p>
+              We may use product analytics and session-recording tools (including PostHog and Emergent-hosted analytics scripts
+              loaded from our web app) to understand usage and improve Helm. These tools may set cookies or similar identifiers.
+              You can limit tracking via your browser settings or ad/analytics blockers where applicable.
             </p>
           </section>
 
