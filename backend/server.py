@@ -32,10 +32,19 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 def _resolve_mongo_url() -> str:
+    """Prefer Render private Mongo (helm-mongo) unless Atlas is explicitly requested."""
+    use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
     host = os.environ.get("MONGO_HOST", "").strip()
+    if not use_atlas:
+        if not host and os.environ.get("RENDER"):
+            host = "helm-mongo"
+        if host:
+            return f"mongodb://{host}:27017"
+    if url := os.environ.get("MONGO_URL", "").strip():
+        return url
     if host:
         return f"mongodb://{host}:27017"
-    return os.environ["MONGO_URL"]
+    raise RuntimeError("Set MONGO_URL, MONGO_HOST, or sync render.yaml (helm-mongo pserv)")
 
 
 mongo_url = _resolve_mongo_url()
