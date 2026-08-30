@@ -11,6 +11,7 @@ import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
 import Login from "@/pages/Login";
+import SignUpPage from "@/pages/SignUp";
 import Landing from "@/pages/Landing";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -45,7 +46,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/login/*" element={<Login />} />
+      <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />

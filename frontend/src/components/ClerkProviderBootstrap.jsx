@@ -47,7 +47,7 @@ export default function ClerkProviderBootstrap({ children }) {
     <ClerkProvider
       publishableKey={publishableKey}
       signInUrl="/login"
-      signUpUrl="/login"
+      signUpUrl="/sign-up"
       signInForceRedirectUrl="/app"
       signUpForceRedirectUrl="/app"
       signInFallbackRedirectUrl="/app"

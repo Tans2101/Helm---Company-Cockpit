@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
+import { SignUp, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
@@ -9,7 +9,7 @@ import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-export default function Login() {
+export default function SignUpPage() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
   const { signOut } = useClerk();
@@ -26,13 +26,13 @@ export default function Login() {
   }, [clerkLoaded, isSignedIn, user, loading, sessionError, navigate]);
 
   if (!clerkLoaded || loading) {
-    return <LoadingScreen label="Loading sign-in" />;
+    return <LoadingScreen label="Loading sign-up" />;
   }
 
   if (isSignedIn && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8">
-        <LoadingScreen label={sessionError ? "Sign-in problem" : "Finishing sign-in"} />
+        <LoadingScreen label={sessionError ? "Sign-up problem" : "Finishing sign-up"} />
         {sessionError && (
           <div className="mt-6 max-w-md text-center space-y-4">
             <p className="text-sm text-rose-400">{sessionError}</p>
@@ -64,50 +64,41 @@ export default function Login() {
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mt-1">CEO Operating System</p>
           </div>
         </div>
-
         <div className="max-w-lg">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-6">Quiet control</p>
+          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-6">Join Helm</p>
           <h1 className="text-4xl md:text-6xl font-light tracking-tight text-white leading-[1.05]">
-            Run your company from one command center.
+            Your company command center awaits.
           </h1>
-          <p className="text-zinc-400 text-base md:text-lg mt-6 leading-relaxed">
-            Helm pulls status and KPIs in, pushes work out, and answers the only question that matters —
-            <span className="text-white"> what does the CEO need to know right now?</span>
-          </p>
         </div>
-
-        <p className="text-xs text-zinc-700">Know what matters before your first meeting.</p>
+        <p className="text-xs text-zinc-700">
+          Already have an account?{" "}
+          <Link to="/login" className="text-gold hover:underline">Sign in</Link>
+        </p>
       </div>
 
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
-          <p className="text-zinc-500 text-sm mt-2">Sign in to your executive command center.</p>
+          <h2 className="text-2xl font-normal text-white tracking-tight">Create your account</h2>
+          <p className="text-zinc-500 text-sm mt-2">Start with Google or email.</p>
 
           {CLERK_KEY ? (
-            <div className="mt-6" data-testid="clerk-sign-in">
-              <SignIn
+            <div className="mt-6" data-testid="clerk-sign-up">
+              <SignUp
                 appearance={clerkAppearance}
                 routing="path"
-                path="/login"
-                signUpUrl="/sign-up"
+                path="/sign-up"
+                signInUrl="/login"
                 forceRedirectUrl={`${window.location.origin}/app`}
                 fallbackRedirectUrl={`${window.location.origin}/app`}
               />
             </div>
           ) : (
-            <p className="mt-8 text-sm text-rose-400">Clerk is not configured on this deployment.</p>
+            <p className="mt-8 text-sm text-rose-400">Clerk is not configured.</p>
           )}
-
-          <p className="mt-4 text-center text-xs text-zinc-600">
-            <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
-            <span className="mx-2 text-zinc-700">·</span>
-            <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
-          </p>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Sign-in powered by Clerk — same account always returns to your company.</span>
+            <span>Powered by Clerk</span>
           </div>
         </div>
       </div>
