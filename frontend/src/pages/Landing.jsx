@@ -24,7 +24,7 @@ function Nav({ authed, onEnter }) {
             </div>
             <span className="text-white font-semibold tracking-tight">Helm</span>
           </div>
-          <button data-testid="nav-signin-btn" onClick={onEnter}
+          <button data-testid="nav-signin-btn" type="button" onClick={onEnter}
             className="group flex items-center gap-1.5 rounded-full bg-white text-black text-sm font-medium px-4 py-1.5 transition-colors hover:bg-gold">
             {authed ? "Open cockpit" : "Sign in"}
             <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -112,11 +112,11 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white grain overflow-x-hidden">
+    <div className="min-h-screen bg-[#09090b] text-white grain overflow-x-hidden relative">
       <Nav authed={authed} onEnter={enter} />
 
       {/* Hero */}
-      <section className="relative px-6 pt-36 md:pt-44 pb-20">
+      <section className="relative z-10 px-6 pt-36 md:pt-44 pb-20">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px]" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(201,169,98,0.10), transparent 70%)" }} />
         <div className="relative mx-auto max-w-6xl grid lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-8 items-center">
           <div>
@@ -130,8 +130,8 @@ export default function Landing() {
               className="mt-6 text-lg text-zinc-400 leading-relaxed max-w-xl">
               Helm is the command center for founders. It pulls your company's real status in, synthesizes the signal, and tells you the one thing to decide — and who to hand the rest to.
             </motion.p>
-            <motion.div variants={fade} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3">
-              <button data-testid="hero-cta-btn" onClick={enter}
+            <motion.div variants={fade} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3 relative z-10">
+              <button data-testid="hero-cta-btn" onClick={enter} type="button"
                 className="group inline-flex items-center gap-2 rounded-full bg-gold text-black font-medium px-6 py-3 transition-colors hover:bg-gold-hover">
                 {authed ? "Open your cockpit" : "Enter Helm"}
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -152,7 +152,7 @@ export default function Landing() {
       </section>
 
       {/* Trust / stats strip */}
-      <section className="px-6 py-12 border-t border-white/[0.05]">
+      <section className="relative z-10 px-6 py-12 border-t border-white/[0.05]">
         <div className="mx-auto max-w-6xl">
           <p className="text-center font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-600">
             Illustrative outcomes — not verified customer metrics
@@ -268,14 +268,14 @@ export default function Landing() {
       </section>
 
       {/* Closing CTA */}
-      <section className="px-6 py-28 border-t border-white/[0.05]">
+      <section className="relative z-10 px-6 py-28 border-t border-white/[0.05]">
         <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}
           className="relative mx-auto max-w-3xl text-center rounded-3xl border border-white/[0.08] bg-[#121214]/60 p-12 md:p-16 overflow-hidden">
           <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(201,169,98,0.12), transparent 70%)" }} />
           <h2 className="relative text-3xl md:text-5xl font-light tracking-tight leading-tight">Run your company from<br />one command center.</h2>
           <p className="relative mt-5 text-zinc-400">Quiet control for the person everyone's counting on.</p>
-          <div className="relative mt-9 flex flex-wrap items-center justify-center gap-3">
-            <button data-testid="footer-cta-btn" onClick={enter}
+          <div className="relative z-10 mt-9 flex flex-wrap items-center justify-center gap-3">
+            <button data-testid="footer-cta-btn" onClick={enter} type="button"
               className="group inline-flex items-center gap-2 rounded-full bg-gold text-black font-medium px-7 py-3 transition-colors hover:bg-gold-hover">
               {authed ? "Open your cockpit" : "Enter Helm"}
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

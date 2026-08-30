@@ -103,7 +103,11 @@ function App() {
   return (
     <div className="App">
       {CLERK_KEY ? (
-        <ClerkProvider publishableKey={CLERK_KEY}>
+        <ClerkProvider
+          publishableKey={CLERK_KEY}
+          signInFallbackRedirectUrl="/app"
+          signUpFallbackRedirectUrl="/app"
+        >
           <ClerkAuthShell />
         </ClerkProvider>
       ) : (

@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignIn, useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { SignInButton, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BACKEND_URL } from "@/lib/api";
-import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "";
+
+const signInBtnClass =
+  "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover";
 
 export default function Login() {
   const { user, loading } = useAuth();
@@ -78,12 +80,20 @@ export default function Login() {
           <p className="text-zinc-500 text-sm mt-2">Sign in to your executive command center.</p>
 
           {clerkEnabled && CLERK_KEY ? (
-            <div className="mt-8" data-testid="clerk-sign-in">
-              <SignIn
-                appearance={clerkAppearance}
-                fallbackRedirectUrl={`${window.location.origin}/app`}
-                signUpFallbackRedirectUrl={`${window.location.origin}/app`}
-              />
+            <div className="mt-8 space-y-4" data-testid="clerk-sign-in">
+              <SignInButton
+                mode="redirect"
+                forceRedirectUrl={`${window.location.origin}/app`}
+                signUpForceRedirectUrl={`${window.location.origin}/app`}
+              >
+                <button type="button" className={signInBtnClass}>
+                  Continue to sign in
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </button>
+              </SignInButton>
+              <p className="text-center text-xs text-zinc-500">
+                Google or email — powered by Clerk
+              </p>
             </div>
           ) : (
             <button
