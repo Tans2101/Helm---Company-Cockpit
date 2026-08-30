@@ -32,19 +32,13 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 def _resolve_mongo_url() -> str:
-    """Prefer Render private Mongo (helm-mongo) unless Atlas is explicitly requested."""
-    use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
+    """Use MONGO_HOST (Render blueprint) or MONGO_URL (Atlas)."""
     host = os.environ.get("MONGO_HOST", "").strip()
-    if not use_atlas:
-        if not host and os.environ.get("RENDER"):
-            host = "helm-mongo"
-        if host:
-            return f"mongodb://{host}:27017"
-    if url := os.environ.get("MONGO_URL", "").strip():
-        return url
     if host:
         return f"mongodb://{host}:27017"
-    raise RuntimeError("Set MONGO_URL, MONGO_HOST, or sync render.yaml (helm-mongo pserv)")
+    if url := os.environ.get("MONGO_URL", "").strip():
+        return url
+    raise RuntimeError("Set MONGO_URL (Atlas) or sync render.yaml for MONGO_HOST")
 
 
 mongo_url = _resolve_mongo_url()
@@ -2048,13 +2042,14 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
 
 @api_router.get("/health")
 async def health():
-    ok = False
+    """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
+    mongo_ok = False
     try:
-        await asyncio.wait_for(db.command("ping", maxTimeMS=1500), timeout=2.0)
-        ok = True
+        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
+        mongo_ok = True
     except Exception:
-        ok = False
-    return {"status": "ok" if ok else "degraded", "mongo": ok}
+        pass
+    return {"status": "ok", "mongo": mongo_ok}
 
 
 @api_router.get("/")
@@ -2112,14 +2107,15 @@ async def _ensure_indexes():
     ]
     for collection, keys, opts in specs:
         try:
-            await collection.create_index(keys, **opts)
+            await asyncio.wait_for(collection.create_index(keys, **opts), timeout=1.5)
         except Exception:
             logger.debug("index ensure skipped for %s", keys, exc_info=True)
 
 
 @app.on_event("startup")
 async def startup():
-    await _ensure_indexes()
+    # Do not block Render health checks — indexes run in background after listen.
+    asyncio.create_task(_ensure_indexes())
 
 
 @app.on_event("shutdown")
