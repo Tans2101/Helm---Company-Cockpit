@@ -19,22 +19,16 @@ export default function Login() {
     if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (clerkLoaded && isSignedIn && !user && !loading && !sessionError) {
-      navigate("/app", { replace: true });
-    }
-  }, [clerkLoaded, isSignedIn, user, loading, sessionError, navigate]);
-
   if (!clerkLoaded || loading) {
     return <LoadingScreen label="Loading sign-in" />;
   }
 
   if (isSignedIn && !user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
         <LoadingScreen label={sessionError ? "Sign-in problem" : "Finishing sign-in"} />
         {sessionError && (
-          <div className="mt-6 max-w-md text-center space-y-4">
+          <div className="mt-6 max-w-md space-y-4">
             <p className="text-sm text-rose-400">{sessionError}</p>
             <button
               type="button"
@@ -42,6 +36,7 @@ export default function Login() {
               onClick={async () => {
                 clearSessionError();
                 await signOut();
+                window.location.href = "/login";
               }}
             >
               Sign out and try again
@@ -82,14 +77,13 @@ export default function Login() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
-          <p className="text-zinc-500 text-sm mt-2">Sign in to your executive command center.</p>
+          <p className="text-zinc-500 text-sm mt-2">Sign in with Google or email.</p>
 
           {CLERK_KEY ? (
             <div className="mt-6" data-testid="clerk-sign-in">
               <SignIn
                 appearance={clerkAppearance}
-                routing="path"
-                path="/login"
+                routing="virtual"
                 signUpUrl="/sign-up"
                 forceRedirectUrl={`${window.location.origin}/app`}
                 fallbackRedirectUrl={`${window.location.origin}/app`}
@@ -104,12 +98,16 @@ export default function Login() {
             <span className="mx-2 text-zinc-700">·</span>
             <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
             <span className="mx-2 text-zinc-700">·</span>
-            <Link to="/sign-up" className="hover:text-zinc-400 transition-colors">Create account</Link>
+            <Link to="/sign-up" className="hover:text-gold transition-colors">Create account</Link>
+          </p>
+
+          <p className="mt-3 text-center text-xs text-zinc-500">
+            Password rules are set in Clerk (not Helm). Use Google for fastest sign-in.
           </p>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Sign-in powered by Clerk — same account always returns to your company.</span>
+            <span>Sign-in powered by Clerk</span>
           </div>
         </div>
       </div>

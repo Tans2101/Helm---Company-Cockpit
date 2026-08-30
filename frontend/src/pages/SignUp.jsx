@@ -19,12 +19,6 @@ export default function SignUpPage() {
     if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (clerkLoaded && isSignedIn && !user && !loading && !sessionError) {
-      navigate("/app", { replace: true });
-    }
-  }, [clerkLoaded, isSignedIn, user, loading, sessionError, navigate]);
-
   if (!clerkLoaded || loading) {
     return <LoadingScreen label="Loading sign-up" />;
   }
@@ -79,14 +73,13 @@ export default function SignUpPage() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Create your account</h2>
-          <p className="text-zinc-500 text-sm mt-2">Start with Google or email.</p>
+          <p className="text-zinc-500 text-sm mt-2">Google or email — password rules are set in Clerk.</p>
 
           {CLERK_KEY ? (
             <div className="mt-6" data-testid="clerk-sign-up">
               <SignUp
                 appearance={clerkAppearance}
-                routing="path"
-                path="/sign-up"
+                routing="virtual"
                 signInUrl="/login"
                 forceRedirectUrl={`${window.location.origin}/app`}
                 fallbackRedirectUrl={`${window.location.origin}/app`}

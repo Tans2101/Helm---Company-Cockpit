@@ -122,5 +122,5 @@ Helm’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail
 |--------|-----|
 | Blank login / Clerk error | Check `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel; redeploy |
 | 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render |
-| Redirect loop | Ensure Vercel `/api` rewrite points to correct Render host |
+| Password too long / strict (e.g. 15+ characters) | **Not set by Helm.** In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **User & authentication** → **Email** → **Password** → lower **Minimum password length** (default is often 8). Or sign in with **Google** to skip password entirely. |
 | New account every login | Atlas `MONGO_URL` wrong or DB not persistent — see `docs/ATLAS_SETUP.md` |

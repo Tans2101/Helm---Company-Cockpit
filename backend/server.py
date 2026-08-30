@@ -815,10 +815,13 @@ async def google_callback(
         return RedirectResponse(fail)
 
 
-@api_router.get("/auth/me")
-async def auth_me(user=Depends(get_user)):
-    base = {"user_id": user["user_id"], "email": user["email"],
-            "name": user.get("name"), "picture": user.get("picture")}
+async def _user_session_payload(user: dict) -> dict:
+    base = {
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "name": user.get("name"),
+        "picture": user.get("picture"),
+    }
     active = user.get("active_workspace_id")
     membership = None
     if active:
@@ -828,15 +831,61 @@ async def auth_me(user=Depends(get_user)):
         membership = await db.memberships.find_one(
             {"user_id": user["user_id"], "status": "active"}, {"_id": 0})
         if membership:
-            await db.users.update_one({"user_id": user["user_id"]},
-                                      {"$set": {"active_workspace_id": membership["workspace_id"]}})
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {"$set": {"active_workspace_id": membership["workspace_id"]}},
+            )
     if not membership:
-        return {**base, "workspace_id": None, "needs_workspace": True, "role": None,
-                "pack": None, "perms": [], "default_route": "/app/welcome", "pack_label": None}
+        return {
+            **base,
+            "workspace_id": None,
+            "needs_workspace": True,
+            "role": None,
+            "pack": None,
+            "perms": [],
+            "default_route": "/app/welcome",
+            "pack_label": None,
+        }
     pack = pack_of(membership)
-    return {**base, "workspace_id": membership["workspace_id"], "needs_workspace": False,
-            "role": membership["role"], "pack": pack, "perms": sorted(perms_for(pack)),
-            "default_route": PACK_HOME.get(pack, "/app"), "pack_label": PACK_LABEL.get(pack, "Member")}
+    return {
+        **base,
+        "workspace_id": membership["workspace_id"],
+        "needs_workspace": False,
+        "role": membership["role"],
+        "pack": pack,
+        "perms": sorted(perms_for(pack)),
+        "default_route": PACK_HOME.get(pack, "/app"),
+        "pack_label": PACK_LABEL.get(pack, "Member"),
+    }
+
+
+def _bearer_token(request: Request) -> str:
+    auth = request.headers.get("Authorization", "")
+    return auth[7:].strip() if auth.startswith("Bearer ") else ""
+
+
+@api_router.post("/auth/clerk/exchange")
+async def clerk_exchange(request: Request, response: Response):
+    """Clerk JWT → Helm session payload (+ optional httpOnly cookie)."""
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=400, detail="Clerk is not configured")
+    await _require_mongo()
+    token = _bearer_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing Clerk session token")
+    if not _looks_like_jwt(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Clerk returned a non-JWT token — try signing out and back in",
+        )
+    user = await _user_from_clerk_jwt(token)
+    await _issue_session(response, user["user_id"])
+    return await _user_session_payload(user)
+
+
+@api_router.get("/auth/me")
+async def auth_me(user=Depends(get_user)):
+    return await _user_session_payload(user)
 
 
 @api_router.post("/auth/logout")
