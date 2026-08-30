@@ -103,6 +103,8 @@ export default function Login() {
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
             <span className="mx-2 text-zinc-700">·</span>
             <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
+            <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/sign-up" className="hover:text-zinc-400 transition-colors">Create account</Link>
           </p>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">

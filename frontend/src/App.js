@@ -1,6 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useClerk } from "@clerk/clerk-react";
+import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthCallback from "@/components/AuthCallback";
@@ -46,6 +46,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/login/sso-callback" element={<AuthenticateWithRedirectCallback />} />
+      <Route path="/sign-up/sso-callback" element={<AuthenticateWithRedirectCallback />} />
       <Route path="/login/*" element={<Login />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<Privacy />} />
