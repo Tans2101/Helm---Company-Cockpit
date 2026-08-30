@@ -31,6 +31,10 @@ from seed_data import build_workspace, sample_financial_entries, gen_join_code
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("helm")
+
+
 def _mongo_candidate_urls() -> list[str]:
     """Ordered Mongo URLs to try — private Render pserv first, then Atlas."""
     seen: set[str] = set()
@@ -73,23 +77,12 @@ def _mongo_source_label(url: str) -> str:
 
 
 def _resolve_mongo_url() -> tuple[str, str]:
-    """Pick the first reachable Mongo URL at boot."""
-    from pymongo import MongoClient
-
+    """Pick Mongo URL without blocking import — health check probes connectivity."""
     candidates = _mongo_candidate_urls()
     if not candidates:
         raise RuntimeError("Set MONGO_URL (Atlas) or sync render.yaml for MONGO_HOST / helm-mongo")
-    for url in candidates:
-        try:
-            probe = MongoClient(url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
-            probe.admin.command("ping")
-            probe.close()
-            return url, _mongo_source_label(url)
-        except Exception:
-            logger.warning("Mongo unreachable at %s", _redact_mongo_url(url))
-    fallback = candidates[0]
-    logger.warning("No Mongo candidate responded; using %s", _redact_mongo_url(fallback))
-    return fallback, _mongo_source_label(fallback)
+    url = candidates[0]
+    return url, _mongo_source_label(url)
 
 
 mongo_url, MONGO_SOURCE = _resolve_mongo_url()
@@ -132,8 +125,6 @@ PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" el
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("helm")
 
 # In-memory join-code rate limit: IP -> list of attempt timestamps
 _join_attempts: dict[str, list[float]] = defaultdict(list)
@@ -2108,6 +2099,7 @@ async def setup_status():
         "mongo_source": MONGO_SOURCE,
         "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
         "on_render": bool(os.environ.get("RENDER")),
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
     }
 
 
