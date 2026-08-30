@@ -1,6 +1,17 @@
 # Render Blueprint — Helm API
 # https://render.com/docs/blueprint-spec
 services:
+  - type: pserv
+    name: helm-mongo
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/library/mongo:7
+    disk:
+      name: mongo-data
+      mountPath: /data/db
+      sizeGB: 10
+
   - type: web
     name: helm-api
     runtime: python
@@ -14,6 +25,11 @@ services:
         value: "3.12.0"
       - key: MONGO_URL
         sync: false
+      - key: MONGO_HOST
+        fromService:
+          name: helm-mongo
+          type: pserv
+          property: host
       - key: DB_NAME
         value: helm
       - key: SESSION_SECRET

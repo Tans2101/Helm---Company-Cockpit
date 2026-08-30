@@ -31,12 +31,19 @@ from seed_data import build_workspace, sample_financial_entries, gen_join_code
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
+def _resolve_mongo_url() -> str:
+    host = os.environ.get("MONGO_HOST", "").strip()
+    if host:
+        return f"mongodb://{host}:27017"
+    return os.environ["MONGO_URL"]
+
+
+mongo_url = _resolve_mongo_url()
 client = AsyncIOMotorClient(
     mongo_url,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=5000,
-    socketTimeoutMS=10000,
+    serverSelectionTimeoutMS=2000,
+    connectTimeoutMS=2000,
+    socketTimeoutMS=5000,
 )
 db = client[os.environ['DB_NAME']]
 
@@ -2032,9 +2039,10 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
 
 @api_router.get("/health")
 async def health():
-    ok = True
+    ok = False
     try:
-        await asyncio.wait_for(db.command("ping"), timeout=3.0)
+        await asyncio.wait_for(db.command("ping", maxTimeMS=1500), timeout=2.0)
+        ok = True
     except Exception:
         ok = False
     return {"status": "ok" if ok else "degraded", "mongo": ok}
