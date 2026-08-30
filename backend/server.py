@@ -36,7 +36,7 @@ logger = logging.getLogger("helm")
 
 
 def _mongo_candidate_urls() -> list[str]:
-    """Ordered Mongo URLs to try — private Render pserv first, then Atlas."""
+    """Ordered Mongo URLs to try — Render pserv first unless USE_ATLAS_MONGO=true."""
     seen: set[str] = set()
     urls: list[str] = []
 
@@ -48,16 +48,22 @@ def _mongo_candidate_urls() -> list[str]:
     use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
     host = os.environ.get("MONGO_HOST", "").strip()
     atlas = os.environ.get("MONGO_URL", "").strip()
-    # Prefer Atlas when explicitly requested or when a srv URL is configured.
-    if use_atlas or atlas.startswith("mongodb+srv://"):
+
+    if use_atlas:
         if atlas:
             add(atlas)
-    if not use_atlas:
         if not host and os.environ.get("RENDER"):
             host = "helm-mongo"
         if host:
             add(f"mongodb://{host}:27017")
-    if atlas and atlas not in seen:
+        return urls
+
+    # Default (Render blueprint): private Mongo first; stale Atlas URL is fallback only.
+    if not host and os.environ.get("RENDER"):
+        host = "helm-mongo"
+    if host:
+        add(f"mongodb://{host}:27017")
+    if atlas:
         add(atlas)
     return urls
 
@@ -88,14 +94,21 @@ def _resolve_mongo_url() -> tuple[str, str]:
     return url, _mongo_source_label(url)
 
 
+DB_NAME = os.environ["DB_NAME"]
+
+
+def _make_mongo_client(url: str) -> AsyncIOMotorClient:
+    return AsyncIOMotorClient(
+        url,
+        serverSelectionTimeoutMS=2000,
+        connectTimeoutMS=2000,
+        socketTimeoutMS=5000,
+    )
+
+
 mongo_url, MONGO_SOURCE = _resolve_mongo_url()
-client = AsyncIOMotorClient(
-    mongo_url,
-    serverSelectionTimeoutMS=2000,
-    connectTimeoutMS=2000,
-    socketTimeoutMS=5000,
-)
-db = client[os.environ['DB_NAME']]
+client = _make_mongo_client(mongo_url)
+db = client[DB_NAME]
 
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'change-me-in-production')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', '')
@@ -2100,6 +2113,8 @@ async def setup_status():
         "clerk_jwks_host": clerk_auth.CLERK_JWKS_URL.split("/")[2] if clerk_auth.CLERK_JWKS_URL else None,
         "mongo": mongo_ok,
         "mongo_source": MONGO_SOURCE,
+        "mongo_url": _redact_mongo_url(mongo_url),
+        "mongo_candidates": len(_mongo_candidate_urls()),
         "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
@@ -2178,8 +2193,32 @@ async def _ensure_indexes():
             logger.debug("index ensure skipped for %s", keys, exc_info=True)
 
 
+async def _connect_mongo_at_startup() -> None:
+    """Probe candidate URLs and bind to the first reachable Mongo (fixes stale Atlas env on Render)."""
+    global client, db, mongo_url, MONGO_SOURCE
+    candidates = _mongo_candidate_urls()
+    for url in candidates:
+        probe = _make_mongo_client(url)
+        try:
+            await asyncio.wait_for(probe.admin.command("ping", maxTimeMS=500), timeout=1.5)
+        except Exception as exc:
+            probe.close()
+            logger.warning("Mongo unreachable (%s): %s", _redact_mongo_url(url), exc)
+            continue
+        if probe is not client:
+            client.close()
+        client = probe
+        db = client[DB_NAME]
+        mongo_url = url
+        MONGO_SOURCE = _mongo_source_label(url)
+        logger.info("Mongo connected via %s (%s)", MONGO_SOURCE, _redact_mongo_url(url))
+        return
+    logger.error("Mongo unavailable after probing %d candidate URL(s)", len(candidates))
+
+
 @app.on_event("startup")
 async def startup():
+    await _connect_mongo_at_startup()
     # Do not block Render health checks — indexes run in background after listen.
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(clerk_auth.ensure_allowed_origins())

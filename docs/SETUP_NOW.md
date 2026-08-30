@@ -87,6 +87,6 @@ Clerk Dashboard (Live mode) → **Configure** → **Domains** → add your **Ver
 | Problem | Fix |
 |---------|-----|
 | Render shows JSON / pretty-print | Wrong URL — use **Vercel**, not Render |
-| `mongo: false` | Fix `MONGO_URL` + Atlas network `0.0.0.0/0` |
+| `mongo: false` | With `USE_ATLAS_MONGO=false`, Render uses **helm-mongo** first. Delete a broken `MONGO_URL` on Render, or fix Atlas + set `USE_ATLAS_MONGO=true` + Network Access `0.0.0.0/0` |
 | Login loops | Set `FRONTEND_URL` / `CORS_ORIGINS` on Render |
 | Clerk error | Add Vercel URL in Clerk Domains + redeploy Vercel |
