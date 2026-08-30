@@ -65,13 +65,21 @@ async def clerk_api_ok() -> bool:
 
 def decode_clerk_jwt(token: str) -> dict[str, Any]:
     """Verify signature + expiry; return JWT payload."""
-    signing_key = _jwks().get_signing_key_from_jwt(token)
-    return jwt.decode(
-        token,
-        signing_key.key,
-        algorithms=["RS256"],
-        options={"verify_aud": False},
-    )
+    try:
+        signing_key = _jwks().get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Clerk session expired — sign out and sign in again")
+    except jwt.InvalidTokenError as exc:
+        logger.warning("clerk jwt invalid: %s (jwks=%s)", exc, CLERK_JWKS_URL)
+        raise ValueError(
+            "Invalid Clerk session token — sign out, hard-refresh, and sign in again"
+        ) from exc
 
 
 async def fetch_clerk_user_profile(clerk_user_id: str) -> dict[str, Any]:

@@ -56,6 +56,33 @@
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
+/* Clerk prebuilt SignIn/SignUp — email OTP + password fields must stay readable on dark bg */
+.cl-formFieldInput input,
+.cl-formFieldInput input[type="text"],
+.cl-formFieldInput input[type="email"],
+.cl-formFieldInput input[type="password"],
+.cl-formFieldInput input[type="tel"],
+.cl-otpCodeFieldInput,
+.cl-otpCodeFieldInput input,
+input.cl-otpCodeFieldInput {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background-color: #141417 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  caret-color: #c9a962 !important;
+}
+
+.cl-otpCodeFieldInput:focus-within,
+.cl-formFieldInput input:focus {
+  border-color: #c9a962 !important;
+  box-shadow: 0 0 0 1px rgba(201, 169, 98, 0.45) !important;
+  outline: none !important;
+}
+
+.cl-otpCodeFieldInputs {
+  gap: 0.5rem;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

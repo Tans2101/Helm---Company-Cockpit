@@ -7,19 +7,38 @@ import { api, setClerkTokenGetter } from "@/lib/api";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function resolveClerkToken(getToken, session) {
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 24; i += 1) {
     const fromSession = session ? await session.getToken({ skipCache: true }) : null;
     const fromAuth = await getToken({ skipCache: true });
     const token = fromSession || fromAuth;
     if (token && token.split(".").length === 3) return token;
-    await sleep(300);
+    await sleep(400);
   }
   return null;
 }
 
+async function exchangeClerkSession(token) {
+  try {
+    const { data } = await api.post(
+      "/auth/clerk/exchange",
+      {},
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    return data;
+  } catch (exchangeErr) {
+    if (exchangeErr?.response?.status === 404) {
+      const { data } = await api.get("/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return data;
+    }
+    throw exchangeErr;
+  }
+}
+
 /** Sync Clerk session → Helm user via POST /auth/clerk/exchange */
 export default function ClerkHelmBridge() {
-  const { isLoaded, isSignedIn, getToken } = useClerkAuth();
+  const { isLoaded, isSignedIn, getToken, userId } = useClerkAuth();
   const { session } = useSession();
   const { user, setUser, setSessionError, clearSessionError } = useAuth();
   const navigate = useNavigate();
@@ -41,12 +60,13 @@ export default function ClerkHelmBridge() {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || user) return;
-    const sessionId = session?.id;
-    if (!sessionId || exchangedFor.current === sessionId) return;
+    const exchangeKey = session?.id || userId;
+    if (!exchangeKey || exchangedFor.current === exchangeKey) return;
 
     let cancelled = false;
     (async () => {
       try {
+        clearSessionError();
         const token = await resolveClerkToken(getToken, session);
         if (!token) {
           if (!cancelled) {
@@ -54,21 +74,9 @@ export default function ClerkHelmBridge() {
           }
           return;
         }
-        exchangedFor.current = sessionId;
-        let data;
-        try {
-          ({ data } = await api.post(
-            "/auth/clerk/exchange",
-            {},
-            { headers: { Authorization: `Bearer ${token}` } },
-          ));
-        } catch (exchangeErr) {
-          if (exchangeErr?.response?.status !== 404) throw exchangeErr;
-          ({ data } = await api.get("/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          }));
-        }
+        const data = await exchangeClerkSession(token);
         if (cancelled) return;
+        exchangedFor.current = exchangeKey;
         setUser(data);
         clearSessionError();
         if (!window.location.pathname.startsWith("/app")) {
@@ -89,7 +97,7 @@ export default function ClerkHelmBridge() {
 
     return () => { cancelled = true; };
   }, [
-    isLoaded, isSignedIn, user, session?.id, getToken, session,
+    isLoaded, isSignedIn, user, session?.id, userId, getToken, session,
     setUser, setSessionError, clearSessionError, navigate,
   ]);
 

@@ -144,7 +144,9 @@ PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
 PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
-CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
+CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip() or (
+    "pk_live_Y2F1c2FsLWNhcmlib3UtMjM1Mi5jbGVyay5hY2NvdW50cy5kZXYk"
+)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -164,6 +166,9 @@ def _session_cookie_domain() -> str | None:
             continue
         host = urlparse(raw).hostname
         if host and host not in ("localhost", "127.0.0.1"):
+            # Host-only cookies work reliably through Vercel /api rewrites to Render.
+            if host.endswith(".vercel.app"):
+                return None
             return host
     return None
 
@@ -362,6 +367,8 @@ async def _user_from_clerk_jwt(token: str):
         identity = await clerk_auth.fetch_clerk_user_profile(clerk_id)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc))
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("clerk jwt auth failed")
         raise HTTPException(
