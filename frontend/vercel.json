@@ -8,6 +8,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

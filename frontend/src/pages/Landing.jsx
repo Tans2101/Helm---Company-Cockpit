@@ -6,6 +6,8 @@ import {
   Layers, Zap, Command, Check, Star,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 const ease = [0.16, 1, 0.3, 1];
 const fade = {
@@ -69,8 +71,12 @@ function BriefingPreview() {
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const navigate = useNavigate();
-  const authed = !loading && !!user;
+  const clerkActive = clerkLoaded && clerkSessionActive({
+    isSignedIn, userId, sessionId, session: null, sessionStatus,
+  });
+  const authed = !loading && (!!user || clerkActive);
 
   const enter = () => {
     if (authed) navigate("/app");

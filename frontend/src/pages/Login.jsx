@@ -96,6 +96,8 @@ export default function Login() {
                 routing="path"
                 path="/login"
                 signUpUrl="/sign-up"
+                forceRedirectUrl={`${window.location.origin}/app`}
+                fallbackRedirectUrl={`${window.location.origin}/app`}
               />
             </div>
           ) : (

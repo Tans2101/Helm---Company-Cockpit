@@ -63,7 +63,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "craco build && node scripts/verify-auth-build.mjs",
     "test": "craco test"
   },
   "browserslist": {

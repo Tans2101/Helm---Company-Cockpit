@@ -45,7 +45,7 @@ export default function ClerkHelmBridge() {
   const { session, isLoaded: sessionLoaded } = useSession();
   const { user, setUser, setSessionError, clearSessionError } = useAuth();
   const navigate = useNavigate();
-  const exchangedFor = useRef(null);
+  const syncing = useRef(false);
 
   const clerkReady = isLoaded && sessionLoaded;
   const clerkActive = clerkSessionActive({
@@ -61,48 +61,55 @@ export default function ClerkHelmBridge() {
   }, [clerkActive, getToken, session]);
 
   useEffect(() => {
-    if (!clerkActive) {
-      exchangedFor.current = null;
-    }
-  }, [clerkActive]);
-
-  useEffect(() => {
-    if (!clerkReady || !clerkActive || user) return;
-    const exchangeKey = session?.id || sessionId || userId
-      || (sessionStatus === "pending" ? "pending" : null);
-    if (!exchangeKey || exchangedFor.current === exchangeKey) return;
+    if (!clerkReady || !clerkActive || user || syncing.current) return;
 
     let cancelled = false;
+    syncing.current = true;
+
     (async () => {
-      try {
-        clearSessionError();
-        const token = await resolveClerkToken(getToken, session);
-        if (!token) {
-          if (!cancelled) {
-            setSessionError("Clerk session not ready — wait a moment, then refresh.");
+      clearSessionError();
+      for (let attempt = 0; attempt < 40 && !cancelled; attempt += 1) {
+        try {
+          const token = await resolveClerkToken(getToken, session);
+          if (!token) {
+            await sleep(500);
+            continue;
+          }
+          const data = await exchangeClerkSession(token);
+          if (cancelled) return;
+          setUser(data);
+          clearSessionError();
+          if (!window.location.pathname.startsWith("/app")) {
+            navigate("/app", { replace: true });
           }
           return;
+        } catch (e) {
+          const status = e?.response?.status;
+          if (status === 503 && attempt < 39) {
+            await sleep(1500);
+            continue;
+          }
+          if (attempt < 5 && (status >= 500 || !status)) {
+            await sleep(1000);
+            continue;
+          }
+          if (cancelled) return;
+          const detail = e?.response?.data?.detail;
+          setSessionError(
+            typeof detail === "string"
+              ? detail
+              : `Sign-in failed (${status || "network"}).`,
+          );
+          console.error("Clerk Helm sync failed", e?.response?.data || e);
+          return;
         }
-        const data = await exchangeClerkSession(token);
-        if (cancelled) return;
-        exchangedFor.current = exchangeKey;
-        setUser(data);
-        clearSessionError();
-        if (!window.location.pathname.startsWith("/app")) {
-          navigate("/app", { replace: true });
-        }
-      } catch (e) {
-        exchangedFor.current = null;
-        if (cancelled) return;
-        const detail = e?.response?.data?.detail;
-        setSessionError(
-          typeof detail === "string"
-            ? detail
-            : `Sign-in failed (${e?.response?.status || "network"}).`,
-        );
-        console.error("Clerk Helm sync failed", e?.response?.data || e);
       }
-    })();
+      if (!cancelled) {
+        setSessionError("Clerk session not ready — wait a moment, then refresh.");
+      }
+    })().finally(() => {
+      syncing.current = false;
+    });
 
     return () => { cancelled = true; };
   }, [
