@@ -26,15 +26,14 @@ def test_prefers_render_pserv_when_atlas_not_forced(monkeypatch):
     assert urls[1].startswith("mongodb+srv://")
 
 
-def test_atlas_first_when_use_atlas_true(monkeypatch):
+def test_atlas_only_when_use_atlas_true(monkeypatch):
     monkeypatch.setenv("USE_ATLAS_MONGO", "true")
     monkeypatch.setenv("RENDER", "true")
     monkeypatch.setenv("MONGO_URL", "mongodb+srv://user:pass@cluster.mongodb.net/")
     monkeypatch.delenv("MONGO_HOST", raising=False)
     monkeypatch.delenv("MONGO_HOSTPORT", raising=False)
     urls = _mongo_candidate_urls()
-    assert urls[0].startswith("mongodb+srv://")
-    assert "helm-mongo" in urls[1]
+    assert urls == ["mongodb+srv://user:pass@cluster.mongodb.net/"]
 
 
 def test_local_mongo_url_only(monkeypatch):

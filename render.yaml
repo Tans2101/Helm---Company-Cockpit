@@ -27,7 +27,7 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.0"
       - key: USE_ATLAS_MONGO
-        value: "false"
+        value: "true"
       - key: MONGO_URL
         sync: false
       - key: MONGO_HOST

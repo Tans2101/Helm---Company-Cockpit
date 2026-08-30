@@ -64,7 +64,7 @@ def _mongo_candidate_urls() -> list[str]:
     if use_atlas:
         if atlas:
             add(atlas)
-        add_pserv()
+        # Atlas-only mode: skip Render pserv probe (avoids false "2 candidates failed" on startup).
         return urls
 
     # Default (Render blueprint): private Mongo first; stale Atlas URL is fallback only.
@@ -104,11 +104,12 @@ DB_NAME = os.environ["DB_NAME"]
 
 
 def _make_mongo_client(url: str) -> AsyncIOMotorClient:
+    is_atlas = url.startswith("mongodb+srv://")
     return AsyncIOMotorClient(
         url,
-        serverSelectionTimeoutMS=2000,
-        connectTimeoutMS=2000,
-        socketTimeoutMS=5000,
+        serverSelectionTimeoutMS=8000 if is_atlas else 3000,
+        connectTimeoutMS=8000 if is_atlas else 3000,
+        socketTimeoutMS=10000,
     )
 
 
@@ -2248,10 +2249,21 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
 
 async def _mongo_ping() -> bool:
     try:
-        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
+        await asyncio.wait_for(db.command("ping", maxTimeMS=2000), timeout=3.0)
         return True
     except Exception:
         return False
+
+
+async def _require_mongo() -> None:
+    if await _mongo_ping():
+        return
+    await _connect_mongo_at_startup()
+    if not await _mongo_ping():
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Check MONGO_URL and Atlas Network Access on Render.",
+        )
 
 
 async def _probe_mongo_candidates() -> list[dict]:
@@ -2261,7 +2273,7 @@ async def _probe_mongo_candidates() -> list[dict]:
         ok = False
         err: str | None = None
         try:
-            await asyncio.wait_for(probe.admin.command("ping", maxTimeMS=500), timeout=1.5)
+            await asyncio.wait_for(probe.admin.command("ping", maxTimeMS=2000), timeout=3.0)
             ok = True
         except Exception as exc:
             err = type(exc).__name__
@@ -2274,14 +2286,6 @@ async def _probe_mongo_candidates() -> list[dict]:
             "error": err,
         })
     return results
-
-
-async def _require_mongo() -> None:
-    if not await _mongo_ping():
-        raise HTTPException(
-            status_code=503,
-            detail="Database unavailable. Sync render.yaml (helm-mongo) or fix MONGO_URL on Render.",
-        )
 
 
 @api_router.get("/setup/status")
@@ -2382,22 +2386,36 @@ async def _connect_mongo_at_startup() -> None:
     """Probe candidate URLs and bind to the first reachable Mongo (fixes stale Atlas env on Render)."""
     global client, db, mongo_url, MONGO_SOURCE
     candidates = _mongo_candidate_urls()
-    for url in candidates:
-        probe = _make_mongo_client(url)
-        try:
-            await asyncio.wait_for(probe.admin.command("ping", maxTimeMS=500), timeout=1.5)
-        except Exception as exc:
-            probe.close()
-            logger.warning("Mongo unreachable (%s): %s", _redact_mongo_url(url), exc)
-            continue
-        if probe is not client:
-            client.close()
-        client = probe
-        db = client[DB_NAME]
-        mongo_url = url
-        MONGO_SOURCE = _mongo_source_label(url)
-        logger.info("Mongo connected via %s (%s)", MONGO_SOURCE, _redact_mongo_url(url))
+    if not candidates:
+        logger.error("No Mongo URL configured — set MONGO_URL or sync render.yaml")
         return
+
+    for attempt in range(1, 6):
+        for url in candidates:
+            probe = _make_mongo_client(url)
+            try:
+                await asyncio.wait_for(
+                    probe.admin.command("ping", maxTimeMS=3000),
+                    timeout=5.0,
+                )
+            except Exception as exc:
+                probe.close()
+                logger.warning(
+                    "Mongo unreachable attempt %d (%s): %s",
+                    attempt, _redact_mongo_url(url), exc,
+                )
+                continue
+            if probe is not client:
+                client.close()
+            client = probe
+            db = client[DB_NAME]
+            mongo_url = url
+            MONGO_SOURCE = _mongo_source_label(url)
+            logger.info("Mongo connected via %s (%s)", MONGO_SOURCE, _redact_mongo_url(url))
+            return
+        if attempt < 5:
+            await asyncio.sleep(min(2 * attempt, 8))
+
     logger.error("Mongo unavailable after probing %d candidate URL(s)", len(candidates))
 
 
