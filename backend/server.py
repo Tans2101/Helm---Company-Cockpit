@@ -2016,6 +2016,18 @@ async def root():
     return {"service": "Helm CEO Operating System"}
 
 
+@app.get("/")
+async def api_root():
+    """Friendly response when someone opens the Render host directly (API-only)."""
+    return {
+        "service": "Helm CEO Operating System API",
+        "message": "This URL is the API backend. Open your Vercel app to use Helm.",
+        "health": "/api/health",
+        "auth": "/api/auth/config",
+        "frontend": FRONTEND_URL or None,
+    }
+
+
 app.include_router(api_router)
 
 _cors_origins = CORS_ORIGINS or ([FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"])

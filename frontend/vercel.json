@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE_WITH_YOUR_RENDER_SERVICE.onrender.com/api/:path*"
+      "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     }
   ]
 }
