@@ -47,15 +47,18 @@ def _mongo_candidate_urls() -> list[str]:
 
     use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
     host = os.environ.get("MONGO_HOST", "").strip()
+    atlas = os.environ.get("MONGO_URL", "").strip()
+    # Prefer Atlas when explicitly requested or when a srv URL is configured.
+    if use_atlas or atlas.startswith("mongodb+srv://"):
+        if atlas:
+            add(atlas)
     if not use_atlas:
         if not host and os.environ.get("RENDER"):
             host = "helm-mongo"
         if host:
             add(f"mongodb://{host}:27017")
-    if atlas := os.environ.get("MONGO_URL", "").strip():
+    if atlas and atlas not in seen:
         add(atlas)
-    if use_atlas and host:
-        add(f"mongodb://{host}:27017")
     return urls
 
 

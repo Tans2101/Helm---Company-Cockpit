@@ -11,11 +11,20 @@ from jwt import PyJWKClient
 
 logger = logging.getLogger(__name__)
 
+HELM_CLERK_JWKS_URL = "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
+
+
+def _resolve_clerk_jwks_url() -> str:
+    env = os.environ.get("CLERK_JWKS_URL", "").strip()
+    if not env or "apexcoach" in env:
+        return HELM_CLERK_JWKS_URL
+    if "causal-caribou" in env:
+        return env
+    return env or HELM_CLERK_JWKS_URL
+
+
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
-CLERK_JWKS_URL = (
-    os.environ.get("CLERK_JWKS_URL", "").strip()
-    or "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
-)
+CLERK_JWKS_URL = _resolve_clerk_jwks_url()
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
 
 HELM_CLERK_ORIGINS = {
