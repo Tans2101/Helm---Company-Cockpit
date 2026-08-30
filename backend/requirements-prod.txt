@@ -1,3 +1,5 @@
+# Production API only — used by Render (pip install -r requirements-prod.txt)
+# Looser pins avoid ResolutionImpossible on Render's resolver.
 fastapi>=0.110,<0.116
 uvicorn[standard]>=0.25,<0.35
 python-dotenv>=1.0

@@ -1,0 +1,10 @@
+frontend/node_modules/
+frontend/build/
+.git/
+**/__pycache__/
+**/.pytest_cache/
+backend/tests/
+test_reports/
+memory/
+*.md
+!README.md
