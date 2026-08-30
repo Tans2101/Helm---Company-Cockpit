@@ -48,8 +48,10 @@ Render → **helm-company-cockpit** → **Environment** → add/update:
 | `CORS_ORIGINS` | `https://helm-company-cockpit.vercel.app` |
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAMESITE` | `lax` |
-| `CLERK_SECRET_KEY` | `sk_live_...` from Clerk |
-| `CLERK_JWKS_URL` | from Clerk API keys page |
+| `CLERK_SECRET_KEY` | `sk_live_...` from Clerk (**not** `sk_test_`) |
+| `CLERK_JWKS_URL` | `https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json` |
+
+> **Important:** Frontend uses `pk_live_...`. Render must use the matching **`sk_live_...`**. Mismatched keys cause a sign-in loop.
 
 **Save** → **Manual Deploy** (wait ~2 min)
 
