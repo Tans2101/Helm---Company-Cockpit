@@ -31,6 +31,11 @@ export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false
     }
     if (deferInitialAuth) {
       setLoading(false);
+      if (window.location.pathname.startsWith("/app")) {
+        api.get("/auth/me")
+          .then(({ data }) => { setUser(data); setSessionError(""); })
+          .catch(() => {});
+      }
       return;
     }
     checkAuth().catch(() => {});

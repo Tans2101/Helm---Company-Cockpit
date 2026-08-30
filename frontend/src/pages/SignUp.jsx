@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignUp, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
+import { SignUp, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
@@ -9,21 +9,30 @@ import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-export default function SignUpPage() {
+import { clerkSessionActive } from "@/lib/clerkSession";() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId } = useClerkAuth();
+  const { session, isLoaded: sessionLoaded } = useSession();
   const { signOut } = useClerk();
   const navigate = useNavigate();
+
+  const clerkReady = clerkLoaded && sessionLoaded;
+  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session });
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
-  if (!clerkLoaded || loading) {
+  useEffect(() => {
+    if (!clerkReady || user) return;
+    if (clerkActive) navigate("/app", { replace: true });
+  }, [clerkReady, clerkActive, user, navigate]);
+
+  if (!clerkReady || loading) {
     return <LoadingScreen label="Loading sign-up" />;
   }
 
-  if (isSignedIn && !user) {
+  if (clerkActive && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8">
         <LoadingScreen label={sessionError ? "Sign-up problem" : "Finishing sign-up"} />
@@ -36,6 +45,7 @@ export default function SignUpPage() {
               onClick={async () => {
                 clearSessionError();
                 await signOut();
+                window.location.href = "/sign-up";
               }}
             >
               Sign out and try again
@@ -79,10 +89,9 @@ export default function SignUpPage() {
             <div className="mt-6" data-testid="clerk-sign-up">
               <SignUp
                 appearance={clerkAppearance}
-                routing="virtual"
+                routing="path"
+                path="/sign-up"
                 signInUrl="/login"
-                forceRedirectUrl={`${window.location.origin}/app`}
-                fallbackRedirectUrl={`${window.location.origin}/app`}
               />
             </div>
           ) : (

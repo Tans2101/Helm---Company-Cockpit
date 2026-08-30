@@ -1,17 +1,21 @@
 import { Navigate } from "react-router-dom";
-import { useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
+import { useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import WorkspaceGate from "@/pages/WorkspaceGate";
 import { LoadingScreen } from "@/components/kit";
 
-/** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
+import { clerkSessionActive } from "@/lib/clerkSession"; — wait for Clerk→Helm session exchange. */
 export default function ProtectedRouteClerk() {
   const { user, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId } = useClerkAuth();
+  const { session, isLoaded: sessionLoaded } = useSession();
   const { signOut } = useClerk();
 
-  if (!clerkLoaded) {
+  const clerkReady = clerkLoaded && sessionLoaded;
+  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session });
+
+  if (!clerkReady) {
     return <LoadingScreen label="Loading cockpit" />;
   }
 
@@ -20,7 +24,8 @@ export default function ProtectedRouteClerk() {
     return <AppLayout />;
   }
 
-  if (isSignedIn) {
+  // Clerk session exists but Helm user not ready — never bounce to login/sign-up mid-exchange.
+  if (clerkActive) {
     if (sessionError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">

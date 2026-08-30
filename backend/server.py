@@ -388,7 +388,12 @@ async def _user_from_request(request: Request):
     auth = request.headers.get("Authorization", "")
     bearer = auth[7:].strip() if auth.startswith("Bearer ") else ""
     if bearer and _looks_like_jwt(bearer):
-        return await _user_from_clerk_jwt(bearer)
+        try:
+            return await _user_from_clerk_jwt(bearer)
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+            # Fall back to Helm session cookie when Clerk JWT is stale/invalid.
 
     token = request.cookies.get("session_token")
     if not token and bearer:

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
+import { SignIn, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
@@ -9,21 +9,30 @@ import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-export default function Login() {
+import { clerkSessionActive } from "@/lib/clerkSession";() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId } = useClerkAuth();
+  const { session, isLoaded: sessionLoaded } = useSession();
   const { signOut } = useClerk();
   const navigate = useNavigate();
+
+  const clerkReady = clerkLoaded && sessionLoaded;
+  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session });
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
-  if (!clerkLoaded || loading) {
+  useEffect(() => {
+    if (!clerkReady || user) return;
+    if (clerkActive) navigate("/app", { replace: true });
+  }, [clerkReady, clerkActive, user, navigate]);
+
+  if (!clerkReady || loading) {
     return <LoadingScreen label="Loading sign-in" />;
   }
 
-  if (isSignedIn && !user) {
+  if (clerkActive && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
         <LoadingScreen label={sessionError ? "Sign-in problem" : "Finishing sign-in"} />
@@ -83,10 +92,9 @@ export default function Login() {
             <div className="mt-6" data-testid="clerk-sign-in">
               <SignIn
                 appearance={clerkAppearance}
-                routing="virtual"
+                routing="path"
+                path="/login"
                 signUpUrl="/sign-up"
-                forceRedirectUrl={`${window.location.origin}/app`}
-                fallbackRedirectUrl={`${window.location.origin}/app`}
               />
             </div>
           ) : (

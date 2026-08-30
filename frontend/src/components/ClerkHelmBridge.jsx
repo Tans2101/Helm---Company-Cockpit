@@ -6,8 +6,8 @@ import { api, setClerkTokenGetter } from "@/lib/api";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function resolveClerkToken(getToken, session) {
-  for (let i = 0; i < 24; i += 1) {
+import { clerkSessionActive } from "@/lib/clerkSession";(getToken, session) {
+  for (let i = 0; i < 30; i += 1) {
     const fromSession = session ? await session.getToken({ skipCache: true }) : null;
     const fromAuth = await getToken({ skipCache: true });
     const token = fromSession || fromAuth;
@@ -38,29 +38,32 @@ async function exchangeClerkSession(token) {
 
 /** Sync Clerk session → Helm user via POST /auth/clerk/exchange */
 export default function ClerkHelmBridge() {
-  const { isLoaded, isSignedIn, getToken, userId } = useClerkAuth();
-  const { session } = useSession();
+  const { isLoaded, isSignedIn, getToken, userId, sessionId } = useClerkAuth();
+  const { session, isLoaded: sessionLoaded } = useSession();
   const { user, setUser, setSessionError, clearSessionError } = useAuth();
   const navigate = useNavigate();
   const exchangedFor = useRef(null);
 
+  const clerkReady = isLoaded && sessionLoaded;
+  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session });
+
   useEffect(() => {
     setClerkTokenGetter(async () => {
-      if (!isSignedIn) return null;
+      if (!clerkActive) return null;
       return resolveClerkToken(getToken, session);
     });
     return () => setClerkTokenGetter(null);
-  }, [isSignedIn, getToken, session]);
+  }, [clerkActive, getToken, session]);
 
   useEffect(() => {
-    if (!isSignedIn) {
+    if (!clerkActive) {
       exchangedFor.current = null;
     }
-  }, [isSignedIn]);
+  }, [clerkActive]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || user) return;
-    const exchangeKey = session?.id || userId;
+    if (!clerkReady || !clerkActive || user) return;
+    const exchangeKey = session?.id || sessionId || userId;
     if (!exchangeKey || exchangedFor.current === exchangeKey) return;
 
     let cancelled = false;
@@ -97,7 +100,7 @@ export default function ClerkHelmBridge() {
 
     return () => { cancelled = true; };
   }, [
-    isLoaded, isSignedIn, user, session?.id, userId, getToken, session,
+    clerkReady, clerkActive, user, session?.id, sessionId, userId, getToken, session,
     setUser, setSessionError, clearSessionError, navigate,
   ]);
 
