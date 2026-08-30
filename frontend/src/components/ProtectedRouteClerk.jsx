@@ -7,8 +7,12 @@ import { LoadingScreen } from "@/components/kit";
 
 /** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
 export default function ProtectedRouteClerk() {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
+
+  if (sessionError) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (loading || !clerkLoaded || (isSignedIn && !user)) {
     return <LoadingScreen label="Loading cockpit" />;

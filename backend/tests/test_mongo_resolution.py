@@ -20,6 +20,7 @@ def test_prefers_render_pserv_when_atlas_not_forced(monkeypatch):
     monkeypatch.setenv("RENDER", "true")
     monkeypatch.setenv("MONGO_URL", "mongodb+srv://user:pass@cluster.mongodb.net/")
     monkeypatch.delenv("MONGO_HOST", raising=False)
+    monkeypatch.delenv("MONGO_HOSTPORT", raising=False)
     urls = _mongo_candidate_urls()
     assert urls[0] == "mongodb://helm-mongo:27017"
     assert urls[1].startswith("mongodb+srv://")
@@ -30,6 +31,7 @@ def test_atlas_first_when_use_atlas_true(monkeypatch):
     monkeypatch.setenv("RENDER", "true")
     monkeypatch.setenv("MONGO_URL", "mongodb+srv://user:pass@cluster.mongodb.net/")
     monkeypatch.delenv("MONGO_HOST", raising=False)
+    monkeypatch.delenv("MONGO_HOSTPORT", raising=False)
     urls = _mongo_candidate_urls()
     assert urls[0].startswith("mongodb+srv://")
     assert "helm-mongo" in urls[1]
@@ -38,6 +40,7 @@ def test_atlas_first_when_use_atlas_true(monkeypatch):
 def test_local_mongo_url_only(monkeypatch):
     monkeypatch.delenv("RENDER", raising=False)
     monkeypatch.delenv("MONGO_HOST", raising=False)
+    monkeypatch.delenv("MONGO_HOSTPORT", raising=False)
     monkeypatch.setenv("USE_ATLAS_MONGO", "false")
     monkeypatch.setenv("MONGO_URL", "mongodb://localhost:27017")
     urls = _mongo_candidate_urls()
@@ -45,8 +48,17 @@ def test_local_mongo_url_only(monkeypatch):
 
 
 def test_mongo_host_override(monkeypatch):
+    monkeypatch.delenv("MONGO_HOSTPORT", raising=False)
     monkeypatch.setenv("USE_ATLAS_MONGO", "false")
     monkeypatch.setenv("MONGO_HOST", "custom-mongo.internal")
     monkeypatch.setenv("MONGO_URL", "mongodb+srv://x/")
     urls = _mongo_candidate_urls()
     assert urls[0] == "mongodb://custom-mongo.internal:27017"
+
+
+def test_mongo_hostport_override(monkeypatch):
+    monkeypatch.setenv("USE_ATLAS_MONGO", "false")
+    monkeypatch.setenv("MONGO_HOSTPORT", "helm-mongo-abc1:27017")
+    monkeypatch.setenv("MONGO_URL", "mongodb+srv://x/")
+    urls = _mongo_candidate_urls()
+    assert urls[0] == "mongodb://helm-mongo-abc1:27017"

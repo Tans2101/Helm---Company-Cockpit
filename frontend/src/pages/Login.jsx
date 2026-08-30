@@ -13,7 +13,7 @@ const signInBtnClass =
   "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover";
 
 export default function Login() {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
   const navigate = useNavigate();
   const [googleReady, setGoogleReady] = useState(true);
@@ -44,7 +44,7 @@ export default function Login() {
     window.location.href = `${base}/api/auth/google/login?redirect=${redirect}`;
   };
 
-  if (CLERK_KEY && clerkLoaded && isSignedIn && !user) {
+  if (CLERK_KEY && clerkLoaded && isSignedIn && !user && !sessionError) {
     return <LoadingScreen label="Finishing sign-in" />;
   }
 
@@ -110,7 +110,9 @@ export default function Login() {
             </button>
           )}
 
-          {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+          {(error || sessionError) && (
+            <p className="mt-3 text-sm text-rose-400">{error || sessionError}</p>
+          )}
 
           <p className="mt-4 text-center text-xs text-zinc-600">
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>

@@ -35,6 +35,11 @@ services:
           name: helm-mongo
           type: pserv
           property: host
+      - key: MONGO_HOSTPORT
+        fromService:
+          name: helm-mongo
+          type: pserv
+          property: hostport
       - key: DB_NAME
         value: helm
       - key: SESSION_SECRET

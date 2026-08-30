@@ -9,7 +9,19 @@
 
 ---
 
-## Step 1 — MongoDB Atlas (~5 min) **DO THIS FIRST**
+## Step 1 — Database (pick one)
+
+### Option A — Render Blueprint (recommended, no Atlas)
+
+1. Render Dashboard → **Blueprints** → **New Blueprint Instance**
+2. Connect repo `Tans2101/Helm---Company-Cockpit` → sync `render.yaml`
+3. This provisions **helm-mongo** (private Mongo) + **helm-company-cockpit** (API)
+4. On the web service, add Clerk + Anthropic keys (Step 2 below)
+5. **Delete** any broken `MONGO_URL` env var unless you use Atlas (Option B)
+
+**Done when:** `/api/setup/status` shows `"mongo": true` and `"mongo_source": "render_pserv"`
+
+### Option B — MongoDB Atlas
 
 1. https://cloud.mongodb.com → create free cluster
 2. **Database Access** → user + password (save password)
@@ -17,6 +29,7 @@
 4. **Database** → **Connect** → **Drivers** → **Python** → copy connection string  
    Looks like: `mongodb+srv://helm_user:PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`
 5. Replace `<password>` with your real password
+6. On Render set `USE_ATLAS_MONGO=true` and paste the URI as `MONGO_URL`
 
 ---
 
@@ -87,6 +100,6 @@ Clerk Dashboard (Live mode) → **Configure** → **Domains** → add your **Ver
 | Problem | Fix |
 |---------|-----|
 | Render shows JSON / pretty-print | Wrong URL — use **Vercel**, not Render |
-| `mongo: false` | With `USE_ATLAS_MONGO=false`, Render uses **helm-mongo** first. Delete a broken `MONGO_URL` on Render, or fix Atlas + set `USE_ATLAS_MONGO=true` + Network Access `0.0.0.0/0` |
+| `mongo: false` | Check https://helm-company-cockpit.onrender.com/api/setup/status → `mongo_probes`. Sync **render.yaml** blueprint (helm-mongo) **or** fix Atlas `MONGO_URL` + `USE_ATLAS_MONGO=true` |
 | Login loops | Set `FRONTEND_URL` / `CORS_ORIGINS` on Render |
 | Clerk error | Add Vercel URL in Clerk Domains + redeploy Vercel |

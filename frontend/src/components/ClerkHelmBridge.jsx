@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 /** Exchange a Clerk session JWT for Helm's httpOnly session cookie. */
 export default function ClerkHelmBridge() {
   const { isLoaded, isSignedIn, getToken } = useClerkAuth();
-  const { user, loading, checkAuth } = useAuth();
+  const { user, loading, checkAuth, setSessionError } = useAuth();
   const busy = useRef(false);
 
   useEffect(() => {
@@ -19,12 +19,17 @@ export default function ClerkHelmBridge() {
         await api.post("/auth/clerk", {}, { headers: { Authorization: `Bearer ${token}` } });
         await checkAuth();
       } catch (e) {
+        const detail = e?.response?.data?.detail;
+        const message = typeof detail === "string"
+          ? detail
+          : "Could not finish sign-in. The database may be unavailable — try again in a minute.";
+        setSessionError(message);
         console.error("Clerk → Helm session exchange failed", e);
       } finally {
         busy.current = false;
       }
     })();
-  }, [isLoaded, isSignedIn, loading, user, getToken, checkAuth]);
+  }, [isLoaded, isSignedIn, loading, user, getToken, checkAuth, setSessionError]);
 
   return null;
 }

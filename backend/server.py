@@ -46,23 +46,29 @@ def _mongo_candidate_urls() -> list[str]:
             urls.append(url)
 
     use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
+    hostport = os.environ.get("MONGO_HOSTPORT", "").strip()
     host = os.environ.get("MONGO_HOST", "").strip()
     atlas = os.environ.get("MONGO_URL", "").strip()
+
+    def add_pserv() -> None:
+        if hostport:
+            add(f"mongodb://{hostport}")
+            return
+        if not host and os.environ.get("RENDER"):
+            host_local = "helm-mongo"
+        else:
+            host_local = host
+        if host_local:
+            add(f"mongodb://{host_local}:27017")
 
     if use_atlas:
         if atlas:
             add(atlas)
-        if not host and os.environ.get("RENDER"):
-            host = "helm-mongo"
-        if host:
-            add(f"mongodb://{host}:27017")
+        add_pserv()
         return urls
 
     # Default (Render blueprint): private Mongo first; stale Atlas URL is fallback only.
-    if not host and os.environ.get("RENDER"):
-        host = "helm-mongo"
-    if host:
-        add(f"mongodb://{host}:27017")
+    add_pserv()
     if atlas:
         add(atlas)
     return urls
@@ -613,6 +619,7 @@ async def auth_config():
 async def clerk_login(request: Request, response: Response):
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=400, detail="Clerk is not configured")
+    await _require_mongo()
     auth = request.headers.get("Authorization", "")
     token = auth[7:].strip() if auth.startswith("Bearer ") else ""
     if not token:
@@ -2098,15 +2105,49 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
     return await _delete_workspace_handler(principal)
 
 
+async def _mongo_ping() -> bool:
+    try:
+        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
+        return True
+    except Exception:
+        return False
+
+
+async def _probe_mongo_candidates() -> list[dict]:
+    results: list[dict] = []
+    for url in _mongo_candidate_urls():
+        probe = _make_mongo_client(url)
+        ok = False
+        err: str | None = None
+        try:
+            await asyncio.wait_for(probe.admin.command("ping", maxTimeMS=500), timeout=1.5)
+            ok = True
+        except Exception as exc:
+            err = type(exc).__name__
+        finally:
+            probe.close()
+        results.append({
+            "source": _mongo_source_label(url),
+            "url": _redact_mongo_url(url),
+            "ok": ok,
+            "error": err,
+        })
+    return results
+
+
+async def _require_mongo() -> None:
+    if not await _mongo_ping():
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Sync render.yaml (helm-mongo) or fix MONGO_URL on Render.",
+        )
+
+
 @api_router.get("/setup/status")
 async def setup_status():
     """Production readiness probe — no secrets."""
-    mongo_ok = False
-    try:
-        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
-        mongo_ok = True
-    except Exception:
-        pass
+    mongo_ok = await _mongo_ping()
+    probes = await _probe_mongo_candidates()
     return {
         "frontend_url": FRONTEND_URL or None,
         "clerk_enabled": clerk_auth.clerk_configured(),
@@ -2115,6 +2156,7 @@ async def setup_status():
         "mongo_source": MONGO_SOURCE,
         "mongo_url": _redact_mongo_url(mongo_url),
         "mongo_candidates": len(_mongo_candidate_urls()),
+        "mongo_probes": probes,
         "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
@@ -2124,12 +2166,7 @@ async def setup_status():
 @api_router.get("/health")
 async def health():
     """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
-    mongo_ok = False
-    try:
-        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
-        mongo_ok = True
-    except Exception:
-        pass
+    mongo_ok = await _mongo_ping()
     return {"status": "ok", "mongo": mongo_ok, "mongo_source": MONGO_SOURCE}
 
 
