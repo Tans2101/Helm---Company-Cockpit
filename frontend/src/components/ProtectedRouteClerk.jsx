@@ -5,7 +5,9 @@ import AppLayout from "@/components/AppLayout";
 import WorkspaceGate from "@/pages/WorkspaceGate";
 import { LoadingScreen } from "@/components/kit";
 
-import { clerkSessionActive } from "@/lib/clerkSession"; — wait for Clerk→Helm session exchange. */
+import { clerkSessionActive } from "@/lib/clerkSession";
+
+/** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
 export default function ProtectedRouteClerk() {
   const { user, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId } = useClerkAuth();
