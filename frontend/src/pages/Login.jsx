@@ -1,69 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { SignIn, useAuth as useClerkAuth } from "@clerk/clerk-react";
+import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { api, BACKEND_URL } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
+import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 
 const CLERK_KEY = getClerkPublishableKey();
 
-const signInBtnClass =
-  "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover disabled:opacity-60 disabled:cursor-not-allowed";
-
 export default function Login() {
-  const { user, loading, sessionError, clearSessionError } = useAuth();
+  const { user, loading, sessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
-  const clerk = useClerk();
   const navigate = useNavigate();
-  const [googleReady, setGoogleReady] = useState(true);
-  const [clerkEnabled, setClerkEnabled] = useState(!!CLERK_KEY);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    api.get("/auth/config")
-      .then((r) => {
-        setClerkEnabled(!!r.data?.clerk_enabled || !!CLERK_KEY);
-        setGoogleReady(!!r.data?.google_oauth);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleClerkSignIn = () => {
-    setError("");
-    clearSessionError();
-    if (!clerk.loaded) {
-      setError("Sign-in is still loading — try again in a second.");
-      return;
+    if (clerkLoaded && isSignedIn && !user && !loading) {
+      navigate("/app", { replace: true });
     }
-    try {
-      clerk.openSignIn({
-        forceRedirectUrl: `${window.location.origin}/app`,
-        signUpForceRedirectUrl: `${window.location.origin}/app`,
-      });
-    } catch (e) {
-      console.error("Clerk sign-in failed", e);
-      setError("Could not open sign-in. Add this site in Clerk → Configure → Domains.");
-    }
-  };
+  }, [clerkLoaded, isSignedIn, user, loading, navigate]);
 
-  const handleGoogleLogin = () => {
-    setError("");
-    if (!googleReady) {
-      setError("Google sign-in is not configured on the server yet.");
-      return;
-    }
-    const redirect = encodeURIComponent(`${window.location.origin}/app`);
-    const base = BACKEND_URL || window.location.origin;
-    window.location.href = `${base}/api/auth/google/login?redirect=${redirect}`;
-  };
+  if (!clerkLoaded || loading) {
+    return <LoadingScreen label="Loading sign-in" />;
+  }
 
-  if (CLERK_KEY && clerkLoaded && isSignedIn && !user && !sessionError) {
+  if (isSignedIn && !user && !sessionError) {
     return <LoadingScreen label="Finishing sign-in" />;
   }
 
@@ -99,37 +64,22 @@ export default function Login() {
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
           <p className="text-zinc-500 text-sm mt-2">Sign in to your executive command center.</p>
 
-          {clerkEnabled && CLERK_KEY ? (
-            <div className="mt-8 space-y-4" data-testid="clerk-sign-in">
-              <button
-                type="button"
-                onClick={handleClerkSignIn}
-                disabled={!clerkLoaded}
-                className={signInBtnClass}
-              >
-                {clerkLoaded ? "Continue to sign in" : "Loading sign-in…"}
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </button>
-              <p className="text-center text-xs text-zinc-500">
-                Google or email — powered by Clerk
-              </p>
+          {CLERK_KEY ? (
+            <div className="mt-6" data-testid="clerk-sign-in">
+              <SignIn
+                appearance={clerkAppearance}
+                routing="hash"
+                signUpUrl="/login"
+                forceRedirectUrl={`${window.location.origin}/app`}
+                fallbackRedirectUrl={`${window.location.origin}/app`}
+              />
             </div>
           ) : (
-            <button
-              data-testid="google-login-btn"
-              onClick={handleGoogleLogin}
-              className="group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12.24 10.4v3.28h4.56c-.2 1.18-1.4 3.46-4.56 3.46-2.75 0-4.99-2.28-4.99-5.09s2.24-5.09 4.99-5.09c1.56 0 2.61.67 3.21 1.24l2.19-2.11C16.36 3.9 14.5 3.1 12.24 3.1 7.9 3.1 4.4 6.6 4.4 10.94s3.5 7.84 7.84 7.84c4.53 0 7.53-3.18 7.53-7.66 0-.51-.06-.9-.13-1.29h-7.4z"/>
-              </svg>
-              Continue with Google
-              <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
-            </button>
+            <p className="mt-8 text-sm text-rose-400">Clerk is not configured on this deployment.</p>
           )}
 
-          {(error || sessionError) && (
-            <p className="mt-3 text-sm text-rose-400">{error || sessionError}</p>
+          {sessionError && (
+            <p className="mt-4 text-sm text-rose-400">{sessionError}</p>
           )}
 
           <p className="mt-4 text-center text-xs text-zinc-600">
@@ -140,11 +90,7 @@ export default function Login() {
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>
-              {clerkEnabled
-                ? "Sign-in powered by Clerk — same account always returns to your company."
-                : "Sign-in is handled by your Helm backend."}
-            </span>
+            <span>Sign-in powered by Clerk — same account always returns to your company.</span>
           </div>
         </div>
       </div>

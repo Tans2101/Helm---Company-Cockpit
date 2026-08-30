@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from collections import defaultdict
 
 import httpx
@@ -154,12 +154,37 @@ _JOIN_RATE_LIMIT = 10
 _JOIN_RATE_WINDOW = 15 * 60
 
 
+def _session_cookie_domain() -> str | None:
+    explicit = os.environ.get("COOKIE_DOMAIN", "").strip()
+    if explicit:
+        return explicit
+    for raw in (FRONTEND_URL, APP_URL):
+        if not raw:
+            continue
+        host = urlparse(raw).hostname
+        if host and host not in ("localhost", "127.0.0.1"):
+            return host
+    return None
+
+
 def set_session_cookie(response: Response, token: str):
-    response.set_cookie(
+    kwargs = dict(
         key="session_token", value=token, httponly=True,
         secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE,
         path="/", max_age=7 * 24 * 60 * 60,
     )
+    domain = _session_cookie_domain()
+    if domain:
+        kwargs["domain"] = domain
+    response.set_cookie(**kwargs)
+
+
+def clear_session_cookie(response: Response):
+    kwargs = dict(key="session_token", path="/")
+    domain = _session_cookie_domain()
+    if domain:
+        kwargs["domain"] = domain
+    response.delete_cookie(**kwargs)
 
 
 def _client_ip(request: Request) -> str:
@@ -626,9 +651,15 @@ async def clerk_login(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Missing Clerk session token")
     try:
         identity = await clerk_auth.verify_clerk_session_token(token)
+    except ValueError as exc:
+        logger.warning("clerk token verification failed: %s", exc)
+        raise HTTPException(status_code=401, detail=str(exc))
     except Exception:
         logger.exception("clerk token verification failed")
-        raise HTTPException(status_code=401, detail="Invalid Clerk session")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid Clerk session — check Render CLERK_SECRET_KEY matches your pk_live key",
+        )
     user = await _upsert_clerk_user(
         email=identity["email"],
         name=identity.get("name"),
@@ -764,7 +795,7 @@ async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
     if token:
         await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/")
+    clear_session_cookie(response)
     return {"ok": True}
 
 

@@ -11,12 +11,21 @@ export default function ProtectedRouteClerk() {
   const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
 
   if (sessionError) {
+    return <Navigate to="/login" replace state={{ sessionError }} />;
+  }
+
+  if (!clerkLoaded || loading) {
+    return <LoadingScreen label="Loading cockpit" />;
+  }
+
+  if (!isSignedIn && !user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (loading || !clerkLoaded || (isSignedIn && !user)) {
-    return <LoadingScreen label="Loading cockpit" />;
+  if (isSignedIn && !user) {
+    return <LoadingScreen label="Connecting your account" />;
   }
+
   if (!user) return <Navigate to="/login" replace />;
   if (user.needs_workspace) return <WorkspaceGate />;
   return <AppLayout />;

@@ -75,9 +75,9 @@ function ClerkAuthShell() {
   const { signOut } = useClerk();
   return (
     <AuthProvider onLogoutExtra={() => signOut()}>
-      <ClerkHelmBridge />
       <ErrorBoundary>
         <BrowserRouter>
+          <ClerkHelmBridge />
           <AppRouter />
           <CookieNotice />
           <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
@@ -107,6 +107,8 @@ function App() {
       {CLERK_KEY ? (
         <ClerkProvider
           publishableKey={CLERK_KEY}
+          signInUrl="/login"
+          signUpUrl="/login"
           signInForceRedirectUrl="/app"
           signUpForceRedirectUrl="/app"
           signInFallbackRedirectUrl="/app"
