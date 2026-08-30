@@ -10,6 +10,7 @@ from jwt import PyJWKClient
 
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
 CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL", "")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
 
 _jwks_client: PyJWKClient | None = None
 
@@ -66,3 +67,33 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
         "name": name,
         "picture": data.get("image_url"),
     }
+
+
+async def ensure_allowed_origins() -> None:
+    """Register Helm frontend URL(s) with Clerk so browser sign-in works on Vercel."""
+    if not clerk_configured():
+        return
+    wanted = {o for o in (
+        FRONTEND_URL,
+        os.environ.get("APP_URL", "").strip().rstrip("/"),
+        "http://localhost:3000",
+    ) if o}
+    if not wanted:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = {"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
+            r = await client.get("https://api.clerk.com/v1/instance", headers=headers)
+            if r.status_code >= 400:
+                return
+            current = set(r.json().get("allowed_origins") or [])
+            merged = sorted(current | wanted)
+            if merged == sorted(current):
+                return
+            await client.patch(
+                "https://api.clerk.com/v1/instance",
+                headers=headers,
+                json={"allowed_origins": merged},
+            )
+    except Exception:
+        pass

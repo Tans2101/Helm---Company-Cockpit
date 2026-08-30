@@ -32,7 +32,9 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 
-const CLERK_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "";
+import { getClerkPublishableKey } from "@/lib/clerkConfig";
+
+const CLERK_KEY = getClerkPublishableKey();
 
 function AppRouter() {
   const location = useLocation();

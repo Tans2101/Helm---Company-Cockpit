@@ -4,9 +4,10 @@ import { SignInButton, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, BACKEND_URL } from "@/lib/api";
+import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { LoadingScreen } from "@/components/kit";
 
-const CLERK_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "";
+const CLERK_KEY = getClerkPublishableKey();
 
 const signInBtnClass =
   "group mt-8 w-full flex items-center justify-center gap-3 rounded-lg bg-gold text-black font-medium py-3 transition-colors hover:bg-gold-hover";

@@ -1,4 +1,9 @@
 {
+  "build": {
+    "env": {
+      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2F1c2FsLWNhcmlib3UtMjM1Mi5jbGVyay5hY2NvdW50cy5kZXYk"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",

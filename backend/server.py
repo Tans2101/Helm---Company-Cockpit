@@ -2116,6 +2116,7 @@ async def _ensure_indexes():
 async def startup():
     # Do not block Render health checks — indexes run in background after listen.
     asyncio.create_task(_ensure_indexes())
+    asyncio.create_task(clerk_auth.ensure_allowed_origins())
 
 
 @app.on_event("shutdown")
