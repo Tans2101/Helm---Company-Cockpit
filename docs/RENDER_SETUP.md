@@ -33,12 +33,18 @@ Usually **not** your code — upload to Render’s builders failed. Try in order
 
 ## Minimum env vars before first deploy
 
-Render will build without these, but the app **crashes on start** without `MONGO_URL`:
+**Recommended:** deploy via **Blueprint** (`render.yaml` in repo root) so `helm-mongo` and `MONGO_HOSTPORT` are wired automatically.
+
+If you created the web service manually, either:
+
+1. **Blueprint sync** — Render → Blueprints → New Instance → this repo, or  
+2. **Atlas** — set `USE_ATLAS_MONGO=true` and a valid `MONGO_URL`
 
 | Key | Required for build? | Required for run? |
 |-----|---------------------|-------------------|
-| `MONGO_URL` | No | **Yes** |
+| `MONGO_URL` or `MONGO_HOST` / blueprint | No | **Yes** (one of) |
 | `DB_NAME` | No | Yes (`helm`) |
 | `SESSION_SECRET` | No | Yes |
+| `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` | No | Yes (for login) |
 
-Add `MONGO_URL` from Atlas before expecting `/api/health` to work.
+Check: https://helm-company-cockpit.onrender.com/api/setup/status — `mongo_probes` shows which URLs were tried.
