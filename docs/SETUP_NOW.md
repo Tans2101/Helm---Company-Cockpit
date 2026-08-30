@@ -1,7 +1,7 @@
 # Helm — set up NOW (your deployment)
 
 **Your API:** `https://helm-company-cockpit.onrender.com`  
-**Your app:** your Vercel URL (e.g. `https://helm-company-cockpit.vercel.app`) — find it in Vercel → Project → Domains
+**Your app:** `https://helm-company-cockpit.vercel.app` — use `/login` to sign in
 
 **Current status (check anytime):**
 - Clerk: https://helm-company-cockpit.onrender.com/api/auth/config → `"clerk_enabled": true` ✓
@@ -30,9 +30,9 @@ Render → **helm-company-cockpit** → **Environment** → add/update:
 | `DB_NAME` | `helm` |
 | `SESSION_SECRET` | any long random string |
 | `OAUTH_STATE_SECRET` | any long random string |
-| `FRONTEND_URL` | your Vercel URL |
-| `APP_URL` | same Vercel URL |
-| `CORS_ORIGINS` | same Vercel URL |
+| `FRONTEND_URL` | `https://helm-company-cockpit.vercel.app` |
+| `APP_URL` | `https://helm-company-cockpit.vercel.app` |
+| `CORS_ORIGINS` | `https://helm-company-cockpit.vercel.app` |
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAMESITE` | `lax` |
 | `CLERK_SECRET_KEY` | `sk_live_...` from Clerk |
