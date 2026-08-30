@@ -107,8 +107,11 @@ function App() {
       {CLERK_KEY ? (
         <ClerkProvider
           publishableKey={CLERK_KEY}
+          signInUrl="/login"
+          signUpUrl="/login"
           signInFallbackRedirectUrl="/app"
           signUpFallbackRedirectUrl="/app"
+          afterSignOutUrl="/"
         >
           <ClerkAuthShell />
         </ClerkProvider>

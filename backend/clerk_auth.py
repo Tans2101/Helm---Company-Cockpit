@@ -1,6 +1,7 @@
 """Verify Clerk session JWTs and load user profile from Clerk API."""
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -8,9 +9,19 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
+logger = logging.getLogger(__name__)
+
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
-CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL", "")
+CLERK_JWKS_URL = (
+    os.environ.get("CLERK_JWKS_URL", "").strip()
+    or "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
+)
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
+
+HELM_CLERK_ORIGINS = {
+    "https://helm-company-cockpit.vercel.app",
+    "http://localhost:3000",
+}
 
 _jwks_client: PyJWKClient | None = None
 
@@ -69,31 +80,40 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     }
 
 
-async def ensure_allowed_origins() -> None:
+async def ensure_allowed_origins() -> bool:
     """Register Helm frontend URL(s) with Clerk so browser sign-in works on Vercel."""
     if not clerk_configured():
-        return
+        logger.info("Clerk origin sync skipped — secret/JWKS not configured")
+        return False
     wanted = {o for o in (
+        *HELM_CLERK_ORIGINS,
         FRONTEND_URL,
         os.environ.get("APP_URL", "").strip().rstrip("/"),
-        "http://localhost:3000",
     ) if o}
     if not wanted:
-        return
+        return False
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             headers = {"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
             r = await client.get("https://api.clerk.com/v1/instance", headers=headers)
             if r.status_code >= 400:
-                return
+                logger.warning("Clerk instance GET failed (%s)", r.status_code)
+                return False
             current = set(r.json().get("allowed_origins") or [])
             merged = sorted(current | wanted)
             if merged == sorted(current):
-                return
-            await client.patch(
+                logger.info("Clerk allowed_origins already include Helm URLs")
+                return True
+            patch = await client.patch(
                 "https://api.clerk.com/v1/instance",
                 headers=headers,
                 json={"allowed_origins": merged},
             )
+            if patch.status_code >= 400:
+                logger.warning("Clerk allowed_origins PATCH failed (%s)", patch.status_code)
+                return False
+            logger.info("Clerk allowed_origins updated: %s", ", ".join(sorted(wanted)))
+            return True
     except Exception:
-        pass
+        logger.exception("Clerk allowed_origins sync failed")
+        return False

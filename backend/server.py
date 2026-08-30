@@ -31,17 +31,68 @@ from seed_data import build_workspace, sample_financial_entries, gen_join_code
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-def _resolve_mongo_url() -> str:
-    """Use MONGO_HOST (Render blueprint) or MONGO_URL (Atlas)."""
+def _mongo_candidate_urls() -> list[str]:
+    """Ordered Mongo URLs to try — private Render pserv first, then Atlas."""
+    seen: set[str] = set()
+    urls: list[str] = []
+
+    def add(url: str) -> None:
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+
+    use_atlas = os.environ.get("USE_ATLAS_MONGO", "").lower() in ("1", "true", "yes")
     host = os.environ.get("MONGO_HOST", "").strip()
-    if host:
-        return f"mongodb://{host}:27017"
-    if url := os.environ.get("MONGO_URL", "").strip():
+    if not use_atlas:
+        if not host and os.environ.get("RENDER"):
+            host = "helm-mongo"
+        if host:
+            add(f"mongodb://{host}:27017")
+    if atlas := os.environ.get("MONGO_URL", "").strip():
+        add(atlas)
+    if use_atlas and host:
+        add(f"mongodb://{host}:27017")
+    return urls
+
+
+def _redact_mongo_url(url: str) -> str:
+    if "@" not in url:
         return url
-    raise RuntimeError("Set MONGO_URL (Atlas) or sync render.yaml for MONGO_HOST")
+    prefix, rest = url.split("@", 1)
+    return f"{prefix.split('://')[0]}://***@{rest}"
 
 
-mongo_url = _resolve_mongo_url()
+def _mongo_source_label(url: str) -> str:
+    if url.startswith("mongodb+srv://"):
+        return "atlas"
+    if "helm-mongo" in url or os.environ.get("MONGO_HOST", "").strip() in url:
+        return "render_pserv"
+    if os.environ.get("MONGO_HOST", "").strip():
+        return "mongo_host"
+    return "mongo_url"
+
+
+def _resolve_mongo_url() -> tuple[str, str]:
+    """Pick the first reachable Mongo URL at boot."""
+    from pymongo import MongoClient
+
+    candidates = _mongo_candidate_urls()
+    if not candidates:
+        raise RuntimeError("Set MONGO_URL (Atlas) or sync render.yaml for MONGO_HOST / helm-mongo")
+    for url in candidates:
+        try:
+            probe = MongoClient(url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
+            probe.admin.command("ping")
+            probe.close()
+            return url, _mongo_source_label(url)
+        except Exception:
+            logger.warning("Mongo unreachable at %s", _redact_mongo_url(url))
+    fallback = candidates[0]
+    logger.warning("No Mongo candidate responded; using %s", _redact_mongo_url(fallback))
+    return fallback, _mongo_source_label(fallback)
+
+
+mongo_url, MONGO_SOURCE = _resolve_mongo_url()
 client = AsyncIOMotorClient(
     mongo_url,
     serverSelectionTimeoutMS=2000,
@@ -2040,6 +2091,26 @@ async def delete_workspace_current(principal=Depends(require("billing:manage")))
     return await _delete_workspace_handler(principal)
 
 
+@api_router.get("/setup/status")
+async def setup_status():
+    """Production readiness probe — no secrets."""
+    mongo_ok = False
+    try:
+        await asyncio.wait_for(db.command("ping", maxTimeMS=500), timeout=1.0)
+        mongo_ok = True
+    except Exception:
+        pass
+    return {
+        "frontend_url": FRONTEND_URL or None,
+        "clerk_enabled": clerk_auth.clerk_configured(),
+        "clerk_jwks_host": clerk_auth.CLERK_JWKS_URL.split("/")[2] if clerk_auth.CLERK_JWKS_URL else None,
+        "mongo": mongo_ok,
+        "mongo_source": MONGO_SOURCE,
+        "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
+        "on_render": bool(os.environ.get("RENDER")),
+    }
+
+
 @api_router.get("/health")
 async def health():
     """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
@@ -2049,7 +2120,7 @@ async def health():
         mongo_ok = True
     except Exception:
         pass
-    return {"status": "ok", "mongo": mongo_ok}
+    return {"status": "ok", "mongo": mongo_ok, "mongo_source": MONGO_SOURCE}
 
 
 @api_router.get("/")

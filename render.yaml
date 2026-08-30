@@ -13,7 +13,7 @@ services:
       sizeGB: 10
 
   - type: web
-    name: helm-api
+    name: helm-company-cockpit
     runtime: python
     plan: starter
     rootDir: backend
@@ -23,6 +23,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: USE_ATLAS_MONGO
+        value: "false"
       - key: MONGO_URL
         sync: false
       - key: MONGO_HOST
@@ -57,7 +59,7 @@ services:
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_JWKS_URL
-        sync: false
+        value: https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
