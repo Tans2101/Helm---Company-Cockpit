@@ -1,9 +1,12 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { ClerkProvider, useClerk } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthCallback from "@/components/AuthCallback";
+import ClerkHelmBridge from "@/components/ClerkHelmBridge";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
 import Login from "@/pages/Login";
@@ -29,6 +32,8 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 
+const CLERK_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "";
+
 function AppRouter() {
   const location = useLocation();
   if (location.hash?.includes("session_id=")) {
@@ -42,7 +47,7 @@ function AppRouter() {
       <Route path="/terms" element={<Terms />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
-      <Route path="/app" element={<ProtectedRoute />}>
+      <Route path="/app" element={CLERK_KEY ? <ProtectedRouteClerk /> : <ProtectedRoute />}>
         <Route index element={<Briefing />} />
         <Route path="me" element={<MyDay />} />
         <Route path="sales" element={<Pipeline />} />
@@ -64,18 +69,46 @@ function AppRouter() {
   );
 }
 
+function ClerkAuthShell() {
+  const { signOut } = useClerk();
+  return (
+    <AuthProvider onLogoutExtra={() => signOut()}>
+      <ClerkHelmBridge />
+      <ErrorBoundary>
+        <BrowserRouter>
+          <AppRouter />
+          <CookieNotice />
+          <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
+        </BrowserRouter>
+      </ErrorBoundary>
+    </AuthProvider>
+  );
+}
+
+function HelmApp() {
+  return (
+    <AuthProvider>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <AppRouter />
+          <CookieNotice />
+          <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
+        </BrowserRouter>
+      </ErrorBoundary>
+    </AuthProvider>
+  );
+}
+
 function App() {
   return (
     <div className="App">
-      <AuthProvider>
-        <ErrorBoundary>
-          <BrowserRouter>
-            <AppRouter />
-            <CookieNotice />
-            <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
-          </BrowserRouter>
-        </ErrorBoundary>
-      </AuthProvider>
+      {CLERK_KEY ? (
+        <ClerkProvider publishableKey={CLERK_KEY}>
+          <ClerkAuthShell />
+        </ClerkProvider>
+      ) : (
+        <HelmApp />
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
+import clerk_auth
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 
 ROOT_DIR = Path(__file__).parent
@@ -413,8 +414,16 @@ class SessionInput(BaseModel):
     session_id: str
 
 
-async def _find_user_by_identity(email: str, google_sub: Optional[str] = None):
-    """Stable identity: Google sub first, then normalized email (incl. legacy mixed-case)."""
+async def _find_user_by_identity(
+    email: str,
+    google_sub: Optional[str] = None,
+    clerk_id: Optional[str] = None,
+):
+    """Stable identity: Clerk id / Google sub first, then normalized email."""
+    if clerk_id:
+        by_clerk = await db.users.find_one({"clerk_id": clerk_id}, {"_id": 0})
+        if by_clerk:
+            return by_clerk
     if google_sub:
         by_sub = await db.users.find_one({"google_sub": google_sub}, {"_id": 0})
         if by_sub:
@@ -424,10 +433,35 @@ async def _find_user_by_identity(email: str, google_sub: Optional[str] = None):
     by_email = await db.users.find_one({"email": email}, {"_id": 0})
     if by_email:
         return by_email
-    # Legacy rows may have mixed-case emails from Emergent auth
     return await db.users.find_one(
         {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}, {"_id": 0}
     )
+
+
+async def _upsert_clerk_user(*, email: str, name: Optional[str], picture: Optional[str], clerk_id: str):
+    email = _normalize_email(email)
+    if not email or not clerk_id:
+        raise HTTPException(status_code=400, detail="Clerk account email is required")
+    existing = await _find_user_by_identity(email, clerk_id=clerk_id)
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        user_id = existing["user_id"]
+        updates = {
+            "email": email,
+            "name": name or existing.get("name"),
+            "picture": picture or existing.get("picture"),
+            "clerk_id": clerk_id,
+        }
+        await db.users.update_one({"user_id": user_id}, {"$set": updates})
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "clerk_id": clerk_id, "created_at": now,
+        })
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    await _bootstrap(user)
+    return user
 
 
 async def _upsert_google_user(*, email: str, name: Optional[str], picture: Optional[str], google_sub: Optional[str]):
@@ -470,12 +504,39 @@ def _auth_redirect_uri(request: Request) -> str:
 
 @api_router.get("/auth/config")
 async def auth_config():
+    clerk_on = clerk_auth.clerk_configured()
+    google_on = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET) and not clerk_on
+    provider = "clerk" if clerk_on else ("google" if google_on else "none")
     return {
         "demo_login": False,
-        "google_oauth": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
-        "provider": "google",
+        "clerk_enabled": clerk_on,
+        "google_oauth": google_on,
+        "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),
     }
+
+
+@api_router.post("/auth/clerk")
+async def clerk_login(request: Request, response: Response):
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=400, detail="Clerk is not configured")
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.startswith("Bearer ") else ""
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing Clerk session token")
+    try:
+        identity = await clerk_auth.verify_clerk_session_token(token)
+    except Exception:
+        logger.exception("clerk token verification failed")
+        raise HTTPException(status_code=401, detail="Invalid Clerk session")
+    user = await _upsert_clerk_user(
+        email=identity["email"],
+        name=identity.get("name"),
+        picture=identity.get("picture"),
+        clerk_id=identity["clerk_id"],
+    )
+    await _issue_session(response, user["user_id"])
+    return {"ok": True, "user_id": user["user_id"], "email": user["email"]}
 
 
 @api_router.post("/auth/session")
@@ -1976,6 +2037,7 @@ async def _ensure_indexes():
     specs = [
         (db.users, [("email", 1)], {"unique": True}),
         (db.users, [("google_sub", 1)], {"unique": True, "sparse": True}),
+        (db.users, [("clerk_id", 1)], {"unique": True, "sparse": True}),
         (db.memberships, [("user_id", 1), ("workspace_id", 1)], {}),
         (db.memberships, [("email", 1), ("status", 1)], {}),
         (db.workspaces, [("workspace_id", 1)], {"unique": True}),

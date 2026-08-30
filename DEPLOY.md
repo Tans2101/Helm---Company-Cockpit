@@ -7,12 +7,26 @@ Do these steps in order. After each step, check the “Done when” line.
 
 ---
 
-## 1. MongoDB Atlas (permanent database)
+## Start here
 
-1. Create a free/paid cluster at https://cloud.mongodb.com  
-2. Create a database user + password  
-3. Network Access → allow `0.0.0.0/0` (or Render IPs later)  
-4. Connect → Drivers → copy the `mongodb+srv://...` URI  
+1. **[MongoDB Atlas](docs/ATLAS_SETUP.md)** — database (do this first)
+2. **[Clerk](docs/CLERK_SETUP.md)** — Google sign-in (no Emergent, no DIY Google OAuth for login)
+3. **Render** — API (see below)
+4. **Vercel** — frontend + domain
+5. **Anthropic** + **Paddle** keys on Render
+
+The code on branch `cursor/helm-production-ready-2637` is set up for **your** stack:
+Render (API) + Vercel (frontend) + MongoDB Atlas + Clerk + Anthropic + Paddle.
+
+When `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` are set on Render and `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel, Helm uses **Clerk for login** automatically.
+
+---
+
+## 1. MongoDB Atlas
+
+See **[docs/ATLAS_SETUP.md](docs/ATLAS_SETUP.md)** for the full walkthrough.
+
+Quick checklist:
 
 **Done when:** you have a URI that works from your laptop (`mongosh` or Compass).
 
@@ -20,7 +34,17 @@ Do these steps in order. After each step, check the “Done when” line.
 
 ---
 
-## 2. Google Cloud OAuth (your sign-in)
+## 2. Clerk (sign-in)
+
+See **[docs/CLERK_SETUP.md](docs/CLERK_SETUP.md)** for the full walkthrough.
+
+**Done when:** you have `pk_...`, `sk_...`, and JWKS URL saved.
+
+---
+
+## 3. Google Cloud OAuth (optional — only if NOT using Clerk)
+
+Skip this if Clerk is configured. Clerk handles Google login for you.
 
 1. https://console.cloud.google.com → APIs & Services → Credentials  
 2. Create **OAuth client ID** → Application type **Web application**  

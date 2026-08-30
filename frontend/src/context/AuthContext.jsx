@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ children, onLogoutExtra }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +19,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
     if (window.location.hash?.includes("session_id=")) {
       setLoading(false);
       return;
@@ -30,6 +29,9 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (e) {}
     setUser(null);
+    if (onLogoutExtra) {
+      try { await onLogoutExtra(); } catch (e) {}
+    }
     window.location.href = "/login";
   };
 
