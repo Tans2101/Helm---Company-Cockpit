@@ -1,6 +1,7 @@
 """Verify Clerk session JWTs and load user profile from Clerk API."""
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from typing import Any
@@ -14,7 +15,7 @@ from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS
 
 logger = logging.getLogger(__name__)
 
-HELM_CLERK_JWKS_URL = "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
+HELM_CLERK_JWKS_URL = "https://clerk.apexcoach.tech/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
 
 
@@ -44,6 +45,71 @@ _last_sync_status: dict[str, Any] | None = None
 
 def clerk_configured() -> bool:
     return bool(CLERK_SECRET_KEY and CLERK_JWKS_URL)
+
+
+def clerk_secret_mode() -> str | None:
+    if CLERK_SECRET_KEY.startswith("sk_live_"):
+        return "live"
+    if CLERK_SECRET_KEY.startswith("sk_test_"):
+        return "test"
+    return None
+
+
+def clerk_jwks_host() -> str | None:
+    if not CLERK_JWKS_URL:
+        return None
+    return urlparse(CLERK_JWKS_URL).hostname
+
+
+def derive_publishable_key_from_jwks(jwks_url: str, *, mode: str = "live") -> str | None:
+    """Derive pk_* from JWKS host when CLERK_PUBLISHABLE_KEY is unset on Render."""
+    host = urlparse(jwks_url).hostname
+    if not host:
+        return None
+    prefix = "pk_test_" if mode == "test" else "pk_live_"
+    encoded = base64.b64encode(f"{host}$".encode()).decode().rstrip("=")
+    return f"{prefix}{encoded}"
+
+
+def publishable_key_instance_host(publishable_key: str) -> str | None:
+    """Decode the Clerk frontend host embedded in a publishable key."""
+    key = (publishable_key or "").strip()
+    if not key.startswith("pk_"):
+        return None
+    parts = key.split("_", 2)
+    if len(parts) < 3 or not parts[2]:
+        return None
+    payload = parts[2]
+    pad = "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.b64decode(payload + pad).decode()
+    except Exception:
+        return None
+    return decoded.rstrip("$") or None
+
+
+def clerk_keys_aligned(publishable_key: str, jwks_url: str) -> bool:
+    """True when publishable key and JWKS URL refer to the same Clerk frontend."""
+    pk_host = publishable_key_instance_host(publishable_key)
+    jwks_host = urlparse(jwks_url).hostname
+    if not pk_host or not jwks_host:
+        return False
+    return pk_host == jwks_host
+
+
+def resolve_clerk_publishable_key() -> str:
+    """Env override, else derive from JWKS + secret mode so keys always match."""
+    explicit = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
+    if explicit:
+        return explicit
+    mode = clerk_secret_mode()
+    if not mode or not CLERK_JWKS_URL:
+        return ""
+    derived = derive_publishable_key_from_jwks(CLERK_JWKS_URL, mode=mode)
+    if derived and not clerk_keys_aligned(derived, CLERK_JWKS_URL):
+        logger.warning("derived Clerk publishable key does not match JWKS host")
+        return ""
+    return derived or ""
 
 
 def helm_frontend_origins() -> list[str]:

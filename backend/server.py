@@ -151,9 +151,7 @@ PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
 PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
-CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip() or (
-    "pk_live_Y2F1c2FsLWNhcmlib3UtMjM1Mi5jbGVyay5hY2NvdW50cy5kZXYk"
-)
+CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -693,18 +691,19 @@ async def auth_config():
     clerk_on = clerk_auth.clerk_configured()
     google_on = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET) and not clerk_on
     provider = "clerk" if clerk_on else ("google" if google_on else "none")
-    sk = clerk_auth.CLERK_SECRET_KEY
-    if sk.startswith("sk_live_"):
-        clerk_mode = "live"
-    elif sk.startswith("sk_test_"):
-        clerk_mode = "test"
-    else:
-        clerk_mode = "unknown"
+    clerk_mode = clerk_auth.clerk_secret_mode() if clerk_on else None
+    keys_aligned = (
+        clerk_auth.clerk_keys_aligned(CLERK_PUBLISHABLE_KEY, clerk_auth.CLERK_JWKS_URL)
+        if clerk_on and CLERK_PUBLISHABLE_KEY
+        else None
+    )
     return {
         "demo_login": False,
         "clerk_enabled": clerk_on,
         "clerk_secret_mode": clerk_mode if clerk_on else None,
         "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
+        "clerk_jwks_host": clerk_auth.clerk_jwks_host(),
+        "clerk_keys_aligned": keys_aligned,
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,
@@ -2314,6 +2313,11 @@ async def setup_status():
             else "unknown"
         ) if clerk_auth.clerk_configured() else None,
         "clerk_publishable_key_set": bool(CLERK_PUBLISHABLE_KEY),
+        "clerk_keys_aligned": (
+            clerk_auth.clerk_keys_aligned(CLERK_PUBLISHABLE_KEY, clerk_auth.CLERK_JWKS_URL)
+            if CLERK_PUBLISHABLE_KEY
+            else None
+        ),
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
         "clerk_sync": clerk_sync,
         "clerk_instance_env": clerk_sync.get("environment_type"),

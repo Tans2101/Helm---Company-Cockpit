@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import AuthCallback from "@/components/AuthCallback";
 import ClerkHelmBridge from "@/components/ClerkHelmBridge";
-import ClerkProviderBootstrap from "@/components/ClerkProviderBootstrap";
+import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -34,10 +34,8 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 
-import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { helmAppUrl } from "@/lib/helmUrls";
 
-const HAS_CLERK = !!getClerkPublishableKey();
 const HELM_APP_URL = helmAppUrl("/app");
 
 function ClerkOAuthCallback() {
@@ -53,6 +51,9 @@ function ClerkOAuthCallback() {
 
 function AppRouter() {
   const location = useLocation();
+  const { clerkEnabled } = useClerkMode();
+  const Protected = clerkEnabled ? ProtectedRouteClerk : ProtectedRoute;
+
   if (location.hash?.includes("session_id=")) {
     return <AuthCallback />;
   }
@@ -67,7 +68,7 @@ function AppRouter() {
       <Route path="/terms" element={<Terms />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
-      <Route path="/app" element={HAS_CLERK ? <ProtectedRouteClerk /> : <ProtectedRoute />}>
+      <Route path="/app" element={<Protected />}>
         <Route index element={<Briefing />} />
         <Route path="me" element={<MyDay />} />
         <Route path="sales" element={<Pipeline />} />
@@ -105,7 +106,7 @@ function ClerkAuthShell() {
   );
 }
 
-function HelmApp() {
+function HelmAppShell() {
   return (
     <AuthProvider>
       <ErrorBoundary>
@@ -119,16 +120,17 @@ function HelmApp() {
   );
 }
 
+function AuthShell() {
+  const { clerkEnabled } = useClerkMode();
+  return clerkEnabled ? <ClerkAuthShell /> : <HelmAppShell />;
+}
+
 function App() {
   return (
     <div className="App">
-      {HAS_CLERK ? (
-        <ClerkProviderBootstrap>
-          <ClerkAuthShell />
-        </ClerkProviderBootstrap>
-      ) : (
-        <HelmApp />
-      )}
+      <ClerkProviderBootstrap>
+        <AuthShell />
+      </ClerkProviderBootstrap>
     </div>
   );
 }

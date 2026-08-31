@@ -3,16 +3,27 @@ import { Link, useNavigate } from "react-router-dom";
 import { SignIn, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getClerkPublishableKey } from "@/lib/clerkConfig";
+import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { helmAppUrl } from "@/lib/helmUrls";
 
-const CLERK_KEY = getClerkPublishableKey();
 const HELM_APP_URL = helmAppUrl("/app");
 
 export default function Login() {
+  const { clerkEnabled } = useClerkMode();
+  if (!clerkEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b] p-8">
+        <p className="text-sm text-rose-400">Sign-in is not available — Clerk is not configured on this deployment.</p>
+      </div>
+    );
+  }
+  return <LoginClerk />;
+}
+
+function LoginClerk() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
@@ -91,21 +102,17 @@ export default function Login() {
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
           <p className="text-zinc-500 text-sm mt-2">Sign in with Google or email.</p>
 
-          {CLERK_KEY ? (
-            <div className="mt-6" data-testid="clerk-sign-in">
-              <SignIn
-                appearance={clerkAppearance}
-                routing="path"
-                path="/login"
-                signUpUrl="/sign-up"
-                oauthFlow="popup"
-                forceRedirectUrl={HELM_APP_URL}
-                fallbackRedirectUrl={HELM_APP_URL}
-              />
-            </div>
-          ) : (
-            <p className="mt-8 text-sm text-rose-400">Clerk is not configured on this deployment.</p>
-          )}
+          <div className="mt-6" data-testid="clerk-sign-in">
+            <SignIn
+              appearance={clerkAppearance}
+              routing="path"
+              path="/login"
+              signUpUrl="/sign-up"
+              oauthFlow="redirect"
+              forceRedirectUrl={HELM_APP_URL}
+              fallbackRedirectUrl={HELM_APP_URL}
+            />
+          </div>
 
           <p className="mt-4 text-center text-xs text-zinc-600">
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>

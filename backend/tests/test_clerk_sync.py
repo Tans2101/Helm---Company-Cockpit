@@ -31,6 +31,25 @@ def test_primary_frontend_origin_prefers_helmcontrol():
     assert clerk_auth.primary_frontend_origin() == "https://www.helmcontrol.online"
 
 
+def test_derive_publishable_key_from_apexcoach_jwks():
+    jwks = "https://clerk.apexcoach.tech/.well-known/jwks.json"
+    pk = clerk_auth.derive_publishable_key_from_jwks(jwks, mode="live")
+    assert pk == "pk_live_Y2xlcmsuYXBleGNvYWNoLnRlY2gk"
+    assert clerk_auth.clerk_keys_aligned(pk, jwks)
+
+
+def test_resolve_publishable_key_prefers_env(monkeypatch):
+    monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", "pk_live_custom")
+    assert clerk_auth.resolve_clerk_publishable_key() == "pk_live_custom"
+
+
+def test_resolve_publishable_key_derives_from_jwks(monkeypatch):
+    monkeypatch.delenv("CLERK_PUBLISHABLE_KEY", raising=False)
+    pk = clerk_auth.resolve_clerk_publishable_key()
+    assert pk.startswith("pk_live_")
+    assert clerk_auth.clerk_keys_aligned(pk, clerk_auth.CLERK_JWKS_URL)
+
+
 def test_sync_clerk_instance_patches_dev_origin():
     instance_before = {
         "environment_type": "development",

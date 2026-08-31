@@ -3,16 +3,27 @@ import { Link, useNavigate } from "react-router-dom";
 import { SignUp, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getClerkPublishableKey } from "@/lib/clerkConfig";
+import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { helmAppUrl } from "@/lib/helmUrls";
 
-const CLERK_KEY = getClerkPublishableKey();
 const HELM_APP_URL = helmAppUrl("/app");
 
 export default function SignUpPage() {
+  const { clerkEnabled } = useClerkMode();
+  if (!clerkEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b] p-8">
+        <p className="text-sm text-rose-400">Sign-up is not available — Clerk is not configured on this deployment.</p>
+      </div>
+    );
+  }
+  return <SignUpClerk />;
+}
+
+function SignUpClerk() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
@@ -88,21 +99,17 @@ export default function SignUpPage() {
           <h2 className="text-2xl font-normal text-white tracking-tight">Create your account</h2>
           <p className="text-zinc-500 text-sm mt-2">Google or email — password rules are set in Clerk.</p>
 
-          {CLERK_KEY ? (
-            <div className="mt-6" data-testid="clerk-sign-up">
-              <SignUp
-                appearance={clerkAppearance}
-                routing="path"
-                path="/sign-up"
-                signInUrl="/login"
-                oauthFlow="popup"
-                forceRedirectUrl={HELM_APP_URL}
-                fallbackRedirectUrl={HELM_APP_URL}
-              />
-            </div>
-          ) : (
-            <p className="mt-8 text-sm text-rose-400">Clerk is not configured.</p>
-          )}
+          <div className="mt-6" data-testid="clerk-sign-up">
+            <SignUp
+              appearance={clerkAppearance}
+              routing="path"
+              path="/sign-up"
+              signInUrl="/login"
+              oauthFlow="redirect"
+              forceRedirectUrl={HELM_APP_URL}
+              fallbackRedirectUrl={HELM_APP_URL}
+            />
+          </div>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
             <ShieldCheck className="w-3.5 h-3.5" />
