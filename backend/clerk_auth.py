@@ -192,14 +192,17 @@ async def sync_clerk_instance() -> dict[str, Any]:
 
             inst = r.json()
             env_type = inst.get("environment_type")
+            jwks_host = urlparse(CLERK_JWKS_URL).hostname or ""
+            is_dev_fapi = jwks_host.endswith(".clerk.accounts.dev")
             current = set(inst.get("allowed_origins") or [])
             status["environment_type"] = env_type
+            status["clerk_fapi_dev"] = is_dev_fapi
             status["allowed_origins_before"] = sorted(current)
 
-            if env_type == "development":
+            if is_dev_fapi or env_type == "development":
                 status["warnings"].append(
-                    "Clerk instance is development — create a production instance in Clerk Dashboard "
-                    "for a permanent fix. Helm auto-configures development_origin for Vercel."
+                    "Clerk FAPI is a development instance (*.clerk.accounts.dev). "
+                    "Sign-in works on Vercel after sync; create a Clerk production instance for a permanent fix."
                 )
 
             merged = sorted(current | set(wanted))
@@ -207,13 +210,10 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 "allowed_origins": merged,
                 "url_based_session_syncing": True,
             }
-            if env_type == "development":
+            if is_dev_fapi or env_type == "development":
                 patch_body["development_origin"] = primary
 
-            needs_patch = (
-                merged != sorted(current)
-                or env_type == "development"
-            )
+            needs_patch = merged != sorted(current) or is_dev_fapi or env_type == "development"
             if needs_patch:
                 patch = await client.patch(
                     f"{CLERK_BAPI}/instance",
@@ -252,10 +252,9 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 )
 
             jwks_host = urlparse(CLERK_JWKS_URL).hostname or ""
-            if jwks_host.endswith(".clerk.accounts.dev") and primary and "vercel.app" in primary:
+            if is_dev_fapi and primary and "vercel.app" in primary:
                 status["warnings"].append(
-                    "Using Clerk development keys on Vercel — sign-in works after sync, "
-                    "but migrate to a Clerk production instance when ready."
+                    "Using Clerk development FAPI on Vercel — migrate to a *.clerk.com production instance when ready."
                 )
 
             _last_sync_status = status
