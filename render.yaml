@@ -74,6 +74,8 @@ services:
         value: https://clerk.helmcontrol.online/.well-known/jwks.json
       - key: CLERK_PRIMARY_ORIGIN
         value: https://www.helmcontrol.online
+      - key: CLERK_PROXY_BOOTSTRAP
+        value: helm-clerk-edge-8c4f2a9e1b7d
       - key: SETUP_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID

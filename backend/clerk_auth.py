@@ -27,6 +27,9 @@ def _resolve_clerk_jwks_url() -> str:
 
 
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
+CLERK_PROXY_BOOTSTRAP = os.environ.get(
+    "CLERK_PROXY_BOOTSTRAP", "helm-clerk-edge-8c4f2a9e1b7d"
+).strip()
 CLERK_JWKS_URL = _resolve_clerk_jwks_url()
 
 _raw_frontend = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")

@@ -715,6 +715,18 @@ async def clerk_fapi_proxy(path: str, request: Request):
     return await clerk_auth.proxy_clerk_fapi(path, request)
 
 
+@api_router.get("/auth/clerk-edge-secret")
+async def clerk_edge_secret(request: Request):
+    """Return CLERK_SECRET_KEY to Vercel edge middleware (bootstrap token required)."""
+    token = request.headers.get("X-Clerk-Bootstrap", "").strip()
+    bootstrap = clerk_auth.CLERK_PROXY_BOOTSTRAP
+    if not bootstrap or not token or not hmac.compare_digest(token, bootstrap):
+        raise HTTPException(status_code=401, detail="Invalid bootstrap token")
+    if not clerk_auth.CLERK_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Clerk is not configured on Render")
+    return {"clerk_secret_key": clerk_auth.CLERK_SECRET_KEY}
+
+
 @api_router.get("/auth/config")
 async def auth_config():
     clerk_on = clerk_auth.clerk_configured()

@@ -5,6 +5,9 @@
       "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA"
     }
   },
+  "env": {
+    "CLERK_PROXY_BOOTSTRAP": "helm-clerk-edge-8c4f2a9e1b7d"
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
