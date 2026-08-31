@@ -10,14 +10,6 @@
       "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://apexcoach.tech/app"
     }
   },
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "helm-company-cockpit.vercel.app" }],
-      "destination": "https://apexcoach.tech/:path*",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/api/:path*",
