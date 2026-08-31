@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 HELM_CLERK_JWKS_URL = "https://clerk.helmcontrol.online/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
-CLERK_FAPI = os.environ.get("CLERK_FAPI_URL", "https://frontend-api.clerk.dev").rstrip("/")
+CLERK_FAPI = os.environ.get("CLERK_FAPI_URL", "https://frontend-api.clerk.services").rstrip("/")
 
 
 def _resolve_clerk_jwks_url() -> str:
@@ -276,7 +276,7 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     forward: dict[str, str] = {}
     for key in (
         "authorization", "content-type", "accept", "accept-language",
-        "user-agent", "origin", "referer", "cookie",
+        "user-agent", "cookie",
     ):
         val = request.headers.get(key)
         if val:
@@ -287,6 +287,7 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     xff = request.headers.get("x-forwarded-for", "")
     client_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "127.0.0.1")
     forward["X-Forwarded-For"] = client_ip
+    forward["Origin"] = HELM_CANONICAL_ORIGIN or proxy_base.rsplit("/__clerk", 1)[0]
 
     try:
         body = await request.body()
