@@ -1,0 +1,66 @@
+# Single Render web service for apexcoach.tech (replaces legacy Kalun deploy).
+# Use this on your EXISTING Render service that already has apexcoach.tech attached.
+#
+# Render Dashboard → your Kalun/apex service → Settings:
+#   - Repository: Tans2101/Helm---Company-Cockpit
+#   - Branch: main
+#   - Root Directory: (leave empty — repo root)
+#   - Build Command: bash scripts/render-apexcoach-build.sh
+#   - Start Command: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
+#   - Health Check: /api/health
+#
+# Copy env vars from helm-company-cockpit, then set FRONTEND_URL / APP_URL / CORS to apexcoach.tech.
+services:
+  - type: web
+    name: helm-apexcoach
+    runtime: python
+    plan: starter
+    repo: https://github.com/Tans2101/Helm---Company-Cockpit
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: bash scripts/render-apexcoach-build.sh
+    startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: NODE_VERSION
+        value: "20"
+      - key: HELM_SERVE_STATIC
+        value: "true"
+      - key: USE_ATLAS_MONGO
+        value: "true"
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: helm
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://apexcoach.tech
+      - key: APP_URL
+        value: https://apexcoach.tech
+      - key: CORS_ORIGINS
+        value: https://apexcoach.tech,https://www.apexcoach.tech
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "lax"
+      - key: ALLOW_DEMO_LOGIN
+        value: "false"
+      - key: DEMO_RESET_ENABLED
+        value: "false"
+      - key: REACT_APP_HELM_ORIGIN
+        value: https://apexcoach.tech
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: REACT_APP_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

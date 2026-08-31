@@ -26,6 +26,7 @@ from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
 import clerk_auth
+from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 
 ROOT_DIR = Path(__file__).parent
@@ -2341,16 +2342,19 @@ async def root():
     return {"service": "Helm CEO Operating System"}
 
 
-@app.get("/")
-async def api_root():
-    """Friendly response when someone opens the Render host directly (API-only)."""
-    return {
-        "service": "Helm CEO Operating System API",
-        "message": "This URL is the API backend. Open your Vercel app to use Helm.",
-        "health": "/api/health",
-        "auth": "/api/auth/config",
-        "frontend": FRONTEND_URL or None,
-    }
+_serve_static = should_serve_static()
+if not _serve_static:
+
+    @app.get("/")
+    async def api_root():
+        """Friendly response when someone opens the Render host directly (API-only)."""
+        return {
+            "service": "Helm CEO Operating System API",
+            "message": "This URL is the API backend. Open your Vercel app to use Helm.",
+            "health": "/api/health",
+            "auth": "/api/auth/config",
+            "frontend": FRONTEND_URL or None,
+        }
 
 
 app.include_router(api_router)
@@ -2367,6 +2371,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if _serve_static:
+    mount_static_frontend(app)
 
 
 async def _ensure_indexes():
