@@ -7,9 +7,12 @@ export const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 export const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  timeout: 20000,
 });
 
 let clerkGetToken = null;
+
+const BOOTSTRAP_PATHS = ["/auth/me", "/auth/config"];
 
 /** Register Clerk getToken so every API call can send the session JWT. */
 export function setClerkTokenGetter(getter) {
@@ -18,14 +21,19 @@ export function setClerkTokenGetter(getter) {
 
 api.interceptors.request.use(async (config) => {
   if (!clerkGetToken) return config;
+  const url = config.url || "";
+  if (BOOTSTRAP_PATHS.some((p) => url.includes(p))) return config;
   try {
-    const token = await clerkGetToken();
+    const token = await Promise.race([
+      clerkGetToken(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("clerk-token-timeout")), 4000)),
+    ]);
     if (token) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
   } catch {
-    /* Clerk not ready */
+    /* Clerk not ready — do not block API calls */
   }
   return config;
 });

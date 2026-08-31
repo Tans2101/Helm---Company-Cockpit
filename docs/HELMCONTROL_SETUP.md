@@ -61,6 +61,21 @@ Remove any parking-page records Namecheap adds by default.
 |------|---------|
 | **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
 | **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
+| **Domains** → Proxy URL | `https://www.helmcontrol.online/__clerk` (routes Clerk through Vercel when custom-domain SSL is pending) |
+
+### Clerk DNS (Namecheap Advanced DNS)
+
+| Type | Host | Value |
+|------|------|-------|
+| CNAME | `clerk` | `frontend-api.clerk.services` |
+| CNAME | `accounts` | `accounts.clerk.services` |
+
+If sign-in spins forever, add apex **CAA** records (Namecheap → Advanced DNS, Host blank):
+
+- `0 issue "pki.goog"`
+- `0 issue "digicert.com"`
+
+Keep existing `letsencrypt.org` if present. Wait 5–30 minutes after DNS changes, then **Verify** in Clerk Dashboard.
 
 Then sync from terminal (use `SETUP_SECRET` from Render env):
 
@@ -87,5 +102,6 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 |---------|-----|
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
+| Page stuck on "Loading sign-in" | Clerk `clerk.helmcontrol.online` SSL not ready — Clerk Dashboard → Domains → Verify; add apex CAA `pki.goog` + `digicert.com` in Namecheap; set Proxy URL to `https://www.helmcontrol.online/__clerk` |
 | Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |

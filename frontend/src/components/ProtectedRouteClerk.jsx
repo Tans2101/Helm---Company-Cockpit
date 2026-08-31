@@ -4,25 +4,30 @@ import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import WorkspaceGate from "@/pages/WorkspaceGate";
 import { LoadingScreen } from "@/components/kit";
+import ClerkLoadError from "@/components/ClerkLoadError";
+import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 /** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
 export default function ProtectedRouteClerk() {
   const { user, sessionError, clearSessionError } = useAuth();
   const {
-    isLoaded: clerkLoaded,
     isSignedIn,
     userId,
     sessionId,
     sessionStatus,
   } = useClerkAuth(CLERK_AUTH_OPTS);
-  const { session, isLoaded: sessionLoaded } = useSession();
+  const { session } = useSession();
   const { signOut } = useClerk();
+  const { clerkReady, clerkTimedOut } = useClerkReady();
 
-  const clerkReady = clerkLoaded && sessionLoaded;
   const clerkActive = clerkSessionActive({
     isSignedIn, userId, sessionId, session, sessionStatus,
   });
+
+  if (clerkTimedOut) {
+    return <ClerkLoadError />;
+  }
 
   if (!clerkReady) {
     return <LoadingScreen label="Loading cockpit" />;

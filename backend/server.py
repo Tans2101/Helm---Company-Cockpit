@@ -727,6 +727,8 @@ async def auth_config():
         "helm_canonical_origin": HELM_CANONICAL_ORIGIN,
         "clerk_multi_domain": clerk_auth.clerk_multi_domain_auth() if clerk_on else False,
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
+        "clerk_jwks_ok": await clerk_auth.clerk_jwks_ok() if clerk_on else None,
+        "clerk_proxy_url": f"{HELM_CANONICAL_ORIGIN}/__clerk" if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),

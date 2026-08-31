@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
+import ClerkLoadError from "@/components/ClerkLoadError";
+import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
 
@@ -25,12 +27,12 @@ function SignUpClerk() {
   const { postAuthUrl } = useClerkMode();
   const redirectUrl = clerkPostAuthUrl(postAuthUrl);
   const { user, loading, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
-  const { session, isLoaded: sessionLoaded } = useSession();
+  const { isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
+  const { session } = useSession();
   const { signOut } = useClerk();
   const navigate = useNavigate();
+  const { clerkReady, clerkTimedOut } = useClerkReady();
 
-  const clerkReady = clerkLoaded && sessionLoaded;
   const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session, sessionStatus });
 
   useEffect(() => {
@@ -41,6 +43,10 @@ function SignUpClerk() {
     if (!clerkReady || user) return;
     if (clerkActive) navigate("/app", { replace: true });
   }, [clerkReady, clerkActive, user, navigate]);
+
+  if (clerkTimedOut) {
+    return <ClerkLoadError />;
+  }
 
   if (!clerkReady || loading) {
     return <LoadingScreen label="Loading sign-up" />;

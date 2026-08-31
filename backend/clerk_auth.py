@@ -222,6 +222,18 @@ async def clerk_api_ok() -> bool:
         return False
 
 
+async def clerk_jwks_ok() -> bool:
+    """True when the configured JWKS URL is reachable (JWT verification will work)."""
+    if not CLERK_JWKS_URL:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(CLERK_JWKS_URL)
+            return r.status_code == 200 and b"keys" in r.content
+    except Exception:
+        return False
+
+
 async def fetch_clerk_instance() -> dict[str, Any] | None:
     if not clerk_configured():
         return None

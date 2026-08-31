@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
+import ClerkLoadError from "@/components/ClerkLoadError";
+import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
 
@@ -27,12 +29,12 @@ function LoginClerk() {
   const [searchParams] = useSearchParams();
   const urlError = searchParams.get("error");
   const { user, loading, sessionError, clearSessionError } = useAuth();
-  const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
-  const { session, isLoaded: sessionLoaded } = useSession();
+  const { isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
+  const { session } = useSession();
   const { signOut } = useClerk();
   const navigate = useNavigate();
+  const { clerkReady, clerkTimedOut } = useClerkReady();
 
-  const clerkReady = clerkLoaded && sessionLoaded;
   const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session, sessionStatus });
 
   useEffect(() => {
@@ -43,6 +45,10 @@ function LoginClerk() {
     if (!clerkReady || user) return;
     if (clerkActive) navigate("/app", { replace: true });
   }, [clerkReady, clerkActive, user, navigate]);
+
+  if (clerkTimedOut) {
+    return <ClerkLoadError />;
+  }
 
   if (!clerkReady || loading) {
     return <LoadingScreen label="Loading sign-in" />;

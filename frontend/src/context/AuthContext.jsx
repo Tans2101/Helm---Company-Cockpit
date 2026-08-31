@@ -29,12 +29,21 @@ export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false
       setLoading(false);
       return;
     }
-    if (deferInitialAuth) {
-      // Still honor an existing Helm session cookie before Clerk exchange.
-      checkAuth().catch(() => setLoading(false));
-      return;
-    }
-    checkAuth().catch(() => {});
+    let cancelled = false;
+    const watchdog = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 12000);
+    const run = deferInitialAuth
+      ? checkAuth().catch(() => setLoading(false))
+      : checkAuth().catch(() => {});
+    run.finally(() => {
+      cancelled = true;
+      clearTimeout(watchdog);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(watchdog);
+    };
   }, [checkAuth, deferInitialAuth]);
 
   const logout = async () => {

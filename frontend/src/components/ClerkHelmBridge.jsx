@@ -4,20 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { useAuth } from "@/context/AuthContext";
 import { api, setClerkTokenGetter } from "@/lib/api";
+import { resolveClerkToken } from "@/lib/clerkToken";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function resolveClerkToken(getToken, session) {
-  for (let i = 0; i < 30; i += 1) {
-    const fromSession = session ? await session.getToken({ skipCache: true }) : null;
-    const fromAuth = await getToken({ skipCache: true });
-    const token = fromSession || fromAuth;
-    if (token && token.split(".").length === 3) return token;
-    await sleep(400);
-  }
-  return null;
-}
 
 async function exchangeClerkSession(token) {
   try {

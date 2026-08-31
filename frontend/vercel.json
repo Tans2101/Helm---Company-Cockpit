@@ -7,6 +7,10 @@
   },
   "rewrites": [
     {
+      "source": "/__clerk/:path*",
+      "destination": "/api/__clerk/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     },
