@@ -38,6 +38,18 @@ def test_derive_publishable_key_from_apexcoach_jwks():
     assert clerk_auth.clerk_keys_aligned(pk, jwks)
 
 
+def test_clerk_primary_origin_from_jwks():
+    assert clerk_auth.clerk_primary_origin() == "https://apexcoach.tech"
+
+
+def test_clerk_post_auth_url_uses_primary_domain():
+    assert clerk_auth.clerk_post_auth_url() == "https://apexcoach.tech/app"
+
+
+def test_clerk_multi_domain_when_helm_differs():
+    assert clerk_auth.clerk_multi_domain_auth() is True
+
+
 def test_resolve_publishable_key_prefers_env(monkeypatch):
     aligned = clerk_auth.derive_publishable_key_from_jwks(clerk_auth.CLERK_JWKS_URL, mode="live")
     monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", aligned)

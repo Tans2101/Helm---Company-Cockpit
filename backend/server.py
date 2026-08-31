@@ -164,6 +164,9 @@ _JOIN_RATE_WINDOW = 15 * 60
 
 
 def _session_cookie_domain() -> str | None:
+    # When Clerk redirects to apexcoach but the app also runs on helmcontrol, use host-only cookies.
+    if clerk_auth.clerk_multi_domain_auth():
+        return None
     explicit = os.environ.get("COOKIE_DOMAIN", "").strip()
     if explicit:
         return explicit
@@ -719,6 +722,10 @@ async def auth_config():
         "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
         "clerk_jwks_host": clerk_auth.clerk_jwks_host(),
         "clerk_keys_aligned": keys_aligned,
+        "clerk_primary_origin": clerk_auth.clerk_primary_origin() if clerk_on else None,
+        "clerk_post_auth_url": clerk_auth.clerk_post_auth_url() if clerk_on else None,
+        "helm_canonical_origin": HELM_CANONICAL_ORIGIN,
+        "clerk_multi_domain": clerk_auth.clerk_multi_domain_auth() if clerk_on else False,
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,

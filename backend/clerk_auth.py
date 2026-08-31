@@ -45,6 +45,8 @@ _extra_cors = {
 HELM_CLERK_ORIGINS = {
     "https://helmcontrol.online",
     "https://www.helmcontrol.online",
+    "https://apexcoach.tech",
+    "https://www.apexcoach.tech",
     "http://localhost:3000",
     *_extra_cors,
 }
@@ -69,6 +71,33 @@ def clerk_jwks_host() -> str | None:
     if not CLERK_JWKS_URL:
         return None
     return urlparse(CLERK_JWKS_URL).hostname
+
+
+def clerk_primary_origin() -> str | None:
+    """Clerk instance primary app domain — redirect URLs must use this host."""
+    explicit = os.environ.get("CLERK_PRIMARY_ORIGIN", "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    host = clerk_jwks_host()
+    if host and host.startswith("clerk."):
+        return f"https://{host[6:]}"
+    return None
+
+
+def clerk_post_auth_url() -> str | None:
+    """URL Clerk must redirect to after sign-in/sign-up (primary domain /app)."""
+    primary = clerk_primary_origin()
+    if primary:
+        return f"{primary.rstrip('/')}/app"
+    canon = primary_frontend_origin() or HELM_CANONICAL_ORIGIN
+    return f"{canon.rstrip('/')}/app" if canon else None
+
+
+def clerk_multi_domain_auth() -> bool:
+    """True when Clerk primary domain differs from the public Helm site."""
+    clerk_prim = (clerk_primary_origin() or "").rstrip("/")
+    helm_prim = (primary_frontend_origin() or HELM_CANONICAL_ORIGIN or "").rstrip("/")
+    return bool(clerk_prim and helm_prim and clerk_prim != helm_prim)
 
 
 def derive_publishable_key_from_jwks(jwks_url: str, *, mode: str = "live") -> str | None:
@@ -307,10 +336,12 @@ async def sync_clerk_satellite_domain(primary: str) -> dict[str, Any]:
         return result
 
 
-async def sync_clerk_account_portal(primary: str) -> dict[str, Any]:
+async def sync_clerk_account_portal(primary: str, app_url: str | None = None) -> dict[str, Any]:
     """Point Clerk Account Portal post-auth redirects back to Helm (not accounts.dev)."""
-    app_url = f"{primary.rstrip('/')}/app"
-    result: dict[str, Any] = {"attempted": True, "ok": False}
+    target = (app_url or f"{primary.rstrip('/')}/app").rstrip("/")
+    if not target.endswith("/app"):
+        target = f"{target}/app"
+    result: dict[str, Any] = {"attempted": True, "ok": False, "target_url": target}
     if not clerk_configured() or not primary:
         result["reason"] = "not_configured"
         return result
@@ -328,12 +359,12 @@ async def sync_clerk_account_portal(primary: str) -> dict[str, Any]:
                 "after_sign_up_url": current.get("after_sign_up_url"),
             }
             patch_body = {
-                "after_sign_in_url": app_url,
-                "after_sign_up_url": app_url,
+                "after_sign_in_url": target,
+                "after_sign_up_url": target,
                 "logo_link_url": primary,
-                "after_join_waitlist_url": app_url,
-                "after_create_organization_url": app_url,
-                "after_leave_organization_url": app_url,
+                "after_join_waitlist_url": target,
+                "after_create_organization_url": target,
+                "after_leave_organization_url": target,
             }
             patch_r = await client.patch(
                 f"{CLERK_BAPI}/account_portal",
@@ -347,10 +378,10 @@ async def sync_clerk_account_portal(primary: str) -> dict[str, Any]:
             updated = patch_r.json() if patch_r.content else {}
             result["ok"] = True
             result["after"] = {
-                "after_sign_in_url": updated.get("after_sign_in_url", app_url),
-                "after_sign_up_url": updated.get("after_sign_up_url", app_url),
+                "after_sign_in_url": updated.get("after_sign_in_url", target),
+                "after_sign_up_url": updated.get("after_sign_up_url", target),
             }
-            logger.info("Clerk account portal redirects → %s", app_url)
+            logger.info("Clerk account portal redirects → %s", target)
             return result
     except Exception:
         logger.exception("Clerk account portal sync failed")
@@ -466,14 +497,20 @@ async def sync_clerk_instance() -> dict[str, Any]:
                     "Using Clerk development FAPI — register helmcontrol.online in Clerk Dashboard → Domains."
                 )
 
-            portal = await sync_clerk_account_portal(primary)
+            portal_primary = clerk_primary_origin() or primary
+            portal_url = clerk_post_auth_url() or f"{primary.rstrip('/')}/app"
+            portal = await sync_clerk_account_portal(portal_primary, portal_url)
             status["account_portal"] = portal
+            status["clerk_primary_origin"] = clerk_primary_origin()
+            status["clerk_post_auth_url"] = portal_url
             satellite = await sync_clerk_satellite_domain(primary)
             status["satellite_domain"] = satellite
             if not portal.get("ok"):
+                redirect_hint = portal_url
                 status["warnings"].append(
-                    "Could not auto-update Clerk redirect URLs — set After sign-in URL to "
-                    f"{primary}/app in Clerk Dashboard → Configure → Paths."
+                    "Could not auto-update Clerk redirect URLs — in Clerk Dashboard set every "
+                    f"after sign-in / sign-up fallback to {redirect_hint} "
+                    "(Clerk requires your primary domain apexcoach.tech until satellite domains are enabled)."
                 )
             if not satellite.get("ok"):
                 status["warnings"].append(

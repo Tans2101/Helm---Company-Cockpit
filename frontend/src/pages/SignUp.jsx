@@ -7,9 +7,7 @@ import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
-import { helmAppUrl } from "@/lib/helmUrls";
-
-const HELM_APP_URL = helmAppUrl("/app");
+import { clerkPostAuthUrl } from "@/lib/helmUrls";
 
 export default function SignUpPage() {
   const { clerkEnabled } = useClerkMode();
@@ -24,6 +22,8 @@ export default function SignUpPage() {
 }
 
 function SignUpClerk() {
+  const { postAuthUrl } = useClerkMode();
+  const redirectUrl = clerkPostAuthUrl(postAuthUrl);
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
@@ -106,8 +106,8 @@ function SignUpClerk() {
               path="/sign-up"
               signInUrl="/login"
               oauthFlow="redirect"
-              forceRedirectUrl={HELM_APP_URL}
-              fallbackRedirectUrl={HELM_APP_URL}
+              forceRedirectUrl={redirectUrl}
+              fallbackRedirectUrl={redirectUrl}
             />
           </div>
 

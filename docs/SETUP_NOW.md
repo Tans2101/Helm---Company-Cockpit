@@ -48,11 +48,14 @@ Verify: https://www.helmcontrol.online/api/auth/config → `clerk_enabled: true`
 
 ## Step 3 — Clerk Dashboard
 
+**Important:** Clerk's primary domain is `apexcoach.tech`. Redirect URLs in the Dashboard **must** use apexcoach, not helmcontrol (satellite domains require a Clerk plan upgrade).
+
 | Area | Setting |
 |------|---------|
-| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
-| **Account Portal → Redirects** | All fallback/force URLs → `https://www.helmcontrol.online/app` |
-| **Google OAuth** | Redirect URI includes `https://www.helmcontrol.online/api/auth/google/callback` |
+| **Account Portal → Redirects** | All after sign-in / sign-up URLs → **`https://apexcoach.tech/app`** |
+| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `https://apexcoach.tech` |
+
+Add **apexcoach.tech** to your Vercel project and point DNS to Vercel so the post-auth redirect works.
 
 Sync origins (after deploy sets `SETUP_SECRET`):
 

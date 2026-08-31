@@ -2,10 +2,18 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { fetchAuthConfig } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
-import { helmAppUrl } from "@/lib/helmUrls";
+import { clerkPostAuthUrl, helmAppUrl } from "@/lib/helmUrls";
 import { LoadingScreen } from "@/components/kit";
 
-const ClerkModeContext = createContext({ ready: false, clerkEnabled: false, configError: null });
+const ClerkModeContext = createContext({
+  ready: false,
+  clerkEnabled: false,
+  configError: null,
+  postAuthUrl: null,
+  helmCanonicalOrigin: null,
+  clerkPrimaryOrigin: null,
+  clerkMultiDomain: false,
+});
 
 /** Whether Clerk auth is active (from /api/auth/config, not build-time env). */
 export function useClerkMode() {
@@ -30,7 +38,7 @@ function ConfigErrorScreen({ message }) {
 
 /**
  * Load publishable key from /api/auth/config (matches CLERK_SECRET_KEY + JWKS on Render).
- * Falls back to REACT_APP_CLERK_PUBLISHABLE_KEY only in local test mode.
+ * Clerk redirect URLs use clerk_post_auth_url (apexcoach.tech) when multi-domain.
  */
 export default function ClerkProviderBootstrap({ children }) {
   const [state, setState] = useState({
@@ -38,8 +46,11 @@ export default function ClerkProviderBootstrap({ children }) {
     clerkEnabled: false,
     publishableKey: null,
     configError: null,
+    postAuthUrl: null,
+    helmCanonicalOrigin: null,
+    clerkPrimaryOrigin: null,
+    clerkMultiDomain: false,
   });
-  const appUrl = helmAppUrl("/app");
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +60,8 @@ export default function ClerkProviderBootstrap({ children }) {
         const cfg = await fetchAuthConfig();
         if (cancelled) return;
 
+        const postAuthUrl = (cfg?.clerk_post_auth_url || "").trim() || null;
+
         if (cfg?.clerk_enabled && cfg?.clerk_keys_aligned === false) {
           setState({
             ready: true,
@@ -56,6 +69,10 @@ export default function ClerkProviderBootstrap({ children }) {
             publishableKey: null,
             configError:
               "Clerk publishable key does not match the API JWKS instance. Fix CLERK_PUBLISHABLE_KEY on Render.",
+            postAuthUrl,
+            helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
+            clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
+            clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
           });
           return;
         }
@@ -75,6 +92,10 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkEnabled: false,
             publishableKey: null,
             configError: "Clerk is enabled on the API but no publishable key is configured.",
+            postAuthUrl,
+            helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
+            clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
+            clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
           });
           return;
         }
@@ -84,6 +105,10 @@ export default function ClerkProviderBootstrap({ children }) {
           clerkEnabled: clerkOn && Boolean(key),
           publishableKey: key || null,
           configError: null,
+          postAuthUrl,
+          helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
+          clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
+          clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
         });
       } catch {
         if (cancelled) return;
@@ -93,6 +118,10 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkEnabled: true,
             publishableKey: fallback,
             configError: null,
+            postAuthUrl: null,
+            helmCanonicalOrigin: null,
+            clerkPrimaryOrigin: null,
+            clerkMultiDomain: false,
           });
           return;
         }
@@ -101,6 +130,10 @@ export default function ClerkProviderBootstrap({ children }) {
           clerkEnabled: false,
           publishableKey: null,
           configError: "Could not reach the API to load sign-in configuration.",
+          postAuthUrl: null,
+          helmCanonicalOrigin: null,
+          clerkPrimaryOrigin: null,
+          clerkMultiDomain: false,
         });
       }
     })();
@@ -115,7 +148,17 @@ export default function ClerkProviderBootstrap({ children }) {
     return <ConfigErrorScreen message={state.configError} />;
   }
 
-  const mode = { ready: true, clerkEnabled: state.clerkEnabled, configError: null };
+  const mode = {
+    ready: true,
+    clerkEnabled: state.clerkEnabled,
+    configError: null,
+    postAuthUrl: state.postAuthUrl,
+    helmCanonicalOrigin: state.helmCanonicalOrigin,
+    clerkPrimaryOrigin: state.clerkPrimaryOrigin,
+    clerkMultiDomain: state.clerkMultiDomain,
+  };
+
+  const redirectUrl = clerkPostAuthUrl(state.postAuthUrl);
 
   if (!state.clerkEnabled || !state.publishableKey) {
     return (
@@ -131,10 +174,10 @@ export default function ClerkProviderBootstrap({ children }) {
         publishableKey={state.publishableKey}
         signInUrl="/login"
         signUpUrl="/sign-up"
-        signInForceRedirectUrl={appUrl}
-        signUpForceRedirectUrl={appUrl}
-        signInFallbackRedirectUrl={appUrl}
-        signUpFallbackRedirectUrl={appUrl}
+        signInForceRedirectUrl={redirectUrl}
+        signUpForceRedirectUrl={redirectUrl}
+        signInFallbackRedirectUrl={redirectUrl}
+        signUpFallbackRedirectUrl={redirectUrl}
         afterSignOutUrl={helmAppUrl("/")}
       >
         {children}

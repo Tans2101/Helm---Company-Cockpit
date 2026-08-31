@@ -7,6 +7,7 @@ import ClerkHelmBridge from "@/components/ClerkHelmBridge";
 import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
+import { clerkPostAuthUrl } from "@/lib/helmUrls";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
 import Login from "@/pages/Login";
@@ -33,17 +34,15 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 
-import { helmAppUrl } from "@/lib/helmUrls";
-
-const HELM_APP_URL = helmAppUrl("/app");
-
 function ClerkOAuthCallback() {
+  const { postAuthUrl } = useClerkMode();
+  const redirectUrl = clerkPostAuthUrl(postAuthUrl);
   return (
     <AuthenticateWithRedirectCallback
-      signInForceRedirectUrl={HELM_APP_URL}
-      signUpForceRedirectUrl={HELM_APP_URL}
-      signInFallbackRedirectUrl={HELM_APP_URL}
-      signUpFallbackRedirectUrl={HELM_APP_URL}
+      signInForceRedirectUrl={redirectUrl}
+      signUpForceRedirectUrl={redirectUrl}
+      signInFallbackRedirectUrl={redirectUrl}
+      signUpFallbackRedirectUrl={redirectUrl}
     />
   );
 }

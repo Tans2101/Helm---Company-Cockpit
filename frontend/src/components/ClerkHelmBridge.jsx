@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useAuth as useClerkAuth, useSession } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
+import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { useAuth } from "@/context/AuthContext";
 import { api, setClerkTokenGetter } from "@/lib/api";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
@@ -44,6 +45,7 @@ export default function ClerkHelmBridge() {
   } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
   const { user, setUser, setSessionError, clearSessionError } = useAuth();
+  const { helmCanonicalOrigin, clerkPrimaryOrigin, clerkMultiDomain } = useClerkMode();
   const navigate = useNavigate();
   const syncing = useRef(false);
 
@@ -79,6 +81,21 @@ export default function ClerkHelmBridge() {
           if (cancelled) return;
           setUser(data);
           clearSessionError();
+          // Clerk may redirect to apexcoach.tech; send user to helmcontrol after session exchange.
+          if (
+            clerkMultiDomain
+            && helmCanonicalOrigin
+            && clerkPrimaryOrigin
+            && typeof window !== "undefined"
+          ) {
+            const here = window.location.origin.replace(/\/$/, "");
+            const clerkOrigin = clerkPrimaryOrigin.replace(/\/$/, "");
+            const canon = helmCanonicalOrigin.replace(/\/$/, "");
+            if (here === clerkOrigin && canon !== clerkOrigin) {
+              window.location.replace(`${canon}/app`);
+              return;
+            }
+          }
           if (!window.location.pathname.startsWith("/app")) {
             navigate("/app", { replace: true });
           }
