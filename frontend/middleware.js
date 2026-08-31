@@ -53,11 +53,9 @@ export default async function middleware(request) {
   const subpath = url.pathname.replace(/^\/__clerk\/?/, "");
   const target = `${CLERK_FAPI}/${subpath}${url.search}`;
 
-  const host = request.headers.get("x-forwarded-host") || url.host;
   const proto = request.headers.get("x-forwarded-proto") || "https";
-  // Clerk validates proxy URL on primary apex domain (helmcontrol.online).
-  const proxyHost = host.startsWith("www.") ? host.slice(4) : host;
-  const proxyUrl = `${proto}://${proxyHost}/__clerk`;
+  // Clerk validates proxy URL on primary apex (must match Dashboard registration).
+  const proxyUrl = "https://helmcontrol.online/__clerk";
 
   const xff = request.headers.get("x-forwarded-for");
   const clientIp = xff ? xff.split(",")[0].trim() : "127.0.0.1";

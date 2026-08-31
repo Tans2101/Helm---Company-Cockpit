@@ -8,6 +8,14 @@
   "env": {
     "CLERK_PROXY_BOOTSTRAP": "helm-clerk-edge-8c4f2a9e1b7d"
   },
+  "redirects": [
+    {
+      "source": "/:path((?!__clerk).*)",
+      "has": [{ "type": "host", "value": "helmcontrol.online" }],
+      "destination": "https://www.helmcontrol.online/:path",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
