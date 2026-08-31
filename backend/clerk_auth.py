@@ -278,6 +278,8 @@ def clerk_proxy_url() -> str | None:
 
 async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     """Proxy Clerk Frontend API when clerk.* custom-domain TLS is not ready."""
+    import asyncio
+    import subprocess
     from starlette.responses import JSONResponse, Response
 
     qs = request.url.query
@@ -302,21 +304,56 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     forward["X-Forwarded-For"] = client_ip
     forward["Origin"] = HELM_CANONICAL_ORIGIN or proxy_base.rsplit("/__clerk", 1)[0]
 
-    try:
-        body = await request.body()
-        async with httpx.AsyncClient(timeout=30) as client:
-            upstream = await client.request(
+    body = await request.body()
+
+    async def _httpx_upstream() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30, http2=False) as client:
+            return await client.request(
                 request.method,
                 target,
                 headers=forward,
                 content=body if body else None,
             )
-        skip = {"transfer-encoding", "content-encoding", "content-length"}
-        headers = {k: v for k, v in upstream.headers.items() if k.lower() not in skip}
-        return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
-    except Exception:
-        logger.exception("clerk fapi proxy failed for %s", target)
-        return JSONResponse({"error": "Clerk proxy failed"}, status_code=502)
+
+    def _curl_upstream() -> tuple[int, bytes, dict[str, str]]:
+        cmd = ["curl", "-sS", "-L", "--http1.1", "-w", "\n%{http_code}", "-X", request.method, target]
+        for key, val in forward.items():
+            cmd.extend(["-H", f"{key}: {val}"])
+        if body and request.method not in ("GET", "HEAD"):
+            cmd.extend(["--data-binary", "@-"])
+        proc = subprocess.run(
+            cmd,
+            input=body if body else None,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.decode("utf-8", errors="replace")[:500] or f"curl exit {proc.returncode}")
+        raw = proc.stdout
+        if b"\n" not in raw:
+            raise RuntimeError("curl response missing status line")
+        payload, status_line = raw.rsplit(b"\n", 1)
+        status = int(status_line.decode().strip())
+        return status, payload, {"content-type": "application/json"}
+
+    try:
+        upstream = await _httpx_upstream()
+    except Exception as httpx_err:
+        logger.warning("clerk fapi httpx failed for %s: %s — trying curl", target, httpx_err)
+        try:
+            status, payload, hdrs = await asyncio.to_thread(_curl_upstream)
+            return Response(content=payload, status_code=status, headers=hdrs)
+        except Exception as curl_err:
+            logger.exception("clerk fapi proxy failed for %s", target)
+            return JSONResponse(
+                {"error": "Clerk proxy failed", "httpx": str(httpx_err), "curl": str(curl_err)},
+                status_code=502,
+            )
+
+    skip = {"transfer-encoding", "content-encoding", "content-length"}
+    headers = {k: v for k, v in upstream.headers.items() if k.lower() not in skip}
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
 
 
 async def fetch_clerk_instance() -> dict[str, Any] | None:

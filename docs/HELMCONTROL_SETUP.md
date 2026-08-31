@@ -48,8 +48,8 @@ Remove any parking-page records Namecheap adds by default.
 2. **Settings** → **General** → **Root Directory** = `frontend`
 3. **Environment Variables**:
    - `REACT_APP_CLERK_PUBLISHABLE_KEY` = matching `pk_live_...` (same instance as Render `CLERK_SECRET_KEY`)
-   - **`CLERK_SECRET_KEY`** = same live secret as Render (required for `/__clerk` edge proxy while custom-domain SSL provisions)
    - If unset, the app loads the publishable key from `/api/auth/config` after deploy (Render derives it from `CLERK_JWKS_URL`).
+   - `/__clerk` proxy runs on Vercel Edge and forwards to Render (no extra Vercel secrets needed).
 4. **Redeploy** production
 
 `frontend/vercel.json` already rewrites `/api/*` to Render.
@@ -103,6 +103,6 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 |---------|-----|
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
-| Page stuck on "Loading sign-in" | Add `CLERK_SECRET_KEY` on Vercel, redeploy, run `POST /api/setup/clerk-sync`. Proxy URL must be `https://www.helmcontrol.online/__clerk`. Also verify `clerk.helmcontrol.online` DNS + CAA (`pki.goog`, `digicert.com`). |
+| Page stuck on "Loading sign-in" | Redeploy Vercel + Render. Verify `GET /__clerk/v1/client` returns JSON. Run `POST /api/setup/clerk-sync` if needed. Also verify `clerk.helmcontrol.online` DNS + CAA (`pki.goog`, `digicert.com`). |
 | Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |

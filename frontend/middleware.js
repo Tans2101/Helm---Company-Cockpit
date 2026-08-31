@@ -1,42 +1,32 @@
 /**
- * Clerk FAPI edge proxy — Dashboard proxy URL: https://www.helmcontrol.online/__clerk
- * Requires CLERK_SECRET_KEY in Vercel → Project Settings → Environment Variables.
+ * Clerk FAPI edge proxy — routes /__clerk to Render (has CLERK_SECRET_KEY).
+ * No Vercel secrets required. Dashboard proxy URL: https://www.helmcontrol.online/__clerk
  */
-const CLERK_FAPI = process.env.CLERK_FAPI_URL || "https://frontend-api.clerk.services";
+const RENDER_API =
+  process.env.RENDER_API_ORIGIN || "https://helm-company-cockpit.onrender.com";
 
 export const config = {
   matcher: "/__clerk/:path*",
 };
 
 export default async function middleware(request) {
-  const secret = process.env.CLERK_SECRET_KEY;
-  if (!secret) {
-    return new Response(
-      JSON.stringify({ error: "CLERK_SECRET_KEY missing on Vercel" }),
-      { status: 500, headers: { "content-type": "application/json" } },
-    );
-  }
-
   const url = new URL(request.url);
   const subpath = url.pathname.replace(/^\/__clerk\/?/, "");
-  const target = `${CLERK_FAPI}/${subpath}${url.search}`;
-
-  const host = request.headers.get("x-forwarded-host") || url.host;
-  const proto = request.headers.get("x-forwarded-proto") || "https";
-  const proxyUrl = `${proto}://${host}/__clerk`;
+  const target = `${RENDER_API}/api/clerk-proxy/${subpath}${url.search}`;
 
   const xff = request.headers.get("x-forwarded-for");
   const clientIp = xff ? xff.split(",")[0].trim() : "127.0.0.1";
 
   const headers = new Headers();
-  headers.set("Clerk-Proxy-Url", proxyUrl);
-  headers.set("Clerk-Secret-Key", secret);
-  headers.set("X-Forwarded-For", clientIp);
-  headers.set("Origin", `${proto}://${host}`);
-  for (const key of ["authorization", "content-type", "accept", "accept-language", "user-agent", "cookie"]) {
+  for (const key of [
+    "authorization", "content-type", "accept", "accept-language", "user-agent", "cookie",
+  ]) {
     const val = request.headers.get(key);
     if (val) headers.set(key, val);
   }
+  headers.set("x-forwarded-for", clientIp);
+  headers.set("x-forwarded-host", request.headers.get("x-forwarded-host") || url.host);
+  headers.set("x-forwarded-proto", request.headers.get("x-forwarded-proto") || "https");
 
   const body =
     request.method !== "GET" && request.method !== "HEAD" ? await request.arrayBuffer() : undefined;
