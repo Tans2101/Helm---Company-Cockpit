@@ -19,6 +19,7 @@ const required = [
   "auth/clerk/exchange",
   "Connecting your account",
   'path:"/login"',
+  "oauthFlow",
 ];
 
 const missing = required.filter((needle) => !bundle.includes(needle));

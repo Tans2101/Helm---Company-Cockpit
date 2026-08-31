@@ -35,8 +35,21 @@ import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
+import { helmAppUrl } from "@/lib/helmUrls";
 
 const HAS_CLERK = !!getClerkPublishableKey();
+const HELM_APP_URL = helmAppUrl("/app");
+
+function ClerkOAuthCallback() {
+  return (
+    <AuthenticateWithRedirectCallback
+      signInForceRedirectUrl={HELM_APP_URL}
+      signUpForceRedirectUrl={HELM_APP_URL}
+      signInFallbackRedirectUrl={HELM_APP_URL}
+      signUpFallbackRedirectUrl={HELM_APP_URL}
+    />
+  );
+}
 
 function AppRouter() {
   const location = useLocation();
@@ -46,8 +59,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/login/sso-callback" element={<AuthenticateWithRedirectCallback />} />
-      <Route path="/sign-up/sso-callback" element={<AuthenticateWithRedirectCallback />} />
+      <Route path="/login/sso-callback" element={<ClerkOAuthCallback />} />
+      <Route path="/sign-up/sso-callback" element={<ClerkOAuthCallback />} />
       <Route path="/login/*" element={<Login />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<Privacy />} />

@@ -2,12 +2,8 @@ import { useEffect, useState } from "react";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { fetchAuthConfig } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
+import { helmAppUrl } from "@/lib/helmUrls";
 import { LoadingScreen } from "@/components/kit";
-
-function helmAppUrl(path = "/app") {
-  if (typeof window === "undefined") return path;
-  return `${window.location.origin}${path}`;
-}
 
 /**
  * Load publishable key from Render /api/auth/config when set (matches CLERK_SECRET_KEY mode).

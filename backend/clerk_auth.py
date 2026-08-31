@@ -157,6 +157,57 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     return await fetch_clerk_user_profile(clerk_user_id)
 
 
+async def sync_clerk_account_portal(primary: str) -> dict[str, Any]:
+    """Point Clerk Account Portal post-auth redirects back to Helm (not accounts.dev)."""
+    app_url = f"{primary.rstrip('/')}/app"
+    result: dict[str, Any] = {"attempted": True, "ok": False}
+    if not clerk_configured() or not primary:
+        result["reason"] = "not_configured"
+        return result
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = _bapi_headers()
+            get_r = await client.get(f"{CLERK_BAPI}/account_portal", headers=headers)
+            if get_r.status_code >= 400:
+                result["reason"] = f"get_{get_r.status_code}"
+                result["error"] = get_r.text[:300]
+                return result
+            current = get_r.json()
+            result["before"] = {
+                "after_sign_in_url": current.get("after_sign_in_url"),
+                "after_sign_up_url": current.get("after_sign_up_url"),
+            }
+            patch_body = {
+                "after_sign_in_url": app_url,
+                "after_sign_up_url": app_url,
+                "logo_link_url": primary,
+                "after_join_waitlist_url": app_url,
+                "after_create_organization_url": app_url,
+                "after_leave_organization_url": app_url,
+            }
+            patch_r = await client.patch(
+                f"{CLERK_BAPI}/account_portal",
+                headers=headers,
+                json=patch_body,
+            )
+            if patch_r.status_code >= 400:
+                result["reason"] = f"patch_{patch_r.status_code}"
+                result["error"] = patch_r.text[:500]
+                return result
+            updated = patch_r.json() if patch_r.content else {}
+            result["ok"] = True
+            result["after"] = {
+                "after_sign_in_url": updated.get("after_sign_in_url", app_url),
+                "after_sign_up_url": updated.get("after_sign_up_url", app_url),
+            }
+            logger.info("Clerk account portal redirects → %s", app_url)
+            return result
+    except Exception:
+        logger.exception("Clerk account portal sync failed")
+        result["reason"] = "exception"
+        return result
+
+
 async def sync_clerk_instance() -> dict[str, Any]:
     """Register Helm Vercel origin with Clerk — required for dev instances on production URL."""
     global _last_sync_status
@@ -263,6 +314,14 @@ async def sync_clerk_instance() -> dict[str, Any]:
             if is_dev_fapi and primary and "vercel.app" in primary:
                 status["warnings"].append(
                     "Using Clerk development FAPI on Vercel — migrate to a *.clerk.com production instance when ready."
+                )
+
+            portal = await sync_clerk_account_portal(primary)
+            status["account_portal"] = portal
+            if not portal.get("ok"):
+                status["warnings"].append(
+                    "Could not auto-update Clerk redirect URLs — set After sign-in URL to "
+                    f"{primary}/app in Clerk Dashboard → Configure → Paths."
                 )
 
             _last_sync_status = status

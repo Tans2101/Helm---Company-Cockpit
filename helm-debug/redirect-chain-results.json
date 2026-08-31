@@ -1,0 +1,191 @@
+{
+  "timestamp": "2026-08-31T05:07:32.202Z",
+  "signInEmbedded": true,
+  "signInDetails": {
+    "pageUrl": "https://helm-company-cockpit.vercel.app/login",
+    "onClerkHostedPage": false,
+    "clerkSignInTestId": 1,
+    "clerkRootBoxes": 2,
+    "hasGoogleButton": 2,
+    "hasDevelopmentBadge": true,
+    "bodySnippet": "H\n\nHelm\n\nCEO OPERATING SYSTEM\n\nQUIET CONTROL\n\nRun your company from one command center.\n\nHelm pulls status and KPIs in, pushes work out, and answers the only question that matters — what does the CEO need to know right now?\n\nKnow what matters before your first meeting.\n\nEnter the cockpit\n\nSign in with Google or email.\n\nSign in to Helm\n\nWelcome back! Please sign in to continue\n\nGoogle\nMicrosoft\n\nor\n\nEmail address\nPassword\nContinue\nDon’t have an account?\nSign up\n\nSecured by\n\nDevelopment mode\n\nPrivacy·Terms·Create account\n\nPassword rules are set in Clerk (not Helm). Use Google for fastest sign-in",
+    "iframeCount": 0
+  },
+  "redirectChain": [
+    {
+      "step": 1,
+      "label": "start",
+      "url": "https://helm-company-cockpit.vercel.app/login"
+    },
+    {
+      "step": 2,
+      "label": "after-load",
+      "url": "https://helm-company-cockpit.vercel.app/login"
+    },
+    {
+      "step": 3,
+      "label": "sign-in-inspection",
+      "url": "https://helm-company-cockpit.vercel.app/login",
+      "embedded": true
+    },
+    {
+      "step": 4,
+      "label": "before-google-click",
+      "url": "https://helm-company-cockpit.vercel.app/login"
+    },
+    {
+      "step": 5,
+      "label": "after-google-click",
+      "url": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg"
+    },
+    {
+      "step": 6,
+      "label": "google-oauth-page",
+      "url": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg",
+      "redirect_uri": "https://clerk.shared.lcl.dev/v1/oauth_callback",
+      "client_id": "787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com",
+      "state": "eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7"
+    }
+  ],
+  "navigationEvents": [
+    {
+      "type": "navigate",
+      "url": "https://helm-company-cockpit.vercel.app/login",
+      "time": 1788152852390
+    },
+    {
+      "type": "navigate",
+      "url": "https://helm-company-cockpit.vercel.app/login",
+      "time": 1788152853561
+    },
+    {
+      "type": "navigate",
+      "url": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg",
+      "time": 1788152858111
+    }
+  ],
+  "clerkRequests": [
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js",
+      "status": 307,
+      "method": "GET",
+      "body": "redirect -> https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/clerk.browser.js"
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/clerk.browser.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2",
+      "status": 401,
+      "method": "GET",
+      "body": "{\"errors\":[{\"message\":\"Browser unauthenticated\",\"long_message\":\"Unable to authenticate this browser for your development instance. Check your Clerk cookies and try again. If the issue persists reach out to support@clerk.com.\",\"code\":\"dev_browser_unauthenticated\"}],\"clerk_trace_id\":\"a480bd11bdec5f2701295ba6a6f753dc\"}"
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2",
+      "status": 401,
+      "method": "GET",
+      "body": "{\"errors\":[{\"message\":\"Browser unauthenticated\",\"long_message\":\"Unable to authenticate this browser for your development instance. Check your Clerk cookies and try again. If the issue persists reach out to support@clerk.com.\",\"code\":\"dev_browser_unauthenticated\"}],\"clerk_trace_id\":\"143a526310a24521e7466cd70369b87f\"}"
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/dev_browser?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2",
+      "status": 200,
+      "method": "POST",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2&__clerk_db_jwt=dvb_3IfPsAx6jwBUPs2OUVU4NJ51wTA",
+      "status": 200,
+      "method": "GET",
+      "body": "{\"response\":{\"object\":\"client\",\"id\":\"client_3IfPsDZIfpGDagKQmspAz8scYEE\",\"sessions\":[],\"sign_in\":null,\"sign_up\":null,\"last_active_session_id\":null,\"last_authentication_strategy\":null,\"cookie_expires_at\":null,\"captcha_bypass\":false,\"created_at\":1788152853858,\"updated_at\":1788152853858},\"client\":null}"
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2&__clerk_db_jwt=dvb_3IfPsAx6jwBUPs2OUVU4NJ51wTA",
+      "status": 200,
+      "method": "GET",
+      "body": "{\"auth_config\":{\"object\":\"auth_config\",\"id\":\"aac_3Icgk0YvJ8CkpdJfpCJXnYOB3uV\",\"first_name\":\"on\",\"last_name\":\"on\",\"email_address\":\"on\",\"phone_number\":\"off\",\"username\":\"off\",\"password\":\"required\",\"identification_requirements\":[[\"email_address\",\"oauth_google\",\"oauth_microsoft\"],[]],\"identification_strategies\":[\"email_address\",\"oauth_google\",\"oauth_microsoft\"],\"first_factors\":[\"email_code\",\"oauth_google\",\"oauth_microsoft\",\"password\",\"reset_password_email_code\",\"ticket\"],\"second_factors\":[],\"email_ad"
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/framework_clerk.browser_0cc2cc_5.127.2.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/vendors_clerk.browser_0cc2cc_5.127.2.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/ui-common_clerk.browser_0cc2cc_5.127.2.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/subscriptionDetails_clerk.browser_0cc2cc_5.127.2.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/npm/@clerk/clerk-js@5.127.2/dist/signin_clerk.browser_0cc2cc_5.127.2.js",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://img.clerk.com/static/microsoft.svg?width=80",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://img.clerk.com/static/google.svg?width=80",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://causal-caribou-2352.clerk.accounts.dev/v1/client/sign_ins?__clerk_api_version=2025-11-10&_clerk_js_version=5.127.2&__clerk_db_jwt=dvb_3IfPsAx6jwBUPs2OUVU4NJ51wTA",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"response\":{\"object\":\"sign_in_attempt\",\"id\":\"sia_3IfPsfqfiHe65Lj9JQYHj8GiY4s\",\"status\":\"needs_identifier\",\"supported_identifiers\":[\"email_address\"],\"supported_first_factors\":[{\"strategy\":\"ticket\"},{\"strategy\":\"oauth_google\"},{\"strategy\":\"oauth_microsoft\"}],\"supported_second_factors\":null,\"first_factor_verification\":{\"object\":\"verification_oauth\",\"status\":\"unverified\",\"strategy\":\"oauth_google\",\"attempts\":null,\"expire_at\":1788153457850,\"external_verification_redirect_url\":\"https://accounts.google"
+    },
+    {
+      "url": "https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7",
+      "status": 302,
+      "method": "GET",
+      "body": "redirect -> https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqc"
+    },
+    {
+      "url": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://accounts.google.com/_/bscframe",
+      "status": 200,
+      "method": "GET",
+      "body": ""
+    },
+    {
+      "url": "https://accounts.google.com/generate_204?KGAjRg",
+      "status": 204,
+      "method": "GET",
+      "body": ""
+    }
+  ],
+  "oauthStartUrl": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg",
+  "googleOAuthParams": {
+    "redirect_uri": "https://clerk.shared.lcl.dev/v1/oauth_callback",
+    "client_id": "787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com",
+    "state": "eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7"
+  },
+  "finalUrl": "https://accounts.google.com/v3/signin/identifier?opparams=%253F&dsh=S-1676408265%3A1788152858006117&access_type=offline&client_id=787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com&o2v=1&prompt=consent&redirect_uri=https%3A%2F%2Fclerk.shared.lcl.dev%2Fv1%2Foauth_callback&response_type=code&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile&service=lso&state=eqir2e1vj78no0vj163atf83z6nv2mrbjbnr4tb7&flowName=GeneralOAuthLite&continue=https%3A%2F%2Faccounts.google.com%2Fsignin%2Foauth%2Flegacy%2Fconsent%3Fauthuser%3Dunknown%26part%3DAJi8hAPKT3vlcgdw8COIOEbrBChtuhbMBHJgQOe9vU-UkihaofEcILM8GgaPBcUDH2tcvLTCTPtIjBVnDuMto6jhEz0QvR0VOIYjnkSH5nFG_vXDy6DBZSoNDoW1sZIniLP-x36-kl0JAFDCEOXWmWqcJiAdBRFBVeXI3eWK2UenNO20RQN-kwd6V4ZHn3VRQTV8yhcoUOqExOIesbMUnTge_ZJC1WClCHtcymhYevUsci8d6CbkLAx7Tmt0KIYNEUJ7D-hTzFyP4wgaStKnyuKP_zKfSa_w1BUbDh8OId2wBqTEeHrT4suCZfgkF7ymxmjzDfmRAtSotzYvM1PT59rkNospfEca_6xqi-C9eq8Xq0TAqJLUBsNIRDluwBM4jl6U6sARmrnPU94ZrmvR47Y634HAPWseRBrxXGX1M10lq2-Ow693ur1eByv-5T-1siODSFZhBEmR0OlWDjHsWp0_lFbsoqGjBiRuaqu8zTsU0beRPEcffcY%26flowName%3DGeneralOAuthFlow%26as%3DS-1676408265%253A1788152858006117%26client_id%3D787459168867-0v2orf3qo56uocsi84iroseoahhuovdm.apps.googleusercontent.com%23&app_domain=https%3A%2F%2Fclerk.shared.lcl.dev&rart=ANgoxcd6VWsQend41jNUW7WxkZ9mZ2vNw_H-gk5M9anU5kxmMAcRSN9cxYPTWjlVFlSDDZUV4IaBgNYIqtXph475_cZbnFjEovnNhHe70qWyDARfSLVUQwg",
+  "leftHelmAt": null
+}

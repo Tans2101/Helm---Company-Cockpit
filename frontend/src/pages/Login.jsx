@@ -7,8 +7,10 @@ import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
+import { helmAppUrl } from "@/lib/helmUrls";
 
 const CLERK_KEY = getClerkPublishableKey();
+const HELM_APP_URL = helmAppUrl("/app");
 
 export default function Login() {
   const { user, loading, sessionError, clearSessionError } = useAuth();
@@ -96,8 +98,9 @@ export default function Login() {
                 routing="path"
                 path="/login"
                 signUpUrl="/sign-up"
-                forceRedirectUrl={`${window.location.origin}/app`}
-                fallbackRedirectUrl={`${window.location.origin}/app`}
+                oauthFlow="popup"
+                forceRedirectUrl={HELM_APP_URL}
+                fallbackRedirectUrl={HELM_APP_URL}
               />
             </div>
           ) : (
