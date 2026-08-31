@@ -273,10 +273,15 @@ async def clerk_custom_domain_ssl_ok() -> bool:
 
 
 def clerk_proxy_url() -> str | None:
-    """Public Clerk FAPI proxy base URL (Vercel /__clerk → serverless)."""
-    if not HELM_CANONICAL_ORIGIN:
+    """Public Clerk FAPI proxy — must be on Clerk primary apex (helmcontrol.online), not www."""
+    origin = clerk_primary_origin() or HELM_CANONICAL_ORIGIN
+    if not origin:
         return None
-    return f"{HELM_CANONICAL_ORIGIN.rstrip('/')}/__clerk"
+    host = urlparse(origin).hostname or ""
+    if not host:
+        return None
+    apex = host[4:] if host.startswith("www.") else host
+    return f"https://{apex}/__clerk"
 
 
 async def proxy_clerk_fapi(path: str, request: Any) -> Any:
@@ -477,9 +482,10 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
     """Enable Clerk FAPI proxy when clerk.* custom-domain TLS is not ready."""
     from urllib.parse import urlparse
 
-    host = urlparse(primary).hostname
-    proxy = f"{primary.rstrip('/')}/__clerk"
-    result: dict[str, Any] = {"attempted": True, "ok": False, "proxy_url": proxy, "host": host}
+    host = urlparse(primary).hostname or ""
+    apex = host[4:] if host.startswith("www.") else host
+    proxy = f"https://{apex}/__clerk"
+    result: dict[str, Any] = {"attempted": True, "ok": False, "proxy_url": proxy, "host": apex}
     if not clerk_configured() or not host:
         result["reason"] = "not_configured"
         return result
@@ -496,8 +502,7 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
                 result["error"] = list_r.text[:300]
                 return result
             domains = (list_r.json() or {}).get("data") or []
-            # Primary Clerk domain is the apex (helmcontrol.online), not www.
-            apex = host.removeprefix("www.")
+            apex = host[4:] if host.startswith("www.") else host
             match = next((d for d in domains if d.get("name") in {apex, host}), None)
             if not match:
                 result["reason"] = "domain_not_found"

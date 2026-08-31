@@ -9,6 +9,8 @@ function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
   const host = window.location.hostname;
   if (!host.endsWith("helmcontrol.online") && !host.endsWith("vercel.app")) return undefined;
+  // Clerk requires proxy on primary apex domain, not www.
+  if (host.endsWith("helmcontrol.online")) return "https://helmcontrol.online/__clerk";
   return `${window.location.origin.replace(/\/$/, "")}/__clerk`;
 }
 
