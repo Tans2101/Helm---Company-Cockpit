@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 HELM_CLERK_JWKS_URL = "https://clerk.helmcontrol.online/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
-CLERK_FAPI = "https://frontend-api.clerk.services"
+CLERK_FAPI = os.environ.get("CLERK_FAPI_URL", "https://frontend-api.clerk.dev").rstrip("/")
 
 
 def _resolve_clerk_jwks_url() -> str:

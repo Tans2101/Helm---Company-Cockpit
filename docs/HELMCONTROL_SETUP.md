@@ -62,7 +62,7 @@ Remove any parking-page records Namecheap adds by default.
 | **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
 | **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
 | **Domains** → Proxy URL | `https://www.helmcontrol.online/__clerk` |
-| **Vercel env** | Add `CLERK_SECRET_KEY` (same live secret as Render) — required for the proxy |
+| **Vercel env** | Not required for proxy (Render handles it with `CLERK_SECRET_KEY`) |
 
 ### Clerk DNS (Namecheap Advanced DNS)
 

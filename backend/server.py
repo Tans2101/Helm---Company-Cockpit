@@ -704,6 +704,11 @@ def _oauth_callback_uri(provider: str) -> str:
     return f"{public_api_origin()}/api/oauth/{provider}/callback"
 
 
+@api_router.api_route("/clerk-proxy", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def clerk_fapi_proxy_root(request: Request):
+    return await clerk_auth.proxy_clerk_fapi("v1/client", request)
+
+
 @api_router.api_route("/clerk-proxy/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
 async def clerk_fapi_proxy(path: str, request: Request):
     """Browser Clerk SDK proxy — avoids broken clerk.* custom-domain TLS during provisioning."""
