@@ -14,7 +14,7 @@
 
 The **Render deploy button** updates the **API only**. Vercel serves the site and proxies `/api/*` to Render, so users on `helmcontrol.online` hit Vercel first.
 
-Clerk may still show **apexcoach.tech** branding — that is your Clerk production instance’s primary domain. Sign-in works on helmcontrol once allowed origins and redirect URLs are set (see Step 3).
+Clerk primary domain is **helmcontrol.online** (`clerk.helmcontrol.online`).
 
 ---
 
@@ -57,16 +57,10 @@ Remove any parking-page records Namecheap adds by default.
 
 ## Step 3 — Clerk Dashboard (~3 min)
 
-Your Clerk **production instance primary domain is `apexcoach.tech`**. Until you upgrade Clerk to add satellite domains, **all redirect URLs must use apexcoach.tech** — Clerk will reject `helmcontrol.online` in the Redirects tab.
-
 | Area | Setting |
 |------|---------|
-| **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://apexcoach.tech/app`** |
-| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `https://apexcoach.tech`, `http://localhost:3000` |
-
-The app signs users up on helmcontrol.online, Clerk redirects to apexcoach.tech/app (required), then Helm sends them back to www.helmcontrol.online/app automatically.
-
-**Also add `apexcoach.tech` to Vercel** (same project as helmcontrol) so the post-auth redirect loads Helm. Point apexcoach DNS to Vercel (A `76.76.21.21` or CNAME `cname.vercel-dns.com`).
+| **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
+| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
 
 Then sync from terminal (use `SETUP_SECRET` from Render env):
 

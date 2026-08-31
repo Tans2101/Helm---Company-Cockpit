@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_clerk_sync")
 os.environ["CLERK_SECRET_KEY"] = "sk_live_test"
-os.environ["CLERK_JWKS_URL"] = "https://clerk.apexcoach.tech/.well-known/jwks.json"
+os.environ["CLERK_JWKS_URL"] = "https://clerk.helmcontrol.online/.well-known/jwks.json"
 os.environ["FRONTEND_URL"] = "https://www.helmcontrol.online"
 os.environ["APP_URL"] = "https://www.helmcontrol.online"
 
@@ -31,19 +31,19 @@ def test_primary_frontend_origin_prefers_helmcontrol():
     assert clerk_auth.primary_frontend_origin() == "https://www.helmcontrol.online"
 
 
-def test_derive_publishable_key_from_apexcoach_jwks():
-    jwks = "https://clerk.apexcoach.tech/.well-known/jwks.json"
+def test_derive_publishable_key_from_helmcontrol_jwks():
+    jwks = "https://clerk.helmcontrol.online/.well-known/jwks.json"
     pk = clerk_auth.derive_publishable_key_from_jwks(jwks, mode="live")
-    assert pk == "pk_live_Y2xlcmsuYXBleGNvYWNoLnRlY2gk"
+    assert pk == "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA"
     assert clerk_auth.clerk_keys_aligned(pk, jwks)
 
 
 def test_clerk_primary_origin_from_jwks():
-    assert clerk_auth.clerk_primary_origin() == "https://apexcoach.tech"
+    assert clerk_auth.clerk_primary_origin() == "https://helmcontrol.online"
 
 
 def test_clerk_post_auth_url_uses_primary_domain():
-    assert clerk_auth.clerk_post_auth_url() == "https://apexcoach.tech/app"
+    assert clerk_auth.clerk_post_auth_url() == "https://helmcontrol.online/app"
 
 
 def test_clerk_multi_domain_when_helm_differs():

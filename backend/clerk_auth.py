@@ -15,7 +15,7 @@ from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS, is_stale_depl
 
 logger = logging.getLogger(__name__)
 
-HELM_CLERK_JWKS_URL = "https://clerk.apexcoach.tech/.well-known/jwks.json"
+HELM_CLERK_JWKS_URL = "https://clerk.helmcontrol.online/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
 
 
@@ -509,8 +509,7 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 redirect_hint = portal_url
                 status["warnings"].append(
                     "Could not auto-update Clerk redirect URLs — in Clerk Dashboard set every "
-                    f"after sign-in / sign-up fallback to {redirect_hint} "
-                    "(Clerk requires your primary domain apexcoach.tech until satellite domains are enabled)."
+                    f"after sign-in / sign-up fallback to {redirect_hint} in Clerk Dashboard."
                 )
             if not satellite.get("ok"):
                 status["warnings"].append(

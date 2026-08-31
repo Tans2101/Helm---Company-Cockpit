@@ -1,7 +1,8 @@
 {
   "build": {
     "env": {
-      "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online"
+      "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online",
+      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA"
     }
   },
   "rewrites": [

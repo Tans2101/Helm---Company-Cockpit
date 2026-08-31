@@ -69,9 +69,11 @@ services:
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
-        sync: false
+        value: pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA
       - key: CLERK_JWKS_URL
-        value: https://clerk.apexcoach.tech/.well-known/jwks.json
+        value: https://clerk.helmcontrol.online/.well-known/jwks.json
+      - key: CLERK_PRIMARY_ORIGIN
+        value: https://www.helmcontrol.online
       - key: SETUP_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID

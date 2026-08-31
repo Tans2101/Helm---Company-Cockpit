@@ -12,7 +12,7 @@
 | Domain registrar | Namecheap |
 | Website | Vercel (`frontend/`) |
 | API | Render (`backend/`, service `helm-company-cockpit`) |
-| Auth | Clerk (instance: `clerk.apexcoach.tech` — branding may still say apexcoach) |
+| Auth | Clerk (`clerk.helmcontrol.online`) |
 | Database | MongoDB Atlas |
 
 ---
@@ -27,9 +27,10 @@ Render → **helm-company-cockpit** → **Environment**:
 | `APP_URL` | `https://www.helmcontrol.online` |
 | `CORS_ORIGINS` | `https://www.helmcontrol.online,https://helmcontrol.online` |
 | `COOKIE_DOMAIN` | `helmcontrol.online` |
-| `CLERK_SECRET_KEY` | `sk_live_...` from Clerk |
-| `CLERK_JWKS_URL` | `https://clerk.apexcoach.tech/.well-known/jwks.json` |
-| `CLERK_PUBLISHABLE_KEY` | optional — auto-derived from JWKS if unset/wrong |
+| `CLERK_SECRET_KEY` | `sk_live_...` from Clerk API Keys |
+| `CLERK_PUBLISHABLE_KEY` | `pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA` (or from Clerk) |
+| `CLERK_JWKS_URL` | `https://clerk.helmcontrol.online/.well-known/jwks.json` |
+| `CLERK_PRIMARY_ORIGIN` | `https://www.helmcontrol.online` |
 | `SETUP_SECRET` | auto-generated (for `/api/setup/clerk-sync`) |
 
 Verify: https://www.helmcontrol.online/api/auth/config → `clerk_enabled: true`, `clerk_keys_aligned: true`
@@ -48,14 +49,10 @@ Verify: https://www.helmcontrol.online/api/auth/config → `clerk_enabled: true`
 
 ## Step 3 — Clerk Dashboard
 
-**Important:** Clerk's primary domain is `apexcoach.tech`. Redirect URLs in the Dashboard **must** use apexcoach, not helmcontrol (satellite domains require a Clerk plan upgrade).
-
 | Area | Setting |
 |------|---------|
-| **Account Portal → Redirects** | All after sign-in / sign-up URLs → **`https://apexcoach.tech/app`** |
-| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `https://apexcoach.tech` |
-
-Add **apexcoach.tech** to your Vercel project and point DNS to Vercel so the post-auth redirect works.
+| **Account Portal → Redirects** | All after sign-in / sign-up URLs → **`https://www.helmcontrol.online/app`** |
+| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
 
 Sync origins (after deploy sets `SETUP_SECRET`):
 
