@@ -157,6 +157,52 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     return await fetch_clerk_user_profile(clerk_user_id)
 
 
+async def sync_clerk_satellite_domain(primary: str) -> dict[str, Any]:
+    """Register Helm Vercel host as Clerk satellite domain so OAuth can redirect back."""
+    from urllib.parse import urlparse
+
+    host = urlparse(primary).hostname
+    result: dict[str, Any] = {"attempted": True, "ok": False, "host": host}
+    if not clerk_configured() or not host:
+        result["reason"] = "not_configured"
+        return result
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = _bapi_headers()
+            list_r = await client.get(f"{CLERK_BAPI}/domains", headers=headers)
+            if list_r.status_code >= 400:
+                result["reason"] = f"list_{list_r.status_code}"
+                result["error"] = list_r.text[:300]
+                return result
+            domains = (list_r.json() or {}).get("data") or []
+            result["existing_domains"] = [d.get("name") for d in domains]
+            match = next((d for d in domains if d.get("name") == host), None)
+            if match:
+                result["ok"] = True
+                result["reason"] = "already_registered"
+                result["domain_id"] = match.get("id")
+                return result
+            add_r = await client.post(
+                f"{CLERK_BAPI}/domains",
+                headers=headers,
+                json={"name": host, "is_satellite": True},
+            )
+            if add_r.status_code >= 400:
+                result["reason"] = f"add_{add_r.status_code}"
+                result["error"] = add_r.text[:500]
+                return result
+            created = add_r.json()
+            result["ok"] = True
+            result["reason"] = "created"
+            result["domain_id"] = created.get("id")
+            logger.info("Clerk satellite domain registered: %s", host)
+            return result
+    except Exception:
+        logger.exception("Clerk satellite domain sync failed")
+        result["reason"] = "exception"
+        return result
+
+
 async def sync_clerk_account_portal(primary: str) -> dict[str, Any]:
     """Point Clerk Account Portal post-auth redirects back to Helm (not accounts.dev)."""
     app_url = f"{primary.rstrip('/')}/app"
@@ -318,10 +364,17 @@ async def sync_clerk_instance() -> dict[str, Any]:
 
             portal = await sync_clerk_account_portal(primary)
             status["account_portal"] = portal
+            satellite = await sync_clerk_satellite_domain(primary)
+            status["satellite_domain"] = satellite
             if not portal.get("ok"):
                 status["warnings"].append(
                     "Could not auto-update Clerk redirect URLs — set After sign-in URL to "
                     f"{primary}/app in Clerk Dashboard → Configure → Paths."
+                )
+            if not satellite.get("ok"):
+                status["warnings"].append(
+                    f"Could not register {urlparse(primary).hostname} as Clerk satellite domain — "
+                    "add it manually in Clerk Dashboard → Configure → Domains."
                 )
 
             _last_sync_status = status
