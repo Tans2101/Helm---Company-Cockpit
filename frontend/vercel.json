@@ -11,7 +11,7 @@
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|__clerk).*)",
       "destination": "/index.html"
     }
   ]

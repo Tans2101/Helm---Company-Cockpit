@@ -256,6 +256,19 @@ async def clerk_jwks_ok() -> bool:
         return False
 
 
+async def clerk_custom_domain_ssl_ok() -> bool:
+    """True when clerk.* custom FAPI host accepts TLS (DNS mode). False → use proxy."""
+    host = clerk_jwks_host()
+    if not host or host.endswith(".clerk.accounts.dev"):
+        return True
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(f"https://{host}/v1/client")
+            return r.status_code < 500
+    except Exception:
+        return False
+
+
 def clerk_proxy_url() -> str | None:
     """Public Clerk FAPI proxy base URL (Vercel /__clerk → serverless)."""
     if not HELM_CANONICAL_ORIGIN:
@@ -416,6 +429,63 @@ async def sync_clerk_satellite_domain(primary: str) -> dict[str, Any]:
             return result
     except Exception:
         logger.exception("Clerk satellite domain sync failed")
+        result["reason"] = "exception"
+        return result
+
+
+async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
+    """Enable Clerk FAPI proxy when clerk.* custom-domain TLS is not ready."""
+    from urllib.parse import urlparse
+
+    host = urlparse(primary).hostname
+    proxy = f"{primary.rstrip('/')}/__clerk"
+    result: dict[str, Any] = {"attempted": True, "ok": False, "proxy_url": proxy, "host": host}
+    if not clerk_configured() or not host:
+        result["reason"] = "not_configured"
+        return result
+    if await clerk_custom_domain_ssl_ok():
+        result["ok"] = True
+        result["reason"] = "custom_domain_ssl_ok"
+        return result
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = _bapi_headers()
+            list_r = await client.get(f"{CLERK_BAPI}/domains", headers=headers)
+            if list_r.status_code >= 400:
+                result["reason"] = f"list_{list_r.status_code}"
+                result["error"] = list_r.text[:300]
+                return result
+            domains = (list_r.json() or {}).get("data") or []
+            # Primary Clerk domain is the apex (helmcontrol.online), not www.
+            apex = host.removeprefix("www.")
+            match = next((d for d in domains if d.get("name") in {apex, host}), None)
+            if not match:
+                result["reason"] = "domain_not_found"
+                result["existing_domains"] = [d.get("name") for d in domains]
+                return result
+            domain_id = match.get("id")
+            current = (match.get("proxy_url") or "").rstrip("/")
+            if current == proxy.rstrip("/"):
+                result["ok"] = True
+                result["reason"] = "already_set"
+                result["domain_id"] = domain_id
+                return result
+            patch_r = await client.patch(
+                f"{CLERK_BAPI}/domains/{domain_id}",
+                headers=headers,
+                json={"proxy_url": proxy},
+            )
+            if patch_r.status_code >= 400:
+                result["reason"] = f"patch_{patch_r.status_code}"
+                result["error"] = patch_r.text[:500]
+                return result
+            result["ok"] = True
+            result["reason"] = "proxy_enabled"
+            result["domain_id"] = domain_id
+            logger.info("Clerk domain proxy enabled: %s", proxy)
+            return result
+    except Exception:
+        logger.exception("Clerk domain proxy sync failed")
         result["reason"] = "exception"
         return result
 
@@ -589,6 +659,8 @@ async def sync_clerk_instance() -> dict[str, Any]:
             status["clerk_post_auth_url"] = portal_url
             satellite = await sync_clerk_satellite_domain(primary)
             status["satellite_domain"] = satellite
+            domain_proxy = await sync_clerk_domain_proxy(primary)
+            status["domain_proxy"] = domain_proxy
             if not portal.get("ok"):
                 redirect_hint = portal_url
                 status["warnings"].append(
@@ -599,6 +671,13 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 status["warnings"].append(
                     f"Could not register {urlparse(primary).hostname} as Clerk satellite domain — "
                     "add it manually in Clerk Dashboard → Configure → Domains."
+                )
+            if not domain_proxy.get("ok") and domain_proxy.get("reason") not in (
+                "custom_domain_ssl_ok", "already_set",
+            ):
+                status["warnings"].append(
+                    f"Could not enable Clerk proxy at {domain_proxy.get('proxy_url')} — "
+                    "set it manually in Clerk Dashboard → Domains → Proxy URL after Vercel deploy."
                 )
 
             _last_sync_status = status

@@ -3,11 +3,15 @@ export default function ClerkLoadError({ onRetry }) {
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
       <p className="text-lg text-white mb-2">Sign-in service is not responding</p>
       <p className="text-sm text-zinc-400 max-w-lg leading-relaxed">
-        Clerk could not load. In Clerk Dashboard → <span className="text-zinc-300">Domains</span>, make sure{" "}
-        <span className="font-mono text-xs">clerk.helmcontrol.online</span> shows a green checkmark (DNS verified, SSL issued).
-        Do <strong>not</strong> use a proxy URL — use DNS only. If SSL is pending, add apex CAA records in Namecheap
-        for <span className="font-mono text-xs">pki.goog</span> and <span className="font-mono text-xs">digicert.com</span>,
-        then click Verify in Clerk and wait 5–30 minutes.
+        Clerk could not load. Helm uses a proxy at{" "}
+        <span className="font-mono text-xs">/__clerk</span> while{" "}
+        <span className="font-mono text-xs">clerk.helmcontrol.online</span> SSL is provisioning.
+        Make sure <span className="text-zinc-300">CLERK_SECRET_KEY</span> is set in Vercel environment
+        variables (same value as Render), redeploy, then run{" "}
+        <span className="font-mono text-xs">POST /api/setup/clerk-sync</span> to register the proxy URL
+        in Clerk Dashboard. If SSL is still pending, add apex CAA records in Namecheap for{" "}
+        <span className="font-mono text-xs">pki.goog</span> and{" "}
+        <span className="font-mono text-xs">digicert.com</span>.
       </p>
       <button
         type="button"

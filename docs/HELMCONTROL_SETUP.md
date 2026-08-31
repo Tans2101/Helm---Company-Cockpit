@@ -46,9 +46,10 @@ Remove any parking-page records Namecheap adds by default.
    - `helmcontrol.online`
    - `www.helmcontrol.online` (optional)
 2. **Settings** → **General** → **Root Directory** = `frontend`
-3. **Environment Variables** (optional but faster first paint):
+3. **Environment Variables**:
    - `REACT_APP_CLERK_PUBLISHABLE_KEY` = matching `pk_live_...` (same instance as Render `CLERK_SECRET_KEY`)
-   - If unset, the app loads the key from `/api/auth/config` after deploy (Render derives it from `CLERK_JWKS_URL`).
+   - **`CLERK_SECRET_KEY`** = same live secret as Render (required for `/__clerk` edge proxy while custom-domain SSL provisions)
+   - If unset, the app loads the publishable key from `/api/auth/config` after deploy (Render derives it from `CLERK_JWKS_URL`).
 4. **Redeploy** production
 
 `frontend/vercel.json` already rewrites `/api/*` to Render.
@@ -61,7 +62,7 @@ Remove any parking-page records Namecheap adds by default.
 |------|---------|
 | **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
 | **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
-| **Domains** | Use **DNS** (CNAME below). Leave **Proxy URL empty** — proxy is not needed. |
+| **Domains** | CNAME below. If `clerk.helmcontrol.online` SSL is pending, Helm uses a **proxy** at `https://www.helmcontrol.online/__clerk` (set automatically via clerk-sync). |
 
 ### Clerk DNS (Namecheap Advanced DNS)
 
@@ -102,6 +103,6 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 |---------|-----|
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
-| Page stuck on "Loading sign-in" | Clerk Dashboard → Domains: verify `clerk.helmcontrol.online` DNS (no proxy); add CAA `pki.goog` + `digicert.com` on Namecheap if SSL pending |
+| Page stuck on "Loading sign-in" | Add `CLERK_SECRET_KEY` on Vercel, redeploy, run `POST /api/setup/clerk-sync`. Proxy URL must be `https://www.helmcontrol.online/__clerk`. Also verify `clerk.helmcontrol.online` DNS + CAA (`pki.goog`, `digicert.com`). |
 | Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |
