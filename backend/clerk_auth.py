@@ -60,6 +60,12 @@ def primary_frontend_origin() -> str | None:
     """Production frontend origin — helmcontrol.online when configured."""
     for host in HELM_PRIMARY_HOSTS:
         for origin in helm_frontend_origins():
+            if not origin.startswith("https://") or host not in origin:
+                continue
+            if origin.startswith("https://www."):
+                return origin
+    for host in HELM_PRIMARY_HOSTS:
+        for origin in helm_frontend_origins():
             if origin.startswith("https://") and host in origin:
                 return origin
     if HELM_CANONICAL_ORIGIN and HELM_CANONICAL_ORIGIN.startswith("https://"):

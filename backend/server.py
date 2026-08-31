@@ -26,6 +26,7 @@ from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
 import clerk_auth
+from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 
@@ -119,7 +120,9 @@ client = _make_mongo_client(mongo_url)
 db = client[DB_NAME]
 
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'change-me-in-production')
-FRONTEND_URL = os.environ.get('FRONTEND_URL', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '').strip().rstrip('/')
+if is_stale_deploy_url(FRONTEND_URL):
+    FRONTEND_URL = HELM_CANONICAL_ORIGIN
 ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
 DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "false").lower() in ("1", "true", "yes")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
@@ -128,6 +131,8 @@ OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
 if not OAUTH_STATE_SECRET:
     OAUTH_STATE_SECRET = SESSION_SECRET
 APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
+if is_stale_deploy_url(APP_URL):
+    APP_URL = HELM_CANONICAL_ORIGIN
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX", "").strip() or None

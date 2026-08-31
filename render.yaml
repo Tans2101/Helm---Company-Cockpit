@@ -47,11 +47,11 @@ services:
       - key: OAUTH_STATE_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://helmcontrol.online
+        value: https://www.helmcontrol.online
       - key: APP_URL
-        value: https://helmcontrol.online
+        value: https://www.helmcontrol.online
       - key: CORS_ORIGINS
-        value: https://helmcontrol.online,https://www.helmcontrol.online,https://helm-company-cockpit.vercel.app
+        value: https://www.helmcontrol.online,https://helmcontrol.online,https://helm-company-cockpit.vercel.app
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE

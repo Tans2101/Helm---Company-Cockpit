@@ -49,7 +49,7 @@ Clerk Dashboard → **Configure**:
 |------|---------|
 | **Domains** | Add `helmcontrol.online` |
 | **Developers** → Allowed origins | `https://helmcontrol.online`, `http://localhost:3000` |
-| **Account Portal** → Redirects | After sign-in / sign-up → `https://helmcontrol.online/app` |
+| **Account Portal → Redirects** | Set **every** fallback/force field to `https://www.helmcontrol.online/app` |
 | **SSO connections** → Google | Add helmcontrol.online redirect URIs if prompted |
 
 Then sync from terminal:
@@ -62,7 +62,7 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync
 
 ## Step 4 — Test
 
-1. https://helmcontrol.online/login
+1. https://www.helmcontrol.online/login
 2. Sign in with Google
 3. Land on https://helmcontrol.online/app
 
