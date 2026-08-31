@@ -52,7 +52,9 @@ HELM_CLERK_ORIGINS = {
     *_extra_cors,
 }
 
-_jwks_client: PyJWKClient | None = None
+_jwks_keys_cache: dict[str, Any] | None = None
+_jwks_keys_cache_at: float = 0.0
+_JWKS_TTL_SECONDS = 3600
 _last_sync_status: dict[str, Any] | None = None
 
 
@@ -198,13 +200,33 @@ def clerk_sync_status() -> dict[str, Any]:
     return dict(_last_sync_status or {"synced": False, "reason": "not_run"})
 
 
-def _jwks() -> PyJWKClient:
-    global _jwks_client
-    if _jwks_client is None:
-        if not CLERK_JWKS_URL:
-            raise RuntimeError("CLERK_JWKS_URL is not configured")
-        _jwks_client = PyJWKClient(CLERK_JWKS_URL)
-    return _jwks_client
+def _fetch_bapi_jwks_sync() -> dict[str, Any]:
+    """JWKS via Clerk Backend API — works when clerk.* custom-domain TLS is not ready."""
+    import time
+
+    global _jwks_keys_cache, _jwks_keys_cache_at
+    now = time.time()
+    if _jwks_keys_cache and now - _jwks_keys_cache_at < _JWKS_TTL_SECONDS:
+        return _jwks_keys_cache
+    with httpx.Client(timeout=15) as client:
+        r = client.get(f"{CLERK_BAPI}/jwks", headers=_bapi_headers())
+        r.raise_for_status()
+        _jwks_keys_cache = r.json()
+        _jwks_keys_cache_at = now
+        return _jwks_keys_cache
+
+
+def _signing_key_from_jwt(token: str):
+    import json
+    from jwt.algorithms import RSAAlgorithm
+
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    jwks = _fetch_bapi_jwks_sync()
+    for key_data in jwks.get("keys", []):
+        if key_data.get("kid") == kid:
+            return RSAAlgorithm.from_jwk(json.dumps(key_data))
+    raise jwt.InvalidTokenError("JWKS kid not found")
 
 
 def _bapi_headers() -> dict[str, str]:
@@ -224,12 +246,12 @@ async def clerk_api_ok() -> bool:
 
 
 async def clerk_jwks_ok() -> bool:
-    """True when the configured JWKS URL is reachable (JWT verification will work)."""
-    if not CLERK_JWKS_URL:
+    """True when JWKS is reachable (via Clerk Backend API)."""
+    if not CLERK_SECRET_KEY:
         return False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(CLERK_JWKS_URL)
+            r = await client.get(f"{CLERK_BAPI}/jwks", headers=_bapi_headers())
             return r.status_code == 200 and b"keys" in r.content
     except Exception:
         return False
@@ -244,7 +266,7 @@ def clerk_proxy_url() -> str | None:
 
 async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     """Proxy Clerk Frontend API when clerk.* custom-domain TLS is not ready."""
-    from starlette.responses import Response
+    from starlette.responses import JSONResponse, Response
 
     qs = request.url.query
     target = f"{CLERK_FAPI}/{path}".rstrip("/")
@@ -261,20 +283,25 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
         if val:
             forward[key] = val
     forward["Clerk-Proxy-Url"] = proxy_base
-    forward["X-Forwarded-For"] = request.client.host if request.client else ""
-    forward["host"] = "frontend-api.clerk.services"
+    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")
+    if client_ip:
+        forward["X-Forwarded-For"] = client_ip
 
-    body = await request.body()
-    async with httpx.AsyncClient(timeout=30) as client:
-        upstream = await client.request(
-            request.method,
-            target,
-            headers=forward,
-            content=body if body else None,
-        )
-    skip = {"transfer-encoding", "content-encoding", "content-length"}
-    headers = {k: v for k, v in upstream.headers.items() if k.lower() not in skip}
-    return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
+    try:
+        body = await request.body()
+        async with httpx.AsyncClient(timeout=30) as client:
+            upstream = await client.request(
+                request.method,
+                target,
+                headers=forward,
+                content=body if body else None,
+            )
+        skip = {"transfer-encoding", "content-encoding", "content-length"}
+        headers = {k: v for k, v in upstream.headers.items() if k.lower() not in skip}
+        return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
+    except Exception:
+        logger.exception("clerk fapi proxy failed for %s", target)
+        return JSONResponse({"error": "Clerk proxy failed"}, status_code=502)
 
 
 async def fetch_clerk_instance() -> dict[str, Any] | None:
@@ -294,10 +321,10 @@ async def fetch_clerk_instance() -> dict[str, Any] | None:
 def decode_clerk_jwt(token: str) -> dict[str, Any]:
     """Verify signature + expiry; return JWT payload."""
     try:
-        signing_key = _jwks().get_signing_key_from_jwt(token)
+        signing_key = _signing_key_from_jwt(token)
         return jwt.decode(
             token,
-            signing_key.key,
+            signing_key,
             algorithms=["RS256"],
             options={"verify_aud": False},
         )
