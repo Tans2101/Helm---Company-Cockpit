@@ -132,6 +132,7 @@ export default function ClerkHelmBridge() {
   }, [
     clerkReady, clerkActive, user, session?.id, sessionId, userId, sessionStatus,
     getToken, session, setUser, setSessionError, clearSessionError, navigate,
+    clerkMultiDomain, clerkPrimaryOrigin, helmCanonicalOrigin,
   ]);
 
   return null;
