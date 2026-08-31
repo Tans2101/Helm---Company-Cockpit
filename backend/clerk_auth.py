@@ -210,16 +210,25 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 "allowed_origins": merged,
                 "url_based_session_syncing": True,
             }
-            if is_dev_fapi or env_type == "development":
+            # development_origin only applies when BAPI reports development — not hybrid prod keys + dev FAPI.
+            if env_type == "development":
                 patch_body["development_origin"] = primary
 
-            needs_patch = merged != sorted(current) or is_dev_fapi or env_type == "development"
+            needs_patch = merged != sorted(current) or env_type == "development"
             if needs_patch:
                 patch = await client.patch(
                     f"{CLERK_BAPI}/instance",
                     headers=headers,
                     json=patch_body,
                 )
+                if patch.status_code == 422 and "development_origin" in patch_body:
+                    logger.warning("Clerk rejected development_origin — retrying without it")
+                    retry_body = {k: v for k, v in patch_body.items() if k != "development_origin"}
+                    patch = await client.patch(
+                        f"{CLERK_BAPI}/instance",
+                        headers=headers,
+                        json=retry_body,
+                    )
                 if patch.status_code >= 400:
                     status["reason"] = f"instance_patch_{patch.status_code}"
                     status["patch_error"] = patch.text[:500]
@@ -251,7 +260,6 @@ async def sync_clerk_instance() -> dict[str, Any]:
                     patch_body.get("development_origin"),
                 )
 
-            jwks_host = urlparse(CLERK_JWKS_URL).hostname or ""
             if is_dev_fapi and primary and "vercel.app" in primary:
                 status["warnings"].append(
                     "Using Clerk development FAPI on Vercel — migrate to a *.clerk.com production instance when ready."
