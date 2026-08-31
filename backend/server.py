@@ -163,7 +163,11 @@ def _session_cookie_domain() -> str | None:
     explicit = os.environ.get("COOKIE_DOMAIN", "").strip()
     if explicit:
         return explicit
-    for raw in (FRONTEND_URL, APP_URL):
+    for raw in (
+        clerk_auth.primary_frontend_origin(),
+        FRONTEND_URL,
+        APP_URL,
+    ):
         if not raw:
             continue
         host = urlparse(raw).hostname
@@ -2359,7 +2363,9 @@ if not _serve_static:
 
 app.include_router(api_router)
 
-_cors_origins = CORS_ORIGINS or ([FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"])
+_cors_origins = list(dict.fromkeys(
+    CORS_ORIGINS + clerk_auth.helm_frontend_origins()
+)) or (clerk_auth.helm_frontend_origins() or ["http://localhost:3000"])
 _cors_regex = CORS_ORIGIN_REGEX
 if not _cors_regex and any("emergentagent.com" in o for o in _cors_origins):
     _cors_regex = r"https://.*\.emergentagent\.com"

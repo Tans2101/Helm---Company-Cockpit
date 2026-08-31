@@ -53,7 +53,10 @@ def helm_frontend_origins() -> list[str]:
 
 
 def primary_frontend_origin() -> str | None:
-    """Production frontend origin — used as Clerk development_origin for dev instances."""
+    """Production frontend origin — apexcoach.tech when configured."""
+    for origin in helm_frontend_origins():
+        if origin.startswith("https://") and "apexcoach.tech" in origin:
+            return origin
     preferred = (FRONTEND_URL, os.environ.get("APP_URL", "").strip().rstrip("/"))
     for origin in preferred:
         if origin and origin.startswith("https://") and "localhost" not in origin:
