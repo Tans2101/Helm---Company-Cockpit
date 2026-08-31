@@ -1,13 +1,7 @@
 {
   "build": {
     "env": {
-      "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online",
-      "REACT_APP_CLERK_SIGN_IN_URL": "/login",
-      "REACT_APP_CLERK_SIGN_UP_URL": "/sign-up",
-      "REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL": "https://www.helmcontrol.online/app",
-      "REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL": "https://www.helmcontrol.online/app",
-      "REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "https://www.helmcontrol.online/app",
-      "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://www.helmcontrol.online/app"
+      "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online"
     }
   },
   "rewrites": [

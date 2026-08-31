@@ -30,7 +30,8 @@ export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false
       return;
     }
     if (deferInitialAuth) {
-      setLoading(false);
+      // Still honor an existing Helm session cookie before Clerk exchange.
+      checkAuth().catch(() => setLoading(false));
       return;
     }
     checkAuth().catch(() => {});

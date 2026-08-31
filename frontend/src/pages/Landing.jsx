@@ -6,6 +6,7 @@ import {
   Layers, Zap, Command, Check, Star,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
@@ -71,18 +72,38 @@ function BriefingPreview() {
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const { clerkEnabled } = useClerkMode();
+  if (clerkEnabled) {
+    return <LandingWithClerk user={user} loading={loading} />;
+  }
+  return <LandingWithoutClerk user={user} loading={loading} />;
+}
+
+function LandingWithClerk({ user, loading }) {
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const navigate = useNavigate();
   const clerkActive = clerkLoaded && clerkSessionActive({
     isSignedIn, userId, sessionId, session: null, sessionStatus,
   });
   const authed = !loading && (!!user || clerkActive);
-
   const enter = () => {
     if (authed) navigate("/app");
     else navigate("/login");
   };
+  return <LandingContent authed={authed} enter={enter} />;
+}
 
+function LandingWithoutClerk({ user, loading }) {
+  const navigate = useNavigate();
+  const authed = !loading && !!user;
+  const enter = () => {
+    if (authed) navigate("/app");
+    else navigate("/login");
+  };
+  return <LandingContent authed={authed} enter={enter} />;
+}
+
+function LandingContent({ authed, enter }) {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const problems = [

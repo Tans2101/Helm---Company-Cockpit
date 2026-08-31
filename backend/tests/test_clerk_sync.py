@@ -39,8 +39,16 @@ def test_derive_publishable_key_from_apexcoach_jwks():
 
 
 def test_resolve_publishable_key_prefers_env(monkeypatch):
+    aligned = clerk_auth.derive_publishable_key_from_jwks(clerk_auth.CLERK_JWKS_URL, mode="live")
+    monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", aligned)
+    assert clerk_auth.resolve_clerk_publishable_key() == aligned
+
+
+def test_resolve_publishable_key_ignores_misaligned_env(monkeypatch):
     monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", "pk_live_custom")
-    assert clerk_auth.resolve_clerk_publishable_key() == "pk_live_custom"
+    derived = clerk_auth.resolve_clerk_publishable_key()
+    assert derived.startswith("pk_live_")
+    assert clerk_auth.clerk_keys_aligned(derived, clerk_auth.CLERK_JWKS_URL)
 
 
 def test_resolve_publishable_key_derives_from_jwks(monkeypatch):

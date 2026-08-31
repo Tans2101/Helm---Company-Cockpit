@@ -20,7 +20,7 @@ services:
     branch: main
     autoDeployTrigger: commit
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt && python scripts/check_prod_env.py
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
@@ -51,7 +51,9 @@ services:
       - key: APP_URL
         value: https://www.helmcontrol.online
       - key: CORS_ORIGINS
-        value: https://www.helmcontrol.online,https://helmcontrol.online,https://helm-company-cockpit.vercel.app
+        value: https://www.helmcontrol.online,https://helmcontrol.online
+      - key: COOKIE_DOMAIN
+        value: helmcontrol.online
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE
@@ -69,7 +71,9 @@ services:
       - key: CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_JWKS_URL
-        sync: false
+        value: https://clerk.apexcoach.tech/.well-known/jwks.json
+      - key: SETUP_SECRET
+        generateValue: true
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { SignIn, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,8 @@ export default function Login() {
 }
 
 function LoginClerk() {
+  const [searchParams] = useSearchParams();
+  const urlError = searchParams.get("error");
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isLoaded: clerkLoaded, isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
   const { session, isLoaded: sessionLoaded } = useSession();
@@ -101,6 +103,10 @@ function LoginClerk() {
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
           <p className="text-zinc-500 text-sm mt-2">Sign in with Google or email.</p>
+
+          {urlError === "session_retired" && (
+            <p className="mt-4 text-sm text-amber-400">That sign-in link has expired. Please sign in again below.</p>
+          )}
 
           <div className="mt-6" data-testid="clerk-sign-in">
             <SignIn

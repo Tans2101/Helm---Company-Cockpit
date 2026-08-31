@@ -1,9 +1,8 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
-import AuthCallback from "@/components/AuthCallback";
 import ClerkHelmBridge from "@/components/ClerkHelmBridge";
 import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -49,19 +48,27 @@ function ClerkOAuthCallback() {
   );
 }
 
+function ClerkOAuthCallbackGuard() {
+  const { clerkEnabled } = useClerkMode();
+  if (!clerkEnabled) {
+    return <Navigate to="/login" replace />;
+  }
+  return <ClerkOAuthCallback />;
+}
+
 function AppRouter() {
   const location = useLocation();
   const { clerkEnabled } = useClerkMode();
   const Protected = clerkEnabled ? ProtectedRouteClerk : ProtectedRoute;
 
   if (location.hash?.includes("session_id=")) {
-    return <AuthCallback />;
+    return <Navigate to="/login?error=session_retired" replace />;
   }
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/login/sso-callback" element={<ClerkOAuthCallback />} />
-      <Route path="/sign-up/sso-callback" element={<ClerkOAuthCallback />} />
+      <Route path="/login/sso-callback" element={<ClerkOAuthCallbackGuard />} />
+      <Route path="/sign-up/sso-callback" element={<ClerkOAuthCallbackGuard />} />
       <Route path="/login/*" element={<Login />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<Privacy />} />

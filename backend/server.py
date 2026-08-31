@@ -26,7 +26,7 @@ from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
 import clerk_auth
-from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url
+from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 
@@ -152,6 +152,7 @@ PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
 CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
+SETUP_SECRET = os.environ.get("SETUP_SECRET", "").strip()
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -174,11 +175,9 @@ def _session_cookie_domain() -> str | None:
         if not raw:
             continue
         host = urlparse(raw).hostname
-        if host and host not in ("localhost", "127.0.0.1"):
-            # Host-only cookies work reliably through Vercel /api rewrites to Render.
-            if host.endswith(".vercel.app"):
-                return None
-            return host
+        domain = registrable_cookie_domain(host)
+        if domain:
+            return domain
     return None
 
 
@@ -195,7 +194,10 @@ def set_session_cookie(response: Response, token: str):
 
 
 def clear_session_cookie(response: Response):
-    kwargs = dict(key="session_token", path="/")
+    kwargs = dict(
+        key="session_token", path="/",
+        httponly=True, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE,
+    )
     domain = _session_cookie_domain()
     if domain:
         kwargs["domain"] = domain
@@ -279,10 +281,19 @@ def _allowed_auth_redirect(url: str) -> bool:
         return True
     bases = {APP_URL.rstrip("/")} if APP_URL else set()
     bases.update(o.rstrip("/") for o in CORS_ORIGINS if o)
+    bases.update(clerk_auth.helm_frontend_origins())
     for base in bases:
         if url == base or url.startswith(base + "/"):
             return True
     return False
+
+
+def _require_setup_secret(request: Request) -> None:
+    if not SETUP_SECRET:
+        raise HTTPException(status_code=503, detail="Setup endpoint disabled (set SETUP_SECRET on Render)")
+    provided = request.headers.get("X-Setup-Secret", "").strip()
+    if not provided or not hmac.compare_digest(provided, SETUP_SECRET):
+        raise HTTPException(status_code=401, detail="Invalid setup secret")
 
 
 def _sign_state(provider: str, workspace_id: str) -> str:
@@ -682,8 +693,12 @@ async def _issue_session(response: Response, user_id: str) -> str:
     return session_token
 
 
-def _auth_redirect_uri(request: Request) -> str:
-    return f"{str(request.base_url).rstrip('/')}/api/auth/google/callback"
+def _auth_redirect_uri(_request: Request) -> str:
+    return f"{public_api_origin()}/api/auth/google/callback"
+
+
+def _oauth_callback_uri(provider: str) -> str:
+    return f"{public_api_origin()}/api/oauth/{provider}/callback"
 
 
 @api_router.get("/auth/config")
@@ -698,7 +713,7 @@ async def auth_config():
         else None
     )
     return {
-        "demo_login": False,
+        "demo_login": ALLOW_DEMO_LOGIN,
         "clerk_enabled": clerk_on,
         "clerk_secret_mode": clerk_mode if clerk_on else None,
         "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
@@ -762,7 +777,11 @@ async def google_login(request: Request, redirect: Optional[str] = None):
     if not _allowed_auth_redirect(dest):
         raise HTTPException(status_code=400, detail="Invalid redirect URL")
     state = jwt.encode(
-        {"redirect": dest, "ts": int(datetime.now(timezone.utc).timestamp())},
+        {
+            "redirect": dest,
+            "ts": int(datetime.now(timezone.utc).timestamp()),
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
+        },
         OAUTH_STATE_SECRET, algorithm="HS256",
     )
     params = {
@@ -1837,8 +1856,8 @@ GOOGLE_SCOPES = [
 ]
 
 
-def _provider_config(provider: str, base_url: str):
-    redirect = f"{base_url}api/oauth/{provider}/callback"
+def _provider_config(provider: str):
+    redirect = _oauth_callback_uri(provider)
     if provider == "google":
         return {
             "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
@@ -1897,7 +1916,7 @@ async def toggle_integration(integration_id: str, principal=Depends(require("int
 
 @api_router.get("/integrations/{provider}/connect")
 async def integration_connect(provider: str, request: Request, principal=Depends(require("integrations:manage"))):
-    cfg = _provider_config(provider, str(request.base_url))
+    cfg = _provider_config(provider)
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown provider")
     if not cfg["configured"]:
@@ -1909,8 +1928,8 @@ async def integration_connect(provider: str, request: Request, principal=Depends
 
 @api_router.get("/oauth/{provider}/callback")
 async def oauth_callback(provider: str, request: Request, code: Optional[str] = None, state: Optional[str] = None, realmId: Optional[str] = None):
-    cfg = _provider_config(provider, str(request.base_url))
-    frontend = str(request.base_url).rstrip("/")
+    cfg = _provider_config(provider)
+    frontend = (APP_URL or public_api_origin()).rstrip("/")
     if not cfg or not code or not state:
         return RedirectResponse(f"{frontend}/integrations?error=oauth")
     verified = _verify_state(state)
@@ -2333,8 +2352,9 @@ async def setup_status():
 
 
 @api_router.post("/setup/clerk-sync")
-async def setup_clerk_sync():
+async def setup_clerk_sync(request: Request):
     """Force Clerk instance sync (allowed_origins + development_origin for Vercel)."""
+    _require_setup_secret(request)
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=400, detail="Clerk is not configured")
     result = await clerk_auth.sync_clerk_instance()

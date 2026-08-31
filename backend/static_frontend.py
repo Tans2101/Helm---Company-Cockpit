@@ -1,4 +1,4 @@
-"""Serve the React production build from FastAPI (apexcoach.tech on Render)."""
+"""Serve the React production build from FastAPI (optional monolith deploy on Render)."""
 from __future__ import annotations
 
 import os

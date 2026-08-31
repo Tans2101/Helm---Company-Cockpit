@@ -11,7 +11,7 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
-from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS
+from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS, is_stale_deploy_url
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +28,25 @@ def _resolve_clerk_jwks_url() -> str:
 
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
 CLERK_JWKS_URL = _resolve_clerk_jwks_url()
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
+
+_raw_frontend = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
+FRONTEND_URL = HELM_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_frontend) else _raw_frontend
+
+_raw_app = os.environ.get("APP_URL", "").strip().rstrip("/")
+APP_URL_CLERK = HELM_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_app) else (_raw_app or FRONTEND_URL)
+
+# Extra origins from CORS_ORIGINS env (e.g. legacy apexcoach during migration).
+_extra_cors = {
+    o.strip().rstrip("/")
+    for o in os.environ.get("CORS_ORIGINS", "").split(",")
+    if o.strip()
+}
 
 HELM_CLERK_ORIGINS = {
     "https://helmcontrol.online",
     "https://www.helmcontrol.online",
-    "https://apexcoach.tech",
-    "https://www.apexcoach.tech",
-    "https://helm-company-cockpit.vercel.app",
     "http://localhost:3000",
+    *_extra_cors,
 }
 
 _jwks_client: PyJWKClient | None = None
@@ -98,10 +108,15 @@ def clerk_keys_aligned(publishable_key: str, jwks_url: str) -> bool:
 
 
 def resolve_clerk_publishable_key() -> str:
-    """Env override, else derive from JWKS + secret mode so keys always match."""
+    """Env override (must match JWKS), else derive from JWKS + secret mode."""
     explicit = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
     if explicit:
-        return explicit
+        if not clerk_keys_aligned(explicit, CLERK_JWKS_URL):
+            logger.error(
+                "CLERK_PUBLISHABLE_KEY does not match CLERK_JWKS_URL host — ignoring explicit key"
+            )
+        else:
+            return explicit
     mode = clerk_secret_mode()
     if not mode or not CLERK_JWKS_URL:
         return ""
@@ -117,7 +132,7 @@ def helm_frontend_origins() -> list[str]:
     origins = {o for o in (
         *HELM_CLERK_ORIGINS,
         FRONTEND_URL,
-        os.environ.get("APP_URL", "").strip().rstrip("/"),
+        APP_URL_CLERK,
     ) if o}
     return sorted(origins)
 
@@ -136,7 +151,7 @@ def primary_frontend_origin() -> str | None:
                 return origin
     if HELM_CANONICAL_ORIGIN and HELM_CANONICAL_ORIGIN.startswith("https://"):
         return HELM_CANONICAL_ORIGIN
-    preferred = (FRONTEND_URL, os.environ.get("APP_URL", "").strip().rstrip("/"))
+    preferred = (FRONTEND_URL, APP_URL_CLERK)
     for origin in preferred:
         if origin and origin.startswith("https://") and "localhost" not in origin:
             return origin

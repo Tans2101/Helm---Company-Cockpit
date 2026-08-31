@@ -1,7 +1,20 @@
 # Put Helm on helmcontrol.online (Namecheap + Vercel + Render API)
 
-**App:** https://helmcontrol.online  
+**App:** https://www.helmcontrol.online  
 **API:** https://helm-company-cockpit.onrender.com (proxied via Vercel `/api/*`)
+
+## Who hosts what?
+
+| Piece | Provider | Role |
+|-------|----------|------|
+| **Domain registration** | **Namecheap** | You own `helmcontrol.online` here |
+| **Website (React UI)** | **Vercel** | Serves `www.helmcontrol.online` |
+| **API (FastAPI)** | **Render** | `helm-company-cockpit.onrender.com` — **not** the public website |
+| **DNS** | Namecheap Advanced DNS | A/CNAME records point `@` and `www` to Vercel |
+
+The **Render deploy button** updates the **API only**. Vercel serves the site and proxies `/api/*` to Render, so users on `helmcontrol.online` hit Vercel first.
+
+Clerk may still show **apexcoach.tech** branding — that is your Clerk production instance’s primary domain. Sign-in works on helmcontrol once allowed origins and redirect URLs are set (see Step 3).
 
 ---
 
@@ -33,8 +46,9 @@ Remove any parking-page records Namecheap adds by default.
    - `helmcontrol.online`
    - `www.helmcontrol.online` (optional)
 2. **Settings** → **General** → **Root Directory** = `frontend`
-3. **Environment Variables** (if not set):
-   - `REACT_APP_CLERK_PUBLISHABLE_KEY` = your `pk_live_...`
+3. **Environment Variables** (optional but faster first paint):
+   - `REACT_APP_CLERK_PUBLISHABLE_KEY` = matching `pk_live_...` (same instance as Render `CLERK_SECRET_KEY`)
+   - If unset, the app loads the key from `/api/auth/config` after deploy (Render derives it from `CLERK_JWKS_URL`).
 4. **Redeploy** production
 
 `frontend/vercel.json` already rewrites `/api/*` to Render.
@@ -48,14 +62,15 @@ Clerk Dashboard → **Configure**:
 | Area | Setting |
 |------|---------|
 | **Domains** | Add `helmcontrol.online` |
-| **Developers** → Allowed origins | `https://helmcontrol.online`, `http://localhost:3000` |
+| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
 | **Account Portal → Redirects** | Set **every** fallback/force field to `https://www.helmcontrol.online/app` |
 | **SSO connections** → Google | Add helmcontrol.online redirect URIs if prompted |
 
-Then sync from terminal:
+Then sync from terminal (use `SETUP_SECRET` from Render env):
 
 ```bash
-curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync
+curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
+  -H "X-Setup-Secret: YOUR_SETUP_SECRET"
 ```
 
 ---
