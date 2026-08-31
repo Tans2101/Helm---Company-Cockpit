@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import httpx
 import jwt
-from jwt import PyJWKClient
 
 from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS, is_stale_deploy_url
 
@@ -258,10 +257,10 @@ async def clerk_jwks_ok() -> bool:
 
 
 def clerk_proxy_url() -> str | None:
-    """Public Clerk FAPI proxy base URL (browser → Helm API → Clerk FAPI)."""
+    """Public Clerk FAPI proxy base URL (Vercel /__clerk → serverless)."""
     if not HELM_CANONICAL_ORIGIN:
         return None
-    return f"{HELM_CANONICAL_ORIGIN.rstrip('/')}/api/clerk-proxy"
+    return f"{HELM_CANONICAL_ORIGIN.rstrip('/')}/__clerk"
 
 
 async def proxy_clerk_fapi(path: str, request: Any) -> Any:
@@ -272,7 +271,7 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     target = f"{CLERK_FAPI}/{path}".rstrip("/")
     if qs:
         target = f"{target}?{qs}"
-    proxy_base = clerk_proxy_url() or f"{HELM_CANONICAL_ORIGIN}/api/clerk-proxy"
+    proxy_base = clerk_proxy_url() or f"{HELM_CANONICAL_ORIGIN}/__clerk"
 
     forward: dict[str, str] = {}
     for key in (
@@ -283,9 +282,11 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
         if val:
             forward[key] = val
     forward["Clerk-Proxy-Url"] = proxy_base
-    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")
-    if client_ip:
-        forward["X-Forwarded-For"] = client_ip
+    if CLERK_SECRET_KEY:
+        forward["Clerk-Secret-Key"] = CLERK_SECRET_KEY
+    xff = request.headers.get("x-forwarded-for", "")
+    client_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "127.0.0.1")
+    forward["X-Forwarded-For"] = client_ip
 
     try:
         body = await request.body()

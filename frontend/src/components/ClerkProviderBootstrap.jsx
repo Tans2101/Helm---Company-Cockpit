@@ -9,7 +9,7 @@ function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
   const host = window.location.hostname;
   if (!host.endsWith("helmcontrol.online") && !host.endsWith("vercel.app")) return undefined;
-  return `${window.location.origin.replace(/\/$/, "")}/api/clerk-proxy`;
+  return `${window.location.origin.replace(/\/$/, "")}/__clerk`;
 }
 
 const ClerkModeContext = createContext({
