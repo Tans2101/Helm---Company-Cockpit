@@ -5,13 +5,6 @@ import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { clerkPostAuthUrl, helmAppUrl } from "@/lib/helmUrls";
 import { LoadingScreen } from "@/components/kit";
 
-function clerkProxyUrl() {
-  if (typeof window === "undefined") return undefined;
-  const host = window.location.hostname;
-  if (!host.endsWith("helmcontrol.online") && !host.endsWith("vercel.app")) return undefined;
-  return `${window.location.origin.replace(/\/$/, "")}/__clerk`;
-}
-
 const ClerkModeContext = createContext({
   ready: false,
   clerkEnabled: false,
@@ -179,7 +172,6 @@ export default function ClerkProviderBootstrap({ children }) {
     <ClerkModeContext.Provider value={mode}>
       <ClerkProvider
         publishableKey={state.publishableKey}
-        proxyUrl={clerkProxyUrl()}
         signInUrl="/login"
         signUpUrl="/sign-up"
         signInForceRedirectUrl={redirectUrl}

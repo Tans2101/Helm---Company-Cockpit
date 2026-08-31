@@ -61,8 +61,7 @@ Remove any parking-page records Namecheap adds by default.
 |------|---------|
 | **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
 | **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
-| **Domains** → Proxy URL | `https://www.helmcontrol.online/__clerk` |
-| **Vercel env** | Add `CLERK_SECRET_KEY` (same live secret as Render) — required for `/__clerk` edge proxy |
+| **Domains** | Use **DNS** (CNAME below). Leave **Proxy URL empty** — proxy is not needed. |
 
 ### Clerk DNS (Namecheap Advanced DNS)
 
@@ -103,6 +102,6 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 |---------|-----|
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
-| Page stuck on "Loading sign-in" | Set Clerk Proxy URL to `https://www.helmcontrol.online/__clerk` and add `CLERK_SECRET_KEY` on Vercel; verify domain DNS/CAA in Clerk |
+| Page stuck on "Loading sign-in" | Clerk Dashboard → Domains: verify `clerk.helmcontrol.online` DNS (no proxy); add CAA `pki.goog` + `digicert.com` on Namecheap if SSL pending |
 | Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |
