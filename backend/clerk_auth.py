@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import jwt
@@ -12,6 +13,7 @@ from jwt import PyJWKClient
 logger = logging.getLogger(__name__)
 
 HELM_CLERK_JWKS_URL = "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
+CLERK_BAPI = "https://api.clerk.com/v1"
 
 
 def _resolve_clerk_jwks_url() -> str:
@@ -33,10 +35,33 @@ HELM_CLERK_ORIGINS = {
 }
 
 _jwks_client: PyJWKClient | None = None
+_last_sync_status: dict[str, Any] | None = None
 
 
 def clerk_configured() -> bool:
     return bool(CLERK_SECRET_KEY and CLERK_JWKS_URL)
+
+
+def helm_frontend_origins() -> list[str]:
+    """Origins Helm must register with Clerk for browser auth on Vercel/local."""
+    origins = {o for o in (
+        *HELM_CLERK_ORIGINS,
+        FRONTEND_URL,
+        os.environ.get("APP_URL", "").strip().rstrip("/"),
+    ) if o}
+    return sorted(origins)
+
+
+def primary_frontend_origin() -> str | None:
+    """Production Vercel origin — used as Clerk development_origin for dev instances."""
+    for origin in helm_frontend_origins():
+        if origin.startswith("https://") and "localhost" not in origin:
+            return origin
+    return helm_frontend_origins()[0] if helm_frontend_origins() else None
+
+
+def clerk_sync_status() -> dict[str, Any]:
+    return dict(_last_sync_status or {"synced": False, "reason": "not_run"})
 
 
 def _jwks() -> PyJWKClient:
@@ -48,19 +73,34 @@ def _jwks() -> PyJWKClient:
     return _jwks_client
 
 
+def _bapi_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
+
+
 async def clerk_api_ok() -> bool:
     """True when CLERK_SECRET_KEY can reach the Clerk API (matches publishable key instance)."""
     if not CLERK_SECRET_KEY:
         return False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                "https://api.clerk.com/v1/instance",
-                headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
-            )
+            r = await client.get(f"{CLERK_BAPI}/instance", headers=_bapi_headers())
             return r.status_code == 200
     except Exception:
         return False
+
+
+async def fetch_clerk_instance() -> dict[str, Any] | None:
+    if not clerk_configured():
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{CLERK_BAPI}/instance", headers=_bapi_headers())
+            if r.status_code >= 400:
+                return None
+            return r.json()
+    except Exception:
+        logger.exception("Clerk instance GET failed")
+        return None
 
 
 def decode_clerk_jwt(token: str) -> dict[str, Any]:
@@ -85,8 +125,8 @@ def decode_clerk_jwt(token: str) -> dict[str, Any]:
 async def fetch_clerk_user_profile(clerk_user_id: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(
-            f"https://api.clerk.com/v1/users/{clerk_user_id}",
-            headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"},
+            f"{CLERK_BAPI}/users/{clerk_user_id}",
+            headers=_bapi_headers(),
         )
     if r.status_code >= 400:
         raise ValueError(f"Clerk user lookup failed ({r.status_code}) — check CLERK_SECRET_KEY matches pk_live")
@@ -117,40 +157,145 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     return await fetch_clerk_user_profile(clerk_user_id)
 
 
-async def ensure_allowed_origins() -> bool:
-    """Register Helm frontend URL(s) with Clerk so browser sign-in works on Vercel."""
+async def sync_clerk_instance() -> dict[str, Any]:
+    """Register Helm Vercel origin with Clerk — required for dev instances on production URL."""
+    global _last_sync_status
+    wanted = helm_frontend_origins()
+    primary = primary_frontend_origin()
     if not clerk_configured():
-        logger.info("Clerk origin sync skipped — secret/JWKS not configured")
+        _last_sync_status = {"synced": False, "reason": "clerk_not_configured"}
+        return _last_sync_status
+    if not wanted or not primary:
+        _last_sync_status = {"synced": False, "reason": "no_frontend_origin"}
+        return _last_sync_status
+
+    status: dict[str, Any] = {
+        "synced": False,
+        "wanted_origins": wanted,
+        "primary_origin": primary,
+        "environment_type": None,
+        "allowed_origins_before": [],
+        "allowed_origins_after": [],
+        "development_origin_set": None,
+        "url_based_session_syncing": True,
+        "warnings": [],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = _bapi_headers()
+            r = await client.get(f"{CLERK_BAPI}/instance", headers=headers)
+            if r.status_code >= 400:
+                status["reason"] = f"instance_get_{r.status_code}"
+                _last_sync_status = status
+                return status
+
+            inst = r.json()
+            env_type = inst.get("environment_type")
+            current = set(inst.get("allowed_origins") or [])
+            status["environment_type"] = env_type
+            status["allowed_origins_before"] = sorted(current)
+
+            if env_type == "development":
+                status["warnings"].append(
+                    "Clerk instance is development — create a production instance in Clerk Dashboard "
+                    "for a permanent fix. Helm auto-configures development_origin for Vercel."
+                )
+
+            merged = sorted(current | set(wanted))
+            patch_body: dict[str, Any] = {
+                "allowed_origins": merged,
+                "url_based_session_syncing": True,
+            }
+            if env_type == "development":
+                patch_body["development_origin"] = primary
+
+            needs_patch = (
+                merged != sorted(current)
+                or env_type == "development"
+            )
+            if needs_patch:
+                patch = await client.patch(
+                    f"{CLERK_BAPI}/instance",
+                    headers=headers,
+                    json=patch_body,
+                )
+                if patch.status_code >= 400:
+                    status["reason"] = f"instance_patch_{patch.status_code}"
+                    status["patch_error"] = patch.text[:500]
+                    _last_sync_status = status
+                    logger.warning("Clerk instance PATCH failed (%s): %s", patch.status_code, patch.text[:200])
+                    return status
+                status["patched"] = True
+                status["development_origin_set"] = patch_body.get("development_origin")
+            else:
+                status["patched"] = False
+
+            verify = await client.get(f"{CLERK_BAPI}/instance", headers=headers)
+            if verify.status_code == 200:
+                after = verify.json()
+                status["allowed_origins_after"] = sorted(after.get("allowed_origins") or [])
+                status["environment_type"] = after.get("environment_type")
+
+            missing = [o for o in wanted if o not in set(status["allowed_origins_after"])]
+            status["missing_origins"] = missing
+            status["synced"] = not missing
+            if missing:
+                status["reason"] = "origins_still_missing"
+            else:
+                status["reason"] = "ok"
+                logger.info(
+                    "Clerk instance synced for Helm (env=%s, origins=%s, dev_origin=%s)",
+                    status["environment_type"],
+                    ", ".join(wanted),
+                    patch_body.get("development_origin"),
+                )
+
+            jwks_host = urlparse(CLERK_JWKS_URL).hostname or ""
+            if jwks_host.endswith(".clerk.accounts.dev") and primary and "vercel.app" in primary:
+                status["warnings"].append(
+                    "Using Clerk development keys on Vercel — sign-in works after sync, "
+                    "but migrate to a Clerk production instance when ready."
+                )
+
+            _last_sync_status = status
+            return status
+    except Exception:
+        logger.exception("Clerk instance sync failed")
+        status["reason"] = "exception"
+        _last_sync_status = status
+        return status
+
+
+async def ensure_allowed_origins() -> bool:
+    """Back-compat wrapper — sync full Clerk instance settings for Helm."""
+    result = await sync_clerk_instance()
+    return bool(result.get("synced"))
+
+
+async def ensure_allowed_origins_legacy() -> bool:
+    """Previous allowed_origins-only sync (kept for reference in tests)."""
+    if not clerk_configured():
         return False
-    wanted = {o for o in (
-        *HELM_CLERK_ORIGINS,
-        FRONTEND_URL,
-        os.environ.get("APP_URL", "").strip().rstrip("/"),
-    ) if o}
+    wanted = set(helm_frontend_origins())
     if not wanted:
         return False
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            headers = {"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
-            r = await client.get("https://api.clerk.com/v1/instance", headers=headers)
+            headers = _bapi_headers()
+            r = await client.get(f"{CLERK_BAPI}/instance", headers=headers)
             if r.status_code >= 400:
-                logger.warning("Clerk instance GET failed (%s)", r.status_code)
                 return False
             current = set(r.json().get("allowed_origins") or [])
             merged = sorted(current | wanted)
             if merged == sorted(current):
-                logger.info("Clerk allowed_origins already include Helm URLs")
                 return True
             patch = await client.patch(
-                "https://api.clerk.com/v1/instance",
+                f"{CLERK_BAPI}/instance",
                 headers=headers,
                 json={"allowed_origins": merged},
             )
-            if patch.status_code >= 400:
-                logger.warning("Clerk allowed_origins PATCH failed (%s)", patch.status_code)
-                return False
-            logger.info("Clerk allowed_origins updated: %s", ", ".join(sorted(wanted)))
-            return True
+            return patch.status_code < 400
     except Exception:
         logger.exception("Clerk allowed_origins sync failed")
         return False

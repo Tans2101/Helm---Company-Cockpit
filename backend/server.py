@@ -2293,6 +2293,7 @@ async def setup_status():
     """Production readiness probe — no secrets."""
     mongo_ok = await _mongo_ping()
     probes = await _probe_mongo_candidates()
+    clerk_sync = clerk_auth.clerk_sync_status()
     return {
         "frontend_url": FRONTEND_URL or None,
         "clerk_enabled": clerk_auth.clerk_configured(),
@@ -2304,6 +2305,8 @@ async def setup_status():
         ) if clerk_auth.clerk_configured() else None,
         "clerk_publishable_key_set": bool(CLERK_PUBLISHABLE_KEY),
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
+        "clerk_sync": clerk_sync,
+        "clerk_instance_env": clerk_sync.get("environment_type"),
         "mongo": mongo_ok,
         "mongo_source": MONGO_SOURCE,
         "mongo_url": _redact_mongo_url(mongo_url),
@@ -2313,6 +2316,17 @@ async def setup_status():
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
     }
+
+
+@api_router.post("/setup/clerk-sync")
+async def setup_clerk_sync():
+    """Force Clerk instance sync (allowed_origins + development_origin for Vercel)."""
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=400, detail="Clerk is not configured")
+    result = await clerk_auth.sync_clerk_instance()
+    if not result.get("synced"):
+        raise HTTPException(status_code=503, detail=result)
+    return result
 
 
 @api_router.get("/health")
@@ -2424,7 +2438,7 @@ async def startup():
     await _connect_mongo_at_startup()
     # Do not block Render health checks — indexes run in background after listen.
     asyncio.create_task(_ensure_indexes())
-    asyncio.create_task(clerk_auth.ensure_allowed_origins())
+    asyncio.create_task(clerk_auth.sync_clerk_instance())
 
 
 @app.on_event("shutdown")
