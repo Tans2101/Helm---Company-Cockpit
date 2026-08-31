@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 HELM_CLERK_JWKS_URL = "https://clerk.helmcontrol.online/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
+CLERK_FAPI = "https://frontend-api.clerk.services"
 
 
 def _resolve_clerk_jwks_url() -> str:
@@ -232,6 +233,48 @@ async def clerk_jwks_ok() -> bool:
             return r.status_code == 200 and b"keys" in r.content
     except Exception:
         return False
+
+
+def clerk_proxy_url() -> str | None:
+    """Public Clerk FAPI proxy base URL (browser → Helm API → Clerk FAPI)."""
+    if not HELM_CANONICAL_ORIGIN:
+        return None
+    return f"{HELM_CANONICAL_ORIGIN.rstrip('/')}/api/clerk-proxy"
+
+
+async def proxy_clerk_fapi(path: str, request: Any) -> Any:
+    """Proxy Clerk Frontend API when clerk.* custom-domain TLS is not ready."""
+    from starlette.responses import Response
+
+    qs = request.url.query
+    target = f"{CLERK_FAPI}/{path}".rstrip("/")
+    if qs:
+        target = f"{target}?{qs}"
+    proxy_base = clerk_proxy_url() or f"{HELM_CANONICAL_ORIGIN}/api/clerk-proxy"
+
+    forward: dict[str, str] = {}
+    for key in (
+        "authorization", "content-type", "accept", "accept-language",
+        "user-agent", "origin", "referer", "cookie",
+    ):
+        val = request.headers.get(key)
+        if val:
+            forward[key] = val
+    forward["Clerk-Proxy-Url"] = proxy_base
+    forward["X-Forwarded-For"] = request.client.host if request.client else ""
+    forward["host"] = "frontend-api.clerk.services"
+
+    body = await request.body()
+    async with httpx.AsyncClient(timeout=30) as client:
+        upstream = await client.request(
+            request.method,
+            target,
+            headers=forward,
+            content=body if body else None,
+        )
+    skip = {"transfer-encoding", "content-encoding", "content-length"}
+    headers = {k: v for k, v in upstream.headers.items() if k.lower() not in skip}
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
 
 
 async def fetch_clerk_instance() -> dict[str, Any] | None:

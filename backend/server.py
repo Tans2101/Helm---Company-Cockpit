@@ -704,6 +704,12 @@ def _oauth_callback_uri(provider: str) -> str:
     return f"{public_api_origin()}/api/oauth/{provider}/callback"
 
 
+@api_router.api_route("/clerk-proxy/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def clerk_fapi_proxy(path: str, request: Request):
+    """Browser Clerk SDK proxy — avoids broken clerk.* custom-domain TLS during provisioning."""
+    return await clerk_auth.proxy_clerk_fapi(path, request)
+
+
 @api_router.get("/auth/config")
 async def auth_config():
     clerk_on = clerk_auth.clerk_configured()
@@ -728,7 +734,7 @@ async def auth_config():
         "clerk_multi_domain": clerk_auth.clerk_multi_domain_auth() if clerk_on else False,
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
         "clerk_jwks_ok": await clerk_auth.clerk_jwks_ok() if clerk_on else None,
-        "clerk_proxy_url": f"{HELM_CANONICAL_ORIGIN}/__clerk" if clerk_on else None,
+        "clerk_proxy_url": clerk_auth.clerk_proxy_url() if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),
