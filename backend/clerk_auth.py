@@ -10,6 +10,8 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
+from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS
+
 logger = logging.getLogger(__name__)
 
 HELM_CLERK_JWKS_URL = "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
@@ -28,6 +30,8 @@ CLERK_JWKS_URL = _resolve_clerk_jwks_url()
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
 
 HELM_CLERK_ORIGINS = {
+    "https://helmcontrol.online",
+    "https://www.helmcontrol.online",
     "https://apexcoach.tech",
     "https://www.apexcoach.tech",
     "https://helm-company-cockpit.vercel.app",
@@ -43,7 +47,7 @@ def clerk_configured() -> bool:
 
 
 def helm_frontend_origins() -> list[str]:
-    """Origins Helm must register with Clerk for browser auth on apexcoach.tech/local."""
+    """Origins Helm must register with Clerk for browser auth."""
     origins = {o for o in (
         *HELM_CLERK_ORIGINS,
         FRONTEND_URL,
@@ -53,10 +57,13 @@ def helm_frontend_origins() -> list[str]:
 
 
 def primary_frontend_origin() -> str | None:
-    """Production frontend origin — apexcoach.tech when configured."""
-    for origin in helm_frontend_origins():
-        if origin.startswith("https://") and "apexcoach.tech" in origin:
-            return origin
+    """Production frontend origin — helmcontrol.online when configured."""
+    for host in HELM_PRIMARY_HOSTS:
+        for origin in helm_frontend_origins():
+            if origin.startswith("https://") and host in origin:
+                return origin
+    if HELM_CANONICAL_ORIGIN and HELM_CANONICAL_ORIGIN.startswith("https://"):
+        return HELM_CANONICAL_ORIGIN
     preferred = (FRONTEND_URL, os.environ.get("APP_URL", "").strip().rstrip("/"))
     for origin in preferred:
         if origin and origin.startswith("https://") and "localhost" not in origin:
@@ -367,9 +374,9 @@ async def sync_clerk_instance() -> dict[str, Any]:
                     patch_body.get("development_origin"),
                 )
 
-            if is_dev_fapi and primary and "apexcoach.tech" not in primary:
+            if is_dev_fapi and primary and not any(h in primary for h in HELM_PRIMARY_HOSTS):
                 status["warnings"].append(
-                    "Using Clerk development FAPI — ensure apexcoach.tech is registered in Clerk Dashboard → Domains."
+                    "Using Clerk development FAPI — register helmcontrol.online in Clerk Dashboard → Domains."
                 )
 
             portal = await sync_clerk_account_portal(primary)

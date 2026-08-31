@@ -8,11 +8,11 @@ cd "$ROOT/frontend"
 npm ci
 
 echo "==> Building React app for apexcoach.tech"
-export REACT_APP_HELM_ORIGIN="${REACT_APP_HELM_ORIGIN:-https://apexcoach.tech}"
-export REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL="${REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL:-https://apexcoach.tech/app}"
-export REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL="${REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL:-https://apexcoach.tech/app}"
-export REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="${REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL:-https://apexcoach.tech/app}"
-export REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL="${REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL:-https://apexcoach.tech/app}"
+export REACT_APP_HELM_ORIGIN="${REACT_APP_HELM_ORIGIN:-https://helmcontrol.online}"
+export REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL="${REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL:-https://helmcontrol.online/app}"
+export REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL="${REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL:-https://helmcontrol.online/app}"
+export REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="${REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL:-https://helmcontrol.online/app}"
+export REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL="${REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL:-https://helmcontrol.online/app}"
 npm run build
 
 echo "==> Copying build to backend/static"

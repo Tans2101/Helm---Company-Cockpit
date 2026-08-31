@@ -1,13 +1,13 @@
 {
   "build": {
     "env": {
-      "REACT_APP_HELM_ORIGIN": "https://apexcoach.tech",
+      "REACT_APP_HELM_ORIGIN": "https://helmcontrol.online",
       "REACT_APP_CLERK_SIGN_IN_URL": "/login",
       "REACT_APP_CLERK_SIGN_UP_URL": "/sign-up",
-      "REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL": "https://apexcoach.tech/app",
-      "REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL": "https://apexcoach.tech/app",
-      "REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "https://apexcoach.tech/app",
-      "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://apexcoach.tech/app"
+      "REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL": "https://helmcontrol.online/app",
+      "REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL": "https://helmcontrol.online/app",
+      "REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "https://helmcontrol.online/app",
+      "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://helmcontrol.online/app"
     }
   },
   "rewrites": [

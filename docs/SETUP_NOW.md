@@ -1,7 +1,9 @@
 # Helm — set up NOW (your deployment)
 
 **Your API:** `https://helm-company-cockpit.onrender.com`  
-**Your app:** `https://apexcoach.tech` — use `/login` to sign in
+**Your app:** `https://helmcontrol.online` — use `/login` to sign in
+
+> Full domain setup: **[docs/HELMCONTROL_SETUP.md](HELMCONTROL_SETUP.md)** (Namecheap + Vercel + Clerk)
 
 **Current status (check anytime):**
 - Clerk: https://helm-company-cockpit.onrender.com/api/auth/config → `"clerk_enabled": true` ✓
@@ -43,9 +45,9 @@ Render → **helm-company-cockpit** → **Environment** → add/update:
 | `DB_NAME` | `helm` |
 | `SESSION_SECRET` | any long random string |
 | `OAUTH_STATE_SECRET` | any long random string |
-| `FRONTEND_URL` | `https://apexcoach.tech` |
-| `APP_URL` | `https://apexcoach.tech` |
-| `CORS_ORIGINS` | `https://apexcoach.tech,https://www.apexcoach.tech` |
+| `FRONTEND_URL` | `https://helmcontrol.online` |
+| `APP_URL` | `https://helmcontrol.online` |
+| `CORS_ORIGINS` | `https://helmcontrol.online,https://www.helmcontrol.online` |
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAMESITE` | `lax` |
 | `CLERK_SECRET_KEY` | `sk_live_...` or `sk_test_...` from Clerk |

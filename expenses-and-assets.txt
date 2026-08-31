@@ -1,0 +1,36 @@
+HELM / INFRA — EXPENSES & ASSETS
+Last updated: 2026-08-31
+
+================================================================================
+THINGS I OWN
+================================================================================
+
+Domains
+-------
+1. helmcontrol.online  ← OFFICIAL Helm domain (Namecheap)
+2. apexcoach.tech      (legacy / previous brand; DNS on Vercel)
+
+Code & repos
+------------
+- GitHub: Tans2101/Helm---Company-Cockpit (Helm CEO OS)
+
+Infrastructure
+--------------
+- Render — API (helm-company-cockpit.onrender.com)
+- Vercel — Helm frontend (helm-company-cockpit project)
+- Clerk — sign-in
+- MongoDB Atlas — Helm database
+
+================================================================================
+CONFIRMED MONTHLY EXPENSES
+================================================================================
+
+Cursor ............................ $20.00/month
+
+================================================================================
+CHECK RENEWAL / BILLING
+================================================================================
+
+helmcontrol.online .............. Namecheap → Domain List → renewal date
+apexcoach.tech .................. Vercel Domains or original registrar
+Render / Vercel / Clerk / Atlas . respective dashboards

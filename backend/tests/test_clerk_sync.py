@@ -1,4 +1,4 @@
-"""Clerk instance sync for apexcoach.tech deployment."""
+"""Clerk instance sync for helmcontrol.online deployment."""
 import asyncio
 import os
 import sys
@@ -11,8 +11,8 @@ os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_clerk_sync")
 os.environ["CLERK_SECRET_KEY"] = "sk_live_test"
 os.environ["CLERK_JWKS_URL"] = "https://clerk.apexcoach.tech/.well-known/jwks.json"
-os.environ["FRONTEND_URL"] = "https://apexcoach.tech"
-os.environ["APP_URL"] = "https://apexcoach.tech"
+os.environ["FRONTEND_URL"] = "https://helmcontrol.online"
+os.environ["APP_URL"] = "https://helmcontrol.online"
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,14 +21,14 @@ if str(ROOT) not in sys.path:
 import clerk_auth  # noqa: E402
 
 
-def test_helm_frontend_origins_includes_apexcoach():
+def test_helm_frontend_origins_includes_helmcontrol():
     origins = clerk_auth.helm_frontend_origins()
-    assert "https://apexcoach.tech" in origins
+    assert "https://helmcontrol.online" in origins
     assert "http://localhost:3000" in origins
 
 
-def test_primary_frontend_origin_prefers_apexcoach():
-    assert clerk_auth.primary_frontend_origin() == "https://apexcoach.tech"
+def test_primary_frontend_origin_prefers_helmcontrol():
+    assert clerk_auth.primary_frontend_origin() == "https://helmcontrol.online"
 
 
 def test_sync_clerk_instance_patches_dev_origin():
@@ -51,7 +51,7 @@ def test_sync_clerk_instance_patches_dev_origin():
             return self._data
 
     portal_resp = Resp({"after_sign_in_url": "", "after_sign_up_url": ""})
-    domains_resp = Resp({"data": [{"name": "apexcoach.tech", "id": "dom_1"}]})
+    domains_resp = Resp({"data": [{"name": "helmcontrol.online", "id": "dom_1"}]})
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(side_effect=[
         Resp(instance_before),
@@ -73,8 +73,8 @@ def test_sync_clerk_instance_patches_dev_origin():
     assert result["environment_type"] == "development"
     assert mock_client.patch.call_count >= 1
     body = mock_client.patch.call_args_list[0].kwargs["json"]
-    assert body["development_origin"] == "https://apexcoach.tech"
-    assert "https://apexcoach.tech" in body["allowed_origins"]
+    assert body["development_origin"] == "https://helmcontrol.online"
+    assert "https://helmcontrol.online" in body["allowed_origins"]
     assert body["url_based_session_syncing"] is True
 
 
