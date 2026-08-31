@@ -1,4 +1,4 @@
-"""Clerk instance sync for Vercel deployment."""
+"""Clerk instance sync for apexcoach.tech deployment."""
 import asyncio
 import os
 import sys
@@ -10,8 +10,9 @@ import pytest
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_clerk_sync")
 os.environ["CLERK_SECRET_KEY"] = "sk_live_test"
-os.environ["CLERK_JWKS_URL"] = "https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json"
-os.environ["FRONTEND_URL"] = "https://helm-company-cockpit.vercel.app"
+os.environ["CLERK_JWKS_URL"] = "https://clerk.apexcoach.tech/.well-known/jwks.json"
+os.environ["FRONTEND_URL"] = "https://apexcoach.tech"
+os.environ["APP_URL"] = "https://apexcoach.tech"
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -20,14 +21,14 @@ if str(ROOT) not in sys.path:
 import clerk_auth  # noqa: E402
 
 
-def test_helm_frontend_origins_includes_vercel():
+def test_helm_frontend_origins_includes_apexcoach():
     origins = clerk_auth.helm_frontend_origins()
-    assert "https://helm-company-cockpit.vercel.app" in origins
+    assert "https://apexcoach.tech" in origins
     assert "http://localhost:3000" in origins
 
 
-def test_primary_frontend_origin_prefers_https():
-    assert clerk_auth.primary_frontend_origin() == "https://helm-company-cockpit.vercel.app"
+def test_primary_frontend_origin_prefers_apexcoach():
+    assert clerk_auth.primary_frontend_origin() == "https://apexcoach.tech"
 
 
 def test_sync_clerk_instance_patches_dev_origin():
@@ -37,10 +38,7 @@ def test_sync_clerk_instance_patches_dev_origin():
     }
     instance_after = {
         "environment_type": "development",
-        "allowed_origins": [
-            "http://localhost:3000",
-            "https://helm-company-cockpit.vercel.app",
-        ],
+        "allowed_origins": sorted(clerk_auth.helm_frontend_origins()),
     }
 
     class Resp:
@@ -52,12 +50,17 @@ def test_sync_clerk_instance_patches_dev_origin():
         def json(self):
             return self._data
 
+    portal_resp = Resp({"after_sign_in_url": "", "after_sign_up_url": ""})
+    domains_resp = Resp({"data": [{"name": "apexcoach.tech", "id": "dom_1"}]})
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(side_effect=[
         Resp(instance_before),
         Resp(instance_after),
+        portal_resp,
+        domains_resp,
     ])
     mock_client.patch = AsyncMock(return_value=Resp({}, 204))
+    mock_client.post = AsyncMock(return_value=Resp({}, 201))
 
     mock_cm = AsyncMock()
     mock_cm.__aenter__.return_value = mock_client
@@ -68,10 +71,10 @@ def test_sync_clerk_instance_patches_dev_origin():
 
     assert result["synced"] is True
     assert result["environment_type"] == "development"
-    mock_client.patch.assert_called_once()
-    body = mock_client.patch.call_args.kwargs["json"]
-    assert body["development_origin"] == "https://helm-company-cockpit.vercel.app"
-    assert "https://helm-company-cockpit.vercel.app" in body["allowed_origins"]
+    assert mock_client.patch.call_count >= 1
+    body = mock_client.patch.call_args_list[0].kwargs["json"]
+    assert body["development_origin"] == "https://apexcoach.tech"
+    assert "https://apexcoach.tech" in body["allowed_origins"]
     assert body["url_based_session_syncing"] is True
 
 

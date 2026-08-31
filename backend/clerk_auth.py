@@ -18,11 +18,9 @@ CLERK_BAPI = "https://api.clerk.com/v1"
 
 def _resolve_clerk_jwks_url() -> str:
     env = os.environ.get("CLERK_JWKS_URL", "").strip()
-    if not env or "apexcoach" in env:
-        return HELM_CLERK_JWKS_URL
-    if "causal-caribou" in env:
+    if env:
         return env
-    return env or HELM_CLERK_JWKS_URL
+    return HELM_CLERK_JWKS_URL
 
 
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
@@ -30,6 +28,8 @@ CLERK_JWKS_URL = _resolve_clerk_jwks_url()
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
 
 HELM_CLERK_ORIGINS = {
+    "https://apexcoach.tech",
+    "https://www.apexcoach.tech",
     "https://helm-company-cockpit.vercel.app",
     "http://localhost:3000",
 }
@@ -43,7 +43,7 @@ def clerk_configured() -> bool:
 
 
 def helm_frontend_origins() -> list[str]:
-    """Origins Helm must register with Clerk for browser auth on Vercel/local."""
+    """Origins Helm must register with Clerk for browser auth on apexcoach.tech/local."""
     origins = {o for o in (
         *HELM_CLERK_ORIGINS,
         FRONTEND_URL,
@@ -53,7 +53,14 @@ def helm_frontend_origins() -> list[str]:
 
 
 def primary_frontend_origin() -> str | None:
-    """Production Vercel origin — used as Clerk development_origin for dev instances."""
+    """Production frontend origin — used as Clerk development_origin for dev instances."""
+    preferred = (FRONTEND_URL, os.environ.get("APP_URL", "").strip().rstrip("/"))
+    for origin in preferred:
+        if origin and origin.startswith("https://") and "localhost" not in origin:
+            return origin
+    for origin in helm_frontend_origins():
+        if origin.startswith("https://") and "localhost" not in origin and "vercel.app" not in origin:
+            return origin
     for origin in helm_frontend_origins():
         if origin.startswith("https://") and "localhost" not in origin:
             return origin
@@ -357,9 +364,9 @@ async def sync_clerk_instance() -> dict[str, Any]:
                     patch_body.get("development_origin"),
                 )
 
-            if is_dev_fapi and primary and "vercel.app" in primary:
+            if is_dev_fapi and primary and "apexcoach.tech" not in primary:
                 status["warnings"].append(
-                    "Using Clerk development FAPI on Vercel — migrate to a *.clerk.com production instance when ready."
+                    "Using Clerk development FAPI — ensure apexcoach.tech is registered in Clerk Dashboard → Domains."
                 )
 
             portal = await sync_clerk_account_portal(primary)

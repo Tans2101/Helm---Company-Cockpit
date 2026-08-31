@@ -1,15 +1,23 @@
 {
   "build": {
     "env": {
-      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2F1c2FsLWNhcmlib3UtMjM1Mi5jbGVyay5hY2NvdW50cy5kZXYk",
+      "REACT_APP_HELM_ORIGIN": "https://apexcoach.tech",
       "REACT_APP_CLERK_SIGN_IN_URL": "/login",
       "REACT_APP_CLERK_SIGN_UP_URL": "/sign-up",
-      "REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL": "https://helm-company-cockpit.vercel.app/app",
-      "REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL": "https://helm-company-cockpit.vercel.app/app",
-      "REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "https://helm-company-cockpit.vercel.app/app",
-      "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://helm-company-cockpit.vercel.app/app"
+      "REACT_APP_CLERK_SIGN_IN_FORCE_REDIRECT_URL": "https://apexcoach.tech/app",
+      "REACT_APP_CLERK_SIGN_UP_FORCE_REDIRECT_URL": "https://apexcoach.tech/app",
+      "REACT_APP_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "https://apexcoach.tech/app",
+      "REACT_APP_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "https://apexcoach.tech/app"
     }
   },
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "helm-company-cockpit.vercel.app" }],
+      "destination": "https://apexcoach.tech/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

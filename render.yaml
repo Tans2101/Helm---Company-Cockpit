@@ -47,11 +47,11 @@ services:
       - key: OAUTH_STATE_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://helm-company-cockpit.vercel.app
+        value: https://apexcoach.tech
       - key: APP_URL
-        value: https://helm-company-cockpit.vercel.app
+        value: https://apexcoach.tech
       - key: CORS_ORIGINS
-        value: https://helm-company-cockpit.vercel.app
+        value: https://apexcoach.tech,https://www.apexcoach.tech,https://helm-company-cockpit.vercel.app
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE
@@ -67,9 +67,9 @@ services:
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_PUBLISHABLE_KEY
-        value: pk_live_Y2F1c2FsLWNhcmlib3UtMjM1Mi5jbGVyay5hY2NvdW50cy5kZXYk
+        sync: false
       - key: CLERK_JWKS_URL
-        value: https://causal-caribou-2352.clerk.accounts.dev/.well-known/jwks.json
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
