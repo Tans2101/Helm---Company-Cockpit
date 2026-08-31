@@ -64,7 +64,7 @@ export default async function middleware(request) {
   headers.set("Clerk-Proxy-Url", proxyUrl);
   headers.set("Clerk-Secret-Key", secret);
   headers.set("X-Forwarded-For", clientIp);
-  headers.set("Origin", `${proto}://${host}`);
+  headers.set("Origin", "https://helmcontrol.online");
   for (const key of ["authorization", "content-type", "accept", "accept-language", "user-agent", "cookie"]) {
     const val = request.headers.get(key);
     if (val) headers.set(key, val);
