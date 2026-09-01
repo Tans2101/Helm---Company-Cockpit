@@ -501,6 +501,24 @@ def require(action: str):
     return dep
 
 
+async def require_pro(principal=Depends(get_principal)):
+    c = await get_ws(principal["workspace_id"])
+    if c["plan"] != "pro":
+        raise HTTPException(status_code=403, detail="Helm Pro subscription required")
+    return principal
+
+
+def require_pro_perm(action: str):
+    async def dep(principal=Depends(get_principal)):
+        if action not in perms_for(principal["pack"]):
+            raise HTTPException(status_code=403, detail="You do not have permission for this action")
+        c = await get_ws(principal["workspace_id"])
+        if c["plan"] != "pro":
+            raise HTTPException(status_code=403, detail="Helm Pro subscription required")
+        return principal
+    return dep
+
+
 async def get_ws(workspace_id: str):
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0})
     if not ws:
@@ -1054,7 +1072,7 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
 
 
 @api_router.get("/workspaces/join-code")
-async def get_join_code(principal=Depends(require("members:invite"))):
+async def get_join_code(principal=Depends(require_pro_perm("members:invite"))):
     ws = await get_ws(principal["workspace_id"])
     code = ws.get("join_code")
     if not code:
@@ -1084,7 +1102,7 @@ class InviteInput(BaseModel):
 
 
 @api_router.post("/members/invite")
-async def invite_member(payload: InviteInput, request: Request, principal=Depends(require("members:invite"))):
+async def invite_member(payload: InviteInput, request: Request, principal=Depends(require_pro_perm("members:invite"))):
     if payload.pack not in VALID_PACKS:
         raise HTTPException(status_code=400, detail="Unknown access pack")
     pack = payload.pack
@@ -1113,7 +1131,7 @@ class RoleInput(BaseModel):
 
 
 @api_router.patch("/members/{membership_id}")
-async def update_member_role(membership_id: str, payload: RoleInput, principal=Depends(require("members:invite"))):
+async def update_member_role(membership_id: str, payload: RoleInput, principal=Depends(require_pro_perm("members:invite"))):
     m = await db.memberships.find_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not m:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -1131,7 +1149,7 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
 
 
 @api_router.delete("/members/{membership_id}")
-async def remove_member(membership_id: str, principal=Depends(require("members:manage"))):
+async def remove_member(membership_id: str, principal=Depends(require_pro_perm("members:manage"))):
     m = await db.memberships.find_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not m:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -1213,10 +1231,8 @@ async def list_activities(principal=Depends(get_principal)):
 
 
 @api_router.post("/briefing/generate")
-async def generate_briefing(principal=Depends(require("briefing:generate"))):
+async def generate_briefing(principal=Depends(require_pro_perm("briefing:generate"))):
     c = await get_ws(principal["workspace_id"])
-    if c["plan"] != "pro":
-        raise HTTPException(status_code=403, detail="Pro required")
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     b = c["briefing"]
@@ -1242,7 +1258,7 @@ class DecisionAction(BaseModel):
 
 
 @api_router.post("/decisions/{decision_id}/action")
-async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require("decisions:act"))):
+async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require_pro_perm("decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = False
@@ -1278,7 +1294,7 @@ def _decision_fields(p: "DecisionInput"):
 
 
 @api_router.post("/decisions")
-async def create_decision(payload: DecisionInput, principal=Depends(require("decisions:act"))):
+async def create_decision(payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -1290,7 +1306,7 @@ async def create_decision(payload: DecisionInput, principal=Depends(require("dec
 
 
 @api_router.patch("/decisions/{decision_id}")
-async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require("decisions:act"))):
+async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = None
@@ -1306,7 +1322,7 @@ async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depe
 
 
 @api_router.delete("/decisions/{decision_id}")
-async def delete_decision(decision_id: str, principal=Depends(require("decisions:act"))):
+async def delete_decision(decision_id: str, principal=Depends(require_pro_perm("decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = [d for d in c["decisions"] if d["id"] != decision_id]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
@@ -1366,7 +1382,7 @@ async def list_deals(principal=Depends(get_principal)):
 
 
 @api_router.post("/deals")
-async def create_deal(payload: DealInput, principal=Depends(require("sales:write"))):
+async def create_deal(payload: DealInput, principal=Depends(require_pro_perm("sales:write"))):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Deal name is required")
     stage = payload.stage if payload.stage in DEAL_STAGES else "lead"
@@ -1383,7 +1399,7 @@ async def create_deal(payload: DealInput, principal=Depends(require("sales:write
 
 
 @api_router.patch("/deals/{deal_id}")
-async def update_deal(deal_id: str, payload: DealInput, principal=Depends(require("sales:write"))):
+async def update_deal(deal_id: str, payload: DealInput, principal=Depends(require_pro_perm("sales:write"))):
     d = await db.deals.find_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -1405,7 +1421,7 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
 
 
 @api_router.delete("/deals/{deal_id}")
-async def delete_deal(deal_id: str, principal=Depends(require("sales:write"))):
+async def delete_deal(deal_id: str, principal=Depends(require_pro_perm("sales:write"))):
     await db.deals.delete_one({"id": deal_id, "workspace_id": principal["workspace_id"]})
     return {"ok": True}
 
@@ -1462,7 +1478,7 @@ class FinEntryInput(BaseModel):
 
 
 @api_router.post("/financials/entries")
-async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finance:write"))):
+async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_pro_perm("finance:write"))):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
@@ -1479,7 +1495,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require("finan
 
 
 @api_router.patch("/financials/entries/{entry_id}")
-async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require("finance:write"))):
+async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require_pro_perm("finance:write"))):
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
@@ -1493,7 +1509,7 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
 
 
 @api_router.delete("/financials/entries/{entry_id}")
-async def delete_fin_entry(entry_id: str, principal=Depends(require("finance:write"))):
+async def delete_fin_entry(entry_id: str, principal=Depends(require_pro_perm("finance:write"))):
     doc = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
     if doc:
@@ -1508,7 +1524,7 @@ class FinSettingsInput(BaseModel):
 
 
 @api_router.put("/financials/settings")
-async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require("finance:write"))):
+async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_pro_perm("finance:write"))):
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
                                    {"$set": {"financial_settings.cash": round(payload.cash, 2),
                                              "financial_settings.gross_margin": payload.gross_margin}})
@@ -1547,7 +1563,7 @@ class TaskInput(BaseModel):
 
 
 @api_router.post("/tasks")
-async def create_task(payload: TaskInput, principal=Depends(require("tasks:create"))):
+async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("tasks:create"))):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -1578,7 +1594,7 @@ class TaskMove(BaseModel):
 
 
 @api_router.patch("/tasks/{task_id}")
-async def move_task(task_id: str, payload: TaskMove, principal=Depends(require("tasks:move"))):
+async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_pro_perm("tasks:move"))):
     c = await get_ws(principal["workspace_id"])
     t = c["tasks"]
     target = next((i for i in t["items"] if i["id"] == task_id), None)
@@ -1618,7 +1634,7 @@ async def todays_updates(principal=Depends(get_principal)):
 
 
 @api_router.post("/updates")
-async def post_update(payload: UpdateInput, principal=Depends(require("updates:write"))):
+async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("updates:write"))):
     if not payload.text.strip():
         raise HTTPException(status_code=400, detail="Update text is required")
     day = datetime.now(timezone.utc).date().isoformat()
@@ -1676,10 +1692,8 @@ async def reports(principal=Depends(get_principal)):
 
 
 @api_router.post("/reports/weekly-pack")
-async def weekly_pack(principal=Depends(require("reports:pack"))):
+async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     c = await get_ws(principal["workspace_id"])
-    if c["plan"] != "pro":
-        raise HTTPException(status_code=403, detail="Pro required")
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     context = {"company": c["name"], "financials": await compute_financials(c["workspace_id"]),
@@ -1777,7 +1791,7 @@ def _person_fields(payload: PersonInput):
 
 
 @api_router.post("/people")
-async def add_person(payload: PersonInput, principal=Depends(require("people:write"))):
+async def add_person(payload: PersonInput, principal=Depends(require_pro_perm("people:write"))):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     c = await get_ws(principal["workspace_id"])
@@ -1795,7 +1809,7 @@ async def add_person(payload: PersonInput, principal=Depends(require("people:wri
 
 
 @api_router.patch("/people/{person_id}")
-async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require("people:write"))):
+async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require_pro_perm("people:write"))):
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     found = None
@@ -1813,7 +1827,7 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
 
 
 @api_router.delete("/people/{person_id}")
-async def remove_person(person_id: str, principal=Depends(require("people:write"))):
+async def remove_person(person_id: str, principal=Depends(require_pro_perm("people:write"))):
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     person = next((p for p in people["people"] if p["id"] == person_id), None)
@@ -1840,14 +1854,8 @@ async def ask_history(principal=Depends(get_principal)):
 
 
 @api_router.post("/ask")
-async def ask_helm(payload: AskInput, principal=Depends(require("ask:use"))):
+async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:use"))):
     c = await get_ws(principal["workspace_id"])
-    is_pro = c["plan"] == "pro"
-    if not is_pro:
-        today = datetime.now(timezone.utc).date().isoformat()
-        count = await db.chat_messages.count_documents({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "day": today})
-        if count >= 5:
-            raise HTTPException(status_code=402, detail="Free plan limited to 5 messages/day. Upgrade to Pro for unlimited.")
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     now = datetime.now(timezone.utc)
@@ -1934,10 +1942,8 @@ async def integrations(principal=Depends(get_principal)):
 
 
 @api_router.post("/integrations/{integration_id}/toggle")
-async def toggle_integration(integration_id: str, principal=Depends(require("integrations:manage"))):
+async def toggle_integration(integration_id: str, principal=Depends(require_pro_perm("integrations:manage"))):
     c = await get_ws(principal["workspace_id"])
-    if c["plan"] != "pro":
-        raise HTTPException(status_code=403, detail="Pro required for live integrations")
     ints = c["integrations"]
     for i in ints:
         if i["id"] == integration_id:
@@ -1950,7 +1956,7 @@ async def toggle_integration(integration_id: str, principal=Depends(require("int
 
 
 @api_router.get("/integrations/{provider}/connect")
-async def integration_connect(provider: str, request: Request, principal=Depends(require("integrations:manage"))):
+async def integration_connect(provider: str, request: Request, principal=Depends(require_pro_perm("integrations:manage"))):
     cfg = _provider_config(provider)
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown provider")
@@ -1988,7 +1994,7 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
 
 
 @api_router.post("/integrations/{provider}/disconnect")
-async def integration_disconnect(provider: str, principal=Depends(require("integrations:manage"))):
+async def integration_disconnect(provider: str, principal=Depends(require_pro_perm("integrations:manage"))):
     field = "google_tokens" if provider == "google" else "quickbooks_tokens" if provider == "quickbooks" else None
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
@@ -2019,6 +2025,8 @@ async def get_billing_status(workspace_id: str, pack: str):
     has_customer = bool(c.get("paddle_customer_id"))
     return {
         "current_plan": c["plan"],
+        "pro_only": True,
+        "requires_activation": c["plan"] != "pro",
         "pro_price": PRO_PRICE,
         "price": PRO_PRICE,
         "can_manage": "billing:manage" in perms_for(pack),

@@ -3,6 +3,8 @@ import os
 import pytest
 import requests
 
+from conftest import set_workspace_plan
+
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://exec-cockpit.preview.emergentagent.com").rstrip("/")
 TOKEN = "test_session_kalun_123"
 
@@ -77,6 +79,7 @@ def test_integrations_shape(auth):
 
 # ---- Decision action ----
 def test_decision_action_updates_status(auth):
+    set_workspace_plan(auth, BASE_URL, "pro")
     decs = auth.get(f"{BASE_URL}/api/decisions").json()["decisions"]
     did = decs[0]["id"]
     r = auth.post(f"{BASE_URL}/api/decisions/{did}/action", json={"action": "approved"})
@@ -88,6 +91,7 @@ def test_decision_action_updates_status(auth):
 
 # ---- Task move ----
 def test_task_move_persists(auth):
+    set_workspace_plan(auth, BASE_URL, "pro")
     tasks = auth.get(f"{BASE_URL}/api/tasks").json()
     items = tasks.get("items", [])
     if not items:
@@ -129,18 +133,12 @@ def test_free_plan_gates_integration_toggle(auth):
     assert r.status_code == 403
 
 
-# ---- Ask Kalun (streaming) ----
-def test_ask_kalun_streams(auth):
+# ---- Ask Helm (streaming) ----
+def test_ask_helm_requires_pro(auth):
     _ensure_free(auth)
     r = auth.post(f"{BASE_URL}/api/ask", json={"message": "One-sentence health check."}, stream=True, timeout=60)
-    assert r.status_code == 200, r.text[:300]
-    collected = b""
-    for chunk in r.iter_content(chunk_size=None):
-        collected += chunk
-        if len(collected) > 5:
-            break
+    assert r.status_code == 403, r.text[:300]
     r.close()
-    assert len(collected) > 0
 
 
 def test_ask_history_returns_messages(auth):

@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Lock, Check, ExternalLink, KeyRound } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Check, ExternalLink, KeyRound } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, ProBadge, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const ICONS = {
@@ -14,7 +14,6 @@ const ICONS = {
 
 export default function Integrations() {
   const { data, loading, reload } = useFetch("/integrations");
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
   useEffect(() => {
@@ -33,7 +32,6 @@ export default function Integrations() {
 
   const gate = () => {
     if (!data.can_manage) { toast.error("Only workspace owners can manage integrations"); return false; }
-    if (!data.is_pro) { toast.error("Live integrations require Pro"); navigate("/app/billing"); return false; }
     return true;
   };
 
@@ -99,7 +97,6 @@ export default function Integrations() {
               </div>
               <div className="flex items-center gap-2">
                 <h3 className="text-white font-medium">{it.name}</h3>
-                {it.pro && <ProBadge />}
                 {it.oauth && <span className="text-[9px] font-mono uppercase tracking-wider text-gold/70 border border-gold/20 rounded px-1.5 py-0.5">OAuth</span>}
               </div>
               <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">{it.category}</p>
@@ -107,7 +104,6 @@ export default function Integrations() {
               <button data-testid={`toggle-${it.id}`} onClick={() => handleClick(it)}
                 className={cn("mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2 transition-colors",
                   it.connected ? "border border-white/10 text-zinc-400 hover:bg-white/5" : "bg-gold text-black font-medium hover:bg-gold-hover")}>
-                {!data.is_pro && !it.connected && <Lock className="w-3.5 h-3.5" />}
                 {it.oauth && !it.connected && <ExternalLink className="w-3.5 h-3.5" />}
                 {it.connected ? "Disconnect" : needsKeys ? "Set up" : "Connect"}
               </button>

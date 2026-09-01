@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Lock, Users, CheckCircle2, Circle } from "lucide-react";
+import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Users, CheckCircle2, Circle } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, SectionLabel, LoadingScreen, ProBadge, Delta } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 
@@ -27,8 +27,7 @@ export default function Briefing() {
       setData({ ...data, ai_summary: res.ai_summary });
       toast.success("Briefing synthesized");
     } catch (e) {
-      toast.error("Upgrade to Pro to generate AI briefings");
-      navigate("/app/billing");
+      toast.error(e?.response?.data?.detail || "Could not generate briefing");
     } finally {
       setGenLoading(false);
     }
@@ -92,27 +91,16 @@ export default function Briefing() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <SectionLabel>Helm's synthesis</SectionLabel>
-              {!data.is_pro && <ProBadge />}
             </div>
             {data.ai_summary ? (
               <p className="text-zinc-200 leading-relaxed text-[15px]">{data.ai_summary}</p>
-            ) : data.is_pro ? (
+            ) : (
               <div>
                 <p className="text-zinc-500 text-sm mb-4">Generate an AI synthesis of today's signal from your live company data.</p>
                 <button data-testid="generate-briefing-btn" onClick={generate} disabled={genLoading}
                   className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2 transition-colors hover:bg-gold-hover disabled:opacity-60">
                   {genLoading ? "Synthesizing…" : "Generate briefing"}
                   {!genLoading && <Send className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <p className="text-zinc-400 text-sm leading-relaxed mb-4">
-                  Your morning executive briefing — synthesized from finance, sales, and team signal into three sentences that matter. Available on Pro.
-                </p>
-                <button data-testid="briefing-upgrade-btn" onClick={() => navigate("/app/billing")}
-                  className="inline-flex items-center gap-2 rounded-md border border-gold/40 text-gold text-sm font-medium px-4 py-2 transition-colors hover:bg-gold/10">
-                  <Lock className="w-3.5 h-3.5" /> Unlock with Pro
                 </button>
               </div>
             )}

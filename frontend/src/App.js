@@ -13,6 +13,8 @@ import CookieNotice from "@/components/CookieNotice";
 import Login from "@/pages/Login";
 import SignUpPage from "@/pages/SignUp";
 import Landing from "@/pages/Landing";
+import About from "@/pages/About";
+import Features from "@/pages/Features";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import Briefing from "@/pages/Briefing";
@@ -66,6 +68,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/features" element={<Features />} />
       <Route path="/login/sso-callback" element={<ClerkOAuthCallbackGuard />} />
       <Route path="/sign-up/sso-callback" element={<ClerkOAuthCallbackGuard />} />
       <Route path="/login/*" element={<Login />} />

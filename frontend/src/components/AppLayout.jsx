@@ -1,15 +1,15 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
   FileText, Users2, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Sparkles, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Briefcase,
+  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { ProBadge } from "@/components/kit";
+import SubscriptionGate from "@/components/SubscriptionGate";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -92,10 +92,7 @@ function SidebarContent({ onNavigate }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: company } = useFetch("/company");
-  const { data: billing } = useFetch("/billing/plans");
   const isPro = company?.plan === "pro";
-  const isOwner = user?.role === "owner";
-  const pastDue = billing?.subscription_status === "past_due";
 
   return (
     <div className="flex flex-col h-full">
@@ -142,19 +139,6 @@ function SidebarContent({ onNavigate }) {
       </nav>
 
       <div className="px-3 pb-4">
-        {!isPro && isOwner && (
-          <button
-            data-testid="sidebar-upgrade-btn"
-            onClick={() => { navigate("/app/billing"); onNavigate?.(); }}
-            className="w-full mb-3 rounded-lg border border-gold/25 bg-gradient-to-b from-gold/[0.12] to-transparent p-3 text-left transition-colors hover:border-gold/50"
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <Sparkles className="w-3.5 h-3.5 text-gold" />
-              <span className="text-xs font-medium text-white">Upgrade to Pro</span>
-            </div>
-            <p className="text-[11px] text-zinc-500 leading-snug">Live integrations, briefing & Weekly CEO Pack</p>
-          </button>
-        )}
         <div className="flex items-center gap-3 rounded-md px-2 py-2">
           {user?.picture ? (
             <img src={user.picture} alt="" className="w-8 h-8 rounded-full object-cover border border-white/10" />
@@ -165,7 +149,7 @@ function SidebarContent({ onNavigate }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
-            <p className="text-[10px] text-zinc-600 truncate">{isPro ? "Pro plan" : "Free plan"}</p>
+            <p className="text-[10px] text-zinc-600 truncate">{isPro ? "Helm Pro" : "Activation required"}</p>
           </div>
           <button
             data-testid="settings-link"
@@ -186,8 +170,14 @@ function SidebarContent({ onNavigate }) {
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const { user } = useAuth();
   const { data: billing } = useFetch("/billing/plans");
+  const { data: company } = useFetch("/company");
   const pastDue = billing?.subscription_status === "past_due";
+  const isPro = company?.plan === "pro";
+  const onBilling = location.pathname.startsWith("/app/billing");
+  const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
 
   return (
     <div className="min-h-screen grain">
@@ -228,7 +218,13 @@ export default function AppLayout() {
 
       <main className="lg:pl-[260px] relative z-10">
         <div className="px-5 md:px-10 py-8 md:py-12 max-w-[1500px]">
-          <Outlet />
+          {onBilling ? (
+            <Outlet />
+          ) : (
+            <SubscriptionGate isPro={isPro} canManageBilling={canManageBilling}>
+              <Outlet />
+            </SubscriptionGate>
+          )}
         </div>
       </main>
     </div>

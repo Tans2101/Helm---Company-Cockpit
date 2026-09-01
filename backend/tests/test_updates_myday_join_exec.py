@@ -14,6 +14,8 @@ import pytest
 import pymongo
 import requests
 
+from conftest import set_workspace_plan
+
 BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://exec-cockpit.preview.emergentagent.com").rstrip("/")
 OWNER_TOKEN = "test_session_kalun_123"
 MEMBER_TOKEN = "test_session_user2"
@@ -37,7 +39,9 @@ def mongo():
 
 @pytest.fixture(scope="module")
 def owner():
-    return _sess(OWNER_TOKEN)
+    s = _sess(OWNER_TOKEN)
+    set_workspace_plan(s, BASE_URL, "pro")
+    return s
 
 
 @pytest.fixture(scope="module")

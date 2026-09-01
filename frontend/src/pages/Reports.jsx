@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { FileText, Sparkles, Lock, Download } from "lucide-react";
+import { FileText, Sparkles, Download } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ProBadge, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 
 export default function Reports() {
   const { data, loading } = useFetch("/reports");
   const [pack, setPack] = useState("");
   const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
 
   if (loading || !data) return <LoadingScreen label="Loading reports" />;
   if (data.reports.length === 0) return <div><PageHeader title="Reports" subtitle="Sales, production and procurement — plus the AI Weekly CEO Pack." /><EmptyState title="No reports yet" body="Reports build as your data and integrations come online." /></div>;
@@ -22,8 +20,7 @@ export default function Reports() {
       setPack(res.content);
       toast.success("Weekly CEO Pack ready");
     } catch (e) {
-      toast.error("Upgrade to Pro for the Weekly CEO Pack");
-      navigate("/app/billing");
+      toast.error(e?.response?.data?.detail || "Could not generate Weekly CEO Pack");
     } finally {
       setBusy(false);
     }
@@ -59,21 +56,13 @@ export default function Reports() {
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <SectionLabel>Weekly CEO Pack</SectionLabel>
-              {!data.is_pro && <ProBadge />}
             </div>
             <p className="text-sm text-zinc-400 max-w-xl">A board-ready weekly summary — growth, financial health, risks and this week's focus — synthesized from all your data.</p>
           </div>
-          {data.is_pro ? (
-            <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
-              className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 transition-colors hover:bg-gold-hover disabled:opacity-60 shrink-0">
-              <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
-            </button>
-          ) : (
-            <button data-testid="pack-upgrade-btn" onClick={() => navigate("/app/billing")}
-              className="inline-flex items-center gap-2 rounded-md border border-gold/40 text-gold text-sm font-medium px-4 py-2.5 transition-colors hover:bg-gold/10 shrink-0">
-              <Lock className="w-4 h-4" /> Unlock with Pro
-            </button>
-          )}
+          <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
+            className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 transition-colors hover:bg-gold-hover disabled:opacity-60 shrink-0">
+            <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
+          </button>
         </div>
         {pack && (
           <div className="mt-4 rounded-lg border border-white/5 bg-black/30 p-5" data-testid="pack-content">

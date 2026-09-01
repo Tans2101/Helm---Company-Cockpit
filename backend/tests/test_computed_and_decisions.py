@@ -15,6 +15,8 @@ import uuid
 import pytest
 import requests
 
+from conftest import set_workspace_plan
+
 BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 
@@ -33,6 +35,7 @@ def owner():
     s = _sess(OWNER_TOKEN)
     # Ensure the owner workspace has sample data (financials, people, decisions).
     s.post(f"{BASE_URL}/api/workspace/apply-template", json={"template": "sample"})
+    set_workspace_plan(s, BASE_URL, "pro")
     return s
 
 

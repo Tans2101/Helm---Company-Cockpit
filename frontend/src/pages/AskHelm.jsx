@@ -42,8 +42,8 @@ export default function AskHelm() {
         credentials: "include",
         body: JSON.stringify({ message: q }),
       });
-      if (res.status === 402) {
-        setMessages((m) => m.slice(0, -1));
+      if (res.status === 403) {
+        setMessages((m) => m.slice(0, -2));
         setStreaming(false);
         navigate("/app/billing");
         return;

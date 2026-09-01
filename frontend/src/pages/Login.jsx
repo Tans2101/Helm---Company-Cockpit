@@ -10,6 +10,7 @@ import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
+import { TAGLINE, CATEGORY, HERO_SUB } from "@/lib/marketingCopy";
 
 export default function Login() {
   const { clerkEnabled } = useClerkMode();
@@ -92,13 +93,12 @@ function LoginClerk() {
         </div>
 
         <div className="max-w-lg">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-6">Quiet control</p>
+          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-6">{CATEGORY}</p>
           <h1 className="text-4xl md:text-6xl font-light tracking-tight text-white leading-[1.05]">
-            Run your company from one command center.
+            {TAGLINE}
           </h1>
           <p className="text-zinc-400 text-base md:text-lg mt-6 leading-relaxed">
-            Helm pulls status and KPIs in, pushes work out, and answers the only question that matters —
-            <span className="text-white"> what does the CEO need to know right now?</span>
+            {HERO_SUB}
           </p>
         </div>
 
@@ -108,7 +108,7 @@ function LoginClerk() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
-          <p className="text-zinc-500 text-sm mt-2">Sign in with Google or email.</p>
+          <p className="text-zinc-500 text-sm mt-2">Sign in, then activate Helm Pro to use the cockpit.</p>
 
           {urlError === "session_retired" && (
             <p className="mt-4 text-sm text-amber-400">That sign-in link has expired. Please sign in again below.</p>

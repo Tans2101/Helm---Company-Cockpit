@@ -16,9 +16,18 @@ CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finan
 
 ## Routing
 - `/` — marketing (Landing)
+- `/about`, `/features` — mission and product detail
 - `/login` — Clerk or Google
 - `/privacy`, `/terms` — legal placeholders `[COMPANY_*]`
 - `/app/*` — authenticated cockpit (Briefing, Pipeline, Financials, etc.)
+
+## Pricing
+- **Helm Pro only** — $8/mo via Paddle (`PRO_PRICE` env). No free tier.
+- Sign up → enter `/app` → preview shell with paywall until Paddle checkout completes.
+- Existing workspaces without Pro are forced to activate (no grandfathering).
+
+## Tagline
+**Run the business. Don't chase it.**
 
 ## Access packs
 `owner`, `exec`, `finance`, `hr`, `sales`, `ops`, `member` — permissions via `PACK_PERMS`; sales pack home → `/app/sales` (Pipeline).
