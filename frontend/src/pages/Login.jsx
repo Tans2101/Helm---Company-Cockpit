@@ -13,7 +13,10 @@ import { clerkPostAuthUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY, HERO_SUB } from "@/lib/marketingCopy";
 
 export default function Login() {
-  const { clerkEnabled } = useClerkMode();
+  const { clerkEnabled, configLoading } = useClerkMode();
+  if (configLoading) {
+    return <LoadingScreen label="Loading sign-in" />;
+  }
   if (!clerkEnabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b] p-8">

@@ -35,6 +35,7 @@ import Billing from "@/pages/Billing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
+import { LoadingScreen } from "@/components/kit";
 
 function ClerkOAuthCallback() {
   const { postAuthUrl } = useClerkMode();
@@ -59,8 +60,12 @@ function ClerkOAuthCallbackGuard() {
 
 function AppRouter() {
   const location = useLocation();
-  const { clerkEnabled } = useClerkMode();
-  const Protected = clerkEnabled ? ProtectedRouteClerk : ProtectedRoute;
+  const { clerkEnabled, configLoading } = useClerkMode();
+  const Protected = configLoading
+    ? () => <LoadingScreen label="Loading cockpit" />
+    : clerkEnabled
+      ? ProtectedRouteClerk
+      : ProtectedRoute;
 
   if (location.hash?.includes("session_id=")) {
     return <Navigate to="/login?error=session_retired" replace />;

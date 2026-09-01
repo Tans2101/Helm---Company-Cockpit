@@ -3,7 +3,6 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import { fetchAuthConfig } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
 import { clerkPostAuthUrl, helmAppUrl } from "@/lib/helmUrls";
-import { LoadingScreen } from "@/components/kit";
 
 function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
@@ -16,6 +15,7 @@ function clerkProxyUrl() {
 
 const ClerkModeContext = createContext({
   ready: false,
+  configLoading: true,
   clerkEnabled: false,
   configError: null,
   postAuthUrl: null,
@@ -155,16 +155,9 @@ export default function ClerkProviderBootstrap({ children }) {
     return () => { cancelled = true; };
   }, []);
 
-  if (!state.ready) {
-    return <LoadingScreen label="Loading sign-in" />;
-  }
-
-  if (state.configError) {
-    return <ConfigErrorScreen message={state.configError} />;
-  }
-
   const mode = {
-    ready: true,
+    ready: state.ready,
+    configLoading: !state.ready,
     clerkEnabled: state.clerkEnabled,
     configError: null,
     postAuthUrl: state.postAuthUrl,
@@ -172,6 +165,10 @@ export default function ClerkProviderBootstrap({ children }) {
     clerkPrimaryOrigin: state.clerkPrimaryOrigin,
     clerkMultiDomain: state.clerkMultiDomain,
   };
+
+  if (state.configError) {
+    return <ConfigErrorScreen message={state.configError} />;
+  }
 
   const redirectUrl = clerkPostAuthUrl(state.postAuthUrl);
 
