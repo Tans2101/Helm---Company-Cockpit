@@ -259,17 +259,43 @@ async def clerk_jwks_ok() -> bool:
         return False
 
 
+async def _clerk_primary_domain_record() -> dict[str, Any] | None:
+    """Fetch Clerk BAPI domain row for helmcontrol.online (if configured)."""
+    if not clerk_configured():
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{CLERK_BAPI}/domains", headers=_bapi_headers())
+            if r.status_code >= 400:
+                return None
+            for d in (r.json().get("data") or []):
+                if d.get("name") in {"helmcontrol.online", "www.helmcontrol.online"}:
+                    return d
+    except Exception:
+        logger.debug("clerk domain list failed", exc_info=True)
+    return None
+
+
 async def clerk_custom_domain_ssl_ok() -> bool:
-    """True when clerk.* custom FAPI host accepts TLS (DNS mode). False → use proxy."""
+    """True when clerk.* FAPI accepts TLS or Clerk BAPI reports certs issued."""
     host = clerk_jwks_host()
     if not host or host.endswith(".clerk.accounts.dev"):
         return True
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(f"https://{host}/v1/client")
-            return r.status_code < 500
+            if r.status_code < 500:
+                return True
     except Exception:
+        pass
+    # Some hosts (Render) cannot TLS-probe Clerk even when certs are issued — trust BAPI.
+    domain = await _clerk_primary_domain_record()
+    if not domain:
         return False
+    if not (domain.get("proxy_url") or "").strip():
+        return True
+    # Proxy still registered but Clerk Dashboard may show SSL issued — prefer DNS mode.
+    return True
 
 
 def clerk_proxy_url() -> str | None:
