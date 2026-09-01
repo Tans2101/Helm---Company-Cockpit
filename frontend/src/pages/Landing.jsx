@@ -11,6 +11,7 @@ import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
   TAGLINE, CATEGORY, AUDIENCE, HERO_SUB, MISSION,
   PRO_PRICE, PRO_FEATURES, PRODUCT_FACTS, PROBLEMS, HOW_IT_WORKS, FEATURE_HIGHLIGHTS,
+  WHO_HELM_IS_FOR, CEO_DAY, PRICING_FAQ,
 } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -98,6 +99,53 @@ export default function Landing() {
               <motion.div key={s.l} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center">
                 <p className="font-mono text-3xl md:text-4xl text-white">{s.v}</p>
                 <p className="mt-2 text-xs text-zinc-500 leading-snug">{s.l}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Who it's for */}
+      <section className="px-6 py-24 border-t border-white/[0.05]">
+        <div className="mx-auto max-w-6xl">
+          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Who it's for</p>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight max-w-2xl leading-tight">
+              Built for the CEO everyone's counting on.
+            </h2>
+            <p className="mt-4 text-zinc-500 max-w-xl">{AUDIENCE}</p>
+          </motion.div>
+          <div className="mt-12 grid md:grid-cols-3 gap-5">
+            {WHO_HELM_IS_FOR.map((item, i) => (
+              <motion.div key={item.title} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}
+                className="rounded-2xl border border-white/[0.06] bg-[#121214]/60 p-6">
+                <h3 className="text-lg text-white tracking-tight">{item.title}</h3>
+                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{item.body}</p>
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Link to="/about" className="inline-flex items-center gap-2 text-sm text-gold hover:underline">
+              Read our story <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* A day with Helm */}
+      <section className="px-6 py-24 border-t border-white/[0.05]">
+        <div className="mx-auto max-w-6xl">
+          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="text-center">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">A day with Helm</p>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">From morning briefing to board prep.</h2>
+          </motion.div>
+          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {CEO_DAY.map((step, i) => (
+              <motion.div key={step.title} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}
+                className="rounded-2xl border border-white/[0.06] bg-[#121214]/60 p-5">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-gold">{step.time}</p>
+                <h3 className="mt-3 text-white font-medium">{step.title}</h3>
+                <p className="mt-2 text-xs text-zinc-500 leading-relaxed">{step.body}</p>
               </motion.div>
             ))}
           </div>
@@ -208,6 +256,15 @@ export default function Landing() {
               className="mt-8 w-full rounded-full bg-gold text-black font-medium py-3 hover:bg-gold-hover transition-colors">
               {authed ? "Open your cockpit" : "Get started"}
             </button>
+            <div className="mt-10 pt-8 border-t border-white/5 space-y-4 text-left">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">Common questions</p>
+              {PRICING_FAQ.map((item) => (
+                <div key={item.q}>
+                  <p className="text-sm text-white">{item.q}</p>
+                  <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.a}</p>
+                </div>
+              ))}
+            </div>
           </motion.div>
         </div>
       </section>

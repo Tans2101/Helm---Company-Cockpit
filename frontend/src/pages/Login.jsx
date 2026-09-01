@@ -11,6 +11,7 @@ import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY, HERO_SUB } from "@/lib/marketingCopy";
+import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
 
 export default function Login() {
   const { clerkEnabled, configLoading } = useClerkMode();
@@ -83,19 +84,10 @@ function LoginClerk() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-[#09090b] grain">
-      <div className="relative flex flex-col justify-between p-10 md:p-16 border-r border-white/5 z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold font-medium">H</span>
-          </div>
-          <div>
-            <p className="text-white font-semibold tracking-tight leading-none">Helm</p>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mt-1">CEO Operating System</p>
-          </div>
-        </div>
-
-        <div className="max-w-lg">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-[#09090b] grain relative">
+      <AuthMarketingHeader />
+      <div className="relative flex flex-col justify-between p-10 md:p-16 pt-28 lg:pt-16 border-r border-white/5 z-10">
+        <div className="max-w-lg flex-1 flex flex-col justify-center">
           <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-6">{CATEGORY}</p>
           <h1 className="text-4xl md:text-6xl font-light tracking-tight text-white leading-[1.05]">
             {TAGLINE}
@@ -104,7 +96,6 @@ function LoginClerk() {
             {HERO_SUB}
           </p>
         </div>
-
         <p className="text-xs text-zinc-700">Know what matters before your first meeting.</p>
       </div>
 
@@ -130,6 +121,8 @@ function LoginClerk() {
           </div>
 
           <p className="mt-4 text-center text-xs text-zinc-600">
+            <Link to="/" className="hover:text-zinc-400 transition-colors">← Back to home</Link>
+            <span className="mx-2 text-zinc-700">·</span>
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
             <span className="mx-2 text-zinc-700">·</span>
             <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>

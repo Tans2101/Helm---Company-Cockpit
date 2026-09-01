@@ -13,6 +13,74 @@ export const MISSION =
 export const VISION =
   "A world where running a company doesn't mean drowning in dashboards — leaders see what matters, decide fast, and delegate with confidence.";
 
+export const ABOUT_STORY =
+  "Helm started from a simple frustration: CEOs at seed and Series A stage spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, Jira, email — and still walk into standup without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
+
+export const VALUES = [
+  {
+    title: "Signal over noise",
+    body: "Every screen in Helm answers one question: what does the CEO need to know or do right now? If it doesn't help you decide or delegate, it doesn't belong.",
+  },
+  {
+    title: "Quiet control",
+    body: "No engagement loops, no notification spam. Helm respects that your attention is the company's scarcest resource.",
+  },
+  {
+    title: "Honest synthesis",
+    body: "AI recommendations cite your real numbers — runway, pipeline, team load — not generic advice. When data is missing, Helm says so.",
+  },
+];
+
+export const WHO_HELM_IS_FOR = [
+  {
+    title: "Seed & Series A CEOs",
+    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you board-ready visibility without hiring a chief of staff.",
+  },
+  {
+    title: "Founder-operators",
+    body: "You wear every hat. Helm separates what only you can decide from what your team should run — and tracks whether it landed.",
+  },
+  {
+    title: "Leadership teams of 8–40",
+    body: "Finance, sales, ops, and engineering each keep their tools. You get one synthesized view every morning.",
+  },
+];
+
+export const CEO_DAY = [
+  { time: "7:30 AM", title: "Morning Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data." },
+  { time: "9:00 AM", title: "Decision Center", body: "Six pending approvals ranked by impact. Helm recommends which to tackle first and why." },
+  { time: "12:00 PM", title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
+  { time: "Friday", title: "Weekly CEO Pack", body: "Board-ready summary of growth, burn, team pulse, and open decisions — generated in one click." },
+];
+
+export const PRICING_FAQ = [
+  { q: "Is there a free plan?", a: "No. Helm is Pro-only — one plan with the full cockpit. Sign up, preview the shell, then activate when you're ready." },
+  { q: "Can my leadership team use Helm?", a: "Yes. Invite CFO, VP Sales, ops, and HR with role-based access. They contribute data; you see the synthesis." },
+  { q: "What integrations are included?", a: "Google Calendar, Gmail, QuickBooks, GitHub, and more — live signal flows into your briefing automatically." },
+  { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancel anytime — no annual lock-in." },
+];
+
+export const FEATURE_CATEGORIES = [
+  {
+    id: "intelligence",
+    label: "Executive intelligence",
+    intro: "AI grounded in your company — not generic chatbot answers.",
+    modules: ["Morning Briefing", "Decision Center", "Ask Helm", "Weekly CEO Pack"],
+  },
+  {
+    id: "finance",
+    label: "Finance & growth",
+    intro: "Runway, revenue, and pipeline — always current for your next board question.",
+    modules: ["Pipeline & Financials", "Telemetry"],
+  },
+  {
+    id: "people",
+    label: "People & operations",
+    intro: "Team bandwidth, access, and integrations — everyone contributes, you stay in control.",
+    modules: ["Integrations", "Team & Access"],
+  },
+];
+
 export const PRO_PRICE = 8;
 
 export const PRO_FEATURES = [
