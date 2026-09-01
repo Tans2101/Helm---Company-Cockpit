@@ -479,7 +479,7 @@ async def sync_clerk_satellite_domain(primary: str) -> dict[str, Any]:
 
 
 async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
-    """Enable Clerk FAPI proxy when clerk.* custom-domain TLS is not ready."""
+    """Enable Clerk FAPI proxy when clerk.* custom-domain TLS is not ready; clear when SSL is live."""
     from urllib.parse import urlparse
 
     host = urlparse(primary).hostname or ""
@@ -489,10 +489,8 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
     if not clerk_configured() or not host:
         result["reason"] = "not_configured"
         return result
-    if await clerk_custom_domain_ssl_ok():
-        result["ok"] = True
-        result["reason"] = "custom_domain_ssl_ok"
-        return result
+    ssl_ok = await clerk_custom_domain_ssl_ok()
+    result["custom_domain_ssl_ok"] = ssl_ok
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             headers = _bapi_headers()
@@ -502,7 +500,6 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
                 result["error"] = list_r.text[:300]
                 return result
             domains = (list_r.json() or {}).get("data") or []
-            apex = host[4:] if host.startswith("www.") else host
             match = next((d for d in domains if d.get("name") in {apex, host}), None)
             if not match:
                 result["reason"] = "domain_not_found"
@@ -510,6 +507,28 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
                 return result
             domain_id = match.get("id")
             current = (match.get("proxy_url") or "").rstrip("/")
+
+            if ssl_ok:
+                if not current:
+                    result["ok"] = True
+                    result["reason"] = "ssl_ok_no_proxy"
+                    result["domain_id"] = domain_id
+                    return result
+                patch_r = await client.patch(
+                    f"{CLERK_BAPI}/domains/{domain_id}",
+                    headers=headers,
+                    json={"proxy_url": ""},
+                )
+                if patch_r.status_code >= 400:
+                    result["reason"] = f"clear_{patch_r.status_code}"
+                    result["error"] = patch_r.text[:500]
+                    return result
+                result["ok"] = True
+                result["reason"] = "proxy_cleared_ssl_ok"
+                result["domain_id"] = domain_id
+                logger.info("Clerk domain proxy cleared — custom-domain SSL is live")
+                return result
+
             if current == proxy.rstrip("/"):
                 result["ok"] = True
                 result["reason"] = "already_set"

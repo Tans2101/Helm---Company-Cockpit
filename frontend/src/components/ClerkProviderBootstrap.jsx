@@ -59,6 +59,7 @@ export default function ClerkProviderBootstrap({ children }) {
     helmCanonicalOrigin: null,
     clerkPrimaryOrigin: null,
     clerkMultiDomain: false,
+    clerkUseProxy: false,
   });
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export default function ClerkProviderBootstrap({ children }) {
             helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
             clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
             clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
+            clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
           });
           return;
         }
@@ -105,6 +107,7 @@ export default function ClerkProviderBootstrap({ children }) {
             helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
             clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
             clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
+            clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
           });
           return;
         }
@@ -118,6 +121,7 @@ export default function ClerkProviderBootstrap({ children }) {
           helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
           clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
           clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
+          clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
         });
       } catch {
         if (cancelled) return;
@@ -131,6 +135,7 @@ export default function ClerkProviderBootstrap({ children }) {
             helmCanonicalOrigin: null,
             clerkPrimaryOrigin: null,
             clerkMultiDomain: false,
+            clerkUseProxy: false,
           });
           return;
         }
@@ -143,6 +148,7 @@ export default function ClerkProviderBootstrap({ children }) {
           helmCanonicalOrigin: null,
           clerkPrimaryOrigin: null,
           clerkMultiDomain: false,
+          clerkUseProxy: false,
         });
       }
     })();
@@ -181,7 +187,7 @@ export default function ClerkProviderBootstrap({ children }) {
     <ClerkModeContext.Provider value={mode}>
       <ClerkProvider
         publishableKey={state.publishableKey}
-        proxyUrl={clerkProxyUrl()}
+        {...(state.clerkUseProxy ? { proxyUrl: clerkProxyUrl() } : {})}
         signInUrl="/login"
         signUpUrl="/sign-up"
         signInForceRedirectUrl={redirectUrl}
