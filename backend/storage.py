@@ -54,3 +54,7 @@ def get_presigned_url(key: str, expires_in: int = 3600) -> str:
         Params={"Bucket": R2_BUCKET_NAME, "Key": key},
         ExpiresIn=expires_in,
     )
+
+
+def delete_document(key: str) -> None:
+    _client().delete_object(Bucket=R2_BUCKET_NAME, Key=key)

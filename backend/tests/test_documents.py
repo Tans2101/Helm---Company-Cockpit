@@ -262,3 +262,87 @@ def test_rate_limit_scoped_per_workspace():
         assert not await rate_limit.is_over_limit(mock_db, "ws_b", "upload", limit)
 
     asyncio.run(run())
+
+
+def test_cleanup_deletes_old_uncommitted_documents():
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+
+    import document_cleanup
+
+    old_uploaded = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    orphan = {
+        "id": "doc_orphan_old",
+        "workspace_id": "ws_doc_test",
+        "storage_key": "ws_doc_test/orphan.pdf",
+        "status": "uploaded",
+        "linked_entry_id": None,
+        "uploaded_at": old_uploaded,
+    }
+    stored = [orphan]
+
+    mock_coll = MagicMock()
+
+    async def find_to_list(*_args, **_kwargs):
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=document_cleanup.DOC_ORPHAN_RETENTION_DAYS)).isoformat()
+        return [
+            d for d in stored
+            if d["status"] in document_cleanup.ORPHAN_STATUSES
+            and not d.get("linked_entry_id")
+            and d["uploaded_at"] < cutoff
+        ]
+
+    async def delete_one(query):
+        nonlocal stored
+        before = len(stored)
+        stored = [d for d in stored if d["id"] != query.get("id")]
+        deleted = MagicMock()
+        deleted.deleted_count = 1 if len(stored) < before else 0
+        return deleted
+
+    mock_coll.find = MagicMock(return_value=MagicMock(to_list=AsyncMock(side_effect=find_to_list)))
+    mock_coll.delete_one = AsyncMock(side_effect=delete_one)
+    mock_db = MagicMock()
+    mock_db.documents = mock_coll
+
+    with patch.object(document_cleanup.doc_storage, "r2_configured", return_value=True), patch.object(
+        document_cleanup.doc_storage, "delete_document", return_value=None
+    ) as delete_mock:
+        result = asyncio.run(document_cleanup.cleanup_orphaned_documents(mock_db))
+
+    assert result["deleted_count"] == 1
+    assert result["deleted_ids"] == ["doc_orphan_old"]
+    assert stored == []
+    delete_mock.assert_called_once_with("ws_doc_test/orphan.pdf")
+
+
+def test_cleanup_skips_committed_documents():
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+
+    import document_cleanup
+
+    old_uploaded = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    committed = {
+        "id": "doc_committed_old",
+        "workspace_id": "ws_doc_test",
+        "storage_key": "ws_doc_test/committed.pdf",
+        "status": "committed",
+        "linked_entry_id": "fe_abc123",
+        "uploaded_at": old_uploaded,
+    }
+    stored = [committed]
+
+    mock_coll = MagicMock()
+    mock_coll.find = MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=list(stored))))
+    mock_coll.delete_one = AsyncMock()
+    mock_db = MagicMock()
+    mock_db.documents = mock_coll
+
+    with patch.object(document_cleanup.doc_storage, "delete_document") as delete_mock:
+        result = asyncio.run(document_cleanup.cleanup_orphaned_documents(mock_db))
+
+    assert result["deleted_count"] == 0
+    assert stored == [committed]
+    delete_mock.assert_not_called()
+    mock_coll.delete_one.assert_not_awaited()
