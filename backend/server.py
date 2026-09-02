@@ -17,7 +17,7 @@ from collections import defaultdict
 import httpx
 import jwt
 import resend
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -25,6 +25,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
+import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
 import clerk_auth
@@ -636,6 +637,17 @@ async def log_activity(principal, module, action, summary, patch=None):
     }
     await db.activities.insert_one(doc)
     return doc
+
+
+async def _enforce_document_rate_limit(principal, action: str, limit: int, message: str) -> None:
+    if await doc_rate_limit.is_over_limit(db, principal["workspace_id"], action, limit):
+        label = "Upload" if action == "upload" else "Extraction"
+        await log_activity(
+            principal, "financials", "document.rate_limit",
+            f"{label} limit reached for this workspace ({limit}/hour)",
+            {"action": action, "limit": limit},
+        )
+        raise HTTPException(status_code=429, detail=message)
 
 
 # ------------------------- Financials (computed from entries) -------------------------
@@ -1648,6 +1660,10 @@ async def upload_financial_document(
     file: UploadFile = File(...),
     principal=Depends(require_pro_perm("finance:write")),
 ):
+    await _enforce_document_rate_limit(
+        principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
+        "Upload limit reached — try again in a bit",
+    )
     if file.content_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
     data = await file.read()
@@ -1679,6 +1695,7 @@ async def upload_financial_document(
         "linked_entry_id": None,
     }
     await db.documents.insert_one(doc)
+    await doc_rate_limit.record_event(db, principal["workspace_id"], "upload")
     await log_activity(principal, "financials", "document.upload", f"Uploaded bill · {filename}")
     return {"document_id": doc_id, "status": "uploaded"}
 
@@ -1686,6 +1703,7 @@ async def upload_financial_document(
 @api_router.post("/documents/{document_id}/extract")
 async def extract_financial_document_route(
     document_id: str,
+    force: bool = Query(False),
     principal=Depends(require_pro_perm("finance:write")),
 ):
     doc = await db.documents.find_one(
@@ -1693,11 +1711,22 @@ async def extract_financial_document_route(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    if (
+        not force
+        and doc.get("status") == "extracted"
+        and doc.get("extracted_data")
+    ):
+        return doc["extracted_data"]
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
+    await _enforce_document_rate_limit(
+        principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
+        "Extraction limit reached — try again in a bit",
+    )
     try:
         file_bytes = doc_storage.get_document_bytes(doc["storage_key"])
         extracted = await helm_llm.extract_financial_document(file_bytes, doc["content_type"])
+        await doc_rate_limit.record_event(db, principal["workspace_id"], "extract")
         status = "failed" if extracted.get("error") in ("not_financial", "unparseable_amount") else "extracted"
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
@@ -2852,6 +2881,8 @@ async def _ensure_indexes():
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
+        (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
+        (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.activities, [("workspace_id", 1)], {}),
         (db.updates, [("workspace_id", 1)], {}),
         (db.chat_messages, [("workspace_id", 1)], {}),
