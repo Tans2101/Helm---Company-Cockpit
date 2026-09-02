@@ -100,3 +100,70 @@ def test_extract_not_financial_returns_error_json(client):
 
     assert r.status_code == 200
     assert r.json() == {"error": "not_financial"}
+
+
+def test_validate_currency_formatted_amount():
+    import llm
+
+    result = llm._validate_extracted_financial({
+        "type": "expense",
+        "amount": "$1,240.00",
+        "month": "2024-06",
+        "category": "G&A",
+        "vendor": "Acme Corp",
+        "confidence": "high",
+    })
+    assert result["amount"] == 1240.0
+    assert result["type"] == "expense"
+    assert result["confidence"] == "high"
+
+
+def test_validate_invalid_type_coerces_to_expense_with_low_confidence():
+    import llm
+
+    result = llm._validate_extracted_financial({
+        "type": "invoice",
+        "amount": 100,
+        "month": "2024-06",
+        "category": "Subscriptions",
+        "vendor": "Vendor",
+        "confidence": "high",
+    })
+    assert result["type"] == "expense"
+    assert result["confidence"] == "low"
+
+
+def test_validate_garbage_amount_returns_unparseable_error():
+    import llm
+
+    result = llm._validate_extracted_financial({
+        "type": "expense",
+        "amount": "unknown",
+        "month": "2024-06",
+        "category": "G&A",
+        "vendor": "Acme",
+    })
+    assert result == {"error": "unparseable_amount"}
+
+
+def test_extract_unparseable_amount_returns_error_json(client):
+    doc_id = "doc_test456"
+    server.db.documents.find_one = AsyncMock(return_value={
+        "id": doc_id,
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "storage_key": "ws_doc_test/key.pdf",
+        "filename": "blurry.pdf",
+        "content_type": "application/pdf",
+        "status": "uploaded",
+    })
+
+    with patch.object(server.doc_storage, "get_document_bytes", return_value=PDF_BYTES), patch.object(
+        server.helm_llm, "anthropic_configured", return_value=True
+    ), patch.object(
+        server.helm_llm, "extract_financial_document", new_callable=AsyncMock,
+        return_value={"error": "unparseable_amount"},
+    ):
+        r = client.post(f"/api/documents/{doc_id}/extract")
+
+    assert r.status_code == 200
+    assert r.json() == {"error": "unparseable_amount"}
