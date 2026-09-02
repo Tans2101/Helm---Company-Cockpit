@@ -564,18 +564,120 @@ async def fetch_clerk_instance() -> dict[str, Any] | None:
         return None
 
 
-def decode_clerk_jwt(token: str) -> dict[str, Any]:
-    """Verify signature + expiry; return JWT payload."""
+def _jwt_payload_unverified(token: str) -> dict[str, Any]:
+    """Parse JWT payload without signature verification (for sid/sub only)."""
+    import base64
+    import json
+
+    parts = (token or "").split(".")
+    if len(parts) != 3:
+        raise ValueError("Clerk returned a non-JWT token — sign out and sign in again")
+    pad = "=" * (-len(parts[1]) % 4)
     try:
-        signing_key = _signing_key_from_jwt(token)
-        return jwt.decode(
-            token,
-            signing_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},
+        return json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+    except Exception as exc:
+        raise ValueError("Invalid Clerk session token") from exc
+
+
+_jwks_async_cache: dict[str, Any] | None = None
+_jwks_async_cache_at: float = 0.0
+
+
+async def prefetch_jwks() -> bool:
+    """Warm JWKS cache at startup (async — works on Render)."""
+    try:
+        await _fetch_jwks_async()
+        return True
+    except Exception:
+        logger.warning("Clerk JWKS prefetch failed", exc_info=True)
+        return False
+
+
+async def _fetch_jwks_async() -> dict[str, Any]:
+    """JWKS from public Clerk URL using async httpx (Render-safe)."""
+    import time
+
+    global _jwks_async_cache, _jwks_async_cache_at
+    now = time.time()
+    if _jwks_async_cache and now - _jwks_async_cache_at < _JWKS_TTL_SECONDS:
+        return _jwks_async_cache
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(CLERK_JWKS_URL)
+        r.raise_for_status()
+        _jwks_async_cache = r.json()
+        _jwks_async_cache_at = now
+        return _jwks_async_cache
+
+
+async def _verify_clerk_session_via_bapi(token: str) -> dict[str, Any]:
+    """Verify session by checking sid with Clerk Backend API (no local JWKS/crypto)."""
+    import time
+
+    payload = _jwt_payload_unverified(token)
+    sid = payload.get("sid") or payload.get("session_id")
+    sub = payload.get("sub")
+    if not sid or not sub:
+        raise ValueError("Clerk session token is missing session or user id")
+    exp = payload.get("exp")
+    if exp is not None and exp < time.time() - 60:
+        raise ValueError("Clerk session expired — sign out and sign in again")
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{CLERK_BAPI}/sessions/{sid}", headers=_bapi_headers())
+    if r.status_code in (401, 403):
+        raise ValueError(
+            "CLERK_SECRET_KEY rejected by Clerk API — use sk_live_ from clerk.helmcontrol.online on Render"
         )
+    if r.status_code == 404:
+        raise ValueError(
+            "Clerk session not found — CLERK_SECRET_KEY may be from a different Clerk instance than pk_live"
+        )
+    if r.status_code >= 400:
+        raise ValueError(f"Clerk session check failed ({r.status_code})")
+    session = r.json()
+    if session.get("user_id") != sub:
+        raise ValueError("Clerk session user mismatch")
+    status = (session.get("status") or "").lower()
+    if status not in ("active", "pending"):
+        raise ValueError("Clerk session is not active — sign in again")
+    return payload
+
+
+async def _verify_clerk_jwt_jwks(token: str) -> dict[str, Any]:
+    """Verify JWT signature against async-cached public JWKS."""
+    import json
+
+    from jwt.algorithms import RSAAlgorithm
+
+    jwks = await _fetch_jwks_async()
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    signing_key = None
+    for key_data in jwks.get("keys", []):
+        if key_data.get("kid") == kid:
+            signing_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
+            break
+    if signing_key is None:
+        raise jwt.InvalidTokenError("JWKS kid not found")
+    return jwt.decode(
+        token,
+        signing_key,
+        algorithms=["RS256"],
+        options={"verify_aud": False},
+    )
+
+
+async def decode_clerk_jwt(token: str) -> dict[str, Any]:
+    """Verify Clerk session JWT — BAPI session check first (Render-safe), JWKS fallback."""
+    try:
+        return await _verify_clerk_session_via_bapi(token)
     except ValueError:
         raise
+    except httpx.HTTPError as exc:
+        logger.warning("clerk bapi session verify network error: %s", exc)
+    except Exception as exc:
+        logger.warning("clerk bapi session verify failed: %s (%s)", type(exc).__name__, exc)
+    try:
+        return await _verify_clerk_jwt_jwks(token)
     except jwt.ExpiredSignatureError:
         raise ValueError("Clerk session expired — sign out and sign in again")
     except jwt.InvalidTokenError as exc:
@@ -584,9 +686,9 @@ def decode_clerk_jwt(token: str) -> dict[str, Any]:
             "Invalid Clerk session token — sign out, hard-refresh, and sign in again"
         ) from exc
     except Exception as exc:
-        logger.warning("clerk jwt decode failed: %s (%s)", type(exc).__name__, exc)
+        logger.warning("clerk jwks verify failed: %s (%s)", type(exc).__name__, exc)
         raise ValueError(
-            "Clerk JWT verification failed — check CLERK_JWKS_URL on Render matches clerk.helmcontrol.online"
+            "Could not verify Clerk session — check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online"
         ) from exc
 
 
@@ -646,7 +748,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
 
 async def verify_clerk_session_token(token: str) -> dict[str, Any]:
     """Validate Clerk session JWT and return stable identity fields for Helm users."""
-    payload = decode_clerk_jwt(token)
+    payload = await decode_clerk_jwt(token)
     clerk_user_id = payload.get("sub")
     if not clerk_user_id:
         raise ValueError("Clerk token missing sub")

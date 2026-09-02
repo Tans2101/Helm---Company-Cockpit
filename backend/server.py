@@ -379,7 +379,7 @@ async def _user_from_clerk_jwt(token: str):
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=401, detail="Clerk is not configured")
     try:
-        payload = clerk_auth.decode_clerk_jwt(token)
+        payload = await clerk_auth.decode_clerk_jwt(token)
         clerk_id = payload.get("sub")
         if not clerk_id:
             raise ValueError("Clerk token missing sub")
@@ -2560,6 +2560,8 @@ async def startup():
     # Do not block Render health checks — indexes run in background after listen.
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
+    if clerk_auth.clerk_configured():
+        asyncio.create_task(clerk_auth.prefetch_jwks())
 
 
 @app.on_event("shutdown")

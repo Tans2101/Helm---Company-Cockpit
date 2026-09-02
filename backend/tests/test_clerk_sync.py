@@ -77,6 +77,18 @@ def test_clerk_secret_publishable_mode_match():
     assert not clerk_auth.clerk_secret_publishable_mode_match("pk_test_abc")
 
 
+def test_jwt_payload_unverified_extracts_sid_sub():
+    import base64
+    import json
+
+    payload = {"sub": "user_abc", "sid": "sess_xyz", "exp": 9999999999}
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    token = f"eyJhbGciOiJSUzI1NiJ9.{body}.sig"
+    parsed = clerk_auth._jwt_payload_unverified(token)
+    assert parsed["sub"] == "user_abc"
+    assert parsed["sid"] == "sess_xyz"
+
+
 def test_sync_clerk_instance_patches_dev_origin():
     instance_before = {
         "environment_type": "development",
