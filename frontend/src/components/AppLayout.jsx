@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import CompanySetup from "@/pages/CompanySetup";
-import { helmPlanLabel, helmWorkspacePlanLabel } from "@/lib/helmPlan";
+import { helmPlanLabel, helmWorkspacePlanLabel, helmHasFullAccess } from "@/lib/helmPlan";
 import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
 
@@ -32,7 +32,7 @@ const NAV = [
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 
-function WorkspaceSwitcher({ onNavigate }) {
+function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data, reload } = useFetch("/workspaces");
@@ -67,7 +67,7 @@ function WorkspaceSwitcher({ onNavigate }) {
         </div>
         <div className="flex-1 min-w-0 text-left">
           <p className="text-xs text-white truncate">{active.name}</p>
-          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan)}</p>
+          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan, billingEnforced)}</p>
         </div>
         <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
       </button>
@@ -91,11 +91,11 @@ function WorkspaceSwitcher({ onNavigate }) {
   );
 }
 
-function SidebarContent({ onNavigate }) {
+function SidebarContent({ onNavigate, billingEnforced }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: company } = useFetch("/company");
-  const isPro = company?.plan === "pro";
+  const isPro = helmHasFullAccess(company?.plan, billingEnforced);
 
   return (
     <div className="flex flex-col h-full">
@@ -111,7 +111,7 @@ function SidebarContent({ onNavigate }) {
         </div>
       </div>
 
-      <WorkspaceSwitcher onNavigate={onNavigate} />
+      <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {NAV.filter((item) => !item.perm || (user?.perms || []).includes(item.perm)).map((item) => (
@@ -152,7 +152,7 @@ function SidebarContent({ onNavigate }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
-            <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro)}</p>
+            <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
           </div>
           <button
             data-testid="settings-link"
@@ -177,8 +177,9 @@ export default function AppLayout() {
   const { user } = useAuth();
   const { data: billing } = useFetch("/billing/plans");
   const { data: company, loading: companyLoading } = useFetch("/company");
-  const pastDue = billing?.subscription_status === "past_due";
-  const isPro = company?.plan === "pro";
+  const billingEnforced = billing?.billing_enforced === true;
+  const pastDue = billingEnforced && billing?.subscription_status === "past_due";
+  const isPro = helmHasFullAccess(company?.plan, billingEnforced);
   const onBilling = location.pathname.startsWith("/app/billing");
   const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
   const needsCompanySetup = company?.role === "owner" && company?.company_setup_done === false;
@@ -200,7 +201,7 @@ export default function AppLayout() {
       )}
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] flex-col bg-[#09090b] border-r border-white/5 z-40">
-        <SidebarContent />
+        <SidebarContent billingEnforced={billingEnforced} />
       </aside>
 
       {/* Mobile top bar */}
@@ -223,7 +224,7 @@ export default function AppLayout() {
             <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 text-zinc-400 z-10">
               <X className="w-5 h-5" />
             </button>
-            <SidebarContent onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent onNavigate={() => setMobileOpen(false)} billingEnforced={billingEnforced} />
           </div>
         </div>
       )}

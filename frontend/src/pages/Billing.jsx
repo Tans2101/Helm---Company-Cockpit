@@ -14,9 +14,10 @@ export default function Billing() {
   const navigate = useNavigate();
 
   if (loading || !data) return <LoadingScreen label="Loading billing" />;
-  const isPro = data.current_plan === "pro";
+  const billingEnforced = data.billing_enforced === true;
+  const isPro = billingEnforced ? data.current_plan === "pro" : true;
   const proPrice = data.pro_price ?? data.price ?? 8;
-  const pastDue = data.subscription_status === "past_due";
+  const pastDue = billingEnforced && data.subscription_status === "past_due";
 
   const activatePaddle = async () => {
     if (!data.paddle_ready) {
@@ -86,6 +87,13 @@ export default function Billing() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {!billingEnforced && (
+        <div className="mb-6 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200" data-testid="billing-standby-banner">
+          <p className="font-medium text-emerald-100">Billing is paused</p>
+          <p className="text-emerald-200/80 mt-0.5">Helm is free while you build and test. Set <code className="font-mono text-xs">BILLING_ENFORCED=true</code> on the API when you&apos;re ready to charge.</p>
         </div>
       )}
 

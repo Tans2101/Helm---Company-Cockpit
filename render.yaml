@@ -95,6 +95,8 @@ services:
         value: production
       - key: PRO_PRICE
         value: "8"
+      - key: BILLING_ENFORCED
+        value: "false"
       - key: RESEND_API_KEY
         sync: false
       - key: SENDER_EMAIL

@@ -10,6 +10,7 @@ import HelmHowToUse from "@/components/HelmHowToUse";
 
 /**
  * Pre-activation shell: onboarding guide + subscription activation.
+ * Bypassed when billing_enforced is false (BILLING_ENFORCED env on API).
  * Billing route bypasses this gate in AppLayout.
  */
 export default function SubscriptionGate({ children, isPro, canManageBilling }) {
@@ -17,7 +18,8 @@ export default function SubscriptionGate({ children, isPro, canManageBilling }) 
   const { data: billing } = useFetch("/billing/plans");
   const [busy, setBusy] = useState(false);
 
-  if (isPro) return children;
+  const enforced = billing?.billing_enforced === true;
+  if (!enforced || isPro) return children;
 
   const helmPrice = billing?.pro_price ?? billing?.price ?? HELM_PRICE;
   const paddleReady = billing?.paddle_ready;

@@ -134,6 +134,8 @@ APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 if is_stale_deploy_url(APP_URL):
     APP_URL = HELM_CANONICAL_ORIGIN
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
+# When false (default), all workspaces get full access; paywall code stays for later.
+BILLING_ENFORCED = os.environ.get("BILLING_ENFORCED", "false").lower() in ("1", "true", "yes")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX", "").strip() or None
 
@@ -509,7 +511,17 @@ def require(action: str):
     return dep
 
 
+def workspace_is_pro(ws_or_plan) -> bool:
+    """True when billing is off (dev) or workspace has an active paid plan."""
+    if not BILLING_ENFORCED:
+        return True
+    plan = ws_or_plan.get("plan") if isinstance(ws_or_plan, dict) else ws_or_plan
+    return plan == "pro"
+
+
 async def require_pro(principal=Depends(get_principal)):
+    if not BILLING_ENFORCED:
+        return principal
     c = await get_ws(principal["workspace_id"])
     if c["plan"] != "pro":
         raise HTTPException(status_code=403, detail="Helm subscription required")
@@ -520,9 +532,10 @@ def require_pro_perm(action: str):
     async def dep(principal=Depends(get_principal)):
         if action not in perms_for(principal["pack"]):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
-        c = await get_ws(principal["workspace_id"])
-        if c["plan"] != "pro":
-            raise HTTPException(status_code=403, detail="Helm subscription required")
+        if BILLING_ENFORCED:
+            c = await get_ws(principal["workspace_id"])
+            if c["plan"] != "pro":
+                raise HTTPException(status_code=403, detail="Helm subscription required")
         return principal
     return dep
 
@@ -790,6 +803,7 @@ async def auth_config():
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),
+        "billing_enforced": BILLING_ENFORCED,
     }
 
 
@@ -1287,7 +1301,7 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     b = dict(c["briefing"])
-    is_pro = c["plan"] == "pro"
+    is_pro = workspace_is_pro(c)
     fin = await compute_financials(c["workspace_id"])
     metrics = [
         {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"], "tone": "positive"},
@@ -1336,7 +1350,7 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"decisions": c["decisions"], "is_pro": c["plan"] == "pro", "can_act": "decisions:act" in perms_for(principal["pack"])}
+    return {"decisions": c["decisions"], "is_pro": workspace_is_pro(c), "can_act": "decisions:act" in perms_for(principal["pack"])}
 
 
 class DecisionAction(BaseModel):
@@ -1775,7 +1789,7 @@ async def reports(principal=Depends(get_principal)):
                      {"label": "In progress", "value": str(inprog)},
                      {"label": "Open", "value": str(openc)}]},
     ]
-    return {"reports": reports, "is_pro": c["plan"] == "pro"}
+    return {"reports": reports, "is_pro": workspace_is_pro(c)}
 
 
 @api_router.post("/reports/weekly-pack")
@@ -2025,7 +2039,7 @@ async def integrations(principal=Depends(get_principal)):
         else:
             item["configured"] = True
         ints.append(item)
-    return {"integrations": ints, "is_pro": c["plan"] == "pro", "can_manage": "integrations:manage" in perms_for(principal["pack"])}
+    return {"integrations": ints, "is_pro": workspace_is_pro(c), "can_manage": "integrations:manage" in perms_for(principal["pack"])}
 
 
 @api_router.post("/integrations/{integration_id}/toggle")
@@ -2113,7 +2127,8 @@ async def get_billing_status(workspace_id: str, pack: str):
     return {
         "current_plan": c["plan"],
         "pro_only": True,
-        "requires_activation": c["plan"] != "pro",
+        "billing_enforced": BILLING_ENFORCED,
+        "requires_activation": BILLING_ENFORCED and c["plan"] != "pro",
         "pro_price": PRO_PRICE,
         "price": PRO_PRICE,
         "can_manage": "billing:manage" in perms_for(pack),
