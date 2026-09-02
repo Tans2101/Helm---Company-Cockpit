@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
-import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Check, ExternalLink, KeyRound } from "lucide-react";
+import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Check, ExternalLink, KeyRound, RefreshCw } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
@@ -12,9 +12,23 @@ const ICONS = {
   github: Github, slack: MessageSquare, salesforce: Cloud,
 };
 
+function formatLastSynced(iso) {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 export default function Integrations() {
   const { data, loading, reload } = useFetch("/integrations");
   const [params, setParams] = useSearchParams();
+  const [qbSyncing, setQbSyncing] = useState(false);
 
   useEffect(() => {
     if (params.get("connected")) {
@@ -55,6 +69,21 @@ export default function Integrations() {
     catch (e) { toast.error("Could not disconnect"); }
   };
 
+  const syncQuickBooks = async () => {
+    if (!gate()) return;
+    setQbSyncing(true);
+    try {
+      const { data: res } = await api.post("/integrations/quickbooks/sync", {}, { timeout: 120000 });
+      toast.success(`Synced ${res.synced_count} transaction${res.synced_count === 1 ? "" : "s"} from QuickBooks`);
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "QuickBooks sync failed");
+      if (e?.response?.status === 401) reload();
+    } finally {
+      setQbSyncing(false);
+    }
+  };
+
   const toggleData = async (id) => {
     if (!gate()) return;
     try { await api.post(`/integrations/${id}/toggle`); reload(); }
@@ -77,6 +106,7 @@ export default function Integrations() {
         {data.integrations.map((it) => {
           const Icon = ICONS[it.id] || Cloud;
           const needsKeys = it.oauth && it.configured === false;
+          const lastSynced = it.provider === "quickbooks" ? formatLastSynced(it.last_synced_at) : null;
           return (
             <GlassCard key={it.id} className="p-5 fade-up flex flex-col" data-testid={`integration-${it.id}`}>
               <div className="flex items-start justify-between mb-3">
@@ -101,6 +131,23 @@ export default function Integrations() {
               </div>
               <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">{it.category}</p>
               <p className="text-sm text-zinc-500 mt-2 leading-relaxed flex-1 min-h-[40px]">{it.description}</p>
+              {it.provider === "quickbooks" && it.connected && lastSynced && (
+                <p className="text-xs text-zinc-600 mt-2" data-testid="qb-last-synced">
+                  Last synced {lastSynced}
+                </p>
+              )}
+              {it.provider === "quickbooks" && it.connected && (
+                <button
+                  type="button"
+                  data-testid="sync-quickbooks-btn"
+                  onClick={syncQuickBooks}
+                  disabled={qbSyncing}
+                  className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 transition-colors hover:bg-gold/15 disabled:opacity-60"
+                >
+                  <RefreshCw className={cn("w-3.5 h-3.5", qbSyncing && "animate-spin")} />
+                  {qbSyncing ? "Syncing…" : "Sync now"}
+                </button>
+              )}
               <button data-testid={`toggle-${it.id}`} onClick={() => handleClick(it)}
                 className={cn("mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2 transition-colors",
                   it.connected ? "border border-white/10 text-zinc-400 hover:bg-white/5" : "bg-gold text-black font-medium hover:bg-gold-hover")}>

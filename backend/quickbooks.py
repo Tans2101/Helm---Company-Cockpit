@@ -1,0 +1,159 @@
+"""QuickBooks Online — token refresh and transaction sync."""
+from __future__ import annotations
+
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import httpx
+
+QB_CLIENT_ID = os.environ.get("QUICKBOOKS_CLIENT_ID", "")
+QB_CLIENT_SECRET = os.environ.get("QUICKBOOKS_CLIENT_SECRET", "")
+QB_ENVIRONMENT = (os.environ.get("QB_ENVIRONMENT") or os.environ.get("QUICKBOOKS_ENV", "sandbox")).lower()
+
+TOKEN_URL = "https://oauth2.platform.intuit.com/oauth2/v1/tokens/bearer"
+API_BASE = (
+    "https://sandbox-quickbooks.api.intuit.com"
+    if QB_ENVIRONMENT == "sandbox"
+    else "https://quickbooks.api.intuit.com"
+)
+
+
+class QuickBooksAuthError(Exception):
+    """Refresh token invalid or revoked — user must reconnect."""
+
+
+def _api_base() -> str:
+    return API_BASE
+
+
+def _token_needs_refresh(tokens: dict) -> bool:
+    obtained = tokens.get("obtained_at")
+    if not obtained:
+        return True
+    try:
+        obtained_dt = datetime.fromisoformat(obtained.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    expires_in = int(tokens.get("expires_in", 3600))
+    return obtained_dt + timedelta(seconds=max(expires_in - 300, 0)) <= datetime.now(timezone.utc)
+
+
+async def refresh_qb_token(tokens: dict) -> dict:
+    """Return valid tokens, refreshing via Intuit when the access token is near expiry."""
+    if not _token_needs_refresh(tokens):
+        return tokens
+    refresh_token = tokens.get("refresh_token")
+    if not refresh_token:
+        raise QuickBooksAuthError("Missing refresh token")
+    if not QB_CLIENT_ID or not QB_CLIENT_SECRET:
+        raise QuickBooksAuthError("QuickBooks OAuth is not configured")
+
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        resp = await hc.post(
+            TOKEN_URL,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            auth=(QB_CLIENT_ID, QB_CLIENT_SECRET),
+            headers={"Accept": "application/json"},
+        )
+    if resp.status_code != 200:
+        raise QuickBooksAuthError(resp.text[:300] or "Token refresh failed")
+
+    updated = resp.json()
+    updated["obtained_at"] = datetime.now(timezone.utc).isoformat()
+    if tokens.get("realmId"):
+        updated["realmId"] = tokens["realmId"]
+    return updated
+
+
+def _line_category(txn: dict) -> str:
+    for line in txn.get("Line") or []:
+        detail = line.get("AccountBasedExpenseLineDetail") or line.get("SalesItemLineDetail") or {}
+        account = detail.get("AccountRef") or detail.get("ItemRef") or {}
+        name = account.get("name")
+        if name:
+            return str(name)[:80]
+    return ""
+
+
+def map_qb_transaction(txn: dict, txn_type: str) -> dict:
+    """Map a QuickBooks Purchase or Invoice to financial_entries fields."""
+    txn_date_full = str(txn.get("TxnDate") or "")
+    month = txn_date_full[:7] if len(txn_date_full) >= 7 else datetime.now(timezone.utc).strftime("%Y-%m")
+    amount = round(float(txn.get("TotalAmt") or 0), 2)
+    qb_id = str(txn.get("Id") or "")
+    qb_txn_id = f"{qb_id}_{txn_date_full}"
+
+    if txn_type == "purchase":
+        vendor = (txn.get("EntityRef") or {}).get("name") or ""
+        memo = txn.get("PrivateNote") or ""
+        parts = [p for p in [vendor, memo] if p]
+        note = " — ".join(parts) if parts else "QuickBooks purchase"
+        return {
+            "type": "expense",
+            "category": _line_category(txn) or "Other",
+            "amount": amount,
+            "month": month,
+            "note": note[:500],
+            "qb_txn_id": qb_txn_id,
+            "recurring": False,
+        }
+
+    customer = (txn.get("CustomerRef") or {}).get("name") or ""
+    doc = txn.get("DocNumber") or ""
+    memo = txn.get("PrivateNote") or ""
+    parts = [p for p in [customer, doc, memo] if p]
+    note = " — ".join(parts) if parts else "QuickBooks invoice"
+    return {
+        "type": "revenue",
+        "category": _line_category(txn) or "Other",
+        "amount": amount,
+        "month": month,
+        "note": note[:500],
+        "qb_txn_id": qb_txn_id,
+        "recurring": False,
+    }
+
+
+async def _query_qb(access_token: str, realm_id: str, entity: str, since: Optional[str]) -> list[dict]:
+    if since:
+        since_date = since[:10]
+        q = f"SELECT * FROM {entity} WHERE TxnDate >= '{since_date}' MAXRESULTS 1000"
+    else:
+        q = f"SELECT * FROM {entity} MAXRESULTS 1000"
+
+    url = f"{_api_base()}/v3/company/{realm_id}/query"
+    async with httpx.AsyncClient(timeout=45.0) as hc:
+        resp = await hc.get(
+            url,
+            params={"query": q, "minorversion": "65"},
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+    if resp.status_code == 401:
+        raise QuickBooksAuthError("QuickBooks access token rejected")
+    if resp.status_code != 200:
+        raise RuntimeError(f"QuickBooks query failed ({resp.status_code}): {resp.text[:300]}")
+
+    body = resp.json()
+    qr = body.get("QueryResponse") or {}
+    rows = qr.get(entity) or []
+    if isinstance(rows, dict):
+        rows = [rows]
+    return rows
+
+
+async def fetch_qb_transactions(tokens: dict, realm_id: str, since: Optional[str] = None) -> list[dict]:
+    """Fetch Purchase and Invoice objects, optionally since an ISO timestamp (uses date portion)."""
+    access_token = tokens.get("access_token")
+    if not access_token:
+        raise QuickBooksAuthError("Missing access token")
+
+    purchases = await _query_qb(access_token, realm_id, "Purchase", since)
+    invoices = await _query_qb(access_token, realm_id, "Invoice", since)
+
+    mapped = []
+    for p in purchases:
+        mapped.append({**map_qb_transaction(p, "purchase"), "_qb_raw_type": "purchase"})
+    for inv in invoices:
+        mapped.append({**map_qb_transaction(inv, "invoice"), "_qb_raw_type": "invoice"})
+    return mapped

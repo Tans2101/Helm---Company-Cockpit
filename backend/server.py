@@ -26,6 +26,7 @@ from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
 import storage as doc_storage
+import quickbooks as qb_sync
 import clerk_auth
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
@@ -2160,6 +2161,7 @@ async def integrations(principal=Depends(get_principal)):
         elif i.get("provider") == "quickbooks":
             item["connected"] = bool(c.get("quickbooks_tokens"))
             item["configured"] = bool(QB_CLIENT_ID and QB_CLIENT_SECRET)
+            item["last_synced_at"] = c.get("qb_last_synced_at")
         else:
             item["configured"] = True
         ints.append(item)
@@ -2223,8 +2225,91 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
     field = "google_tokens" if provider == "google" else "quickbooks_tokens" if provider == "quickbooks" else None
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
-    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": {field: None}})
+    unset = {}
+    if provider == "quickbooks":
+        unset["qb_last_synced_at"] = ""
+    update: dict = {"$set": {field: None}}
+    if unset:
+        update["$unset"] = unset
+    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, update)
     return {"ok": True}
+
+
+# Manual QuickBooks sync — periodic auto-sync (APScheduler / Render cron) is a natural next step.
+@api_router.post("/integrations/quickbooks/sync")
+async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manage"))):
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    tokens = c.get("quickbooks_tokens")
+    if not tokens:
+        raise HTTPException(status_code=400, detail="QuickBooks is not connected — connect it in Integrations first.")
+    realm_id = tokens.get("realmId")
+    if not realm_id:
+        raise HTTPException(status_code=400, detail="QuickBooks company (realmId) is missing — reconnect QuickBooks.")
+
+    try:
+        tokens = await qb_sync.refresh_qb_token(tokens)
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"quickbooks_tokens": tokens}})
+
+        since = c.get("qb_last_synced_at")
+        txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
+        synced_count = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        for txn in txns:
+            txn.pop("_qb_raw_type", None)
+            qb_txn_id = txn.pop("qb_txn_id")
+            existing = await db.financial_entries.find_one(
+                {"workspace_id": ws_id, "qb_txn_id": qb_txn_id}, {"_id": 0, "id": 1},
+            )
+            fields = {
+                "type": txn["type"],
+                "category": txn["category"],
+                "amount": txn["amount"],
+                "month": txn["month"],
+                "note": txn.get("note", ""),
+                "recurring": txn.get("recurring", False),
+                "source": "quickbooks_sync",
+            }
+            if existing:
+                await db.financial_entries.update_one(
+                    {"workspace_id": ws_id, "qb_txn_id": qb_txn_id},
+                    {"$set": fields},
+                )
+            else:
+                entry = {
+                    "id": f"fe_{uuid.uuid4().hex[:10]}",
+                    "workspace_id": ws_id,
+                    "qb_txn_id": qb_txn_id,
+                    "created_by": principal["user_id"],
+                    "created_at": now_iso,
+                    **fields,
+                }
+                await db.financial_entries.insert_one(entry)
+            synced_count += 1
+
+        last_synced_at = now_iso
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
+        await log_activity(
+            principal, "integrations", "quickbooks.sync",
+            f"Synced {synced_count} transaction{'s' if synced_count != 1 else ''} from QuickBooks",
+            {"synced_count": synced_count},
+        )
+        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
+
+    except qb_sync.QuickBooksAuthError as exc:
+        logger.warning("QuickBooks auth failed for %s: %s", ws_id, exc)
+        await db.workspaces.update_one(
+            {"workspace_id": ws_id},
+            {"$set": {"quickbooks_tokens": None}, "$unset": {"qb_last_synced_at": ""}},
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="QuickBooks connection expired — please reconnect in Integrations.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("QuickBooks sync failed for %s", ws_id)
+        raise HTTPException(status_code=502, detail="QuickBooks sync failed — try again shortly.") from exc
 
 
 @api_router.get("/integrations/google/calendar-events")
@@ -2705,6 +2790,7 @@ async def _ensure_indexes():
         (db.paddle_intents, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.deals, [("workspace_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1)], {}),
+        (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
         (db.activities, [("workspace_id", 1)], {}),
