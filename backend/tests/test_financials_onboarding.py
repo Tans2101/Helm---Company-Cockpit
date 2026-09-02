@@ -69,6 +69,7 @@ class TestOnboardingEmpty:
         assert r.status_code == 200
         d = r.json()
         assert d["onboarding_done"] is False
+        assert d.get("company_setup_done") is False
         assert d["template"] == "empty"
         assert d["role"] == "owner"
 

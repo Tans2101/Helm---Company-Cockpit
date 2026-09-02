@@ -10,8 +10,10 @@ import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import SubscriptionGate from "@/components/SubscriptionGate";
+import CompanySetup from "@/pages/CompanySetup";
 import { helmPlanLabel, helmWorkspacePlanLabel } from "@/lib/helmPlan";
 import { cn } from "@/lib/utils";
+import { LoadingScreen } from "@/components/kit";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -174,11 +176,20 @@ export default function AppLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const { data: billing } = useFetch("/billing/plans");
-  const { data: company } = useFetch("/company");
+  const { data: company, loading: companyLoading } = useFetch("/company");
   const pastDue = billing?.subscription_status === "past_due";
   const isPro = company?.plan === "pro";
   const onBilling = location.pathname.startsWith("/app/billing");
   const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
+  const needsCompanySetup = company?.role === "owner" && company?.company_setup_done === false;
+
+  if (companyLoading && !company) {
+    return <LoadingScreen label="Loading cockpit" />;
+  }
+
+  if (needsCompanySetup) {
+    return <CompanySetup company={company} />;
+  }
 
   return (
     <div className="min-h-screen grain">

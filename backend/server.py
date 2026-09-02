@@ -1190,10 +1190,70 @@ async def remove_member(membership_id: str, principal=Depends(require_pro_perm("
 @api_router.get("/company")
 async def company(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"name": c["name"], "plan": c["plan"], "stage": c["stage"], "employees": c["employees"],
-            "founded": c["founded"], "mission": c["mission"], "ceo_name": principal.get("name") or "CEO",
-            "role": principal["role"], "workspace_id": c["workspace_id"],
-            "onboarding_done": c.get("onboarding_done", True), "template": c.get("template", "sample")}
+    return {
+        "name": c["name"], "plan": c["plan"], "stage": c["stage"], "employees": c["employees"],
+        "founded": c["founded"], "mission": c["mission"], "industry": c.get("industry", ""),
+        "founder_title": c.get("founder_title", ""),
+        "ceo_name": principal.get("name") or "CEO",
+        "role": principal["role"], "workspace_id": c["workspace_id"],
+        "onboarding_done": c.get("onboarding_done", True),
+        "company_setup_done": c.get("company_setup_done", True),
+        "template": c.get("template", "sample"),
+    }
+
+
+COMPANY_STAGES = frozenset({"Pre-seed", "Seed", "Series A", "Series B", "Growth", "Bootstrapped", "Other"})
+FOUNDER_TITLES = frozenset({"CEO", "Founder", "Co-founder", "Managing Director", "President", "Other"})
+
+
+class CompanySetupInput(BaseModel):
+    name: Optional[str] = None
+    industry: Optional[str] = None
+    stage: Optional[str] = None
+    employees: Optional[int] = None
+    founded: Optional[str] = None
+    mission: Optional[str] = None
+    founder_title: Optional[str] = None
+    company_setup_done: bool = True
+
+
+@api_router.patch("/company")
+async def update_company(payload: CompanySetupInput, principal=Depends(require("workspace:edit"))):
+    updates = {}
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Company name is required")
+        updates["name"] = name
+    if payload.industry is not None:
+        updates["industry"] = payload.industry.strip()[:120]
+    if payload.stage is not None:
+        stage = payload.stage.strip()
+        if stage and stage not in COMPANY_STAGES:
+            raise HTTPException(status_code=400, detail="Invalid company stage")
+        updates["stage"] = stage or "Series A"
+    if payload.employees is not None:
+        if payload.employees < 0 or payload.employees > 100000:
+            raise HTTPException(status_code=400, detail="Invalid team size")
+        updates["employees"] = payload.employees
+    if payload.founded is not None:
+        founded = payload.founded.strip()
+        if founded and (len(founded) != 4 or not founded.isdigit()):
+            raise HTTPException(status_code=400, detail="Founded year must be YYYY")
+        updates["founded"] = founded or "2022"
+    if payload.mission is not None:
+        updates["mission"] = payload.mission.strip()[:500]
+    if payload.founder_title is not None:
+        title = payload.founder_title.strip()
+        if title and title not in FOUNDER_TITLES:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        updates["founder_title"] = title or "CEO"
+    if payload.company_setup_done:
+        updates["company_setup_done"] = True
+    if not updates:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": updates})
+    return {"ok": True}
 
 
 class TemplateInput(BaseModel):

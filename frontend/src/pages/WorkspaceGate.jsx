@@ -63,7 +63,7 @@ export default function WorkspaceGate() {
               className="text-left rounded-xl border border-white/10 bg-white/[0.02] p-6 transition-colors hover:border-gold/40 group">
               <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-gold" /></div>
               <h3 className="mt-4 text-lg text-white tracking-tight">Create a company</h3>
-              <p className="mt-1.5 text-sm text-zinc-500 leading-relaxed">Set up a new Helm workspace and invite your team. You'll be the owner.</p>
+              <p className="mt-1.5 text-sm text-zinc-500 leading-relaxed">Name your company now — you'll set up the rest (stage, team, industry) on the next screen.</p>
               <span className="mt-4 inline-flex items-center gap-1.5 text-sm text-gold">Get started <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
           </div>
