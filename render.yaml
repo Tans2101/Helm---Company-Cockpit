@@ -67,7 +67,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-20250514
+        value: claude-sonnet-5
       - key: CLERK_SECRET_KEY
         sync: false
         # Must be sk_live_ from the clerk.helmcontrol.online Clerk instance (same as CLERK_PUBLISHABLE_KEY).

@@ -1569,7 +1569,7 @@ async def list_deals(
     deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
     all_for_metrics = await db.deals.find(
         {"workspace_id": ws}, {"_id": 0, "stage": 1, "value": 1}
-    ).to_list(None)
+    ).to_list(100_000)
     cursor = next_cursor(deals, "updated_at", page_limit)
     return {
         "items": deals,
