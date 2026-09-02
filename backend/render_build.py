@@ -18,4 +18,5 @@ subprocess.check_call([
     "resend>=2.0",
     "anthropic>=0.40",
     "python-multipart>=0.0.9",
+    "boto3>=1.34,<2",
 ])

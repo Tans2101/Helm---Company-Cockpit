@@ -20,7 +20,7 @@ services:
     branch: main
     autoDeployTrigger: commit
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt && python scripts/check_prod_env.py
+    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt && python scripts/check_prod_env.py && python -c "import storage, pagination, document_cleanup, rate_limit"
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
