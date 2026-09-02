@@ -29,6 +29,8 @@ import document_cleanup
 import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
+import google_oauth as gcal
+import integrations_catalog as integ_catalog
 import clerk_auth
 from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
@@ -1421,6 +1423,12 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
     b = c["briefing"]
     context = {"company": c["name"], "metrics": b.get("what_to_decide"), "what_changed": b["what_changed"],
                "decisions": b["what_to_decide"], "financials": await compute_financials(c["workspace_id"])}
+    cal_snap = await _google_calendar_snapshot(c)
+    if cal_snap and cal_snap.get("meetings"):
+        context["calendar_today"] = [
+            {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
+            for m in cal_snap["meetings"][:8]
+        ]
     system = ("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. "
               "Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, "
               "and end with a confident recommendation. No fluff, no lists.")
@@ -2094,11 +2102,48 @@ async def team(principal=Depends(get_principal)):
     return {"members": members, "avg_utilization": avg, "overloaded_count": overloaded}
 
 
+async def _google_calendar_snapshot(workspace: dict) -> Optional[dict]:
+    """Fetch today's Google Calendar events when connected; None if not connected."""
+    tokens = workspace.get("google_tokens")
+    if not tokens:
+        return None
+    try:
+        meetings, focus_hours, meeting_hours, refreshed = await gcal.fetch_today_calendar(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+        )
+        if refreshed is not tokens:
+            await db.workspaces.update_one(
+                {"workspace_id": workspace["workspace_id"]},
+                {"$set": {"google_tokens": refreshed}},
+            )
+        return {
+            "meetings": meetings,
+            "focus_hours": focus_hours,
+            "meeting_hours": meeting_hours,
+            "live": True,
+            "source": "google_calendar",
+        }
+    except gcal.GoogleAuthError as exc:
+        logger.warning("Google Calendar auth failed for %s: %s", workspace.get("workspace_id"), exc)
+        await db.workspaces.update_one(
+            {"workspace_id": workspace["workspace_id"]},
+            {"$set": {"google_tokens": None}},
+        )
+        return {"meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
+    except Exception:
+        logger.exception("Google Calendar fetch failed for %s", workspace.get("workspace_id"))
+        return None
+
+
 @api_router.get("/calendar")
 async def calendar(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    data = dict(c["calendar"])
-    data["live"] = bool(c.get("google_tokens"))
+    live_cal = await _google_calendar_snapshot(c)
+    if live_cal is not None:
+        data = {**dict(c["calendar"]), **live_cal}
+    else:
+        data = dict(c["calendar"])
+        data["live"] = bool(c.get("google_tokens"))
     # Upcoming deadlines from decisions that carry a real (YYYY-MM-DD) due date.
     upcoming = []
     for d in c.get("decisions", []):
@@ -2291,34 +2336,41 @@ def _provider_config(provider: str):
 @api_router.get("/integrations")
 async def integrations(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    ints = []
-    for i in c["integrations"]:
-        item = dict(i)
-        if i.get("provider") == "google":
-            item["connected"] = bool(c.get("google_tokens"))
-            item["configured"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
-        elif i.get("provider") == "quickbooks":
-            item["connected"] = bool(c.get("quickbooks_tokens"))
-            item["configured"] = bool(QB_CLIENT_ID and QB_CLIENT_SECRET)
-            item["last_synced_at"] = c.get("qb_last_synced_at")
-        else:
-            item["configured"] = True
-        ints.append(item)
-    return {"integrations": ints, "is_pro": workspace_is_pro(c), "can_manage": "integrations:manage" in perms_for(principal["pack"])}
+    ints = integ_catalog.merge_integrations(
+        c,
+        google_configured=bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+        qb_configured=bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
+        anthropic_configured=helm_llm.anthropic_configured(),
+        r2_configured=doc_storage.r2_configured(),
+        resend_configured=bool(RESEND_API_KEY),
+        paddle_ready=bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+        clerk_configured=clerk_auth.clerk_configured(),
+    )
+    return {
+        "integrations": ints,
+        "is_pro": workspace_is_pro(c),
+        "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+        "platform": {
+            "clerk": clerk_auth.clerk_configured(),
+            "anthropic": helm_llm.anthropic_configured(),
+            "r2": doc_storage.r2_configured(),
+            "resend": bool(RESEND_API_KEY),
+            "paddle_ready": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+        },
+    }
 
 
 @api_router.post("/integrations/{integration_id}/toggle")
 async def toggle_integration(integration_id: str, principal=Depends(require_pro_perm("integrations:manage"))):
-    c = await get_ws(principal["workspace_id"])
-    ints = c["integrations"]
-    for i in ints:
-        if i["id"] == integration_id:
-            if i.get("oauth"):
-                raise HTTPException(status_code=400, detail="Use Connect to link this provider via OAuth")
-            i["connected"] = not i["connected"]
-            break
-    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"integrations": ints}})
-    return {"ok": True, "integrations": ints}
+    spec = next((i for i in integ_catalog.INTEGRATION_CATALOG if i["id"] == integration_id), None)
+    if not spec:
+        raise HTTPException(status_code=404, detail="Unknown integration")
+    if spec.get("kind") in ("oauth", "platform", "billing", "coming_soon"):
+        raise HTTPException(
+            status_code=400,
+            detail="This integration cannot be toggled — use Connect, Billing, or configure platform keys on Render.",
+        )
+    raise HTTPException(status_code=400, detail="Integration toggle is not supported")
 
 
 @api_router.get("/integrations/{provider}/connect")
@@ -2457,14 +2509,22 @@ async def google_calendar_events(principal=Depends(get_principal)):
     tokens = c.get("google_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="Google not connected")
-    token = tokens.get("access_token")
-    async with httpx.AsyncClient() as hc:
-        r = await hc.get("https://www.googleapis.com/calendar/v3/calendars/primary/events",
-                         headers={"Authorization": f"Bearer {token}"},
-                         params={"timeMin": datetime.now(timezone.utc).isoformat(), "maxResults": 20, "singleEvents": True, "orderBy": "startTime"})
-    if r.status_code == 401:
-        raise HTTPException(status_code=401, detail="Google token expired — reconnect")
-    return {"events": r.json().get("items", [])}
+    try:
+        meetings, _, _, refreshed = await gcal.fetch_today_calendar(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, max_results=20,
+        )
+        if refreshed is not tokens:
+            await db.workspaces.update_one(
+                {"workspace_id": c["workspace_id"]},
+                {"$set": {"google_tokens": refreshed}},
+            )
+        return {"events": meetings, "live": True}
+    except gcal.GoogleAuthError as exc:
+        await db.workspaces.update_one(
+            {"workspace_id": c["workspace_id"]},
+            {"$set": {"google_tokens": None}},
+        )
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 # ------------------------- Payments -------------------------

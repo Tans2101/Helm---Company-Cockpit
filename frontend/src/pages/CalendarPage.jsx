@@ -54,7 +54,10 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <PageHeader title="Calendar" subtitle="Your schedule and the deadlines that matter — in one clean view." />
+      <PageHeader
+        title="Calendar"
+        subtitle={data.source === "google_calendar" ? "Live from Google Calendar — today's meetings and your deadlines." : "Your schedule and upcoming deadlines in one place."}
+      />
 
       {upcoming.length > 0 && (
         <div className="mb-8">
