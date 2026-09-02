@@ -10,6 +10,7 @@ import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import SubscriptionGate from "@/components/SubscriptionGate";
+import { helmPlanLabel, helmWorkspacePlanLabel } from "@/lib/helmPlan";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -64,7 +65,7 @@ function WorkspaceSwitcher({ onNavigate }) {
         </div>
         <div className="flex-1 min-w-0 text-left">
           <p className="text-xs text-white truncate">{active.name}</p>
-          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {active.plan}</p>
+          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan)}</p>
         </div>
         <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
       </button>
@@ -149,7 +150,7 @@ function SidebarContent({ onNavigate }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
-            <p className="text-[10px] text-zinc-600 truncate">{isPro ? "Helm Pro" : "Activation required"}</p>
+            <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro)}</p>
           </div>
           <button
             data-testid="settings-link"
@@ -183,7 +184,7 @@ export default function AppLayout() {
     <div className="min-h-screen grain">
       {pastDue && (
         <div className="lg:pl-[260px] bg-amber-500/10 border-b border-amber-500/30 px-5 py-2.5 text-center text-sm text-amber-200" data-testid="global-past-due-banner">
-          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Pro access.
+          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Helm access.
         </div>
       )}
       {/* Desktop sidebar */}

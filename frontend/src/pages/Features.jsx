@@ -44,7 +44,7 @@ export default function Features() {
         <div className="mx-auto max-w-4xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}
             className="rounded-2xl border border-gold/20 bg-gold/[0.04] p-6 md:p-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gold mb-4">Included in Helm Pro</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gold mb-4">Included in Helm</p>
             <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2">
               {PRO_FEATURES.map((f) => (
                 <p key={f} className="text-sm text-zinc-300 flex items-start gap-2">
@@ -88,7 +88,7 @@ export default function Features() {
           <p className="mt-3 text-sm text-zinc-500">One plan. Full cockpit. Live in minutes.</p>
           <button type="button" onClick={enter}
             className="mt-8 group inline-flex items-center gap-2 rounded-full bg-gold text-black font-medium px-6 py-3 hover:bg-gold-hover transition-colors">
-            {authed ? "Open your cockpit" : "Start with Helm Pro"}
+            {authed ? "Open your cockpit" : "Get started with Helm"}
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
           <p className="mt-4 text-sm text-zinc-600 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">

@@ -512,7 +512,7 @@ def require(action: str):
 async def require_pro(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     if c["plan"] != "pro":
-        raise HTTPException(status_code=403, detail="Helm Pro subscription required")
+        raise HTTPException(status_code=403, detail="Helm subscription required")
     return principal
 
 
@@ -522,7 +522,7 @@ def require_pro_perm(action: str):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
         c = await get_ws(principal["workspace_id"])
         if c["plan"] != "pro":
-            raise HTTPException(status_code=403, detail="Helm Pro subscription required")
+            raise HTTPException(status_code=403, detail="Helm subscription required")
         return principal
     return dep
 

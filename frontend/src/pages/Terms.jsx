@@ -65,7 +65,7 @@ export default function Terms() {
               To the fullest extent permitted by law, [COMPANY_NAME] and its suppliers are not liable for indirect, incidental,
               special, consequential, or punitive damages, or for lost profits, data, or business opportunities arising from
               your use of Helm. Our aggregate liability for claims relating to the service is limited to the fees you paid us
-              for Helm in the twelve months before the claim (or zero if you have not paid for Helm Pro).
+              for Helm in the twelve months before the claim (or zero if you have not paid for Helm).
             </p>
           </section>
 

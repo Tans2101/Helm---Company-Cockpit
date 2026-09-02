@@ -238,7 +238,7 @@ export default function Landing() {
         <div className="mx-auto max-w-lg">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center mb-10">
             <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Pricing</p>
-            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Helm Pro</h2>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Helm</h2>
             <p className="mt-3 text-zinc-500">The full CEO Operating System. One plan, everything included.</p>
           </motion.div>
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}
@@ -295,7 +295,7 @@ export default function Landing() {
             </button>
           </div>
           <div className="relative mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-600">
-            <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Helm Pro · ${PRO_PRICE}/mo</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Helm · ${PRO_PRICE}/mo</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Sign in with Google</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Live in minutes</span>
           </div>

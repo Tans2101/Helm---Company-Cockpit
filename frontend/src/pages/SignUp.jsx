@@ -91,7 +91,7 @@ function SignUpClerk() {
             {TAGLINE}
           </h1>
           <p className="text-zinc-400 text-base md:text-lg mt-6 leading-relaxed">
-            Create your account, set up your workspace, then activate Helm Pro (${PRO_PRICE}/mo) to run the full cockpit.
+            Create your account, set up your workspace, then activate Helm (${PRO_PRICE}/mo) to run the full cockpit.
           </p>
         </div>
         <p className="text-xs text-zinc-700">
@@ -103,7 +103,7 @@ function SignUpClerk() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Create your account</h2>
-          <p className="text-zinc-500 text-sm mt-2">Google or email — activate Helm Pro after sign-up.</p>
+          <p className="text-zinc-500 text-sm mt-2">Google or email — activate Helm after sign-up.</p>
 
           <div className="mt-6" data-testid="clerk-sign-up">
             <SignUp

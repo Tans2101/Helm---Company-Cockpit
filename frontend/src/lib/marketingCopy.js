@@ -54,7 +54,7 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "No. Helm is Pro-only — one plan with the full cockpit. Sign up, preview the shell, then activate when you're ready." },
+  { q: "Is there a free plan?", a: "No. Helm is one plan — the full CEO cockpit. You can preview the shell after sign-up, then activate when you're ready." },
   { q: "Can my leadership team use Helm?", a: "Yes. Invite CFO, VP Sales, ops, and HR with role-based access. They contribute data; you see the synthesis." },
   { q: "What integrations are included?", a: "Google Calendar, Gmail, QuickBooks, GitHub, and more — live signal flows into your briefing automatically." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancel anytime — no annual lock-in." },
@@ -82,6 +82,7 @@ export const FEATURE_CATEGORIES = [
 ];
 
 export const PRO_PRICE = 8;
+export const HELM_PRICE = PRO_PRICE;
 
 export const PRO_FEATURES = [
   "AI Morning Briefing & synthesis",
@@ -91,6 +92,7 @@ export const PRO_FEATURES = [
   "Unlimited Ask Helm",
   "Runway, pipeline, team bandwidth & reports",
 ];
+export const HELM_FEATURES = PRO_FEATURES;
 
 export const PRODUCT_FACTS = [
   { v: "3 min", l: "to your morning briefing" },
@@ -176,4 +178,64 @@ export const FEATURE_MODULES = [
     body: "Role-based packs for finance, sales, ops, and HR — everyone contributes, you stay in control.",
     example: "Your CFO updates financials. Your VP Sales owns pipeline. You see the synthesis.",
   },
+];
+
+/** In-app onboarding — how CEOs use Helm day to day. */
+export const HOW_TO_USE_INTRO = {
+  title: "How to use Helm",
+  subtitle: "Your CEO operating system in three rhythms: morning, during the day, and each week.",
+  lead: "Helm isn't another dashboard to maintain. Open it once, get the signal, make the call, delegate the rest — then get back to building.",
+};
+
+export const HOW_TO_USE_RHYTHMS = [
+  {
+    id: "morning",
+    label: "Every morning",
+    time: "~5 minutes",
+    icon: "sun",
+    steps: [
+      { title: "Open Briefing", body: "Start on the Briefing tab. Three columns tell you what changed overnight, what needs your decision, and what to hand off." },
+      { title: "Scan Decisions", body: "Head to Decision Center. Approvals are ranked by impact — Helm recommends which to tackle first and why." },
+      { title: "Check My Day", body: "My Day pulls your calendar and top tasks into one view so you walk into standup already oriented." },
+    ],
+  },
+  {
+    id: "day",
+    label: "During the day",
+    time: "As needed",
+    icon: "zap",
+    steps: [
+      { title: "Ask Helm", body: "Need a fast read? Ask \"What's our runway at current burn?\" or \"What's stuck in the pipeline?\" — answers come from your live data." },
+      { title: "Delegate from Decisions", body: "Approve, follow up, or assign. Helm tracks whether outcomes actually landed — no more decisions that vanish." },
+      { title: "Glance Telemetry", body: "MRR, burn, headcount, open tasks — one screen when a board member Slacks you a number question." },
+    ],
+  },
+  {
+    id: "week",
+    label: "Each week",
+    time: "Friday · ~10 minutes",
+    icon: "calendar",
+    steps: [
+      { title: "Generate CEO Pack", body: "Reports → Weekly CEO Pack. One click produces a board-ready summary of financials, team pulse, and open decisions." },
+      { title: "Connect integrations", body: "Integrations pulls signal from Google Calendar, Gmail, QuickBooks, and GitHub — your team keeps their tools." },
+      { title: "Invite your leadership team", body: "Team & Access lets CFO, VP Sales, and ops contribute data while you keep the synthesized view." },
+    ],
+  },
+];
+
+export const HOW_TO_USE_MODULES = [
+  { nav: "Briefing", path: "/app", tip: "Your daily starting point — always open this first." },
+  { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up." },
+  { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A grounded in your company, not the internet." },
+  { nav: "Financials", path: "/app/financials", tip: "Runway, burn, and scenarios for board prep." },
+  { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and weighted pipeline at a glance." },
+  { nav: "Integrations", path: "/app/integrations", tip: "Connect tools once; signal flows in automatically." },
+];
+
+export const HOW_TO_USE_CHECKLIST = [
+  "Skim your Morning Briefing",
+  "Clear or delegate one Decision",
+  "Connect at least one integration",
+  "Invite a leadership team member",
+  "Generate your first Weekly CEO Pack",
 ];

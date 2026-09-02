@@ -102,7 +102,7 @@ function LoginClerk() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-white tracking-tight">Enter the cockpit</h2>
-          <p className="text-zinc-500 text-sm mt-2">Sign in, then activate Helm Pro to use the cockpit.</p>
+          <p className="text-zinc-500 text-sm mt-2">Sign in, then activate Helm to use the cockpit.</p>
 
           {urlError === "session_retired" && (
             <p className="mt-4 text-sm text-amber-400">That sign-in link has expired. Please sign in again below.</p>

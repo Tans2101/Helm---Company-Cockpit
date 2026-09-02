@@ -44,7 +44,7 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 className="w-8 h-8 text-gold" />
             </div>
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Welcome to Pro</p>
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Welcome to Helm</p>
             <h1 className="text-3xl font-light text-white">You're in command.</h1>
             <p className="text-zinc-400 mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
             <button data-testid="success-continue-btn" onClick={() => navigate("/app")}
