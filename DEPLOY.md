@@ -134,7 +134,27 @@ In Paddle dashboard, set webhook URL to:
 
 ---
 
-## 7. Smoke test (must pass before you tell anyone)
+## 7. Orphaned document cleanup (daily cron)
+
+Bill/receipt uploads that are never saved as a financial entry (`linked_entry_id` stays empty) are purged after **7 days** by:
+
+`POST https://YOUR-API.onrender.com/api/admin/cleanup-orphaned-documents`
+
+**Render cron (recommended):** create a **Cron Job** on Render that runs once per day:
+
+```bash
+curl -sf -X POST "https://YOUR-API.onrender.com/api/admin/cleanup-orphaned-documents" \
+  -H "X-Setup-Secret: YOUR_SETUP_SECRET"
+```
+
+- `SETUP_SECRET` must match the value on your API service (same header as `/api/setup/clerk-sync`).
+- Optional: `DOC_ORPHAN_RETENTION_DAYS` (default `7`) on the API service.
+
+**Done when:** a manual curl returns `{"deleted_count":0,...}` (or deletes stale test rows) and committed documents are untouched.
+
+---
+
+## 8. Smoke test (must pass before you tell anyone)
 
 1. Open your domain → **Continue with Google**  
 2. Sign in → create a company once  

@@ -25,6 +25,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
+import document_cleanup
 import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
@@ -2812,6 +2813,13 @@ async def setup_clerk_sync(request: Request):
     if not result.get("synced"):
         raise HTTPException(status_code=503, detail=result)
     return result
+
+
+@api_router.post("/admin/cleanup-orphaned-documents")
+async def cleanup_orphaned_documents_admin(request: Request):
+    """Delete uncommitted document uploads older than DOC_ORPHAN_RETENTION_DAYS (default 7)."""
+    _require_setup_secret(request)
+    return await document_cleanup.cleanup_orphaned_documents(db)
 
 
 @api_router.get("/health")
