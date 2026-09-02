@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft, ChevronRight, CalendarPlus, Clock, Users, Plus, X,
+  ChevronLeft, ChevronRight, CalendarPlus, Clock, Users, Plus, X, RefreshCw, Link2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
@@ -372,6 +372,7 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ title: "", date: "", time: "09:00", duration: 30, type: "Internal", all_day: false });
   const [busy, setBusy] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const weekParam = toIsoDate(weekStart);
   const { data, loading, error, reload } = useFetch(`/calendar?week_start=${weekParam}`, [weekParam]);
@@ -443,6 +444,22 @@ export default function CalendarPage() {
     finally { setBusy(false); }
   };
 
+  const connectGoogle = async () => {
+    setConnecting(true);
+    try {
+      const { data: res } = await api.get("/integrations/google/connect");
+      if (res.configured && res.authorization_url) {
+        window.location.href = res.authorization_url;
+        return;
+      }
+      toast.info(res.message || "Google Calendar isn't available yet — try again later.");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not start Google Calendar connection");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   if (loading) return <LoadingScreen label="Loading calendar" />;
   if (error || !data) {
     return (
@@ -456,8 +473,34 @@ export default function CalendarPage() {
 
   const hasEvents = events.length > 0 || (data.upcoming || []).length > 0;
   const canWrite = data.can_write !== false;
+  const googleConnected = data.google_connected || data.live || data.source === "google_calendar";
+  const googleAvailable = data.google_available !== false;
 
-  if (!hasEvents && !data.live && !canWrite) {
+  const syncBanner = !googleConnected && (
+    <GlassCard className="p-4 mb-4 mx-2 md:mx-4 fade-up border-gold/20" data-testid="calendar-sync-banner">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1">
+          <p className="text-sm text-white font-medium">Sync your calendar</p>
+          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+            Connect Google Calendar to pull in team meetings and external events. Microsoft Teams calendar sync is coming soon.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {googleAvailable ? (
+            <button type="button" data-testid="connect-google-calendar-btn" onClick={connectGoogle} disabled={connecting}
+              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60">
+              <Link2 className="w-4 h-4" />{connecting ? "Connecting…" : "Connect Google Calendar"}
+            </button>
+          ) : (
+            <span className="text-xs text-zinc-500 border border-white/10 rounded-md px-3 py-2">Google Calendar — unavailable on this instance</span>
+          )}
+          <span className="text-xs text-zinc-600 border border-white/10 rounded-md px-3 py-2">Microsoft Teams — coming soon</span>
+        </div>
+      </div>
+    </GlassCard>
+  );
+
+  if (!hasEvents && !googleConnected && !canWrite) {
     return (
       <div>
         <div className="mb-8">
@@ -466,12 +509,17 @@ export default function CalendarPage() {
         </div>
         <EmptyState
           icon={CalendarPlus}
-          title="Connect Google Calendar"
-          body="Bring your real schedule into Helm — deadlines from decisions and tasks appear automatically."
-          action={(
+          title="Sync your calendar"
+          body="Connect Google Calendar to see your real meetings alongside Helm deadlines. Microsoft Teams sync is on the roadmap."
+          action={googleAvailable ? (
+            <button data-testid="connect-calendar-btn" onClick={connectGoogle} disabled={connecting}
+              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60">
+              <CalendarPlus className="w-4 h-4" />{connecting ? "Connecting…" : "Connect Google Calendar"}
+            </button>
+          ) : (
             <button data-testid="connect-calendar-btn" onClick={() => navigate("/app/integrations")}
               className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover">
-              <CalendarPlus className="w-4 h-4" /> Connect Google Calendar
+              <CalendarPlus className="w-4 h-4" /> View integrations
             </button>
           )}
         />
@@ -481,14 +529,22 @@ export default function CalendarPage() {
 
   return (
     <div className="fade-up -mx-2 md:-mx-4">
+      {syncBanner}
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4 px-2 md:px-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-light tracking-tight text-white">Calendar</h1>
           <p className="text-zinc-500 text-sm mt-1">
-            {data.source === "google_calendar" ? "Live from Google Calendar" : "Your schedule and Helm deadlines"}
+            {googleConnected ? "Synced with Google Calendar" : "Helm events and deadlines — connect Google to sync external meetings"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
+          {!googleConnected && googleAvailable && (
+            <button type="button" onClick={connectGoogle} disabled={connecting}
+              className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60">
+              <RefreshCw className={cn("w-3.5 h-3.5", connecting && "animate-spin")} />
+              {connecting ? "Connecting…" : "Sync Google Calendar"}
+            </button>
+          )}
           {canWrite && (
             <button type="button" data-testid="add-event-btn" onClick={() => openAdd(selectedDay)}
               className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">

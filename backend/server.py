@@ -1201,12 +1201,24 @@ class JoinInput(BaseModel):
     code: str
 
 
+async def _find_workspace_by_join_code(code: str):
+    """Match invite codes case-insensitively so pasted codes always work."""
+    c = (code or "").strip()
+    if not c:
+        return None
+    ws = await db.workspaces.find_one({"join_code": c}, {"_id": 0})
+    if ws:
+        return ws
+    rows = await db.workspaces.find(
+        {"join_code": {"$regex": f"^{re.escape(c)}$", "$options": "i"}},
+        {"_id": 0},
+    ).to_list(1)
+    return rows[0] if rows else None
+
+
 @api_router.get("/workspaces/join-info")
 async def join_info(code: str, user=Depends(get_user)):
-    c = code.strip()
-    ws = await db.workspaces.find_one({"join_code": c}, {"_id": 0, "name": 1, "workspace_id": 1})
-    if not ws:
-        ws = await db.workspaces.find_one({"join_code": c.upper()}, {"_id": 0, "name": 1, "workspace_id": 1})
+    ws = await _find_workspace_by_join_code(code)
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     return {"name": ws["name"], "workspace_id": ws["workspace_id"]}
@@ -1215,10 +1227,7 @@ async def join_info(code: str, user=Depends(get_user)):
 @api_router.post("/workspaces/join")
 async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_user)):
     _check_join_rate_limit(_client_ip(request))
-    code = payload.code.strip()
-    ws = await db.workspaces.find_one({"join_code": code}, {"_id": 0})
-    if not ws:
-        ws = await db.workspaces.find_one({"join_code": code.upper()}, {"_id": 0})
+    ws = await _find_workspace_by_join_code(payload.code)
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     ws_id = ws["workspace_id"]
@@ -2519,6 +2528,8 @@ async def calendar(
                     existing_ids.add(ev.get("id"))
         data["events"] = events
     data["can_write"] = True
+    data["google_connected"] = bool(c.get("google_tokens"))
+    data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     return data
 
 

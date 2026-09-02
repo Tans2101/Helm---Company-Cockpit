@@ -72,9 +72,12 @@ export default function WorkspaceGate() {
         {mode === "join" && (
           <GlassCard className="mt-10 p-6 fade-up">
             <label className="text-xs text-zinc-500">Invite code
-              <input data-testid="gate-code-input" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. A1B2C3"
+              <input data-testid="gate-code-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste your invite code"
                 onKeyDown={(e) => e.key === "Enter" && join()}
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 tracking-[0.2em] font-mono focus:outline-none focus:border-gold/40" />
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40" />
             </label>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setMode(null)} className="rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2.5 hover:bg-white/5">Back</button>

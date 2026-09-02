@@ -53,6 +53,7 @@ export default function MyDay() {
   const [noteText, setNoteText] = useState("");
   const [noteColor, setNoteColor] = useState("gold");
   const [noteBusy, setNoteBusy] = useState(false);
+  const [showNoteComposer, setShowNoteComposer] = useState(false);
 
   if (l0 || l1 || l2 || l3) return <LoadingScreen label="Assembling your day" />;
   const dayError = e0 || e1 || e2 || e3;
@@ -81,7 +82,7 @@ export default function MyDay() {
         await api.post("/notes", { text: noteText.trim(), color: noteColor });
         toast.success("Private note saved");
       }
-      setNoteText(""); setEditingNote(null);
+      setNoteText(""); setEditingNote(null); setShowNoteComposer(false);
       reloadNotes();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not save note"); }
     finally { setNoteBusy(false); }
@@ -91,6 +92,20 @@ export default function MyDay() {
     setEditingNote(n.note_id);
     setNoteText(n.text);
     setNoteColor(n.color || "gold");
+    setShowNoteComposer(true);
+  };
+
+  const openNewNote = () => {
+    setEditingNote(null);
+    setNoteText("");
+    setNoteColor("gold");
+    setShowNoteComposer(true);
+  };
+
+  const cancelNote = () => {
+    setEditingNote(null);
+    setNoteText("");
+    setShowNoteComposer(false);
   };
 
   const delNote = async (n) => {
@@ -150,14 +165,15 @@ export default function MyDay() {
             </div>
             <button
               data-testid="new-note-btn"
-              onClick={() => { setEditingNote(null); setNoteText(""); setNoteColor("gold"); }}
+              type="button"
+              onClick={openNewNote}
               className="inline-flex items-center gap-1 text-xs text-gold hover:text-gold-hover"
             >
               <Plus className="w-3.5 h-3.5" /> New note
             </button>
           </div>
 
-          {(editingNote !== null || noteText) && (
+          {showNoteComposer && (
             <GlassCard className="p-4 fade-up border-gold/20" data-testid="note-composer">
               <textarea
                 data-testid="note-text"
@@ -180,14 +196,15 @@ export default function MyDay() {
                   {noteBusy ? "Saving…" : editingNote ? "Save" : "Add note"}
                 </button>
                 {editingNote && (
-                  <button onClick={() => { setEditingNote(null); setNoteText(""); }} className="text-xs text-zinc-500 hover:text-white">Cancel</button>
+                  <button type="button" onClick={cancelNote} className="text-xs text-zinc-500 hover:text-white">Cancel</button>
                 )}
               </div>
             </GlassCard>
           )}
 
-          {notes.length === 0 ? (
-            <EmptyState title="No private notes yet" body="Sticky notes here are only visible to you — great for priorities, reminders, and scratch ideas." />
+          {notes.length === 0 && !showNoteComposer ? (
+            <EmptyState title="No private notes yet" body="Sticky notes here are only visible to you — great for priorities, reminders, and scratch ideas."
+              action={<button type="button" onClick={openNewNote} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add your first note</button>} />
           ) : (
             <div className="grid sm:grid-cols-2 gap-3" data-testid="sticky-notes-grid">
               {notes.map((n) => (
