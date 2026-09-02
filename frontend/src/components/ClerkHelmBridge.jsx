@@ -54,8 +54,6 @@ export default function ClerkHelmBridge() {
 
   useEffect(() => {
     if (!clerkReady || !clerkActive || user || syncing.current) return;
-    // OAuth can return before Clerk finalizes the session JWT — wait for active status.
-    if (sessionStatus === "pending") return;
 
     let cancelled = false;
     syncing.current = true;

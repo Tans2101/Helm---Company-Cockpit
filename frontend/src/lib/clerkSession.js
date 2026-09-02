@@ -15,5 +15,15 @@ export function clerkSessionActive({
   );
 }
 
+/** True when Clerk session is ready for Helm JWT exchange (needs a concrete session). */
+export function clerkSessionReadyForExchange({
+  isSignedIn,
+  userId,
+  sessionId,
+  session,
+}) {
+  return Boolean(isSignedIn || userId || sessionId || session);
+}
+
 /** Clerk useAuth options — pending sessions must count as signed in for Helm exchange. */
 export const CLERK_AUTH_OPTS = { treatPendingAsSignedOut: false };

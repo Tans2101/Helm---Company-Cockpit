@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
 import { useAuth } from "@/context/AuthContext";
@@ -20,10 +21,20 @@ export default function ProtectedRouteClerk() {
   const { session } = useSession();
   const { signOut } = useClerk();
   const { clerkReady, clerkTimedOut } = useClerkReady();
+  const [connectTimedOut, setConnectTimedOut] = useState(false);
 
   const clerkActive = clerkSessionActive({
     isSignedIn, userId, sessionId, session, sessionStatus,
   });
+
+  useEffect(() => {
+    if (user || !clerkActive || sessionError) {
+      setConnectTimedOut(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setConnectTimedOut(true), 25000);
+    return () => clearTimeout(t);
+  }, [user, clerkActive, sessionError]);
 
   if (clerkTimedOut) {
     return <ClerkLoadError />;
@@ -39,16 +50,18 @@ export default function ProtectedRouteClerk() {
   }
 
   if (clerkActive) {
-    if (sessionError) {
+    if (sessionError || connectTimedOut) {
+      const message = sessionError || "Connecting your account is taking too long. Try again.";
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
           <p className="text-lg text-white mb-2">Could not connect your account</p>
-          <p className="text-sm text-rose-400 max-w-md mb-6">{sessionError}</p>
+          <p className="text-sm text-rose-400 max-w-md mb-6">{message}</p>
           <button
             type="button"
             className="rounded-lg bg-gold text-black px-4 py-2 text-sm font-medium"
             onClick={async () => {
               clearSessionError();
+              setConnectTimedOut(false);
               await signOut();
               window.location.href = "/login";
             }}
