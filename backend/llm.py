@@ -10,7 +10,8 @@ from typing import AsyncIterator, Optional
 from anthropic import AsyncAnthropic
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or ""
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+# Default Sonnet model — see current IDs at https://docs.anthropic.com/en/docs/about-claude/models/overview
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 _EXTRACT_SYSTEM = """You extract financial data from bills, receipts, and invoices.
 Return ONLY strict JSON with no markdown and no prose.
