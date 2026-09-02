@@ -36,6 +36,7 @@ from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
+import access_sections as sec_access
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -308,12 +309,12 @@ PACK_PERMS = {
     "sales": BASE_PERMS | {"sales:write"},
     "ops": BASE_PERMS | {"ops:write"},
     "exec": BASE_PERMS | {
-        "decisions:act", "briefing:generate", "reports:pack",
+        "decisions:act", "briefing:generate", "reports:pack", "reports:write",
         "members:invite", "tasks:assign",
     },
     "owner": BASE_PERMS | {
         "finance:write", "people:write", "sales:write", "ops:write",
-        "decisions:act", "briefing:generate", "reports:pack",
+        "decisions:act", "briefing:generate", "reports:pack", "reports:write",
         "integrations:manage", "billing:manage",
         "members:invite", "members:manage", "tasks:assign", "workspace:edit",
     },
@@ -337,6 +338,49 @@ def pack_of(membership: dict) -> str:
 
 def perms_for(pack: str):
     return PACK_PERMS.get(pack, PACK_PERMS["member"])
+
+
+async def _membership_for(principal: dict) -> dict:
+    return await db.memberships.find_one(
+        {"user_id": principal["user_id"], "workspace_id": principal["workspace_id"], "status": "active"},
+        {"_id": 0},
+    ) or {}
+
+
+async def can_section_write(principal: dict, section_id: str, pack_perm: str) -> bool:
+    """Pack permission OR CEO-granted department access for a section."""
+    if pack_perm in perms_for(principal["pack"]):
+        return True
+    ws = await get_ws(principal["workspace_id"])
+    membership = await _membership_for(principal)
+    dept = (membership.get("department") or "General").strip()
+    allowed = (ws.get("section_access") or {}).get(section_id) or []
+    return dept in allowed
+
+
+def require_section(section_id: str, pack_perm: str):
+    async def dep(principal=Depends(get_principal)):
+        if not await can_section_write(principal, section_id, pack_perm):
+            raise HTTPException(status_code=403, detail="You do not have permission for this action")
+        if BILLING_ENFORCED:
+            c = await get_ws(principal["workspace_id"])
+            if c["plan"] != "pro":
+                raise HTTPException(status_code=403, detail="Helm subscription required")
+        return principal
+    return dep
+
+
+def _normalize_task_columns(tasks: dict) -> dict:
+    """Display label Backlog → To-Do while keeping column id backlog."""
+    out = dict(tasks)
+    cols = []
+    for col in out.get("columns") or []:
+        c = dict(col)
+        if c.get("id") == "backlog":
+            c["name"] = "To-Do"
+        cols.append(c)
+    out["columns"] = cols
+    return out
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
@@ -1051,6 +1095,7 @@ async def _user_session_payload(user: dict) -> dict:
         "needs_workspace": False,
         "role": membership["role"],
         "pack": pack,
+        "department": membership.get("department") or "General",
         "perms": sorted(perms_for(pack)),
         "default_route": PACK_HOME.get(pack, "/app"),
         "pack_label": PACK_LABEL.get(pack, "Member"),
@@ -1208,6 +1253,7 @@ async def list_members(principal=Depends(get_principal)):
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
             "pack": pack_of(m), "status": m["status"], "name": (u or {}).get("name"),
             "picture": (u or {}).get("picture"), "user_id": m.get("user_id"),
+            "department": m.get("department") or "General",
             "is_self": m.get("user_id") == principal["user_id"],
         })
     return {"members": out, "my_role": principal["role"], "my_pack": principal["pack"]}
@@ -1216,6 +1262,7 @@ async def list_members(principal=Depends(get_principal)):
 class InviteInput(BaseModel):
     email: EmailStr
     pack: str = "member"
+    department: str = "General"
 
 
 @api_router.post("/members/invite")
@@ -1234,7 +1281,8 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     await db.memberships.insert_one({
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
         "user_id": existing_user["user_id"] if existing_user else None, "email": email,
-        "role": role, "pack": pack, "status": "active" if existing_user else "invited",
+        "role": role, "pack": pack, "department": payload.department.strip() or "General",
+        "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
     })
     ws = await get_ws(principal["workspace_id"])
@@ -1245,6 +1293,7 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
 
 class RoleInput(BaseModel):
     pack: str
+    department: Optional[str] = None
 
 
 @api_router.patch("/members/{membership_id}")
@@ -1261,8 +1310,37 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
         raise HTTPException(status_code=403, detail="Only an owner can change owner access")
     pack = payload.pack
     role = "owner" if pack == "owner" else "member"
-    await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": {"role": role, "pack": pack}})
+    upd = {"role": role, "pack": pack}
+    if payload.department is not None:
+        upd["department"] = payload.department.strip() or "General"
+    await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
     return {"ok": True}
+
+
+class SectionAccessInput(BaseModel):
+    section_access: dict
+
+
+@api_router.get("/access/sections")
+async def get_section_access(principal=Depends(get_principal)):
+    ws = await get_ws(principal["workspace_id"])
+    can_manage = "members:manage" in perms_for(principal["pack"])
+    return {
+        "sections": sec_access.MANAGEABLE_SECTIONS,
+        "departments": sec_access.DEFAULT_DEPARTMENTS,
+        "section_access": sec_access.normalize_section_access(ws.get("section_access")),
+        "can_manage": can_manage,
+    }
+
+
+@api_router.patch("/access/sections")
+async def update_section_access(payload: SectionAccessInput, principal=Depends(require_pro_perm("members:manage"))):
+    normalized = sec_access.normalize_section_access(payload.section_access)
+    await db.workspaces.update_one(
+        {"workspace_id": principal["workspace_id"]},
+        {"$set": {"section_access": normalized}},
+    )
+    return {"ok": True, "section_access": normalized}
 
 
 @api_router.delete("/members/{membership_id}")
@@ -1613,7 +1691,7 @@ async def list_deals(
 
 
 @api_router.post("/deals")
-async def create_deal(payload: DealInput, principal=Depends(require_pro_perm("sales:write"))):
+async def create_deal(payload: DealInput, principal=Depends(require_section("sales", "sales:write"))):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Deal name is required")
     stage = payload.stage if payload.stage in DEAL_STAGES else "lead"
@@ -1630,7 +1708,7 @@ async def create_deal(payload: DealInput, principal=Depends(require_pro_perm("sa
 
 
 @api_router.patch("/deals/{deal_id}")
-async def update_deal(deal_id: str, payload: DealInput, principal=Depends(require_pro_perm("sales:write"))):
+async def update_deal(deal_id: str, payload: DealInput, principal=Depends(require_section("sales", "sales:write"))):
     d = await db.deals.find_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -1652,7 +1730,7 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
 
 
 @api_router.delete("/deals/{deal_id}")
-async def delete_deal(deal_id: str, principal=Depends(require_pro_perm("sales:write"))):
+async def delete_deal(deal_id: str, principal=Depends(require_section("sales", "sales:write"))):
     await db.deals.delete_one({"id": deal_id, "workspace_id": principal["workspace_id"]})
     return {"ok": True}
 
@@ -1664,7 +1742,9 @@ async def telemetry(principal=Depends(get_principal)):
     items = c["tasks"]["items"]
     open_tasks = len([t for t in items if t.get("column") != "done"])
     headcount = c.get("employees") or len(c["people"]["people"])
+    now = datetime.now(timezone.utc)
     kpis = []
+    sources = []
     if fin["has_data"]:
         kpis += [
             {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"],
@@ -1675,27 +1755,49 @@ async def telemetry(principal=Depends(get_principal)):
             {"label": "Net Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"],
              "spark": [b["burn"] for b in fin["burn_series"]]},
         ]
+        sources.append({"label": "Financials", "detail": "Live from your financial entries", "freshness": "live"})
     kpis += [
         {"label": "Headcount", "value": str(headcount), "delta": 0, "tone": "neutral", "spark": []},
         {"label": "Open Tasks", "value": str(open_tasks), "delta": 0, "tone": "neutral", "spark": []},
     ]
+    sources.append({"label": "People & Tasks", "detail": "Headcount and open tasks from workspace data", "freshness": "live"})
     deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
-    if deals:
-        kpis.append({"label": "Pipeline", "value": fmt_money(_deal_metrics(deals)["open_value"]),
+    metrics = _deal_metrics(deals) if deals else None
+    if metrics:
+        kpis.append({"label": "Pipeline", "value": fmt_money(metrics["open_value"]),
                      "delta": 0, "tone": "neutral", "spark": []})
+        sources.append({"label": "Pipeline", "detail": "Live from deals in your CRM board", "freshness": "live"})
     revenue_trend = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)}
                      for r in fin["revenue_series"]]
+    funnel = []
+    if metrics:
+        funnel = [{"stage": row["label"], "value": row["count"]} for row in metrics["by_stage"] if row["count"] > 0]
+    elif (c.get("telemetry") or {}).get("funnel"):
+        funnel = c["telemetry"]["funnel"]
+        sources.append({"label": "Sales Funnel", "detail": "Sample funnel — add deals for live pipeline stages", "freshness": "sample"})
     tel = c.get("telemetry") or {}
-    return {"kpis": kpis, "revenue_trend": revenue_trend,
-            "funnel": tel.get("funnel") or [], "risks": tel.get("risks") or [],
-            "expense_breakdown": fin["expense_breakdown"]}
+    risks = tel.get("risks") or []
+    if risks and not metrics:
+        sources.append({"label": "Risks", "detail": "Sample risk radar — connect integrations for live signals", "freshness": "sample"})
+    qb = c.get("quickbooks_tokens")
+    if qb:
+        sources.append({"label": "QuickBooks", "detail": "Accounting sync when connected", "freshness": "hourly"})
+    if c.get("google_tokens"):
+        sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
+    return {
+        "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
+        "expense_breakdown": fin["expense_breakdown"],
+        "data_as_of": now.isoformat(),
+        "sources": sources,
+    }
 
 
 @api_router.get("/financials")
 async def financials(principal=Depends(get_principal)):
     fin = await compute_financials(principal["workspace_id"])
     entries = await db.financial_entries.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("month", -1).to_list(5000)
-    return {**fin, "entries": entries, "can_write": "finance:write" in perms_for(principal["pack"]),
+    return {**fin, "entries": entries,
+            "can_write": await can_section_write(principal, "financials", "finance:write"),
             "can_manage": "integrations:manage" in perms_for(principal["pack"])}
 
 
@@ -1716,7 +1818,7 @@ MAX_DOC_BYTES = 15 * 1024 * 1024
 @api_router.post("/documents/upload")
 async def upload_financial_document(
     file: UploadFile = File(...),
-    principal=Depends(require_pro_perm("finance:write")),
+    principal=Depends(require_section("financials", "finance:write")),
 ):
     await _enforce_document_rate_limit(
         principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
@@ -1763,7 +1865,7 @@ async def upload_financial_document(
 async def extract_financial_document_route(
     document_id: str,
     force: bool = Query(False),
-    principal=Depends(require_pro_perm("finance:write")),
+    principal=Depends(require_section("financials", "finance:write")),
 ):
     doc = await db.documents.find_one(
         {"id": document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
@@ -1815,7 +1917,7 @@ async def extract_financial_document_route(
 @api_router.get("/documents/{document_id}")
 async def get_financial_document(
     document_id: str,
-    principal=Depends(require_pro_perm("finance:write")),
+    principal=Depends(require_section("financials", "finance:write")),
 ):
     doc = await db.documents.find_one(
         {"id": document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
@@ -1831,7 +1933,7 @@ async def get_financial_document(
 
 
 @api_router.post("/financials/entries")
-async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_pro_perm("finance:write"))):
+async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
     source = "manual"
@@ -1867,7 +1969,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_pro_pe
 
 
 @api_router.patch("/financials/entries/{entry_id}")
-async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require_pro_perm("finance:write"))):
+async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
@@ -1881,7 +1983,7 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
 
 
 @api_router.delete("/financials/entries/{entry_id}")
-async def delete_fin_entry(entry_id: str, principal=Depends(require_pro_perm("finance:write"))):
+async def delete_fin_entry(entry_id: str, principal=Depends(require_section("financials", "finance:write"))):
     doc = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
     if doc:
@@ -1896,7 +1998,7 @@ class FinSettingsInput(BaseModel):
 
 
 @api_router.put("/financials/settings")
-async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_pro_perm("finance:write"))):
+async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_section("financials", "finance:write"))):
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
                                    {"$set": {"financial_settings.cash": round(payload.cash, 2),
                                              "financial_settings.gross_margin": payload.gross_margin}})
@@ -1911,9 +2013,9 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
 @api_router.get("/tasks")
 async def tasks(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    t = dict(c["tasks"])
+    t = _normalize_task_columns(dict(c["tasks"]))
     t["can_create"] = "tasks:create" in perms_for(principal["pack"])
-    t["can_assign"] = "tasks:assign" in perms_for(principal["pack"])
+    t["can_assign"] = await can_section_write(principal, "tasks", "tasks:assign")
     t["my_user_id"] = principal["user_id"]
     return t
 
@@ -1922,7 +2024,7 @@ async def tasks(principal=Depends(get_principal)):
 async def my_tasks(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     items = [t for t in c["tasks"]["items"] if t.get("assignee_user_id") == principal["user_id"]]
-    return {"items": items, "columns": c["tasks"]["columns"]}
+    return {"items": items, "columns": _normalize_task_columns(c["tasks"])["columns"]}
 
 
 class TaskInput(BaseModel):
@@ -2031,36 +2133,181 @@ async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("
     return {"ok": True, "edited": False, "update": doc}
 
 
+# ------------------------- Private notes (My Day) -------------------------
+NOTE_COLORS = ("gold", "sky", "emerald", "rose", "violet", "amber")
+
+
+class NoteInput(BaseModel):
+    text: str
+    color: str = "gold"
+
+
+@api_router.get("/notes")
+async def list_notes(principal=Depends(get_principal)):
+    notes = await db.private_notes.find(
+        {"workspace_id": principal["workspace_id"], "user_id": principal["user_id"]},
+        {"_id": 0},
+    ).sort("updated_at", -1).to_list(100)
+    return {"notes": notes}
+
+
+@api_router.post("/notes")
+async def create_note(payload: NoteInput, principal=Depends(get_principal)):
+    if not payload.text.strip():
+        raise HTTPException(status_code=400, detail="Note text is required")
+    now = datetime.now(timezone.utc).isoformat()
+    color = payload.color if payload.color in NOTE_COLORS else "gold"
+    doc = {
+        "note_id": f"note_{uuid.uuid4().hex[:10]}",
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "text": payload.text.strip()[:800],
+        "color": color,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.private_notes.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "note": doc}
+
+
+@api_router.patch("/notes/{note_id}")
+async def edit_note(note_id: str, payload: NoteInput, principal=Depends(get_principal)):
+    if not payload.text.strip():
+        raise HTTPException(status_code=400, detail="Note text is required")
+    now = datetime.now(timezone.utc).isoformat()
+    color = payload.color if payload.color in NOTE_COLORS else None
+    upd = {"text": payload.text.strip()[:800], "updated_at": now}
+    if color:
+        upd["color"] = color
+    res = await db.private_notes.update_one(
+        {"note_id": note_id, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"]},
+        {"$set": upd},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"ok": True}
+
+
+@api_router.delete("/notes/{note_id}")
+async def delete_note(note_id: str, principal=Depends(get_principal)):
+    res = await db.private_notes.delete_one(
+        {"note_id": note_id, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"]},
+    )
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"ok": True}
+
+
+def _computed_report_cards(c, fin, items, ups, headcount):
+    done = len([t for t in items if t.get("column") == "done"])
+    inprog = len([t for t in items if t.get("column") == "in_progress"])
+    openc = len([t for t in items if t.get("column") != "done"])
+    blocked = len([u for u in ups if u.get("blocker")])
+    return [
+        {"id": "auto_fin", "title": "Financial Snapshot", "type": "Finance", "period": "Live",
+         "summary": f"MRR {fin['mrr']} · ARR {fin['arr']} · runway {fin['runway_months'] or '—'}mo · net burn {fin['burn']}.",
+         "metrics": [{"label": "MRR", "value": fin["mrr"]},
+                     {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—"},
+                     {"label": "Burn", "value": fin["burn"]}],
+         "source": "auto"},
+        {"id": "auto_team", "title": "Team Pulse", "type": "People", "period": "Today",
+         "summary": f"{headcount} people · {len(ups)} daily update(s) today · {blocked} blocked.",
+         "metrics": [{"label": "Headcount", "value": str(headcount)},
+                     {"label": "Updates", "value": str(len(ups))},
+                     {"label": "Blocked", "value": str(blocked)}],
+         "source": "auto"},
+        {"id": "auto_exec", "title": "Execution", "type": "Delivery", "period": "Live",
+         "summary": f"{done} shipped · {inprog} in progress · {openc} open across the board.",
+         "metrics": [{"label": "Shipped", "value": str(done)},
+                     {"label": "In progress", "value": str(inprog)},
+                     {"label": "Open", "value": str(openc)}],
+         "source": "auto"},
+    ]
+
+
 @api_router.get("/reports")
 async def reports(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     fin = await compute_financials(c["workspace_id"])
     items = c["tasks"]["items"]
-    done = len([t for t in items if t.get("column") == "done"])
-    inprog = len([t for t in items if t.get("column") == "in_progress"])
-    openc = len([t for t in items if t.get("column") != "done"])
     day = datetime.now(timezone.utc).date().isoformat()
     ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
-    blocked = len([u for u in ups if u.get("blocker")])
     headcount = c.get("employees") or len(c["people"]["people"])
-    reports = [
-        {"id": "fin", "title": "Financial Snapshot", "type": "Finance", "period": "Live",
-         "summary": f"MRR {fin['mrr']} · ARR {fin['arr']} · runway {fin['runway_months'] or '—'}mo · net burn {fin['burn']}.",
-         "metrics": [{"label": "MRR", "value": fin["mrr"]},
-                     {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—"},
-                     {"label": "Burn", "value": fin["burn"]}]},
-        {"id": "team", "title": "Team Pulse", "type": "People", "period": "Today",
-         "summary": f"{headcount} people · {len(ups)} daily update(s) today · {blocked} blocked.",
-         "metrics": [{"label": "Headcount", "value": str(headcount)},
-                     {"label": "Updates", "value": str(len(ups))},
-                     {"label": "Blocked", "value": str(blocked)}]},
-        {"id": "exec", "title": "Execution", "type": "Delivery", "period": "Live",
-         "summary": f"{done} shipped · {inprog} in progress · {openc} open across the board.",
-         "metrics": [{"label": "Shipped", "value": str(done)},
-                     {"label": "In progress", "value": str(inprog)},
-                     {"label": "Open", "value": str(openc)}]},
-    ]
-    return {"reports": reports, "is_pro": workspace_is_pro(c)}
+    manual = list(c.get("manual_reports") or [])
+    auto = _computed_report_cards(c, fin, items, ups, headcount)
+    can_write = await can_section_write(principal, "reports", "reports:write")
+    return {
+        "reports": manual + auto,
+        "manual_reports": manual,
+        "auto_reports": auto,
+        "can_write": can_write,
+        "is_pro": workspace_is_pro(c),
+    }
+
+
+class ReportInput(BaseModel):
+    title: str
+    type: str = "General"
+    period: str = ""
+    summary: str = ""
+    metrics: list = []
+
+
+@api_router.post("/reports")
+async def create_report(payload: ReportInput, principal=Depends(require_section("reports", "reports:write"))):
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+    c = await get_ws(principal["workspace_id"])
+    manual = list(c.get("manual_reports") or [])
+    report = {
+        "id": f"rep_{uuid.uuid4().hex[:10]}",
+        "title": payload.title.strip(),
+        "type": (payload.type or "General").strip(),
+        "period": (payload.period or "Manual").strip(),
+        "summary": payload.summary.strip(),
+        "metrics": payload.metrics[:6] if payload.metrics else [],
+        "source": "manual",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    manual.append(report)
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    await log_activity(principal, "reports", "report.create", f"Added report: {report['title']}")
+    return {"ok": True, "report": report}
+
+
+@api_router.patch("/reports/{report_id}")
+async def edit_report(report_id: str, payload: ReportInput, principal=Depends(require_section("reports", "reports:write"))):
+    c = await get_ws(principal["workspace_id"])
+    manual = list(c.get("manual_reports") or [])
+    found = None
+    for r in manual:
+        if r["id"] == report_id:
+            r.update({
+                "title": payload.title.strip() or r["title"],
+                "type": (payload.type or r.get("type", "General")).strip(),
+                "period": (payload.period or r.get("period", "Manual")).strip(),
+                "summary": payload.summary.strip() if payload.summary is not None else r.get("summary", ""),
+                "metrics": payload.metrics if payload.metrics is not None else r.get("metrics", []),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            found = r
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Report not found")
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    return {"ok": True, "report": found}
+
+
+@api_router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, principal=Depends(require_section("reports", "reports:write"))):
+    c = await get_ws(principal["workspace_id"])
+    manual = [r for r in (c.get("manual_reports") or []) if r["id"] != report_id]
+    if len(manual) == len(c.get("manual_reports") or []):
+        raise HTTPException(status_code=404, detail="Report not found")
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    return {"ok": True}
 
 
 @api_router.post("/reports/weekly-pack")
@@ -2102,26 +2349,33 @@ async def team(principal=Depends(get_principal)):
     return {"members": members, "avg_utilization": avg, "overloaded_count": overloaded}
 
 
-async def _google_calendar_snapshot(workspace: dict) -> Optional[dict]:
-    """Fetch today's Google Calendar events when connected; None if not connected."""
+async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:
+    """Fetch Google Calendar events for a week when connected; None if not connected."""
     tokens = workspace.get("google_tokens")
     if not tokens:
         return None
+    if week_start is None:
+        week_start = _calendar_week_start(datetime.now(timezone.utc).date())
     try:
-        meetings, focus_hours, meeting_hours, refreshed = await gcal.fetch_today_calendar(
-            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+        events, refreshed = await gcal.fetch_week_calendar(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, week_start,
         )
         if refreshed is not tokens:
             await db.workspaces.update_one(
                 {"workspace_id": workspace["workspace_id"]},
                 {"$set": {"google_tokens": refreshed}},
             )
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        meetings = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
+        focus_hours, meeting_hours = gcal._compute_hours(meetings)
         return {
+            "events": events,
             "meetings": meetings,
             "focus_hours": focus_hours,
             "meeting_hours": meeting_hours,
             "live": True,
             "source": "google_calendar",
+            "week_start": week_start.strftime("%Y-%m-%d"),
         }
     except gcal.GoogleAuthError as exc:
         logger.warning("Google Calendar auth failed for %s: %s", workspace.get("workspace_id"), exc)
@@ -2129,21 +2383,89 @@ async def _google_calendar_snapshot(workspace: dict) -> Optional[dict]:
             {"workspace_id": workspace["workspace_id"]},
             {"$set": {"google_tokens": None}},
         )
-        return {"meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
+        return {"events": [], "meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
     except Exception:
         logger.exception("Google Calendar fetch failed for %s", workspace.get("workspace_id"))
         return None
 
 
+def _calendar_week_start(day) -> datetime:
+    """Week starts Sunday (matches Helm calendar UI)."""
+    sunday_offset = (day.weekday() + 1) % 7
+    start = day - timedelta(days=sunday_offset)
+    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+
+
+def _normalize_seed_events(meetings: list[dict], day) -> list[dict]:
+    day_str = day.isoformat()
+    out = []
+    for m in meetings:
+        if m.get("start_at"):
+            out.append(dict(m))
+            continue
+        parts = (m.get("time") or "09:00").split(":")
+        hour = int(parts[0])
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        start = datetime(day.year, day.month, day.day, hour, minute, tzinfo=timezone.utc)
+        duration = int(m.get("duration") or 30)
+        end = start + timedelta(minutes=duration)
+        row = dict(m)
+        row.update({
+            "date": day_str,
+            "start_at": start.isoformat(),
+            "end_at": end.isoformat(),
+            "all_day": False,
+        })
+        out.append(row)
+    return out
+
+
+def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
+    events = []
+    for u in upcoming:
+        events.append({
+            "id": f"deadline_{u['id']}",
+            "title": u["title"],
+            "time": "",
+            "duration": 0,
+            "attendees": 0,
+            "type": u.get("type", "Deadline"),
+            "prep": None,
+            "importance": "medium",
+            "source": "helm",
+            "date": u["date"],
+            "start_at": f"{u['date']}T00:00:00+00:00",
+            "end_at": f"{u['date']}T23:59:59+00:00",
+            "all_day": True,
+        })
+    return events
+
+
 @api_router.get("/calendar")
-async def calendar(principal=Depends(get_principal)):
+async def calendar(
+    principal=Depends(get_principal),
+    week_start: Optional[str] = Query(None, description="Sunday of the week to load (YYYY-MM-DD)"),
+):
     c = await get_ws(principal["workspace_id"])
-    live_cal = await _google_calendar_snapshot(c)
+    if week_start:
+        try:
+            anchor_day = datetime.strptime(week_start, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="week_start must be YYYY-MM-DD")
+    else:
+        anchor_day = datetime.now(timezone.utc).date()
+    week_anchor = _calendar_week_start(anchor_day)
+
+    live_cal = await _google_calendar_snapshot(c, week_anchor)
     if live_cal is not None:
         data = {**dict(c["calendar"]), **live_cal}
     else:
         data = dict(c["calendar"])
         data["live"] = bool(c.get("google_tokens"))
+        today = datetime.now(timezone.utc).date()
+        seed_events = _normalize_seed_events(data.get("meetings") or [], today)
+        data["events"] = seed_events
+        data["week_start"] = week_anchor.strftime("%Y-%m-%d")
     # Upcoming deadlines from decisions that carry a real (YYYY-MM-DD) due date.
     upcoming = []
     for d in c.get("decisions", []):
@@ -2166,14 +2488,131 @@ async def calendar(principal=Depends(get_principal)):
                              "type": "Task", "meta": t.get("tag", "")})
     upcoming.sort(key=lambda x: x["date"])
     data["upcoming"] = upcoming
+    week_end = (week_anchor + timedelta(days=6)).strftime("%Y-%m-%d")
+    week_start_s = week_anchor.strftime("%Y-%m-%d")
+    in_week_deadlines = [u for u in upcoming if week_start_s <= u["date"] <= week_end]
+    events = list(data.get("events") or data.get("meetings") or [])
+    if not data.get("events"):
+        events = _normalize_seed_events(events, datetime.now(timezone.utc).date())
+    existing_ids = {e.get("id") for e in events}
+    for ev in _deadlines_as_events(in_week_deadlines):
+        if ev["id"] not in existing_ids:
+            events.append(ev)
+    data["events"] = events
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    data["meetings"] = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
+    if "focus_hours" not in data:
+        data["focus_hours"], data["meeting_hours"] = gcal._compute_hours(data["meetings"])
+    data["week_start"] = week_start_s
+    helm_events = c.get("calendar", {}).get("helm_events") or []
+    if helm_events:
+        week_end_dt = week_anchor + timedelta(days=6)
+        for ev in helm_events:
+            ev_date = (ev.get("date") or (ev.get("start_at") or "")[:10]).strip()
+            try:
+                ev_day = datetime.strptime(ev_date, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if week_anchor.date() <= ev_day <= week_end_dt.date():
+                if ev.get("id") not in existing_ids:
+                    events.append(ev)
+                    existing_ids.add(ev.get("id"))
+        data["events"] = events
+    data["can_write"] = True
     return data
+
+
+class CalendarEventInput(BaseModel):
+    title: str
+    date: str
+    time: str = "09:00"
+    duration: int = 30
+    type: str = "Internal"
+    all_day: bool = False
+
+
+def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = None) -> dict:
+    try:
+        day = datetime.strptime(payload.date.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+    eid = event_id or f"helm_{uuid.uuid4().hex[:10]}"
+    if payload.all_day:
+        start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+        end = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
+        return {
+            "id": eid, "title": payload.title.strip(), "date": day.isoformat(),
+            "time": "", "duration": 0, "attendees": 0, "type": payload.type or "Internal",
+            "prep": None, "importance": "medium", "source": "helm",
+            "start_at": start.isoformat(), "end_at": end.isoformat(), "all_day": True,
+        }
+    parts = (payload.time or "09:00").split(":")
+    hour = int(parts[0])
+    minute = int(parts[1]) if len(parts) > 1 else 0
+    start = datetime(day.year, day.month, day.day, hour, minute, tzinfo=timezone.utc)
+    duration = max(int(payload.duration or 30), 15)
+    end = start + timedelta(minutes=duration)
+    return {
+        "id": eid, "title": payload.title.strip(), "date": day.isoformat(),
+        "time": f"{hour:02d}:{minute:02d}", "duration": duration, "attendees": 0,
+        "type": payload.type or "Internal", "prep": None, "importance": "medium", "source": "helm",
+        "start_at": start.isoformat(), "end_at": end.isoformat(), "all_day": False,
+    }
+
+
+@api_router.post("/calendar/events")
+async def create_calendar_event(payload: CalendarEventInput, principal=Depends(get_principal)):
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+    c = await get_ws(principal["workspace_id"])
+    cal = dict(c.get("calendar") or {})
+    events = list(cal.get("helm_events") or [])
+    ev = _build_helm_event(payload)
+    events.append(ev)
+    cal["helm_events"] = events
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    await log_activity(principal, "calendar", "event.create", f"Added calendar event: {ev['title']}")
+    return {"ok": True, "event": ev}
+
+
+@api_router.patch("/calendar/events/{event_id}")
+async def edit_calendar_event(event_id: str, payload: CalendarEventInput, principal=Depends(get_principal)):
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+    c = await get_ws(principal["workspace_id"])
+    cal = dict(c.get("calendar") or {})
+    events = list(cal.get("helm_events") or [])
+    found = None
+    for i, ev in enumerate(events):
+        if ev.get("id") == event_id and ev.get("source") == "helm":
+            events[i] = _build_helm_event(payload, event_id=event_id)
+            found = events[i]
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Event not found")
+    cal["helm_events"] = events
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    return {"ok": True, "event": found}
+
+
+@api_router.delete("/calendar/events/{event_id}")
+async def delete_calendar_event(event_id: str, principal=Depends(get_principal)):
+    c = await get_ws(principal["workspace_id"])
+    cal = dict(c.get("calendar") or {})
+    events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
+    if len(events) == len(cal.get("helm_events") or []):
+        raise HTTPException(status_code=404, detail="Event not found")
+    cal["helm_events"] = events
+    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    return {"ok": True}
 
 
 @api_router.get("/people")
 async def people(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     data = dict(c["people"])
-    data["can_write"] = "people:write" in perms_for(principal["pack"])
+    data["can_write"] = await can_section_write(principal, "people", "people:write")
+    data["departments"] = sec_access.DEFAULT_DEPARTMENTS
     return data
 
 
@@ -2200,7 +2639,7 @@ def _person_fields(payload: PersonInput):
 
 
 @api_router.post("/people")
-async def add_person(payload: PersonInput, principal=Depends(require_pro_perm("people:write"))):
+async def add_person(payload: PersonInput, principal=Depends(require_section("people", "people:write"))):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
     c = await get_ws(principal["workspace_id"])
@@ -2218,7 +2657,7 @@ async def add_person(payload: PersonInput, principal=Depends(require_pro_perm("p
 
 
 @api_router.patch("/people/{person_id}")
-async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require_pro_perm("people:write"))):
+async def edit_person(person_id: str, payload: PersonInput, principal=Depends(require_section("people", "people:write"))):
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     found = None
@@ -2236,7 +2675,7 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
 
 
 @api_router.delete("/people/{person_id}")
-async def remove_person(person_id: str, principal=Depends(require_pro_perm("people:write"))):
+async def remove_person(person_id: str, principal=Depends(require_section("people", "people:write"))):
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     person = next((p for p in people["people"] if p["id"] == person_id), None)

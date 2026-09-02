@@ -3,7 +3,7 @@ import { Crown, LineChart, DollarSign, Users2, Briefcase, Wrench, Shield } from 
 
 export const PACKS = [
   { id: "owner", label: "Owner", icon: Crown, style: "text-gold bg-gold/10 border-gold/20", desc: "Full control — runs the company, billing & access." },
-  { id: "exec", label: "Executive", icon: LineChart, style: "text-violet-300 bg-violet-400/10 border-violet-400/20", desc: "Full read + can decide and invite teammates (not owners)." },
+  { id: "exec", label: "Executive", icon: LineChart, style: "text-violet-300 bg-violet-400/10 border-violet-400/20", desc: "Full read + can decide, invite teammates, and manage manual reports." },
   { id: "finance", label: "Finance", icon: DollarSign, style: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20", desc: "Reads everything, writes financials." },
   { id: "hr", label: "People / HR", icon: Users2, style: "text-sky-300 bg-sky-400/10 border-sky-400/20", desc: "Reads everything, manages the roster & headcount." },
   { id: "sales", label: "Sales", icon: Briefcase, style: "text-amber-300 bg-amber-400/10 border-amber-400/20", desc: "Reads everything, owns pipeline (write loop coming)." },

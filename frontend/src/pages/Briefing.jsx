@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
+import { timeGreeting } from "@/lib/greeting";
 
 const toneDot = { positive: "bg-emerald-400", negative: "bg-rose-400", neutral: "bg-zinc-500" };
 
@@ -46,13 +47,14 @@ export default function Briefing() {
     }
   };
 
-  const greeting = `${data.greeting}, ${company?.ceo_name?.split(" ")[0] || "CEO"}`;
+  const { greeting: timeGreet, briefingLabel } = timeGreeting();
+  const greeting = `${timeGreet}, ${company?.ceo_name?.split(" ")[0] || "CEO"}`;
 
   return (
     <div>
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8 fade-up">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">{data.date} · Morning Briefing</p>
+          <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">{data.date} · {briefingLabel}</p>
           <h1 className="text-3xl md:text-5xl font-light tracking-tight text-white">{greeting}.</h1>
           <p className="text-zinc-400 mt-3 max-w-2xl text-base md:text-lg leading-relaxed">{data.headline}</p>
         </div>

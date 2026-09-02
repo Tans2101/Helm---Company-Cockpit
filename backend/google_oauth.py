@@ -80,8 +80,11 @@ def _infer_meeting_type(title: str, attendee_count: int) -> str:
 
 
 def _map_google_event(event: dict) -> Optional[dict]:
-    start_raw = (event.get("start") or {}).get("dateTime") or (event.get("start") or {}).get("date")
-    end_raw = (event.get("end") or {}).get("dateTime") or (event.get("end") or {}).get("date")
+    start_obj = event.get("start") or {}
+    end_obj = event.get("end") or {}
+    start_raw = start_obj.get("dateTime") or start_obj.get("date")
+    end_raw = end_obj.get("dateTime") or end_obj.get("date")
+    all_day = bool(start_obj.get("date") and not start_obj.get("dateTime"))
     start_dt = _parse_event_dt(start_raw or "")
     end_dt = _parse_event_dt(end_raw or "")
     if not start_dt:
@@ -106,6 +109,10 @@ def _map_google_event(event: dict) -> Optional[dict]:
         "prep": None,
         "importance": "medium",
         "source": "google_calendar",
+        "date": start_dt.strftime("%Y-%m-%d"),
+        "start_at": start_dt.isoformat(),
+        "end_at": end_dt.isoformat() if end_dt else None,
+        "all_day": all_day,
     }
 
 
@@ -116,27 +123,29 @@ def _today_bounds() -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def _compute_hours(meetings: list[dict]) -> tuple[float, float]:
-    meeting_m = sum(m.get("duration", 0) for m in meetings)
-    meeting_hours = round(meeting_m / 60, 2)
-    focus_hours = round(max(8 - meeting_hours, 0), 2)
-    return focus_hours, meeting_hours
+def week_bounds(week_start: datetime) -> tuple[str, str]:
+    """Return ISO bounds for a 7-day window starting at week_start (UTC midnight)."""
+    start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    end = start + timedelta(days=7)
+    return start.isoformat(), end.isoformat()
 
 
-async def fetch_today_calendar(
+async def _fetch_calendar_events(
     tokens: dict,
     client_id: str,
     client_secret: str,
+    time_min: str,
+    time_max: str,
     *,
-    max_results: int = 25,
-) -> tuple[list[dict], float, float, dict]:
-    """Fetch today's primary-calendar events. Returns (meetings, focus_hours, meeting_hours, tokens)."""
+    max_results: int = 100,
+) -> tuple[list[dict], dict]:
     tokens = await refresh_google_token(tokens, client_id, client_secret)
     access_token = tokens.get("access_token")
     if not access_token:
         raise GoogleAuthError("Missing access token")
 
-    time_min, time_max = _today_bounds()
     async with httpx.AsyncClient(timeout=45.0) as hc:
         resp = await hc.get(
             CALENDAR_EVENTS_URL,
@@ -155,6 +164,43 @@ async def fetch_today_calendar(
         raise RuntimeError(f"Google Calendar API failed ({resp.status_code}): {resp.text[:300]}")
 
     items = resp.json().get("items") or []
-    meetings = [m for m in (_map_google_event(ev) for ev in items) if m]
+    events = [m for m in (_map_google_event(ev) for ev in items) if m]
+    return events, tokens
+
+
+def _compute_hours(meetings: list[dict]) -> tuple[float, float]:
+    meeting_m = sum(m.get("duration", 0) for m in meetings)
+    meeting_hours = round(meeting_m / 60, 2)
+    focus_hours = round(max(8 - meeting_hours, 0), 2)
+    return focus_hours, meeting_hours
+
+
+async def fetch_today_calendar(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    *,
+    max_results: int = 25,
+) -> tuple[list[dict], float, float, dict]:
+    """Fetch today's primary-calendar events. Returns (meetings, focus_hours, meeting_hours, tokens)."""
+    time_min, time_max = _today_bounds()
+    meetings, tokens = await _fetch_calendar_events(
+        tokens, client_id, client_secret, time_min, time_max, max_results=max_results,
+    )
     focus_hours, meeting_hours = _compute_hours(meetings)
     return meetings, focus_hours, meeting_hours, tokens
+
+
+async def fetch_week_calendar(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    week_start: datetime,
+    *,
+    max_results: int = 100,
+) -> tuple[list[dict], dict]:
+    """Fetch one week of events from primary calendar."""
+    time_min, time_max = week_bounds(week_start)
+    return await _fetch_calendar_events(
+        tokens, client_id, client_secret, time_min, time_max, max_results=max_results,
+    )

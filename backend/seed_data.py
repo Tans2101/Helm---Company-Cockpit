@@ -103,7 +103,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
 
     tasks = {
         "columns": [
-            {"id": "backlog", "name": "Backlog"}, {"id": "in_progress", "name": "In Progress"},
+            {"id": "backlog", "name": "To-Do"}, {"id": "in_progress", "name": "In Progress"},
             {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"},
         ],
         "items": [
@@ -160,7 +160,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         briefing = {"date": "Today", "greeting": "Good morning", "headline": "Your cockpit is ready. Start by logging your financials and adding your team.",
                     "ai_summary": None, "nrr": None, "what_changed": [], "what_to_decide": [], "what_to_delegate": []}
         decisions = []
-        tasks = {"columns": [{"id": "backlog", "name": "Backlog"}, {"id": "in_progress", "name": "In Progress"}, {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"}], "items": []}
+        tasks = {"columns": [{"id": "backlog", "name": "To-Do"}, {"id": "in_progress", "name": "In Progress"}, {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"}], "items": []}
         reports = []
         team = {"members": [], "avg_utilization": 0, "overloaded_count": 0}
         calendar = {"meetings": [], "focus_hours": 0, "meeting_hours": 0}

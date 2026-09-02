@@ -4,9 +4,44 @@ import { Plus, PenLine, Trash2, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
-import { cn } from "@/lib/utils";
+import { DEFAULT_DEPARTMENTS, CUSTOM_DEPT } from "@/lib/departments";
 
-const emptyForm = () => ({ name: "", role: "", department: "", tasks_done: 0, tenure: "" });
+const emptyForm = () => ({ name: "", role: "", department: DEFAULT_DEPARTMENTS[0], customDepartment: "" });
+
+function resolveDepartment(form) {
+  if (form.department === CUSTOM_DEPT) return form.customDepartment.trim() || "General";
+  return form.department || "General";
+}
+
+function DepartmentField({ form, setForm }) {
+  const isCustom = form.department === CUSTOM_DEPT;
+  return (
+    <>
+      <label className="text-xs text-zinc-500">Department
+        <select
+          data-testid="person-dept"
+          value={form.department}
+          onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+          className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+        >
+          {DEFAULT_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          <option value={CUSTOM_DEPT}>Custom department…</option>
+        </select>
+      </label>
+      {isCustom && (
+        <label className="col-span-2 text-xs text-zinc-500">Custom department
+          <input
+            data-testid="person-dept-custom"
+            value={form.customDepartment}
+            onChange={(e) => setForm((f) => ({ ...f, customDepartment: e.target.value }))}
+            placeholder="e.g. Customer Success"
+            className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+          />
+        </label>
+      )}
+    </>
+  );
+}
 
 export default function People() {
   const { data, loading, error, reload } = useFetch("/people");
@@ -26,18 +61,27 @@ export default function People() {
     );
   }
   const canWrite = data.can_write;
+  const deptOptions = data.departments || DEFAULT_DEPARTMENTS;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (p) => {
+    const known = deptOptions.includes(p.department);
     setEditing(p.id);
-    setForm({ name: p.name, role: p.role, department: p.department, tasks_done: p.tasks_done, tenure: p.tenure });
+    setForm({
+      name: p.name,
+      role: p.role,
+      department: known ? p.department : CUSTOM_DEPT,
+      customDepartment: known ? "" : (p.department || ""),
+    });
     setShowForm(true);
   };
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
+    const department = resolveDepartment(form);
+    if (form.department === CUSTOM_DEPT && !department) { toast.error("Enter a custom department"); return; }
     setBusy(true);
-    const payload = { ...form, tasks_done: parseInt(form.tasks_done) || 0 };
+    const payload = { name: form.name.trim(), role: form.role.trim(), department };
     try {
       if (editing) { await api.patch(`/people/${editing}`, payload); toast.success("Person updated"); }
       else { await api.post("/people", payload); toast.success("Person added — headcount synced"); }
@@ -75,14 +119,10 @@ export default function People() {
     <div>
       <PageHeader title="People" subtitle="Your team roster — who does what, and how headcount tracks over time." action={action} />
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Headcount</p>
           <p className="font-mono text-3xl text-white mt-2" data-testid="people-headcount">{data.people.length}</p>
-        </GlassCard>
-        <GlassCard className="p-5 fade-up">
-          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Tasks Shipped</p>
-          <p className="font-mono text-3xl text-white mt-2">{data.people.reduce((a, p) => a + (p.tasks_done || 0), 0)}</p>
         </GlassCard>
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Departments</p>
@@ -107,10 +147,6 @@ export default function People() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/5 text-center">
-              <div><p className="font-mono text-white text-sm">{p.tasks_done || 0}</p><p className="text-[10px] text-zinc-600">shipped</p></div>
-              <div><p className="font-mono text-white text-sm">{p.tenure || "—"}</p><p className="text-[10px] text-zinc-600">tenure</p></div>
-            </div>
           </GlassCard>
         ))}
       </div>
@@ -134,15 +170,7 @@ function PersonForm({ form, setForm, submit, busy, editing, close }) {
           <label className="text-xs text-zinc-500">Role
             <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
           </label>
-          <label className="text-xs text-zinc-500">Department
-            <input data-testid="person-dept" value={form.department} onChange={set("department")} placeholder="Engineering" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-          </label>
-          <label className="text-xs text-zinc-500">Tasks shipped
-            <input data-testid="person-tasks" type="number" min="0" value={form.tasks_done} onChange={set("tasks_done")} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-          </label>
-          <label className="text-xs text-zinc-500">Tenure
-            <input data-testid="person-tenure" value={form.tenure} onChange={set("tenure")} placeholder="1.2y" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
-          </label>
+          <DepartmentField form={form} setForm={setForm} />
         </div>
         <button data-testid="submit-person-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save changes" : "Add person"}</button>
       </GlassCard>
