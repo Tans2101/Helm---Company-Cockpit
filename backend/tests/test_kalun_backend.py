@@ -128,8 +128,7 @@ def test_free_plan_gates_weekly_pack(auth):
 
 def test_free_plan_gates_integration_toggle(auth):
     _ensure_free(auth)
-    ints = auth.get(f"{BASE_URL}/api/integrations").json()["integrations"]
-    r = auth.post(f"{BASE_URL}/api/integrations/{ints[0]['id']}/toggle")
+    r = auth.post(f"{BASE_URL}/api/integrations/quickbooks/sync")
     assert r.status_code == 403
 
 

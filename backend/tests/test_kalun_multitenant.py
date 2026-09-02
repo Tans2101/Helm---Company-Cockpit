@@ -183,8 +183,7 @@ def test_member_forbidden_on_decision_action(owner, member):
 
 
 def test_member_forbidden_integration_toggle(owner, member):
-    ints = owner.get(f"{BASE_URL}/api/integrations").json()["integrations"]
-    r = member.post(f"{BASE_URL}/api/integrations/{ints[0]['id']}/toggle")
+    r = member.get(f"{BASE_URL}/api/integrations/google/connect")
     assert r.status_code == 403
 
 
@@ -288,12 +287,13 @@ def test_workspace_list_and_create_and_switch(owner):
 # ---------------- Integrations OAuth degradation ----------------
 def test_integrations_oauth_present(owner):
     d = owner.get(f"{BASE_URL}/api/integrations").json()
-    ints = {i["provider"]: i for i in d["integrations"] if i.get("provider")}
-    # google + quickbooks present and oauth true; configured depends on env keys
-    for p in ["google", "quickbooks"]:
-        assert p in ints, f"provider {p} missing"
-        assert ints[p].get("oauth") is True
-        assert "configured" in ints[p]
+    ints = {i["id"]: i for i in d["integrations"]}
+    for iid in ["google_calendar", "quickbooks", "helm_ai", "document_storage"]:
+        assert iid in ints, f"integration {iid} missing"
+    assert ints["google_calendar"].get("oauth") is True
+    assert "configured" in ints["google_calendar"]
+    assert "status" in ints["helm_ai"]
+    assert "platform" in d
 
 
 def test_google_connect_returns_expected_shape(owner):
@@ -326,9 +326,7 @@ def test_free_plan_gates(owner):
     for path in ["/api/briefing/generate", "/api/reports/weekly-pack"]:
         r = owner.post(f"{BASE_URL}{path}")
         assert r.status_code == 403, f"{path} should 403 on free"
-    ints = owner.get(f"{BASE_URL}/api/integrations").json()["integrations"]
-    non_oauth = next(i for i in ints if not i.get("oauth"))
-    r = owner.post(f"{BASE_URL}/api/integrations/{non_oauth['id']}/toggle")
+    r = owner.post(f"{BASE_URL}/api/integrations/quickbooks/sync")
     assert r.status_code == 403
 
 
