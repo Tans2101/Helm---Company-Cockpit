@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X, TrendingUp } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -16,17 +15,60 @@ const stageStyle = {
 };
 const money = (n) => "$" + (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n);
 const emptyForm = () => ({ name: "", company: "", value: "", stage: "lead", owner_name: "", close_date: "" });
+const PAGE_LIMIT = 200;
 
 export default function Pipeline() {
-  const { data, loading, reload } = useFetch("/deals");
+  const [deals, setDeals] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading pipeline" />;
-  const canWrite = data.can_write;
-  const m = data.metrics;
+  const fetchPage = useCallback(async (before = null, append = false) => {
+    const params = { limit: PAGE_LIMIT };
+    if (before) params.before = before;
+    const { data } = await api.get("/deals", { params });
+    const page = data.items || data.deals || [];
+    setDeals((prev) => (append ? [...prev, ...page] : page));
+    setMeta({ can_write: data.can_write, metrics: data.metrics, stages: data.stages });
+    setNextCursor(data.next_cursor ?? null);
+    return data;
+  }, []);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      await fetchPage();
+    } catch {
+      toast.error("Could not load pipeline");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchPage]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      await fetchPage(nextCursor, true);
+    } catch {
+      toast.error("Could not load more deals");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  if (loading || !meta) return <LoadingScreen label="Loading pipeline" />;
+  const canWrite = meta.can_write;
+  const m = meta.metrics;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
@@ -67,7 +109,7 @@ export default function Pipeline() {
     <div>
       <PageHeader title="Sales Pipeline" subtitle="Log deals and stages — pipeline signals roll straight into the CEO Briefing." action={action} />
 
-      {data.deals.length === 0 ? (
+      {deals.length === 0 ? (
         <EmptyState icon={TrendingUp} title="No deals yet" body="Add your first deal — as it moves through stages, the CEO sees it in the morning briefing."
           action={canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
       ) : (
@@ -87,7 +129,7 @@ export default function Pipeline() {
                   <span className="text-xs font-mono text-zinc-600">{s.count} · {money(s.value)}</span>
                 </div>
                 <div className="space-y-2">
-                  {data.deals.filter((d) => d.stage === s.stage).map((d) => (
+                  {deals.filter((d) => d.stage === s.stage).map((d) => (
                     <GlassCard key={d.id} className="p-4 fade-up flex items-center gap-4 group" data-testid={`deal-${d.id}`}>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{d.name}</p>
@@ -97,7 +139,7 @@ export default function Pipeline() {
                       {canWrite ? (
                         <select value={d.stage} onChange={(e) => changeStage(d, e.target.value)} data-testid={`deal-stage-${d.id}`}
                           className={cn("text-[11px] font-mono rounded px-2 py-1 border border-white/10 bg-[#141417] focus:outline-none focus:border-gold/40", stageStyle[d.stage])}>
-                          {data.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
+                          {meta.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
                         </select>
                       ) : (
                         <span className={cn("text-[10px] font-mono uppercase rounded px-1.5 py-0.5", stageStyle[d.stage])}>{s.label}</span>
@@ -114,6 +156,20 @@ export default function Pipeline() {
               </div>
             ))}
           </div>
+
+          {nextCursor && (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                data-testid="load-more-deals-btn"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-gold/30 hover:text-white disabled:opacity-60"
+              >
+                {loadingMore ? "Loading…" : "Load more deals"}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -134,7 +190,7 @@ export default function Pipeline() {
               </label>
               <label className="text-xs text-zinc-500">Stage
                 <select data-testid="deal-stage" value={form.stage} onChange={(e) => setForm((f) => ({ ...f, stage: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
-                  {data.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
+                  {meta.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
                 </select>
               </label>
               <label className="text-xs text-zinc-500">Expected close

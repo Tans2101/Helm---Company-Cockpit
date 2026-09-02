@@ -17,7 +17,7 @@ from collections import defaultdict
 import httpx
 import jwt
 import resend
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -25,9 +25,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
 import llm as helm_llm
+import document_cleanup
+import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
 import clerk_auth
+from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
@@ -636,6 +639,17 @@ async def log_activity(principal, module, action, summary, patch=None):
     }
     await db.activities.insert_one(doc)
     return doc
+
+
+async def _enforce_document_rate_limit(principal, action: str, limit: int, message: str) -> None:
+    if await doc_rate_limit.is_over_limit(db, principal["workspace_id"], action, limit):
+        label = "Upload" if action == "upload" else "Extraction"
+        await log_activity(
+            principal, "financials", "document.rate_limit",
+            f"{label} limit reached for this workspace ({limit}/hour)",
+            {"action": action, "limit": limit},
+        )
+        raise HTTPException(status_code=429, detail=message)
 
 
 # ------------------------- Financials (computed from entries) -------------------------
@@ -1384,11 +1398,19 @@ async def briefing(principal=Depends(get_principal)):
 
 
 @api_router.get("/activities")
-async def list_activities(principal=Depends(get_principal)):
-    acts = await db.activities.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)
+async def list_activities(
+    principal=Depends(get_principal),
+    limit: int = Query(50, ge=1),
+    before: Optional[str] = None,
+):
+    page_limit = clamp_limit(limit)
+    ws = principal["workspace_id"]
+    filt = apply_before_filter({"workspace_id": ws}, "created_at", before)
+    acts = await db.activities.find(filt, {"_id": 0}).sort("created_at", -1).limit(page_limit).to_list(page_limit)
     for a in acts:
         a["ago"] = _rel_time(a["created_at"])
-    return {"activities": acts}
+    cursor = next_cursor(acts, "created_at", page_limit)
+    return {"items": acts, "activities": acts, "next_cursor": cursor}
 
 
 @api_router.post("/briefing/generate")
@@ -1536,10 +1558,27 @@ class DealInput(BaseModel):
 
 
 @api_router.get("/deals")
-async def list_deals(principal=Depends(get_principal)):
-    deals = await db.deals.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("updated_at", -1).to_list(500)
-    return {"deals": deals, "can_write": "sales:write" in perms_for(principal["pack"]),
-            "metrics": _deal_metrics(deals), "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES]}
+async def list_deals(
+    principal=Depends(get_principal),
+    limit: int = Query(50, ge=1),
+    before: Optional[str] = None,
+):
+    page_limit = clamp_limit(limit)
+    ws = principal["workspace_id"]
+    filt = apply_before_filter({"workspace_id": ws}, "updated_at", before)
+    deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
+    all_for_metrics = await db.deals.find(
+        {"workspace_id": ws}, {"_id": 0, "stage": 1, "value": 1}
+    ).to_list(None)
+    cursor = next_cursor(deals, "updated_at", page_limit)
+    return {
+        "items": deals,
+        "deals": deals,
+        "next_cursor": cursor,
+        "can_write": "sales:write" in perms_for(principal["pack"]),
+        "metrics": _deal_metrics(all_for_metrics),
+        "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES],
+    }
 
 
 @api_router.post("/deals")
@@ -1648,6 +1687,10 @@ async def upload_financial_document(
     file: UploadFile = File(...),
     principal=Depends(require_pro_perm("finance:write")),
 ):
+    await _enforce_document_rate_limit(
+        principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
+        "Upload limit reached — try again in a bit",
+    )
     if file.content_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
     data = await file.read()
@@ -1659,7 +1702,8 @@ async def upload_financial_document(
         raise HTTPException(status_code=503, detail="Document storage is not configured")
     filename = (file.filename or "document").replace("/", "_").replace("\\", "_")[:200]
     try:
-        storage_key = doc_storage.upload_document(
+        storage_key = await asyncio.to_thread(
+            doc_storage.upload_document,
             principal["workspace_id"], data, filename, file.content_type,
         )
     except Exception as exc:
@@ -1679,6 +1723,7 @@ async def upload_financial_document(
         "linked_entry_id": None,
     }
     await db.documents.insert_one(doc)
+    await doc_rate_limit.record_event(db, principal["workspace_id"], "upload")
     await log_activity(principal, "financials", "document.upload", f"Uploaded bill · {filename}")
     return {"document_id": doc_id, "status": "uploaded"}
 
@@ -1686,6 +1731,7 @@ async def upload_financial_document(
 @api_router.post("/documents/{document_id}/extract")
 async def extract_financial_document_route(
     document_id: str,
+    force: bool = Query(False),
     principal=Depends(require_pro_perm("finance:write")),
 ):
     doc = await db.documents.find_one(
@@ -1693,12 +1739,23 @@ async def extract_financial_document_route(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    if (
+        not force
+        and doc.get("status") == "extracted"
+        and doc.get("extracted_data")
+    ):
+        return doc["extracted_data"]
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
+    await _enforce_document_rate_limit(
+        principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
+        "Extraction limit reached — try again in a bit",
+    )
     try:
-        file_bytes = doc_storage.get_document_bytes(doc["storage_key"])
+        file_bytes = await asyncio.to_thread(doc_storage.get_document_bytes, doc["storage_key"])
         extracted = await helm_llm.extract_financial_document(file_bytes, doc["content_type"])
-        status = "failed" if extracted.get("error") == "not_financial" else "extracted"
+        await doc_rate_limit.record_event(db, principal["workspace_id"], "extract")
+        status = "failed" if extracted.get("error") in ("not_financial", "unparseable_amount") else "extracted"
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
             {"$set": {"status": status, "extracted_data": extracted}},
@@ -1735,7 +1792,7 @@ async def get_financial_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        presigned_url = doc_storage.get_presigned_url(doc["storage_key"])
+        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, doc["storage_key"])
     except Exception as exc:
         logger.exception("presigned url failed for %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
@@ -2785,6 +2842,13 @@ async def setup_clerk_sync(request: Request):
     return result
 
 
+@api_router.post("/admin/cleanup-orphaned-documents")
+async def cleanup_orphaned_documents_admin(request: Request):
+    """Delete uncommitted document uploads older than DOC_ORPHAN_RETENTION_DAYS (default 7)."""
+    _require_setup_secret(request)
+    return await document_cleanup.cleanup_orphaned_documents(db)
+
+
 @api_router.get("/health")
 async def health():
     """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
@@ -2852,6 +2916,8 @@ async def _ensure_indexes():
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
+        (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
+        (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.activities, [("workspace_id", 1)], {}),
         (db.updates, [("workspace_id", 1)], {}),
         (db.chat_messages, [("workspace_id", 1)], {}),

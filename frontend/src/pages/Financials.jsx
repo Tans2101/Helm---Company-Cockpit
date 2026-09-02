@@ -95,6 +95,10 @@ export default function Financials() {
         toast.error("This doesn't look like a bill or invoice — upload a financial document only.");
         return;
       }
+      if (extracted?.error === "unparseable_amount") {
+        toast.error("Couldn't read a clear amount from this document — try entering it manually.");
+        return;
+      }
       const entryType = extracted.type === "revenue" ? "revenue" : "expense";
       setForm({
         type: entryType,
@@ -142,7 +146,7 @@ export default function Financials() {
   if (loading || !data) return <LoadingScreen label="Loading financials" />;
 
   const canWrite = data.can_write;
-  const finActs = (activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
+  const finActs = (activityData?.items || activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
 
   const submitEntry = async () => {
     if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
