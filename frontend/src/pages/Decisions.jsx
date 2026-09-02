@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Check, X, Sparkles, Plus, PenLine, Trash2 } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
@@ -15,7 +15,7 @@ const statusStyle = {
 const emptyForm = () => ({ title: "", category: "General", description: "", recommendation: "", confidence: "", due: "", impact: "Medium" });
 
 export default function Decisions() {
-  const { data, loading, reload } = useFetch("/decisions");
+  const { data, loading, error, reload } = useFetch("/decisions");
   const { data: membersData } = useFetch("/members");
   const [busy, setBusy] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -23,7 +23,16 @@ export default function Decisions() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading decisions" />;
+  if (loading) return <LoadingScreen label="Loading decisions" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load decisions"
+        message={fetchErrorMessage(error, "Decisions data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   const canAct = data.can_act;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };

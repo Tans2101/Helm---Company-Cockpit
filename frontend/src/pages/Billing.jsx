@@ -2,18 +2,27 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Check, Sparkles, ArrowLeft, ShieldCheck, ExternalLink, AlertTriangle } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { initPaddle } from "@/lib/paddle";
 import { HELM_FEATURES } from "@/lib/marketingCopy";
-import { GlassCard, SectionLabel, LoadingScreen } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
 
 export default function Billing() {
-  const { data, loading } = useFetch("/billing/plans");
+  const { data, loading, error, reload } = useFetch("/billing/plans");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data) return <LoadingScreen label="Loading billing" />;
+  if (loading) return <LoadingScreen label="Loading billing" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load billing"
+        message={fetchErrorMessage(error, "Billing data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   const billingEnforced = data.billing_enforced === true;
   const isPro = billingEnforced ? data.current_plan === "pro" : true;
   const proPrice = data.pro_price ?? data.price ?? 8;

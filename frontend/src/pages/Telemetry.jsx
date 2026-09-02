@@ -2,8 +2,8 @@ import {
   AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ZAxis,
 } from "recharts";
-import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, Delta, EmptyState } from "@/components/kit";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, Delta, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
@@ -36,8 +36,17 @@ function Sparkline({ data }) {
 const riskColor = (score) => (score >= 15 ? "#ef4444" : score >= 8 ? "#f59e0b" : "#10b981");
 
 export default function Telemetry() {
-  const { data, loading } = useFetch("/telemetry");
-  if (loading || !data) return <LoadingScreen label="Loading telemetry" />;
+  const { data, loading, error, reload } = useFetch("/telemetry");
+  if (loading) return <LoadingScreen label="Loading telemetry" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load telemetry"
+        message={fetchErrorMessage(error, "Telemetry data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." /><EmptyState title="No telemetry yet" body="Log financials and add your team — your KPIs build from real data." /></div>;
 
   return (

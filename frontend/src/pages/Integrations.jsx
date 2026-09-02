@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Check, ExternalLink, KeyRound, RefreshCw } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, LoadingScreen } from "@/components/kit";
+import { PageHeader, GlassCard, LoadingScreen, ErrorScreen } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const ICONS = {
@@ -26,7 +26,7 @@ function formatLastSynced(iso) {
 }
 
 export default function Integrations() {
-  const { data, loading, reload } = useFetch("/integrations");
+  const { data, loading, error, reload } = useFetch("/integrations");
   const [params, setParams] = useSearchParams();
   const [qbSyncing, setQbSyncing] = useState(false);
 
@@ -42,7 +42,16 @@ export default function Integrations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
-  if (loading || !data) return <LoadingScreen label="Loading integrations" />;
+  if (loading) return <LoadingScreen label="Loading integrations" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load integrations"
+        message={fetchErrorMessage(error, "Integrations data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
 
   const gate = () => {
     if (!data.can_manage) { toast.error("Only workspace owners can manage integrations"); return false; }

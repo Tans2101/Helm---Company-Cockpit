@@ -5,9 +5,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const GOLD = "#c9a962";
@@ -56,7 +56,7 @@ function buildNote(vendor, note) {
 }
 
 export default function Financials() {
-  const { data, loading, reload } = useFetch("/financials");
+  const { data, loading, error, reload } = useFetch("/financials");
   const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -143,7 +143,16 @@ export default function Financials() {
     }
   };
 
-  if (loading || !data) return <LoadingScreen label="Loading financials" />;
+  if (loading) return <LoadingScreen label="Loading financials" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load financials"
+        message={fetchErrorMessage(error, "Financial data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
 
   const canWrite = data.can_write;
   const finActs = (activityData?.items || activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);

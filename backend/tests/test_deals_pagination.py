@@ -72,6 +72,17 @@ class FakeCursor:
         return items
 
 
+class FakeAggregateCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def to_list(self, n):
+        items = self._rows
+        if n is not None:
+            items = items[:n]
+        return items
+
+
 class FakeCollection:
     def __init__(self, docs, sort_field: str):
         self._docs = docs
@@ -82,6 +93,25 @@ class FakeCollection:
         cursor._filt = dict(filt or {})
         cursor._projection = projection
         return cursor
+
+    def aggregate(self, pipeline):
+        items = list(self._docs)
+        for stage in pipeline:
+            if "$match" in stage:
+                filt = stage["$match"]
+                ws = filt.get("workspace_id")
+                if ws is not None:
+                    items = [i for i in items if i.get("workspace_id") == ws]
+            elif "$group" in stage:
+                groups = {}
+                for item in items:
+                    key = item.get(stage["$group"]["_id"].lstrip("$"))
+                    if key not in groups:
+                        groups[key] = {"_id": key, "count": 0, "value": 0}
+                    groups[key]["count"] += 1
+                    groups[key]["value"] += item.get("value", 0)
+                items = list(groups.values())
+        return FakeAggregateCursor(items)
 
 
 def _make_deals(n: int, workspace_id: str = "ws_pagination"):

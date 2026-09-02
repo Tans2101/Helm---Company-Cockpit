@@ -2,22 +2,35 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Sparkles, Send, UserCheck, TrendingUp, TrendingDown, Minus, Users, CheckCircle2, Circle } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, SectionLabel, LoadingScreen, Delta } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 
 const toneDot = { positive: "bg-emerald-400", negative: "bg-rose-400", neutral: "bg-zinc-500" };
 
 export default function Briefing() {
-  const { data, loading, setData } = useFetch("/briefing");
-  const { data: company } = useFetch("/company");
+  const { data, loading: briefingLoading, error: briefingError, reload: reloadBriefing, setData } = useFetch("/briefing");
+  const { data: company, loading: companyLoading, error: companyError, reload: reloadCompany } = useFetch("/company");
   const { data: checklist } = useFetch("/onboarding/checklist");
   const [genLoading, setGenLoading] = useState(false);
   const navigate = useNavigate();
 
-  if (loading || !data || !company) return <LoadingScreen label="Assembling briefing" />;
+  const loading = briefingLoading || companyLoading;
+  const error = briefingError || companyError;
+  const reload = () => { reloadBriefing(); reloadCompany(); };
+
+  if (loading) return <LoadingScreen label="Assembling briefing" />;
+  if (error || !data || !company) {
+    return (
+      <ErrorScreen
+        label="Could not load briefing"
+        message={fetchErrorMessage(error, "Briefing data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   if (company.onboarding_done === false) return <Onboarding />;
 
   const generate = async () => {

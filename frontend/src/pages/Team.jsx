@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
@@ -11,8 +11,17 @@ const statusStyle = {
 };
 
 export default function Team() {
-  const { data, loading } = useFetch("/team");
-  if (loading || !data) return <LoadingScreen label="Loading bandwidth" />;
+  const { data, loading, error, reload } = useFetch("/team");
+  if (loading) return <LoadingScreen label="Loading bandwidth" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load team bandwidth"
+        message={fetchErrorMessage(error, "Team data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   if (data.members.length === 0) return <div><PageHeader title="Team Bandwidth" subtitle="Utilization across the team — Helm flags overload early." /><EmptyState title="No team members yet" body="Add your team or connect your tools to see utilization and overload flags." /></div>;
 
   return (
