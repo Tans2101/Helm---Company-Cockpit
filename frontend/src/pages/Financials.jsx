@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Plus, Trash2, Wallet, X, PenLine, History } from "lucide-react";
+import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle } from "lucide-react";
 import { useFetch } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
@@ -14,6 +14,8 @@ const GOLD = "#c9a962";
 const PIE = ["#c9a962", "#8b7a4a", "#6b6b74", "#3f3f46", "#27272a", "#52525b"];
 const REV_CATS = ["Subscriptions", "Enterprise", "Services", "Other"];
 const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", "Other"];
+const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg"];
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -29,7 +31,29 @@ function ChartTooltip({ active, payload, label }) {
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
-const emptyForm = () => ({ type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(), recurring: true, note: "" });
+const emptyForm = () => ({
+  type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(),
+  recurring: true, note: "", source_document_id: null, extract_confidence: null,
+});
+
+function mapCategory(type, raw) {
+  const cats = type === "revenue" ? REV_CATS : EXP_CATS;
+  if (!raw) return "Other";
+  const norm = String(raw).trim().toLowerCase();
+  const exact = cats.find((c) => c.toLowerCase() === norm);
+  if (exact) return exact;
+  const partial = cats.find((c) => norm.includes(c.toLowerCase().split("/")[0]) || c.toLowerCase().includes(norm));
+  return partial || "Other";
+}
+
+function buildNote(vendor, note) {
+  const parts = [];
+  if (vendor) parts.push(String(vendor).trim());
+  if (note && String(note).trim() && String(note).trim() !== String(vendor || "").trim()) {
+    parts.push(String(note).trim());
+  }
+  return parts.join(" — ");
+}
 
 export default function Financials() {
   const { data, loading, reload } = useFetch("/financials");
@@ -37,9 +61,83 @@ export default function Financials() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cash, setCash] = useState("");
   const [gm, setGm] = useState("");
+  const fileInputRef = useRef(null);
+
+  const processBillFile = useCallback(async (file) => {
+    if (!file) return;
+    if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
+      toast.error("Use PDF, PNG, or JPEG only");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("File must be 15MB or smaller");
+      return;
+    }
+    setUploadBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data: uploaded } = await api.post("/documents/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      });
+      const { data: extracted } = await api.post(
+        `/documents/${uploaded.document_id}/extract`,
+        {},
+        { timeout: 120000 },
+      );
+      if (extracted?.error === "not_financial") {
+        toast.error("This doesn't look like a bill or invoice — upload a financial document only.");
+        return;
+      }
+      const entryType = extracted.type === "revenue" ? "revenue" : "expense";
+      setForm({
+        type: entryType,
+        category: mapCategory(entryType, extracted.category),
+        amount: extracted.amount != null ? String(extracted.amount) : "",
+        month: extracted.month || thisMonth(),
+        recurring: entryType === "revenue",
+        note: buildNote(extracted.vendor, extracted.note),
+        source_document_id: uploaded.document_id,
+        extract_confidence: extracted.confidence || "medium",
+      });
+      setShowForm(true);
+      toast.success("Review the extracted entry and save when it looks right");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not process document");
+    } finally {
+      setUploadBusy(false);
+      setDragOver(false);
+    }
+  }, []);
+
+  const onFilePick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    processBillFile(file);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    processBillFile(file);
+  };
+
+  const openDocument = async (docId) => {
+    try {
+      const { data: doc } = await api.get(`/documents/${docId}`);
+      if (doc?.presigned_url) window.open(doc.presigned_url, "_blank", "noopener,noreferrer");
+      else toast.error("Could not open document");
+    } catch {
+      toast.error("Could not open document");
+    }
+  };
 
   if (loading || !data) return <LoadingScreen label="Loading financials" />;
 
@@ -50,7 +148,16 @@ export default function Financials() {
     if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
     setBusy(true);
     try {
-      await api.post("/financials/entries", { ...form, amount: parseFloat(form.amount) });
+      const payload = {
+        type: form.type,
+        category: form.category,
+        amount: parseFloat(form.amount),
+        month: form.month,
+        recurring: form.recurring,
+        note: form.note,
+      };
+      if (form.source_document_id) payload.source_document_id = form.source_document_id;
+      await api.post("/financials/entries", payload);
       toast.success("Entry logged");
       setForm(emptyForm());
       setShowForm(false);
@@ -92,7 +199,25 @@ export default function Financials() {
   ];
 
   const actions = canWrite ? (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+        className="hidden"
+        data-testid="bill-file-input"
+        onChange={onFilePick}
+      />
+      <button
+        type="button"
+        data-testid="upload-bill-btn"
+        disabled={uploadBusy}
+        onClick={() => fileInputRef.current?.click()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-gold/15 disabled:opacity-60"
+      >
+        <Upload className="w-4 h-4" />
+        {uploadBusy ? "Reading bill…" : "Upload a bill"}
+      </button>
       <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
         className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
         <Plus className="w-4 h-4" /> Log entry
@@ -104,11 +229,42 @@ export default function Financials() {
     <div>
       <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
 
+      {canWrite && (
+        <div
+          data-testid="bill-dropzone"
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={cn(
+            "mb-6 rounded-xl border border-dashed px-5 py-6 text-center transition-colors fade-up",
+            dragOver ? "border-gold/50 bg-gold/[0.06]" : "border-white/10 bg-white/[0.02]",
+            uploadBusy && "opacity-70 pointer-events-none",
+          )}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/25 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-gold" />
+            </div>
+            <p className="text-sm text-zinc-300">Drop a bill, receipt, or invoice here</p>
+            <p className="text-xs text-zinc-600">PDF, PNG, or JPEG · up to 15MB · Claude reads it and pre-fills an entry for you to confirm</p>
+          </div>
+        </div>
+      )}
+
       {!data.has_data ? (
         <EmptyState icon={Wallet} title="No financials logged yet"
           body="Log your revenue and expenses and Helm computes MRR, ARR, runway and burn automatically."
           action={canWrite ? (
-            <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Log first entry</button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button data-testid="empty-upload-bill-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-4 py-2 hover:bg-gold/15 disabled:opacity-60">
+                <Upload className="w-4 h-4" /> Upload a bill
+              </button>
+              <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover">
+                <Plus className="w-4 h-4" /> Log first entry
+              </button>
+            </div>
           ) : <p className="text-sm text-zinc-600">Ask a workspace owner or finance teammate to add data.</p>}
         />
       ) : (
@@ -205,7 +361,6 @@ export default function Financials() {
             </div>
           )}
 
-          {/* Ledger */}
           <GlassCard className="p-5 fade-up">
             <SectionLabel className="mb-4">Ledger · {data.entries.length} entries</SectionLabel>
             <div className="overflow-x-auto">
@@ -224,7 +379,21 @@ export default function Financials() {
                       <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-emerald-400 bg-emerald-400/10" : "text-rose-400 bg-rose-400/10")}>{e.type}</span></td>
                       <td className="py-2.5 pr-4 text-zinc-300">{e.category}{e.recurring && <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>}</td>
                       <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount)}</td>
-                      <td className="py-2.5 pr-4"><span className="text-[10px] font-mono text-zinc-600">{e.source}</span></td>
+                      <td className="py-2.5 pr-4">
+                        {e.source === "ai_upload" && e.source_document_id ? (
+                          <button
+                            type="button"
+                            data-testid={`entry-doc-${e.id}`}
+                            onClick={() => openDocument(e.source_document_id)}
+                            className="inline-flex items-center gap-1 text-[10px] font-mono text-gold hover:text-gold-hover transition-colors"
+                            title="View original document"
+                          >
+                            <Sparkles className="w-3 h-3" /> AI upload
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-mono text-zinc-600">{e.source}</span>
+                        )}
+                      </td>
                       <td className="py-2.5 text-right">{canWrite && <button onClick={() => del(e.id)} data-testid={`del-${e.id}`} className="text-zinc-600 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>}</td>
                     </tr>
                   ))}
@@ -235,12 +404,28 @@ export default function Financials() {
         </>
       )}
 
-      {/* Add entry drawer */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="entry-form">
-            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Log a financial entry</h3><button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg text-white font-light">
+                {form.source_document_id ? "Confirm extracted entry" : "Log a financial entry"}
+              </h3>
+              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            {form.extract_confidence === "low" && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200" data-testid="low-confidence-banner">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Double-check this one — I wasn&apos;t fully sure.</span>
+              </div>
+            )}
+            {form.source_document_id && (
+              <p className="mb-4 text-xs text-zinc-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-gold" />
+                Pre-filled from your upload — edit anything before saving.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 flex gap-2">
                 {["revenue", "expense"].map((t) => (
@@ -274,7 +459,6 @@ export default function Financials() {
         </div>
       )}
 
-      {/* Settings drawer */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowSettings(false)} />
