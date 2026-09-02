@@ -288,12 +288,13 @@ def test_workspace_list_and_create_and_switch(owner):
 def test_integrations_oauth_present(owner):
     d = owner.get(f"{BASE_URL}/api/integrations").json()
     ints = {i["id"]: i for i in d["integrations"]}
-    for iid in ["google_calendar", "quickbooks", "helm_ai", "document_storage"]:
+    for iid in ["google_calendar", "quickbooks", "gmail", "github"]:
         assert iid in ints, f"integration {iid} missing"
     assert ints["google_calendar"].get("oauth") is True
     assert "configured" in ints["google_calendar"]
-    assert "status" in ints["helm_ai"]
+    assert "status" in ints["google_calendar"]
     assert "platform" in d
+    assert "helm_ai" not in ints
 
 
 def test_google_connect_returns_expected_shape(owner):
