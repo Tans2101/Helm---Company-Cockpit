@@ -202,6 +202,25 @@ def clerk_sync_status() -> dict[str, Any]:
     return dict(_last_sync_status or {"synced": False, "reason": "not_run"})
 
 
+def clerk_secret_publishable_mode_match(publishable_key: str) -> bool:
+    """True when sk_live_/sk_test_ matches pk_live_/pk_test_."""
+    mode = clerk_secret_mode()
+    if not mode or not (publishable_key or "").strip():
+        return False
+    expected = "pk_test_" if mode == "test" else "pk_live_"
+    return publishable_key.strip().startswith(expected)
+
+
+def _fetch_public_jwks_sync() -> dict[str, Any]:
+    """JWKS from Clerk custom-domain /.well-known/jwks.json (no secret required)."""
+    if not CLERK_JWKS_URL:
+        raise ValueError("CLERK_JWKS_URL is not configured")
+    with httpx.Client(timeout=15) as client:
+        r = client.get(CLERK_JWKS_URL)
+        r.raise_for_status()
+        return r.json()
+
+
 def _fetch_bapi_jwks_sync() -> dict[str, Any]:
     """JWKS via Clerk Backend API — works when clerk.* custom-domain TLS is not ready."""
     import time
@@ -212,10 +231,31 @@ def _fetch_bapi_jwks_sync() -> dict[str, Any]:
         return _jwks_keys_cache
     with httpx.Client(timeout=15) as client:
         r = client.get(f"{CLERK_BAPI}/jwks", headers=_bapi_headers())
+        if r.status_code in (401, 403):
+            raise ValueError(
+                "CLERK_SECRET_KEY rejected by Clerk API — use the secret key from the same "
+                "Clerk instance as your publishable key (Dashboard → API keys)"
+            )
         r.raise_for_status()
         _jwks_keys_cache = r.json()
         _jwks_keys_cache_at = now
         return _jwks_keys_cache
+
+
+def _fetch_jwks_sync() -> dict[str, Any]:
+    """Prefer BAPI JWKS; fall back to public JWKS URL when BAPI is unavailable."""
+    try:
+        return _fetch_bapi_jwks_sync()
+    except ValueError:
+        raise
+    except httpx.HTTPError as exc:
+        logger.warning("Clerk BAPI JWKS fetch failed (%s) — trying public JWKS", exc)
+    try:
+        return _fetch_public_jwks_sync()
+    except httpx.HTTPError as exc:
+        raise ValueError(
+            "Could not load Clerk signing keys — check CLERK_SECRET_KEY and CLERK_JWKS_URL on Render"
+        ) from exc
 
 
 def _signing_key_from_jwt(token: str):
@@ -224,11 +264,13 @@ def _signing_key_from_jwt(token: str):
 
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
-    jwks = _fetch_bapi_jwks_sync()
+    jwks = _fetch_jwks_sync()
     for key_data in jwks.get("keys", []):
         if key_data.get("kid") == kid:
             return RSAAlgorithm.from_jwk(json.dumps(key_data))
-    raise jwt.InvalidTokenError("JWKS kid not found")
+    raise jwt.InvalidTokenError(
+        "JWKS kid not found — CLERK_SECRET_KEY may be from a different Clerk instance than pk_live on Vercel"
+    )
 
 
 def _bapi_headers() -> dict[str, str]:
@@ -274,6 +316,117 @@ async def _clerk_primary_domain_record() -> dict[str, Any] | None:
     except Exception:
         logger.debug("clerk domain list failed", exc_info=True)
     return None
+
+
+def clerk_google_oauth_redirect_uri() -> str | None:
+    """Clerk production Google OAuth callback — must match Google Cloud Console."""
+    host = clerk_jwks_host()
+    if not host or host.endswith(".clerk.accounts.dev"):
+        return None
+    return f"https://{host}/v1/oauth_callback"
+
+
+async def _clerk_google_client_id() -> str | None:
+    """Google OAuth client ID configured in Clerk (from FAPI environment)."""
+    host = clerk_jwks_host()
+    if not host:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"https://{host}/v1/environment")
+            if r.status_code >= 400:
+                return None
+            env = r.json() or {}
+            display = env.get("display_config") or {}
+            one_tap = (display.get("google_one_tap_client_id") or "").strip()
+            if one_tap:
+                return one_tap
+            cr = await client.get(f"https://{host}/v1/client")
+            if cr.status_code >= 400:
+                return None
+            cookies = dict(cr.cookies)
+            sia_resp = await client.post(
+                f"https://{host}/v1/client/sign_ins",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                content=b"",
+                cookies=cookies,
+            )
+            sia = (sia_resp.json().get("response") or {}).get("id")
+            if not sia:
+                return None
+            prep = await client.post(
+                f"https://{host}/v1/client/sign_ins/{sia}/prepare_first_factor",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "strategy": "oauth_google",
+                    "redirect_url": f"{HELM_CANONICAL_ORIGIN}/app",
+                    "action_complete_redirect_url": f"{HELM_CANONICAL_ORIGIN}/app",
+                },
+                cookies=cookies,
+            )
+            url = (
+                ((prep.json().get("response") or {}).get("first_factor_verification") or {})
+                .get("external_verification_redirect_url")
+                or ""
+            )
+            if "client_id=" not in url:
+                return None
+            from urllib.parse import parse_qs, urlparse
+
+            qs = parse_qs(urlparse(url).query)
+            return (qs.get("client_id") or [None])[0]
+    except Exception:
+        logger.debug("clerk google client id probe failed", exc_info=True)
+    return None
+
+
+async def clerk_google_oauth_status() -> dict[str, Any]:
+    """Probe whether Google OAuth redirect URI is registered for Clerk sign-in."""
+    redirect_uri = clerk_google_oauth_redirect_uri()
+    client_id = await _clerk_google_client_id()
+    result: dict[str, Any] = {
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "redirect_uri_registered": None,
+        "ok": False,
+    }
+    if not redirect_uri or not client_id:
+        result["reason"] = "not_configured"
+        return result
+    project = client_id.split("-", 1)[0] if client_id else ""
+    result["google_cloud_project_number"] = project or None
+    result["google_cloud_console_url"] = (
+        f"https://console.cloud.google.com/apis/credentials/oauthclient/{client_id}?project={project}"
+        if project
+        else "https://console.cloud.google.com/apis/credentials"
+    )
+    result["javascript_origins"] = [
+        "https://helmcontrol.online",
+        "https://www.helmcontrol.online",
+        "https://clerk.helmcontrol.online",
+    ]
+    try:
+        from urllib.parse import urlencode
+
+        params = urlencode(
+            {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": "openid email profile",
+            }
+        )
+        async with httpx.AsyncClient(timeout=12, follow_redirects=False) as client:
+            r = await client.get(f"https://accounts.google.com/o/oauth2/auth?{params}")
+            loc = r.headers.get("location", "")
+            mismatch = "oauth/error" in loc or "redirect_uri_mismatch" in loc
+            result["redirect_uri_registered"] = not mismatch
+            result["ok"] = not mismatch
+            result["reason"] = "redirect_uri_mismatch" if mismatch else "ok"
+    except Exception as exc:
+        result["reason"] = "probe_failed"
+        result["error"] = str(exc)[:200]
+    return result
 
 
 async def clerk_custom_domain_ssl_ok() -> bool:
@@ -423,30 +576,52 @@ def decode_clerk_jwt(token: str) -> dict[str, Any]:
         ) from exc
 
 
-async def fetch_clerk_user_profile(clerk_user_id: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            f"{CLERK_BAPI}/users/{clerk_user_id}",
-            headers=_bapi_headers(),
-        )
-    if r.status_code >= 400:
-        raise ValueError(f"Clerk user lookup failed ({r.status_code}) — check CLERK_SECRET_KEY matches pk_live")
-    data = r.json()
-    emails = data.get("email_addresses") or []
-    primary_id = data.get("primary_email_address_id")
-    primary = next((e for e in emails if e.get("id") == primary_id), emails[0] if emails else None)
-    email = (primary or {}).get("email_address")
-    if not email:
-        raise ValueError("Clerk user has no email")
-    first = (data.get("first_name") or "").strip()
-    last = (data.get("last_name") or "").strip()
-    name = f"{first} {last}".strip() or None
-    return {
-        "clerk_id": clerk_user_id,
-        "email": email,
-        "name": name,
-        "picture": data.get("image_url"),
-    }
+async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> dict[str, Any]:
+    import asyncio
+
+    last_status: int | None = None
+    for attempt in range(retries):
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(
+                    f"{CLERK_BAPI}/users/{clerk_user_id}",
+                    headers=_bapi_headers(),
+                )
+        except httpx.HTTPError as exc:
+            if attempt < retries - 1:
+                await asyncio.sleep(0.4 * (attempt + 1))
+                continue
+            raise ValueError("Clerk API unreachable — try signing in again") from exc
+        last_status = r.status_code
+        if r.status_code in (401, 403):
+            raise ValueError(
+                "CLERK_SECRET_KEY rejected by Clerk API — use the sk_live_ key from the same "
+                "instance as pk_live on Vercel (clerk.helmcontrol.online)"
+            )
+        if r.status_code == 404 and attempt < retries - 1:
+            await asyncio.sleep(0.5 * (attempt + 1))
+            continue
+        if r.status_code >= 400:
+            break
+        data = r.json()
+        emails = data.get("email_addresses") or []
+        primary_id = data.get("primary_email_address_id")
+        primary = next((e for e in emails if e.get("id") == primary_id), emails[0] if emails else None)
+        email = (primary or {}).get("email_address")
+        if not email:
+            raise ValueError("Clerk user has no email")
+        first = (data.get("first_name") or "").strip()
+        last = (data.get("last_name") or "").strip()
+        name = f"{first} {last}".strip() or None
+        return {
+            "clerk_id": clerk_user_id,
+            "email": email,
+            "name": name,
+            "picture": data.get("image_url"),
+        }
+    raise ValueError(
+        f"Clerk user lookup failed ({last_status}) — check CLERK_SECRET_KEY matches pk_live"
+    )
 
 
 async def verify_clerk_session_token(token: str) -> dict[str, Any]:

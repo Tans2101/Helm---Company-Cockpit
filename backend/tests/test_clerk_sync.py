@@ -70,6 +70,13 @@ def test_resolve_publishable_key_derives_from_jwks(monkeypatch):
     assert clerk_auth.clerk_keys_aligned(pk, clerk_auth.CLERK_JWKS_URL)
 
 
+def test_clerk_secret_publishable_mode_match():
+    assert clerk_auth.clerk_secret_publishable_mode_match(
+        "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA"
+    )
+    assert not clerk_auth.clerk_secret_publishable_mode_match("pk_test_abc")
+
+
 def test_sync_clerk_instance_patches_dev_origin():
     instance_before = {
         "environment_type": "development",

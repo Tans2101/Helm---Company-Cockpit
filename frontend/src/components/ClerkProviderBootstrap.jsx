@@ -88,6 +88,23 @@ export default function ClerkProviderBootstrap({ children }) {
           return;
         }
 
+        if (cfg?.clerk_enabled && cfg?.clerk_secret_mode_match === false) {
+          setState({
+            ready: true,
+            clerkEnabled: false,
+            publishableKey: null,
+            configError:
+              "Clerk secret key mode on Render does not match the publishable key (sk_live_ vs pk_live_). "
+              + "Use API keys from the same Clerk instance in Render and Vercel.",
+            postAuthUrl,
+            helmCanonicalOrigin: cfg?.helm_canonical_origin || null,
+            clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
+            clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
+            clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
+          });
+          return;
+        }
+
         const fromApi = (cfg?.clerk_publishable_key || "").trim();
         const clerkOn = Boolean(cfg?.clerk_enabled);
         let key = "";

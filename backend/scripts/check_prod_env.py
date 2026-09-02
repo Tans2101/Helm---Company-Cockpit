@@ -56,6 +56,21 @@ def main() -> int:
         weak.append("ALLOW_DEMO_LOGIN is enabled (should be false in production)")
     if os.environ.get("COOKIE_SECURE", "false").lower() not in ("1", "true", "yes"):
         weak.append("COOKIE_SECURE should be true behind HTTPS")
+
+    sk = (os.environ.get("CLERK_SECRET_KEY") or "").strip()
+    pk = (os.environ.get("CLERK_PUBLISHABLE_KEY") or "").strip()
+    if sk and pk:
+        sk_live = sk.startswith("sk_live_")
+        sk_test = sk.startswith("sk_test_")
+        pk_live = pk.startswith("pk_live_")
+        pk_test = pk.startswith("pk_test_")
+        if (sk_live and not pk_live) or (sk_test and not pk_test):
+            weak.append(
+                "CLERK_SECRET_KEY mode does not match CLERK_PUBLISHABLE_KEY "
+                "(use sk_live_ + pk_live_ from the same Clerk instance)"
+            )
+    elif sk and not pk:
+        weak.append("CLERK_PUBLISHABLE_KEY unset — Render will derive from CLERK_JWKS_URL at runtime")
     if (
         os.environ.get("USE_ATLAS_MONGO", "false").lower() not in ("1", "true", "yes")
         and (os.environ.get("MONGO_URL") or "").startswith("mongodb+srv://")

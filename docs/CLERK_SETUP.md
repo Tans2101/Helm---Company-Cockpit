@@ -122,5 +122,7 @@ Helm’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail
 |--------|-----|
 | Blank login / Clerk error | Check `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel; redeploy |
 | 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render |
+| **"Could not connect your account" after Google sign-in** | Google OAuth only needs the publishable key. Connecting your Helm account needs the matching **`sk_live_`** on Render from the **same** Clerk instance as `pk_live_` on Vercel (`clerk.helmcontrol.online`). In Clerk Dashboard → API keys, copy Secret key → Render `CLERK_SECRET_KEY`, redeploy Render. Check `/api/auth/config` → `clerk_secret_mode_match: true`, `clerk_api_ok: true`. |
+| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Add `https://clerk.helmcontrol.online/v1/oauth_callback` to Google Cloud Console → Credentials → Authorized redirect URIs. Verify: `GET /api/setup/google-oauth` → `"ok": true`. |
 | Password too long / strict (e.g. 15+ characters) | **Not set by Helm.** In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **User & authentication** → **Email** → **Password** → lower **Minimum password length** (default is often 8). Or sign in with **Google** to skip password entirely. |
 | New account every login | Atlas `MONGO_URL` wrong or DB not persistent — see `docs/ATLAS_SETUP.md` |

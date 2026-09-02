@@ -396,15 +396,23 @@ async def _user_from_clerk_jwt(token: str):
         logger.exception("clerk jwt auth failed")
         raise HTTPException(
             status_code=401,
-            detail="Invalid Clerk session — ensure Render CLERK_SECRET_KEY matches your Clerk publishable key",
+            detail="Clerk sign-in failed — check Render CLERK_SECRET_KEY matches your Clerk publishable key",
         )
-    user = await _upsert_clerk_user(
-        email=identity["email"],
-        name=identity.get("name"),
-        picture=identity.get("picture"),
-        clerk_id=identity["clerk_id"],
-    )
-    return user
+    try:
+        return await _upsert_clerk_user(
+            email=identity["email"],
+            name=identity.get("name"),
+            picture=identity.get("picture"),
+            clerk_id=identity["clerk_id"],
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("clerk user upsert failed for %s", identity.get("email"))
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save your account — database unavailable. Try again in a moment.",
+        )
 
 
 async def _user_from_request(request: Request):
@@ -756,6 +764,11 @@ async def auth_config():
         if clerk_on and CLERK_PUBLISHABLE_KEY
         else None
     )
+    mode_match = (
+        clerk_auth.clerk_secret_publishable_mode_match(CLERK_PUBLISHABLE_KEY)
+        if clerk_on and CLERK_PUBLISHABLE_KEY
+        else None
+    )
     ssl_ok = await clerk_auth.clerk_custom_domain_ssl_ok() if clerk_on else None
     return {
         "demo_login": ALLOW_DEMO_LOGIN,
@@ -764,6 +777,7 @@ async def auth_config():
         "clerk_publishable_key": CLERK_PUBLISHABLE_KEY or None,
         "clerk_jwks_host": clerk_auth.clerk_jwks_host(),
         "clerk_keys_aligned": keys_aligned,
+        "clerk_secret_mode_match": mode_match,
         "clerk_primary_origin": clerk_auth.clerk_primary_origin() if clerk_on else None,
         "clerk_post_auth_url": clerk_auth.clerk_post_auth_url() if clerk_on else None,
         "helm_canonical_origin": HELM_CANONICAL_ORIGIN,
@@ -964,6 +978,19 @@ async def clerk_exchange(request: Request, response: Response):
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=400, detail="Clerk is not configured")
     await _require_mongo()
+    if CLERK_PUBLISHABLE_KEY and not clerk_auth.clerk_secret_publishable_mode_match(CLERK_PUBLISHABLE_KEY):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"CLERK_SECRET_KEY is {clerk_auth.clerk_secret_mode() or 'unknown'} but the publishable key "
+                "is a different mode — use matching sk_live_/pk_live_ keys from the same Clerk instance on Render"
+            ),
+        )
+    if not await clerk_auth.clerk_jwks_ok():
+        raise HTTPException(
+            status_code=503,
+            detail="Clerk signing keys unavailable — check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online",
+        )
     token = _bearer_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Missing Clerk session token")
@@ -2381,6 +2408,7 @@ async def setup_status():
             else None
         ),
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
+        "clerk_google_oauth": await clerk_auth.clerk_google_oauth_status() if clerk_auth.clerk_configured() else None,
         "clerk_sync": clerk_sync,
         "clerk_instance_env": clerk_sync.get("environment_type"),
         "mongo": mongo_ok,
@@ -2392,6 +2420,14 @@ async def setup_status():
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
     }
+
+
+@api_router.get("/setup/google-oauth")
+async def setup_google_oauth():
+    """Clerk Google OAuth readiness — verifies redirect URI is registered in Google Cloud."""
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=400, detail="Clerk is not configured")
+    return await clerk_auth.clerk_google_oauth_status()
 
 
 @api_router.post("/setup/clerk-sync")

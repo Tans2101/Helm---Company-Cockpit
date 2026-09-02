@@ -68,6 +68,7 @@ services:
         value: claude-sonnet-4-20250514
       - key: CLERK_SECRET_KEY
         sync: false
+        # Must be sk_live_ from the clerk.helmcontrol.online Clerk instance (same as CLERK_PUBLISHABLE_KEY).
       - key: CLERK_PUBLISHABLE_KEY
         value: pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA
       - key: CLERK_JWKS_URL

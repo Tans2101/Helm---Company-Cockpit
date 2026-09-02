@@ -1,5 +1,5 @@
 /**
- * Clerk FAPI edge proxy — Dashboard proxy URL: https://www.helmcontrol.online/__clerk
+ * Clerk FAPI edge proxy — Dashboard proxy URL: https://helmcontrol.online/__clerk
  * Proxies directly to frontend-api.clerk.services (Render cannot TLS to FAPI).
  * CLERK_SECRET_KEY: Vercel env, or fetched from Render bootstrap (CLERK_PROXY_BOOTSTRAP).
  */
