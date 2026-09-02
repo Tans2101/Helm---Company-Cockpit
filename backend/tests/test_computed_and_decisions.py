@@ -194,16 +194,18 @@ class TestTeamComputed:
 # ---------------- Reports (computed) ----------------
 
 class TestReportsComputed:
-    def test_reports_returns_three_computed_cards(self, owner):
+    def test_reports_returns_manual_and_auto_cards(self, owner):
         r = owner.get(f"{BASE_URL}/api/reports")
         assert r.status_code == 200
         j = r.json()
-        assert isinstance(j["reports"], list) and len(j["reports"]) == 3
-        titles = [x["title"] for x in j["reports"]]
-        assert titles == ["Financial Snapshot", "Team Pulse", "Execution"]
-        for card in j["reports"]:
+        assert isinstance(j["reports"], list) and len(j["reports"]) >= 3
+        auto_titles = [x["title"] for x in j["auto_reports"]]
+        assert auto_titles == ["Financial Snapshot", "Team Pulse", "Execution"]
+        for card in j["auto_reports"]:
+            assert card.get("source") == "auto"
             assert "summary" in card and card["summary"]
             assert "metrics" in card and len(card["metrics"]) >= 3
+        assert j["can_write"] is True
 
     def test_weekly_pack_is_pro_gated_403_when_free(self, owner):
         # Ensure plan reset to free

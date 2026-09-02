@@ -49,9 +49,27 @@ export default function Telemetry() {
   }
   if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." /><EmptyState title="No telemetry yet" body="Log financials and add your team — your KPIs build from real data." /></div>;
 
+  const asOf = data.data_as_of ? new Date(data.data_as_of).toLocaleString() : null;
+
   return (
     <div>
-      <PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data. Signal over noise." />
+      <PageHeader title="Telemetry" subtitle="Live KPIs from your integrated sources — financials, pipeline, people, and tasks. Refreshes on every load." />
+
+      {data.sources?.length > 0 && (
+        <GlassCard className="p-4 mb-6 fade-up" data-testid="telemetry-sources">
+          <SectionLabel className="mb-2">Data sources</SectionLabel>
+          {asOf && <p className="text-[11px] font-mono text-zinc-600 mb-3">As of {asOf}</p>}
+          <div className="flex flex-wrap gap-2">
+            {data.sources.map((s) => (
+              <span key={s.label} className="inline-flex flex-col rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-left">
+                <span className="text-xs text-white">{s.label}</span>
+                <span className="text-[10px] text-zinc-500">{s.detail}</span>
+                <span className={cn("text-[9px] font-mono uppercase mt-1", s.freshness === "live" ? "text-emerald-400" : s.freshness === "hourly" ? "text-sky-400" : "text-amber-400")}>{s.freshness}</span>
+              </span>
+            ))}
+          </div>
+        </GlassCard>
+      )}
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

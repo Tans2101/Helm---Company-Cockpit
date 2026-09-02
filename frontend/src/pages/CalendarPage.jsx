@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
-  ChevronLeft, ChevronRight, CalendarPlus, Clock, Users,
+  ChevronLeft, ChevronRight, CalendarPlus, Clock, Users, Plus, X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
-import { LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { api } from "@/lib/api";
+import { LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const HOUR_HEIGHT = 52;
@@ -199,7 +201,7 @@ function AgendaSidebar({ events, weekDays, selectedDay, onSelectDay }) {
   );
 }
 
-function WeekGrid({ weekDays, events, selectedDay }) {
+function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
   const now = new Date();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -259,13 +261,15 @@ function WeekGrid({ weekDays, events, selectedDay }) {
         {byDay.map(({ day, allDay }) => (
           <div key={toIsoDate(day)} className="px-1 py-1 border-r border-white/5 last:border-r-0 flex flex-col gap-0.5">
             {allDay.map((ev) => (
-              <div
+              <button
                 key={ev.id}
-                className={cn("rounded px-1.5 py-0.5 text-[10px] truncate border", typeBlock[ev.type] || "bg-white/10 border-white/10 text-zinc-300")}
+                type="button"
+                onClick={() => onEventClick?.(ev)}
+                className={cn("rounded px-1.5 py-0.5 text-[10px] truncate border text-left w-full", typeBlock[ev.type] || "bg-white/10 border-white/10 text-zinc-300", ev.source === "helm" && "cursor-pointer hover:brightness-110")}
                 title={ev.title}
               >
                 {ev.title}
-              </div>
+              </button>
             ))}
           </div>
         ))}
@@ -325,12 +329,15 @@ function WeekGrid({ weekDays, events, selectedDay }) {
                   const height = Math.max(durH * HOUR_HEIGHT - 2, 22);
                   if (startFrac < GRID_START || startFrac > GRID_END) return null;
                   return (
-                    <div
+                    <button
                       key={ev.id}
+                      type="button"
                       data-testid={`meeting-${ev.id}`}
+                      onClick={() => onEventClick?.(ev)}
                       className={cn(
                         "absolute left-1 right-1 z-10 rounded-md border px-1.5 py-1 overflow-hidden text-left shadow-sm",
                         typeBlock[ev.type] || "bg-white/10 border-white/15 text-zinc-200",
+                        ev.source === "helm" && "cursor-pointer hover:brightness-110",
                       )}
                       style={{ top: top + 1, height }}
                       title={ev.title}
@@ -339,7 +346,7 @@ function WeekGrid({ weekDays, events, selectedDay }) {
                       <p className="text-[10px] opacity-80 truncate">
                         {ev.time}{ev.duration ? ` · ${ev.duration}m` : ""}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -361,6 +368,10 @@ export default function CalendarPage() {
     return t;
   });
   const [view, setView] = useState("week");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ title: "", date: "", time: "09:00", duration: 30, type: "Internal", all_day: false });
+  const [busy, setBusy] = useState(false);
 
   const weekParam = toIsoDate(weekStart);
   const { data, loading, error, reload } = useFetch(`/calendar?week_start=${weekParam}`, [weekParam]);
@@ -387,6 +398,51 @@ export default function CalendarPage() {
     setSidebarMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   };
 
+  const openAdd = (day) => {
+    setEditing(null);
+    setForm({ title: "", date: toIsoDate(day || selectedDay), time: "09:00", duration: 30, type: "Internal", all_day: false });
+    setShowForm(true);
+  };
+
+  const openEdit = (ev) => {
+    if (ev.source !== "helm") return;
+    setEditing(ev.id);
+    setForm({
+      title: ev.title,
+      date: ev.date || toIsoDate(selectedDay),
+      time: ev.time || "09:00",
+      duration: ev.duration || 30,
+      type: ev.type || "Internal",
+      all_day: !!ev.all_day,
+    });
+    setShowForm(true);
+  };
+
+  const submitEvent = async () => {
+    if (!form.title.trim()) { toast.error("Title is required"); return; }
+    setBusy(true);
+    try {
+      if (editing) await api.patch(`/calendar/events/${editing}`, form);
+      else await api.post("/calendar/events", form);
+      toast.success(editing ? "Event updated" : "Event added");
+      setShowForm(false);
+      reload();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not save event"); }
+    finally { setBusy(false); }
+  };
+
+  const deleteEvent = async () => {
+    if (!editing || !window.confirm("Delete this event?")) return;
+    setBusy(true);
+    try {
+      await api.delete(`/calendar/events/${editing}`);
+      toast.success("Event deleted");
+      setShowForm(false);
+      reload();
+    } catch (e) { toast.error("Could not delete"); }
+    finally { setBusy(false); }
+  };
+
   if (loading) return <LoadingScreen label="Loading calendar" />;
   if (error || !data) {
     return (
@@ -399,8 +455,9 @@ export default function CalendarPage() {
   }
 
   const hasEvents = events.length > 0 || (data.upcoming || []).length > 0;
+  const canWrite = data.can_write !== false;
 
-  if (!hasEvents && !data.live) {
+  if (!hasEvents && !data.live && !canWrite) {
     return (
       <div>
         <div className="mb-8">
@@ -432,6 +489,12 @@ export default function CalendarPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
+          {canWrite && (
+            <button type="button" data-testid="add-event-btn" onClick={() => openAdd(selectedDay)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
+              <Plus className="w-4 h-4" /> Add event
+            </button>
+          )}
           <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
             <button type="button" onClick={() => shiftWeek(-1)} className="p-1.5 text-zinc-400 hover:text-white rounded" aria-label="Previous week">
               <ChevronLeft className="w-4 h-4" />
@@ -483,13 +546,13 @@ export default function CalendarPage() {
 
         <div className="flex-1 flex flex-col min-w-0 bg-[#0c0c0e]">
           {view === "week" && (
-            <WeekGrid weekDays={weekDays} events={events} selectedDay={selectedDay} />
+            <WeekGrid weekDays={weekDays} events={events} selectedDay={selectedDay} onEventClick={openEdit} />
           )}
           {view === "day" && (
             <WeekGrid weekDays={[selectedDay]} events={events.filter((ev) => {
               const s = parseEventStart(ev);
               return s && sameDay(s, selectedDay);
-            })} selectedDay={selectedDay} />
+            })} selectedDay={selectedDay} onEventClick={openEdit} />
           )}
           {view === "month" && (
             <div className="p-4 flex-1 overflow-auto">
@@ -506,6 +569,53 @@ export default function CalendarPage() {
           )}
         </div>
       </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
+          <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="event-form">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg text-white font-light">{editing ? "Edit event" : "Add event"}</h3>
+              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <label className="text-xs text-zinc-500 block">Title
+                <input data-testid="event-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-xs text-zinc-500">Date
+                  <input type="date" data-testid="event-date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                </label>
+                <label className="text-xs text-zinc-500">Type
+                  <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                    {["Internal", "Sales", "1:1", "Board"].map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input type="checkbox" checked={form.all_day} onChange={(e) => setForm((f) => ({ ...f, all_day: e.target.checked }))} className="accent-gold" />
+                All day
+              </label>
+              {!form.all_day && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs text-zinc-500">Start time
+                    <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                  </label>
+                  <label className="text-xs text-zinc-500">Duration (min)
+                    <input type="number" min={15} step={15} value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: parseInt(e.target.value, 10) || 30 }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                  </label>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 mt-5">
+              {editing && (
+                <button type="button" onClick={deleteEvent} disabled={busy} className="rounded-md border border-rose-500/40 text-rose-300 text-sm px-4 py-2.5 hover:bg-rose-500/10 disabled:opacity-60">Delete</button>
+              )}
+              <button data-testid="submit-event-btn" onClick={submitEvent} disabled={busy} className="flex-1 rounded-md bg-gold text-black font-medium py-2.5 text-sm hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save event" : "Add event"}</button>
+            </div>
+          </GlassCard>
+        </div>
+      )}
     </div>
   );
 }
