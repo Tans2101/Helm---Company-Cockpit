@@ -62,6 +62,8 @@ services:
         value: "false"
       - key: DEMO_RESET_ENABLED
         value: "false"
+      - key: ENVIRONMENT
+        value: "production"
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL

@@ -39,3 +39,33 @@ def test_cors_regex_not_wildcard_dot_star():
 
     assert server._cors_regex != ".*"
     assert server._cors_regex != r".*"
+
+
+def test_production_config_allows_development():
+    import server
+
+    server._enforce_production_config()
+
+
+def test_production_config_refuses_insecure(monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "ENVIRONMENT", "production")
+    monkeypatch.setattr(server, "SESSION_SECRET", "change-me-in-production")
+    monkeypatch.setattr(server, "CORS_ORIGINS", [])
+    monkeypatch.setattr(server, "ALLOW_DEMO_LOGIN", True)
+    monkeypatch.delenv("OAUTH_STATE_SECRET", raising=False)
+    with pytest.raises(RuntimeError) as exc:
+        server._enforce_production_config()
+    msg = str(exc.value)
+    assert "SESSION_SECRET" in msg
+    assert "OAUTH_STATE_SECRET" in msg
+    assert "CORS_ORIGINS" in msg
+    assert "ALLOW_DEMO_LOGIN" in msg
+
+
+def test_google_scopes_exclude_gmail():
+    import server
+
+    assert "https://www.googleapis.com/auth/gmail.readonly" not in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/calendar.readonly" in server.GOOGLE_SCOPES

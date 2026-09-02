@@ -107,6 +107,34 @@ def _resolve_mongo_url() -> tuple[str, str]:
 DB_NAME = os.environ["DB_NAME"]
 
 
+# -----------------------------------------------------------------------------
+# Environment configuration
+#
+# ENVIRONMENT=production enforces the go-live checklist below. Keep in sync with
+# DEPLOY.md § "Deploy API on Render" and README.md § "Go-live checklist".
+#
+# Required before ENVIRONMENT=production:
+#   MONGO_URL          Atlas URI (or MONGO_HOST / helm-mongo on Render blueprint)
+#   DB_NAME            Database name (e.g. helm)
+#   SESSION_SECRET     Long random string — never use placeholders in production
+#   OAUTH_STATE_SECRET Long random string — required in production (no fallback)
+#   FRONTEND_URL       Public app URL (e.g. https://www.helmcontrol.online)
+#   APP_URL            Same as FRONTEND_URL for post-OAuth redirects
+#   CORS_ORIGINS       Comma-separated allowed browser origins (same as frontend)
+#   COOKIE_SECURE      true behind HTTPS
+#   COOKIE_SAMESITE    lax when Vercel rewrites /api → Render (same-origin cookies);
+#                      none + COOKIE_SECURE=true when the browser calls Render directly
+#   ALLOW_DEMO_LOGIN   false
+#   DEMO_RESET_ENABLED false (recommended)
+#   CLERK_SECRET_KEY + CLERK_JWKS_URL   OR   GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
+#   ANTHROPIC_API_KEY  AI briefing / Ask Helm
+#   PADDLE_*           Billing (when BILLING_ENFORCED=true)
+#
+# Development: leave ENVIRONMENT unset or set to "development" — placeholders are OK.
+# -----------------------------------------------------------------------------
+
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").strip().lower()
+
 def _make_mongo_client(url: str) -> AsyncIOMotorClient:
     is_atlas = url.startswith("mongodb+srv://")
     return AsyncIOMotorClient(
@@ -127,7 +155,10 @@ if is_stale_deploy_url(FRONTEND_URL):
     FRONTEND_URL = HELM_CANONICAL_ORIGIN
 ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
 DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "false").lower() in ("1", "true", "yes")
+# HTTPS cookies: default false for local dev; set true on Render (see DEPLOY.md).
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
+# Default lax — correct when Vercel rewrites /api to Render (browser sees same-origin).
+# If REACT_APP_BACKEND_URL points at Render directly, set COOKIE_SAMESITE=none and COOKIE_SECURE=true.
 COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax")
 OAUTH_STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
 if not OAUTH_STATE_SECRET:
@@ -157,6 +188,36 @@ PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
 CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
 SETUP_SECRET = os.environ.get("SETUP_SECRET", "").strip()
+
+_INSECURE_SESSION_SECRETS = frozenset({
+    "change-me-in-production",
+    "change-me-to-a-long-random-string",
+})
+
+
+def _enforce_production_config() -> None:
+    """Refuse to boot with known-insecure settings when ENVIRONMENT=production."""
+    if ENVIRONMENT != "production":
+        return
+    problems: list[str] = []
+    raw_session = (os.environ.get("SESSION_SECRET") or "").strip()
+    if not raw_session or SESSION_SECRET in _INSECURE_SESSION_SECRETS:
+        problems.append("SESSION_SECRET must be set to a strong random value (not a placeholder)")
+    if not (os.environ.get("OAUTH_STATE_SECRET") or "").strip():
+        problems.append("OAUTH_STATE_SECRET must be set explicitly in production")
+    if not CORS_ORIGINS:
+        problems.append("CORS_ORIGINS must list your frontend origin(s)")
+    if ALLOW_DEMO_LOGIN:
+        problems.append("ALLOW_DEMO_LOGIN must be false in production")
+    if problems:
+        raise RuntimeError(
+            "Production configuration invalid (ENVIRONMENT=production):\n"
+            + "\n".join(f"  - {p}" for p in problems)
+            + "\nSee DEPLOY.md and the config header in server.py."
+        )
+
+
+_enforce_production_config()
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -274,9 +335,6 @@ def perms_for(pack: str):
 
 
 # ------------------------- OAuth state signing (CSRF) -------------------------
-if not os.environ.get("OAUTH_STATE_SECRET") and COOKIE_SECURE and SESSION_SECRET == "change-me-in-production":
-    logger.warning("Set OAUTH_STATE_SECRET and SESSION_SECRET in production")
-
 _STATE_SECRET = OAUTH_STATE_SECRET.encode()
 
 
@@ -2121,7 +2179,8 @@ api_router.add_api_route("/ai/ask-kalun", ask_helm, methods=["POST"])
 GOOGLE_SCOPES = [
     "openid", "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/gmail.readonly",
+    # gmail.readonly omitted — re-add only when email-forward document intake ships
+    # (bills forwarded to a workspace address, parsed like uploaded documents).
 ]
 
 
