@@ -43,6 +43,9 @@ def client():
     mock_db.documents.update_one = AsyncMock(return_value=None)
     mock_db.activities = MagicMock()
     mock_db.activities.insert_one = AsyncMock(return_value=None)
+    mock_db.document_rate_events = MagicMock()
+    mock_db.document_rate_events.count_documents = AsyncMock(return_value=0)
+    mock_db.document_rate_events.insert_one = AsyncMock(return_value=None)
 
     with patch.object(server, "db", mock_db), patch.object(server.doc_storage, "r2_configured", return_value=True), patch.object(
         server.doc_storage, "upload_document", return_value="ws_doc_test/test-key.pdf"
@@ -167,3 +170,95 @@ def test_extract_unparseable_amount_returns_error_json(client):
 
     assert r.status_code == 200
     assert r.json() == {"error": "unparseable_amount"}
+
+
+def test_extract_returns_cached_result_without_second_claude_call(client):
+    doc_id = "doc_cached"
+    doc = {
+        "id": doc_id,
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "storage_key": "ws_doc_test/key.pdf",
+        "filename": "invoice.pdf",
+        "content_type": "application/pdf",
+        "status": "uploaded",
+        "extracted_data": None,
+    }
+    extracted_payload = {
+        "type": "expense",
+        "amount": 42.0,
+        "month": "2024-06",
+        "category": "G&A",
+        "vendor": "Acme",
+        "confidence": "high",
+    }
+
+    async def update_one(_filter, update):
+        doc.update(update.get("$set", {}))
+
+    server.db.documents.find_one = AsyncMock(return_value=doc)
+    server.db.documents.update_one = AsyncMock(side_effect=update_one)
+
+    with patch.object(server.doc_storage, "get_document_bytes", return_value=PDF_BYTES), patch.object(
+        server.helm_llm, "anthropic_configured", return_value=True
+    ), patch.object(
+        server.helm_llm, "extract_financial_document", new_callable=AsyncMock, return_value=extracted_payload
+    ) as extract_mock, patch.object(
+        server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=False
+    ), patch.object(server.doc_rate_limit, "record_event", new_callable=AsyncMock):
+        r1 = client.post(f"/api/documents/{doc_id}/extract")
+        r2 = client.post(f"/api/documents/{doc_id}/extract")
+        r3 = client.post(f"/api/documents/{doc_id}/extract?force=true")
+
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r3.status_code == 200
+    assert r1.json() == extracted_payload
+    assert r2.json() == extracted_payload
+    assert extract_mock.await_count == 2  # initial extract + force re-extract only
+
+
+def test_upload_rate_limit_returns_429(client):
+    with patch.object(server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=True), patch.object(
+        server, "log_activity", new_callable=AsyncMock
+    ) as log_mock:
+        r = client.post(
+            "/api/documents/upload",
+            files={"file": ("invoice.pdf", io.BytesIO(PDF_BYTES), "application/pdf")},
+        )
+
+    assert r.status_code == 429
+    assert r.json()["detail"] == "Upload limit reached — try again in a bit"
+    log_mock.assert_awaited()
+    assert log_mock.await_args.args[2] == "document.rate_limit"
+
+
+def test_rate_limit_scoped_per_workspace():
+    import asyncio
+    import rate_limit
+
+    events = []
+    mock_coll = MagicMock()
+
+    async def count_documents(query):
+        return sum(
+            1 for e in events
+            if e["workspace_id"] == query["workspace_id"] and e["action"] == query["action"]
+        )
+
+    async def insert_one(doc):
+        events.append(doc)
+
+    mock_coll.count_documents = AsyncMock(side_effect=count_documents)
+    mock_coll.insert_one = AsyncMock(side_effect=insert_one)
+    mock_db = MagicMock()
+    mock_db.document_rate_events = mock_coll
+
+    limit = 2
+
+    async def run():
+        await rate_limit.record_event(mock_db, "ws_a", "upload")
+        await rate_limit.record_event(mock_db, "ws_a", "upload")
+        assert await rate_limit.is_over_limit(mock_db, "ws_a", "upload", limit)
+        assert not await rate_limit.is_over_limit(mock_db, "ws_b", "upload", limit)
+
+    asyncio.run(run())
