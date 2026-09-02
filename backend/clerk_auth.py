@@ -243,18 +243,18 @@ def _fetch_bapi_jwks_sync() -> dict[str, Any]:
 
 
 def _fetch_jwks_sync() -> dict[str, Any]:
-    """Prefer BAPI JWKS; fall back to public JWKS URL when BAPI is unavailable."""
+    """Prefer public JWKS (matches browser-issued session JWTs); BAPI as fallback."""
+    try:
+        return _fetch_public_jwks_sync()
+    except httpx.HTTPError as exc:
+        logger.warning("Clerk public JWKS fetch failed (%s) — trying BAPI JWKS", exc)
     try:
         return _fetch_bapi_jwks_sync()
     except ValueError:
         raise
     except httpx.HTTPError as exc:
-        logger.warning("Clerk BAPI JWKS fetch failed (%s) — trying public JWKS", exc)
-    try:
-        return _fetch_public_jwks_sync()
-    except httpx.HTTPError as exc:
         raise ValueError(
-            "Could not load Clerk signing keys — check CLERK_SECRET_KEY and CLERK_JWKS_URL on Render"
+            "Could not load Clerk signing keys — check CLERK_JWKS_URL and CLERK_SECRET_KEY on Render"
         ) from exc
 
 
@@ -290,7 +290,14 @@ async def clerk_api_ok() -> bool:
 
 
 async def clerk_jwks_ok() -> bool:
-    """True when JWKS is reachable (via Clerk Backend API)."""
+    """True when JWKS is reachable (public URL or Clerk Backend API)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(CLERK_JWKS_URL)
+            if r.status_code == 200 and b"keys" in r.content:
+                return True
+    except Exception:
+        pass
     if not CLERK_SECRET_KEY:
         return False
     try:
@@ -567,12 +574,19 @@ def decode_clerk_jwt(token: str) -> dict[str, Any]:
             algorithms=["RS256"],
             options={"verify_aud": False},
         )
+    except ValueError:
+        raise
     except jwt.ExpiredSignatureError:
         raise ValueError("Clerk session expired — sign out and sign in again")
     except jwt.InvalidTokenError as exc:
         logger.warning("clerk jwt invalid: %s (jwks=%s)", exc, CLERK_JWKS_URL)
         raise ValueError(
             "Invalid Clerk session token — sign out, hard-refresh, and sign in again"
+        ) from exc
+    except Exception as exc:
+        logger.warning("clerk jwt decode failed: %s (%s)", type(exc).__name__, exc)
+        raise ValueError(
+            "Clerk JWT verification failed — check CLERK_JWKS_URL on Render matches clerk.helmcontrol.online"
         ) from exc
 
 
@@ -601,6 +615,12 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
         if r.status_code == 404 and attempt < retries - 1:
             await asyncio.sleep(0.5 * (attempt + 1))
             continue
+        if r.status_code == 404:
+            raise ValueError(
+                "Clerk user not found via API — Render CLERK_SECRET_KEY is likely from a "
+                "different Clerk instance than your publishable key. In Clerk Dashboard → API keys "
+                "(clerk.helmcontrol.online), copy Secret key → Render CLERK_SECRET_KEY and redeploy."
+            )
         if r.status_code >= 400:
             break
         data = r.json()
