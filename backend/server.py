@@ -1659,7 +1659,8 @@ async def upload_financial_document(
         raise HTTPException(status_code=503, detail="Document storage is not configured")
     filename = (file.filename or "document").replace("/", "_").replace("\\", "_")[:200]
     try:
-        storage_key = doc_storage.upload_document(
+        storage_key = await asyncio.to_thread(
+            doc_storage.upload_document,
             principal["workspace_id"], data, filename, file.content_type,
         )
     except Exception as exc:
@@ -1696,7 +1697,7 @@ async def extract_financial_document_route(
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
     try:
-        file_bytes = doc_storage.get_document_bytes(doc["storage_key"])
+        file_bytes = await asyncio.to_thread(doc_storage.get_document_bytes, doc["storage_key"])
         extracted = await helm_llm.extract_financial_document(file_bytes, doc["content_type"])
         status = "failed" if extracted.get("error") == "not_financial" else "extracted"
         await db.documents.update_one(
@@ -1735,7 +1736,7 @@ async def get_financial_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     try:
-        presigned_url = doc_storage.get_presigned_url(doc["storage_key"])
+        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, doc["storage_key"])
     except Exception as exc:
         logger.exception("presigned url failed for %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
