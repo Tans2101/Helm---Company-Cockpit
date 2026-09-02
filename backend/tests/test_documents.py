@@ -16,6 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import server  # noqa: E402
+import routes.financials  # noqa: E402
+import storage as doc_storage_mod  # noqa: E402
+import llm as helm_llm_mod  # noqa: E402
 
 MOCK_PRINCIPAL = {
     "user_id": "test-user-docs",
@@ -44,9 +47,9 @@ def client():
     mock_db.activities = MagicMock()
     mock_db.activities.insert_one = AsyncMock(return_value=None)
 
-    with patch.object(server, "db", mock_db), patch.object(server.doc_storage, "r2_configured", return_value=True), patch.object(
-        server.doc_storage, "upload_document", return_value="ws_doc_test/test-key.pdf"
-    ), patch.object(server, "log_activity", new_callable=AsyncMock, return_value=None):
+    with patch("routes.financials.db", mock_db), patch("helpers.db", mock_db), patch("db.db", mock_db), patch("routes.financials.doc_storage", doc_storage_mod), patch.object(doc_storage_mod, "r2_configured", return_value=True), patch.object(
+        doc_storage_mod, "upload_document", return_value="ws_doc_test/test-key.pdf"
+    ), patch("helpers.log_activity", new_callable=AsyncMock, return_value=None):
         yield TestClient(server.app)
     server.app.dependency_overrides.clear()
 
@@ -82,7 +85,7 @@ def test_upload_wrong_content_type_rejected(client):
 
 def test_extract_not_financial_returns_error_json(client):
     doc_id = "doc_test123"
-    server.db.documents.find_one = AsyncMock(return_value={
+    routes.financials.db.documents.find_one = AsyncMock(return_value={
         "id": doc_id,
         "workspace_id": MOCK_PRINCIPAL["workspace_id"],
         "storage_key": "ws_doc_test/key.pdf",
@@ -91,10 +94,10 @@ def test_extract_not_financial_returns_error_json(client):
         "status": "uploaded",
     })
 
-    with patch.object(server.doc_storage, "get_document_bytes", return_value=PDF_BYTES), patch.object(
-        server.helm_llm, "anthropic_configured", return_value=True
+    with patch.object(doc_storage_mod, "get_document_bytes", return_value=PDF_BYTES), patch.object(
+        helm_llm_mod, "anthropic_configured", return_value=True
     ), patch.object(
-        server.helm_llm, "extract_financial_document", new_callable=AsyncMock, return_value={"error": "not_financial"}
+        helm_llm_mod, "extract_financial_document", new_callable=AsyncMock, return_value={"error": "not_financial"}
     ):
         r = client.post(f"/api/documents/{doc_id}/extract")
 
