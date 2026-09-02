@@ -17,7 +17,7 @@ from collections import defaultdict
 import httpx
 import jwt
 import resend
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
 from fastapi.responses import StreamingResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -28,6 +28,7 @@ import llm as helm_llm
 import storage as doc_storage
 import quickbooks as qb_sync
 import clerk_auth
+from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
@@ -1384,11 +1385,19 @@ async def briefing(principal=Depends(get_principal)):
 
 
 @api_router.get("/activities")
-async def list_activities(principal=Depends(get_principal)):
-    acts = await db.activities.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(40)
+async def list_activities(
+    principal=Depends(get_principal),
+    limit: int = Query(50, ge=1),
+    before: Optional[str] = None,
+):
+    page_limit = clamp_limit(limit)
+    ws = principal["workspace_id"]
+    filt = apply_before_filter({"workspace_id": ws}, "created_at", before)
+    acts = await db.activities.find(filt, {"_id": 0}).sort("created_at", -1).limit(page_limit).to_list(page_limit)
     for a in acts:
         a["ago"] = _rel_time(a["created_at"])
-    return {"activities": acts}
+    cursor = next_cursor(acts, "created_at", page_limit)
+    return {"items": acts, "activities": acts, "next_cursor": cursor}
 
 
 @api_router.post("/briefing/generate")
@@ -1536,10 +1545,27 @@ class DealInput(BaseModel):
 
 
 @api_router.get("/deals")
-async def list_deals(principal=Depends(get_principal)):
-    deals = await db.deals.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("updated_at", -1).to_list(500)
-    return {"deals": deals, "can_write": "sales:write" in perms_for(principal["pack"]),
-            "metrics": _deal_metrics(deals), "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES]}
+async def list_deals(
+    principal=Depends(get_principal),
+    limit: int = Query(50, ge=1),
+    before: Optional[str] = None,
+):
+    page_limit = clamp_limit(limit)
+    ws = principal["workspace_id"]
+    filt = apply_before_filter({"workspace_id": ws}, "updated_at", before)
+    deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
+    all_for_metrics = await db.deals.find(
+        {"workspace_id": ws}, {"_id": 0, "stage": 1, "value": 1}
+    ).to_list(None)
+    cursor = next_cursor(deals, "updated_at", page_limit)
+    return {
+        "items": deals,
+        "deals": deals,
+        "next_cursor": cursor,
+        "can_write": "sales:write" in perms_for(principal["pack"]),
+        "metrics": _deal_metrics(all_for_metrics),
+        "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES],
+    }
 
 
 @api_router.post("/deals")

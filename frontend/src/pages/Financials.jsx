@@ -142,7 +142,7 @@ export default function Financials() {
   if (loading || !data) return <LoadingScreen label="Loading financials" />;
 
   const canWrite = data.can_write;
-  const finActs = (activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
+  const finActs = (activityData?.items || activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
 
   const submitEntry = async () => {
     if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
