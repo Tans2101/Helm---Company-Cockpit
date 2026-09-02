@@ -104,5 +104,6 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
 | Page stuck on "Loading sign-in" | Redeploy Vercel + Render. Verify `GET /__clerk/v1/client` returns JSON. Run `POST /api/setup/clerk-sync` if needed. Also verify `clerk.helmcontrol.online` DNS + CAA (`pki.goog`, `digicert.com`). |
+| **Google sign-in blocked — `redirect_uri_mismatch`** | In Google Cloud Console → Credentials → your Clerk Google OAuth client, add redirect URI `https://clerk.helmcontrol.online/v1/oauth_callback` and JS origins `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`. Clerk Dashboard → SSO → Google must use **custom credentials** (production). Check: `GET /api/setup/google-oauth` on Render. |
 | Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |

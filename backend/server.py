@@ -2381,6 +2381,7 @@ async def setup_status():
             else None
         ),
         "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
+        "clerk_google_oauth": await clerk_auth.clerk_google_oauth_status() if clerk_auth.clerk_configured() else None,
         "clerk_sync": clerk_sync,
         "clerk_instance_env": clerk_sync.get("environment_type"),
         "mongo": mongo_ok,
@@ -2392,6 +2393,14 @@ async def setup_status():
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
     }
+
+
+@api_router.get("/setup/google-oauth")
+async def setup_google_oauth():
+    """Clerk Google OAuth readiness — verifies redirect URI is registered in Google Cloud."""
+    if not clerk_auth.clerk_configured():
+        raise HTTPException(status_code=400, detail="Clerk is not configured")
+    return await clerk_auth.clerk_google_oauth_status()
 
 
 @api_router.post("/setup/clerk-sync")
