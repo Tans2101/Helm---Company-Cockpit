@@ -2102,26 +2102,33 @@ async def team(principal=Depends(get_principal)):
     return {"members": members, "avg_utilization": avg, "overloaded_count": overloaded}
 
 
-async def _google_calendar_snapshot(workspace: dict) -> Optional[dict]:
-    """Fetch today's Google Calendar events when connected; None if not connected."""
+async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:
+    """Fetch Google Calendar events for a week when connected; None if not connected."""
     tokens = workspace.get("google_tokens")
     if not tokens:
         return None
+    if week_start is None:
+        week_start = _calendar_week_start(datetime.now(timezone.utc).date())
     try:
-        meetings, focus_hours, meeting_hours, refreshed = await gcal.fetch_today_calendar(
-            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+        events, refreshed = await gcal.fetch_week_calendar(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, week_start,
         )
         if refreshed is not tokens:
             await db.workspaces.update_one(
                 {"workspace_id": workspace["workspace_id"]},
                 {"$set": {"google_tokens": refreshed}},
             )
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        meetings = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
+        focus_hours, meeting_hours = gcal._compute_hours(meetings)
         return {
+            "events": events,
             "meetings": meetings,
             "focus_hours": focus_hours,
             "meeting_hours": meeting_hours,
             "live": True,
             "source": "google_calendar",
+            "week_start": week_start.strftime("%Y-%m-%d"),
         }
     except gcal.GoogleAuthError as exc:
         logger.warning("Google Calendar auth failed for %s: %s", workspace.get("workspace_id"), exc)
@@ -2129,21 +2136,89 @@ async def _google_calendar_snapshot(workspace: dict) -> Optional[dict]:
             {"workspace_id": workspace["workspace_id"]},
             {"$set": {"google_tokens": None}},
         )
-        return {"meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
+        return {"events": [], "meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
     except Exception:
         logger.exception("Google Calendar fetch failed for %s", workspace.get("workspace_id"))
         return None
 
 
+def _calendar_week_start(day) -> datetime:
+    """Week starts Sunday (matches Helm calendar UI)."""
+    sunday_offset = (day.weekday() + 1) % 7
+    start = day - timedelta(days=sunday_offset)
+    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+
+
+def _normalize_seed_events(meetings: list[dict], day) -> list[dict]:
+    day_str = day.isoformat()
+    out = []
+    for m in meetings:
+        if m.get("start_at"):
+            out.append(dict(m))
+            continue
+        parts = (m.get("time") or "09:00").split(":")
+        hour = int(parts[0])
+        minute = int(parts[1]) if len(parts) > 1 else 0
+        start = datetime(day.year, day.month, day.day, hour, minute, tzinfo=timezone.utc)
+        duration = int(m.get("duration") or 30)
+        end = start + timedelta(minutes=duration)
+        row = dict(m)
+        row.update({
+            "date": day_str,
+            "start_at": start.isoformat(),
+            "end_at": end.isoformat(),
+            "all_day": False,
+        })
+        out.append(row)
+    return out
+
+
+def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
+    events = []
+    for u in upcoming:
+        events.append({
+            "id": f"deadline_{u['id']}",
+            "title": u["title"],
+            "time": "",
+            "duration": 0,
+            "attendees": 0,
+            "type": u.get("type", "Deadline"),
+            "prep": None,
+            "importance": "medium",
+            "source": "helm",
+            "date": u["date"],
+            "start_at": f"{u['date']}T00:00:00+00:00",
+            "end_at": f"{u['date']}T23:59:59+00:00",
+            "all_day": True,
+        })
+    return events
+
+
 @api_router.get("/calendar")
-async def calendar(principal=Depends(get_principal)):
+async def calendar(
+    principal=Depends(get_principal),
+    week_start: Optional[str] = Query(None, description="Sunday of the week to load (YYYY-MM-DD)"),
+):
     c = await get_ws(principal["workspace_id"])
-    live_cal = await _google_calendar_snapshot(c)
+    if week_start:
+        try:
+            anchor_day = datetime.strptime(week_start, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="week_start must be YYYY-MM-DD")
+    else:
+        anchor_day = datetime.now(timezone.utc).date()
+    week_anchor = _calendar_week_start(anchor_day)
+
+    live_cal = await _google_calendar_snapshot(c, week_anchor)
     if live_cal is not None:
         data = {**dict(c["calendar"]), **live_cal}
     else:
         data = dict(c["calendar"])
         data["live"] = bool(c.get("google_tokens"))
+        today = datetime.now(timezone.utc).date()
+        seed_events = _normalize_seed_events(data.get("meetings") or [], today)
+        data["events"] = seed_events
+        data["week_start"] = week_anchor.strftime("%Y-%m-%d")
     # Upcoming deadlines from decisions that carry a real (YYYY-MM-DD) due date.
     upcoming = []
     for d in c.get("decisions", []):
@@ -2166,6 +2241,22 @@ async def calendar(principal=Depends(get_principal)):
                              "type": "Task", "meta": t.get("tag", "")})
     upcoming.sort(key=lambda x: x["date"])
     data["upcoming"] = upcoming
+    week_end = (week_anchor + timedelta(days=6)).strftime("%Y-%m-%d")
+    week_start_s = week_anchor.strftime("%Y-%m-%d")
+    in_week_deadlines = [u for u in upcoming if week_start_s <= u["date"] <= week_end]
+    events = list(data.get("events") or data.get("meetings") or [])
+    if not data.get("events"):
+        events = _normalize_seed_events(events, datetime.now(timezone.utc).date())
+    existing_ids = {e.get("id") for e in events}
+    for ev in _deadlines_as_events(in_week_deadlines):
+        if ev["id"] not in existing_ids:
+            events.append(ev)
+    data["events"] = events
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    data["meetings"] = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
+    if "focus_hours" not in data:
+        data["focus_hours"], data["meeting_hours"] = gcal._compute_hours(data["meetings"])
+    data["week_start"] = week_start_s
     return data
 
 
