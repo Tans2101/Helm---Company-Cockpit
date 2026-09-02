@@ -1,7 +1,7 @@
 import { Clock, Users, Sparkles, CalendarPlus, CalendarClock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useFetch } from "@/hooks/useFetch";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const typeStyle = {
@@ -17,9 +17,18 @@ function fmtDate(d) {
 }
 
 export default function CalendarPage() {
-  const { data, loading } = useFetch("/calendar");
+  const { data, loading, error, reload } = useFetch("/calendar");
   const navigate = useNavigate();
-  if (loading || !data) return <LoadingScreen label="Loading calendar" />;
+  if (loading) return <LoadingScreen label="Loading calendar" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load calendar"
+        message={fetchErrorMessage(error, "Calendar data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
 
   const meetings = data.meetings || [];
   const upcoming = data.upcoming || [];

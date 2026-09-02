@@ -1,16 +1,25 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { FileText, Sparkles, Download } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 
 export default function Reports() {
-  const { data, loading } = useFetch("/reports");
+  const { data, loading, error, reload } = useFetch("/reports");
   const [pack, setPack] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading reports" />;
+  if (loading) return <LoadingScreen label="Loading reports" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load reports"
+        message={fetchErrorMessage(error, "Reports data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   if (data.reports.length === 0) return <div><PageHeader title="Reports" subtitle="Sales, production and procurement — plus the AI Weekly CEO Pack." /><EmptyState title="No reports yet" body="Reports build as your data and integrations come online." /></div>;
 
   const generatePack = async () => {

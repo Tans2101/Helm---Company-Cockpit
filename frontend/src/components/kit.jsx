@@ -75,6 +75,24 @@ export function LoadingScreen({ label = "Loading" }) {
   );
 }
 
+export function ErrorScreen({ label = "Something went wrong", message, onRetry }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center py-32 px-6 text-center">
+      <p className="font-mono text-xs uppercase tracking-[0.25em] text-rose-400/80 mb-3">{label}</p>
+      <p className="text-sm text-zinc-400 max-w-md leading-relaxed">{message}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 transition-colors hover:border-gold/30 hover:text-white"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function EmptyState({ icon: Icon, title, body, action }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-24 px-6 fade-up">

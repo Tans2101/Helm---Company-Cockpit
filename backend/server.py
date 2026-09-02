@@ -1548,6 +1548,31 @@ def _deal_metrics(deals):
             "open_count": len(open_deals), "by_stage": by_stage}
 
 
+async def _deal_metrics_for_workspace(workspace_id: str):
+    """Aggregate pipeline metrics in MongoDB instead of loading all deals."""
+    rows = await db.deals.aggregate([
+        {"$match": {"workspace_id": workspace_id}},
+        {"$group": {"_id": "$stage", "count": {"$sum": 1}, "value": {"$sum": "$value"}}},
+    ]).to_list(None)
+    by_stage_map = {r["_id"]: r for r in rows}
+    by_stage = []
+    open_value = weighted_value = open_count = 0.0
+    won_value = 0.0
+    for s in DEAL_STAGES:
+        row = by_stage_map.get(s, {"count": 0, "value": 0})
+        count = int(row["count"])
+        value = round(float(row["value"]), 2)
+        by_stage.append({"stage": s, "label": STAGE_LABEL[s], "count": count, "value": value})
+        if s not in ("won", "lost"):
+            open_value += value
+            open_count += count
+            weighted_value += value * STAGE_PROB.get(s, 0)
+        elif s == "won":
+            won_value = value
+    return {"open_value": round(open_value, 2), "weighted_value": round(weighted_value, 2),
+            "won_value": round(won_value, 2), "open_count": int(open_count), "by_stage": by_stage}
+
+
 class DealInput(BaseModel):
     name: str
     company: str = ""
@@ -1567,16 +1592,14 @@ async def list_deals(
     ws = principal["workspace_id"]
     filt = apply_before_filter({"workspace_id": ws}, "updated_at", before)
     deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
-    all_for_metrics = await db.deals.find(
-        {"workspace_id": ws}, {"_id": 0, "stage": 1, "value": 1}
-    ).to_list(100_000)
+    metrics = await _deal_metrics_for_workspace(ws)
     cursor = next_cursor(deals, "updated_at", page_limit)
     return {
         "items": deals,
         "deals": deals,
         "next_cursor": cursor,
         "can_write": "sales:write" in perms_for(principal["pack"]),
-        "metrics": _deal_metrics(all_for_metrics),
+        "metrics": metrics,
         "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES],
     }
 

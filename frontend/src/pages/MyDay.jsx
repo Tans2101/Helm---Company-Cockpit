@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Send, CheckCircle2, Circle, AlertTriangle, Plus, ArrowUpRight, Users } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const MOODS = [
@@ -24,9 +24,9 @@ const colStyle = {
 
 export default function MyDay() {
   const { user } = useAuth();
-  const { data: mine, loading: l1, reload: reloadMine } = useFetch("/updates/me");
-  const { data: tasks, loading: l2, reload: reloadTasks } = useFetch("/tasks/me");
-  const { data: today, loading: l3, reload: reloadToday } = useFetch("/updates/today");
+  const { data: mine, loading: l1, error: e1, reload: reloadMine } = useFetch("/updates/me");
+  const { data: tasks, loading: l2, error: e2, reload: reloadTasks } = useFetch("/tasks/me");
+  const { data: today, loading: l3, error: e3, reload: reloadToday } = useFetch("/updates/today");
 
   const [text, setText] = useState("");
   const [blocker, setBlocker] = useState(false);
@@ -46,6 +46,16 @@ export default function MyDay() {
   }, [mine]);
 
   if (l1 || l2 || l3) return <LoadingScreen label="Assembling your day" />;
+  const dayError = e1 || e2 || e3;
+  if (dayError || !mine || !tasks || !today) {
+    return (
+      <ErrorScreen
+        label="Could not load your day"
+        message={fetchErrorMessage(dayError, "Your day view is unavailable right now.")}
+        onRetry={() => { reloadMine(); reloadTasks(); reloadToday(); }}
+      />
+    );
+  }
 
   const first = user?.name?.split(" ")[0] || "there";
   const hasPosted = !!mine?.update;

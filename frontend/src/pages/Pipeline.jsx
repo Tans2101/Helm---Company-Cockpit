@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
 
 const stageStyle = {
@@ -22,6 +23,7 @@ export default function Pipeline() {
   const [meta, setMeta] = useState(null);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -41,10 +43,12 @@ export default function Pipeline() {
 
   const reload = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       await fetchPage();
-    } catch {
-      toast.error("Could not load pipeline");
+    } catch (e) {
+      setLoadError(e);
+      toast.error(fetchErrorMessage(e, "Could not load pipeline"));
     } finally {
       setLoading(false);
     }
@@ -66,7 +70,16 @@ export default function Pipeline() {
     }
   };
 
-  if (loading || !meta) return <LoadingScreen label="Loading pipeline" />;
+  if (loading) return <LoadingScreen label="Loading pipeline" />;
+  if (loadError || !meta) {
+    return (
+      <ErrorScreen
+        label="Could not load pipeline"
+        message={fetchErrorMessage(loadError, "Pipeline data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
   const canWrite = meta.can_write;
   const m = meta.metrics;
 

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { GripVertical, Plus, X } from "lucide-react";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, LoadingScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const priorityStyle = {
@@ -15,14 +15,23 @@ const priorityStyle = {
 const emptyTask = () => ({ title: "", priority: "Medium", tag: "General", due: "", assignee_user_id: "" });
 
 export default function Tasks() {
-  const { data, loading, setData, reload } = useFetch("/tasks");
+  const { data, loading, error, reload, setData } = useFetch("/tasks");
   const { data: membersData } = useFetch("/members");
   const [dragId, setDragId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyTask());
   const [busy, setBusy] = useState(false);
 
-  if (loading || !data) return <LoadingScreen label="Loading board" />;
+  if (loading) return <LoadingScreen label="Loading board" />;
+  if (error || !data) {
+    return (
+      <ErrorScreen
+        label="Could not load board"
+        message={fetchErrorMessage(error, "Task board is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
 
   const canCreate = data.can_create;
   const canAssign = data.can_assign;

@@ -22,3 +22,13 @@ export function useFetch(path, deps = []) {
   const reload = () => setReloadKey((k) => k + 1);
   return { data, loading, error, reload, setData };
 }
+
+export function fetchErrorMessage(error, fallback = "Could not load data. Check your connection and try again.") {
+  if (!error) return fallback;
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) return detail.map((d) => d.msg || String(d)).join(", ");
+  if (error?.message === "clerk-token-timeout") return "Sign-in is still loading. Wait a moment and try again.";
+  if (error?.code === "ECONNABORTED") return "Request timed out. The server may be busy — try again.";
+  return error?.message || fallback;
+}
