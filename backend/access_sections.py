@@ -27,6 +27,8 @@ MANAGEABLE_SECTIONS = [
      "description": "Create tasks and assign work to teammates."},
     {"id": "decisions", "label": "Decisions", "perm": "decisions:act",
      "description": "Approve, delegate, or reject decision cards."},
+    {"id": "telemetry", "label": "Telemetry", "perm": "telemetry:write",
+     "description": "KPI notes, risk radar, and manual telemetry inputs."},
 ]
 
 _SECTION_PERM = {s["id"]: s["perm"] for s in MANAGEABLE_SECTIONS}

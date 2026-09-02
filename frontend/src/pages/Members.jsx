@@ -38,6 +38,7 @@ export default function Members() {
 
   const packOptions = PACKS.filter((p) => p.id !== "owner" || canManageOwners);
   const sections = accessData?.sections || [];
+  const departments = accessData?.departments || [];
   const sectionAccess = accessDraft ?? accessData?.section_access ?? {};
 
   const invite = async () => {
@@ -108,33 +109,47 @@ export default function Members() {
         <GlassCard className="p-5 mb-6 fade-up" data-testid="manage-access-panel">
           <div className="flex items-center gap-2 mb-2 text-gold">
             <Shield className="w-4 h-4" />
-            <SectionLabel>Department section access</SectionLabel>
+            <SectionLabel>Who can edit what</SectionLabel>
           </div>
-          <p className="text-sm text-zinc-500 mb-5">Choose which departments can edit each area — on top of their access pack. Owners always have full access.</p>
-          <div className="space-y-5">
-            {sections.map((section) => (
-              <div key={section.id} className="border-b border-white/5 pb-4 last:border-0">
-                <p className="text-white text-sm font-medium">{section.label}</p>
-                <p className="text-xs text-zinc-600 mb-2">{section.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {DEFAULT_DEPARTMENTS.map((dept) => {
-                    const on = (sectionAccess[section.id] || []).includes(dept);
-                    return (
-                      <button
-                        key={dept}
-                        type="button"
-                        data-testid={`access-${section.id}-${dept}`}
-                        onClick={() => toggleDept(section.id, dept)}
-                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", on ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-zinc-500 hover:border-white/20")}
-                      >
-                        {dept}
-                      </button>
-                    );
-                  })}
+          <p className="text-sm text-zinc-500 mb-2">
+            For each <span className="text-zinc-300">department on your team</span>, choose which Helm sections they can edit.
+            This is on top of their access pack. Owners always have full access.
+          </p>
+          <p className="text-xs text-zinc-600 mb-5">
+            Only departments that exist in your team (from invites or People) appear here — not every possible department label.
+          </p>
+          {departments.length === 0 ? (
+            <p className="text-sm text-zinc-600">Add teammates with a department first, then configure access.</p>
+          ) : (
+            <div className="space-y-5">
+              {departments.map((dept) => (
+                <div key={dept} className="border-b border-white/5 pb-4 last:border-0" data-testid={`access-dept-${dept}`}>
+                  <p className="text-white text-sm font-medium">{dept}</p>
+                  <p className="text-xs text-zinc-600 mb-2">Can edit these sections:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {sections.map((section) => {
+                      const on = (sectionAccess[section.id] || []).includes(dept);
+                      return (
+                        <button
+                          key={section.id}
+                          type="button"
+                          data-testid={`access-${dept}-${section.id}`}
+                          title={section.description}
+                          onClick={() => toggleDept(section.id, dept)}
+                          className={cn(
+                            "text-xs rounded-full px-2.5 py-1 border transition-colors",
+                            on ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-zinc-500 hover:border-white/20",
+                          )}
+                        >
+                          {section.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           <button data-testid="save-access-btn" onClick={saveAccess} disabled={accessBusy}
             className="mt-5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60">
             {accessBusy ? "Saving…" : "Save access rules"}
