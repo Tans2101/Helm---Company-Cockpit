@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Calendar, Mail, DollarSign, Github, MessageSquare, Cloud, Building2, Check,
-  ExternalLink, KeyRound, RefreshCw, Sparkles, Upload, CreditCard, Clock, ArrowRight,
+  Calendar, Mail, Building2, Check, ExternalLink, RefreshCw,
+  Cloud, Github, MessageSquare, Clock, ArrowRight, Link2, Unlink,
 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
@@ -14,10 +14,6 @@ const ICONS = {
   google_calendar: Calendar,
   gmail: Mail,
   quickbooks: Building2,
-  helm_ai: Sparkles,
-  document_storage: Upload,
-  team_email: Mail,
-  paddle: CreditCard,
   github: Github,
   slack: MessageSquare,
   salesforce: Cloud,
@@ -25,9 +21,8 @@ const ICONS = {
 
 const STATUS_LABELS = {
   connected: { text: "Connected", className: "text-emerald-400 bg-emerald-400/10" },
-  ready: { text: "Ready", className: "text-emerald-400 bg-emerald-400/10" },
-  keys_needed: { text: "Keys needed", className: "text-amber-400 bg-amber-400/10" },
-  not_connected: { text: "Not connected", className: "text-zinc-500 border border-white/10" },
+  not_connected: { text: "Not connected", className: "text-zinc-400 border border-white/10" },
+  unavailable: { text: "Unavailable", className: "text-zinc-500 border border-white/10" },
   coming_soon: { text: "Coming soon", className: "text-zinc-500 border border-white/10" },
 };
 
@@ -46,7 +41,7 @@ function formatLastSynced(iso) {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_LABELS[status] || STATUS_LABELS.not_connected;
-  const Icon = status === "connected" || status === "ready" ? Check : status === "keys_needed" ? KeyRound : null;
+  const Icon = status === "connected" ? Check : null;
   return (
     <span className={cn("inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide rounded px-2 py-1", cfg.className)}>
       {Icon && <Icon className="w-3 h-3" />}
@@ -57,35 +52,19 @@ function StatusBadge({ status }) {
 
 function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNavigate, qbSyncing }) {
   const Icon = ICONS[it.id] || Cloud;
-  const status = it.status || (it.connected ? "connected" : it.configured === false ? "keys_needed" : "not_connected");
+  const status = it.status || (it.connected ? "connected" : "not_connected");
   const lastSynced = it.provider === "quickbooks" ? formatLastSynced(it.last_synced_at) : null;
   const isComingSoon = it.coming_soon || status === "coming_soon";
+  const isUnavailable = status === "unavailable";
   const isOAuth = it.kind === "oauth" && it.oauth;
-  const isPlatform = it.kind === "platform";
-  const isBilling = it.kind === "billing";
 
-  const primaryAction = () => {
-    if (isComingSoon) return;
+  const handleConnect = () => {
+    if (isComingSoon || isUnavailable) return;
     if (isOAuth) {
       it.connected ? onDisconnect(it.provider) : onConnect(it.provider);
-      return;
+    } else if (it.cta_route) {
+      onNavigate(it.cta_route);
     }
-    if (it.cta_route) onNavigate(it.cta_route);
-  };
-
-  const primaryLabel = () => {
-    if (isComingSoon) return "Coming soon";
-    if (isOAuth) {
-      if (it.connected) return "Disconnect";
-      if (status === "keys_needed") return "Set up on Render";
-      return "Connect";
-    }
-    if (isPlatform) {
-      if (status === "keys_needed") return "Set keys on Render";
-      return it.cta_label || "Open";
-    }
-    if (isBilling) return it.cta_label || "Open billing";
-    return it.connected ? "Disconnect" : "Connect";
   };
 
   return (
@@ -97,27 +76,22 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         <StatusBadge status={status} />
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <h3 className="text-white font-medium">{it.name}</h3>
-        {isOAuth && <span className="text-[9px] font-mono uppercase tracking-wider text-gold/70 border border-gold/20 rounded px-1.5 py-0.5">OAuth</span>}
-        {isPlatform && <span className="text-[9px] font-mono uppercase tracking-wider text-sky-400/80 border border-sky-400/20 rounded px-1.5 py-0.5">Platform</span>}
-      </div>
-
+      <h3 className="text-white font-medium">{it.name}</h3>
       <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">{it.category}</p>
       <p className="text-sm text-zinc-500 mt-2 leading-relaxed flex-1 min-h-[40px]">{it.description}</p>
 
       {it.value && (
-        <p className="text-xs text-zinc-600 mt-2 leading-relaxed border-l-2 border-gold/30 pl-2">{it.value}</p>
+        <p className="text-xs text-zinc-400 mt-3 leading-relaxed border-l-2 border-gold/30 pl-2">{it.value}</p>
       )}
 
-      {status === "keys_needed" && it.env_vars?.length > 0 && (
-        <p className="text-[11px] font-mono text-amber-400/80 mt-2" data-testid={`env-vars-${it.id}`}>
-          Render: {it.env_vars.join(", ")}
+      {isUnavailable && (
+        <p className="text-xs text-zinc-600 mt-3 leading-relaxed">
+          This connection isn&apos;t enabled on your Helm instance yet. Contact your administrator or Helm support.
         </p>
       )}
 
       {it.provider === "quickbooks" && it.connected && lastSynced && (
-        <p className="text-xs text-zinc-600 mt-2 flex items-center gap-1" data-testid="qb-last-synced">
+        <p className="text-xs text-zinc-600 mt-3 flex items-center gap-1" data-testid="qb-last-synced">
           <Clock className="w-3 h-3" /> Last synced {lastSynced}
         </p>
       )}
@@ -128,30 +102,44 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
           data-testid="sync-quickbooks-btn"
           onClick={onSync}
           disabled={qbSyncing}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 transition-colors hover:bg-gold/15 disabled:opacity-60"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15 disabled:opacity-60"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", qbSyncing && "animate-spin")} />
           {qbSyncing ? "Syncing…" : "Sync to Financials"}
         </button>
       )}
 
+      {it.connected && it.cta_route && (
+        <button
+          type="button"
+          onClick={() => onNavigate(it.cta_route)}
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm py-2 hover:bg-white/5"
+        >
+          <ArrowRight className="w-3.5 h-3.5" /> {it.cta_label || "Open in Helm"}
+        </button>
+      )}
+
       {!isComingSoon && (
         <button
           data-testid={`action-${it.id}`}
-          onClick={primaryAction}
-          disabled={isComingSoon || (isOAuth && !canManage && !it.connected)}
+          onClick={handleConnect}
+          disabled={isComingSoon || isUnavailable || (!canManage && !it.connected)}
           className={cn(
-            "mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2 transition-colors disabled:opacity-50",
-            isOAuth && it.connected
+            "mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2.5 transition-colors disabled:opacity-50",
+            it.connected
               ? "border border-white/10 text-zinc-400 hover:bg-white/5"
-              : status === "keys_needed"
-                ? "border border-amber-400/30 text-amber-400 hover:bg-amber-400/10"
+              : isUnavailable
+                ? "border border-white/10 text-zinc-600 cursor-not-allowed"
                 : "bg-gold text-black font-medium hover:bg-gold-hover",
           )}
         >
-          {isOAuth && !it.connected && status !== "keys_needed" && <ExternalLink className="w-3.5 h-3.5" />}
-          {!isOAuth && it.cta_route && <ArrowRight className="w-3.5 h-3.5" />}
-          {primaryLabel()}
+          {it.connected ? (
+            <><Unlink className="w-3.5 h-3.5" /> Disconnect</>
+          ) : isUnavailable ? (
+            <><Link2 className="w-3.5 h-3.5" /> Connect unavailable</>
+          ) : (
+            <><ExternalLink className="w-3.5 h-3.5" /> {it.connect_label || `Connect ${it.name}`}</>
+          )}
         </button>
       )}
     </GlassCard>
@@ -166,12 +154,12 @@ export default function Integrations() {
 
   useEffect(() => {
     if (params.get("connected")) {
-      const name = params.get("connected") === "google" ? "Google Calendar" : params.get("connected");
-      toast.success(`${name} connected`);
+      const name = params.get("connected") === "google" ? "Google Calendar" : params.get("connected") === "quickbooks" ? "QuickBooks" : params.get("connected");
+      toast.success(`${name} connected — your data will flow into Helm`);
       setParams({});
       reload();
     } else if (params.get("error")) {
-      toast.error("Connection failed. Check OAuth credentials on Render and try again.");
+      toast.error("Could not complete the connection. Try again or use a different account.");
       setParams({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +178,7 @@ export default function Integrations() {
 
   const gate = () => {
     if (!data.can_manage) {
-      toast.error("Only workspace owners can manage integrations");
+      toast.error("Only workspace owners can connect integrations");
       return false;
     }
     return true;
@@ -203,7 +191,7 @@ export default function Integrations() {
       if (res.configured && res.authorization_url) {
         window.location.href = res.authorization_url;
       } else {
-        toast.info(res.message || "OAuth credentials not configured yet — add them on Render.");
+        toast.info(res.message || "This connection isn't available yet on your Helm instance.");
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start connection");
@@ -236,23 +224,30 @@ export default function Integrations() {
     }
   };
 
-  const dayOne = data.integrations.filter((i) => !i.coming_soon);
-  const later = data.integrations.filter((i) => i.coming_soon);
+  const connectable = data.integrations.filter((i) => i.kind === "oauth" && !i.coming_soon);
+  const roadmap = data.integrations.filter((i) => i.coming_soon);
+  const connectedCount = connectable.filter((i) => i.connected).length;
 
   return (
     <div>
       <PageHeader
         title="Integrations"
-        subtitle="Connect the tools that feed your cockpit on day one — calendar, books, AI, and team email."
+        subtitle="Connect your calendar, accounting, and tools — Helm pulls your data in so the briefing, financials, and calendar stay current."
       />
 
-      <p className="text-sm text-zinc-500 mb-6 max-w-2xl">
-        OAuth connections are per-workspace. Platform keys (Anthropic, R2, Resend) are set once on Render and apply to all workspaces.
-      </p>
+      <GlassCard className="p-4 mb-8 fade-up border-white/5">
+        <p className="text-sm text-zinc-400 leading-relaxed">
+          Each connection is <span className="text-zinc-200">per company workspace</span> and uses secure OAuth —
+          Helm never sees your passwords. Owners connect accounts here; teammates see the results in Calendar and Financials.
+          {connectedCount > 0 && (
+            <span className="text-emerald-400/90"> {connectedCount} connected.</span>
+          )}
+        </p>
+      </GlassCard>
 
-      <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Day 1 essentials</h2>
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mb-10">
-        {dayOne.map((it) => (
+      <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Connect your accounts</h2>
+      <div className="grid md:grid-cols-2 gap-4 mb-10">
+        {connectable.map((it) => (
           <IntegrationCard
             key={it.id}
             it={it}
@@ -266,11 +261,12 @@ export default function Integrations() {
         ))}
       </div>
 
-      {later.length > 0 && (
+      {roadmap.length > 0 && (
         <>
-          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">On the roadmap</h2>
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {later.map((it) => (
+          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Coming soon</h2>
+          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — email, engineering, comms, and CRM.</p>
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {roadmap.map((it) => (
               <IntegrationCard
                 key={it.id}
                 it={it}

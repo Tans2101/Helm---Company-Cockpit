@@ -2804,10 +2804,10 @@ async def toggle_integration(integration_id: str, principal=Depends(require_pro_
     spec = next((i for i in integ_catalog.INTEGRATION_CATALOG if i["id"] == integration_id), None)
     if not spec:
         raise HTTPException(status_code=404, detail="Unknown integration")
-    if spec.get("kind") in ("oauth", "platform", "billing", "coming_soon"):
+    if spec.get("kind") in ("oauth", "coming_soon"):
         raise HTTPException(
             status_code=400,
-            detail="This integration cannot be toggled — use Connect, Billing, or configure platform keys on Render.",
+            detail="Use Connect or Disconnect for this integration.",
         )
     raise HTTPException(status_code=400, detail="Integration toggle is not supported")
 
@@ -2818,7 +2818,10 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown provider")
     if not cfg["configured"]:
-        return {"configured": False, "message": f"{provider.title()} OAuth credentials are not set yet. Add them in the backend .env to enable live connection."}
+        return {
+            "configured": False,
+            "message": "This connection isn't available on your Helm instance yet. Contact your administrator.",
+        }
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
               "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
