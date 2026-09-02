@@ -1699,7 +1699,7 @@ async def extract_financial_document_route(
     try:
         file_bytes = await asyncio.to_thread(doc_storage.get_document_bytes, doc["storage_key"])
         extracted = await helm_llm.extract_financial_document(file_bytes, doc["content_type"])
-        status = "failed" if extracted.get("error") == "not_financial" else "extracted"
+        status = "failed" if extracted.get("error") in ("not_financial", "unparseable_amount") else "extracted"
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
             {"$set": {"status": status, "extracted_data": extracted}},

@@ -5,6 +5,7 @@ import base64
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 
 from anthropic import AsyncAnthropic
@@ -89,6 +90,73 @@ def _parse_extract_json(text: str) -> dict:
     return data
 
 
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+_VALID_CONFIDENCE = frozenset({"high", "medium", "low"})
+_MAX_LABEL_LEN = 100
+
+
+def _coerce_label(value) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()[:_MAX_LABEL_LEN]
+
+
+def _parse_positive_amount(value) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        n = float(value)
+        return n if n > 0 else None
+    cleaned = re.sub(r"[\s$,]", "", str(value).strip())
+    if not cleaned:
+        return None
+    try:
+        n = float(cleaned)
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+def _current_month() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def _validate_extracted_financial(data: dict) -> dict:
+    """Normalize and validate Claude extraction output for the entry form."""
+    if data.get("error"):
+        return data
+
+    confidence = data.get("confidence")
+    if confidence not in _VALID_CONFIDENCE:
+        confidence = "medium"
+
+    type_val = data.get("type")
+    if type_val not in ("revenue", "expense"):
+        type_val = "expense"
+        confidence = "low"
+
+    amount = _parse_positive_amount(data.get("amount"))
+    if amount is None:
+        return {"error": "unparseable_amount"}
+
+    month = data.get("month")
+    if not isinstance(month, str) or not _MONTH_RE.match(month.strip()):
+        month = _current_month()
+        confidence = "low"
+    else:
+        month = month.strip()
+
+    return {
+        "type": type_val,
+        "amount": round(amount, 2),
+        "month": month,
+        "category": _coerce_label(data.get("category")),
+        "vendor": _coerce_label(data.get("vendor")),
+        "note": _coerce_label(data.get("note")),
+        "confidence": confidence,
+    }
+
+
 async def extract_financial_document(file_bytes: bytes, content_type: str) -> dict:
     if content_type == "application/pdf":
         block = {
@@ -124,4 +192,4 @@ async def extract_financial_document(file_bytes: bytes, content_type: str) -> di
     raw = "".join(parts).strip()
     if not raw:
         raise ValueError("Empty response from model")
-    return _parse_extract_json(raw)
+    return _validate_extracted_financial(_parse_extract_json(raw))

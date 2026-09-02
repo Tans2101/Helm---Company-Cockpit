@@ -95,6 +95,10 @@ export default function Financials() {
         toast.error("This doesn't look like a bill or invoice — upload a financial document only.");
         return;
       }
+      if (extracted?.error === "unparseable_amount") {
+        toast.error("Couldn't read a clear amount from this document — try entering it manually.");
+        return;
+      }
       const entryType = extracted.type === "revenue" ? "revenue" : "expense";
       setForm({
         type: entryType,
