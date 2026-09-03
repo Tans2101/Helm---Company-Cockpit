@@ -10,7 +10,7 @@ import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
   TAGLINE, CATEGORY, AUDIENCE, HERO_SUB, MISSION,
-  PRO_PRICE, PRO_FEATURES, PRODUCT_FACTS, PROBLEMS, HOW_IT_WORKS, FEATURE_HIGHLIGHTS,
+  PLANS, PRODUCT_FACTS, PROBLEMS, HOW_IT_WORKS, FEATURE_HIGHLIGHTS,
   WHO_HELM_IS_FOR, CEO_DAY, PRICING_FAQ,
 } from "@/lib/marketingCopy";
 
@@ -235,37 +235,63 @@ export default function Landing() {
 
       {/* Pricing */}
       <section id="pricing" className="px-6 py-24 border-t border-white/[0.05]">
-        <div className="mx-auto max-w-lg">
-          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center mb-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center mb-12">
             <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Pricing</p>
-            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Helm</h2>
-            <p className="mt-3 text-zinc-500">The full CEO Operating System. One plan, everything included.</p>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Plans that scale with you</h2>
+            <p className="mt-3 text-zinc-500">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
           </motion.div>
-          <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}
-            className="rounded-2xl border border-gold/30 bg-[#121214]/80 p-8 shadow-[0_0_40px_-12px_rgba(201,169,98,0.25)]">
-            <p className="font-mono text-5xl text-white">${PRO_PRICE}<span className="text-lg text-zinc-600">/mo</span></p>
-            <p className="text-sm text-zinc-500 mt-2">Per company workspace. Cancel anytime.</p>
-            <div className="mt-6 space-y-3">
-              {PRO_FEATURES.map((f) => (
-                <div key={f} className="flex items-center gap-2.5 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-gold shrink-0" /> {f}
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {PLANS.map((plan, i) => (
+              <motion.div
+                key={plan.id}
+                variants={fade}
+                custom={i}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true }}
+                className={`rounded-2xl border p-6 flex flex-col ${
+                  plan.highlighted
+                    ? "border-gold/30 bg-[#121214]/80 shadow-[0_0_40px_-12px_rgba(201,169,98,0.25)]"
+                    : "border-white/10 bg-[#121214]/50"
+                }`}
+              >
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">{plan.label}</p>
+                <p className="font-mono text-4xl text-white mt-3">
+                  {plan.price === 0 ? "$0" : `$${plan.price}`}
+                  {plan.price > 0 && <span className="text-base text-zinc-600">/mo</span>}
+                </p>
+                <p className="text-sm text-zinc-500 mt-2 min-h-[2.5rem]">{plan.for}</p>
+                {plan.trialDays > 0 && (
+                  <p className="text-[11px] font-mono text-gold/80 mt-1">{plan.trialDays}-day free trial</p>
+                )}
+                <div className="mt-5 space-y-2.5 flex-1">
+                  {plan.includes.map((f) => (
+                    <div key={f} className="flex items-start gap-2 text-sm text-zinc-300">
+                      <Check className="w-4 h-4 text-gold shrink-0 mt-0.5" /> {f}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button type="button" onClick={enter} data-testid="pricing-cta-btn"
-              className="mt-8 w-full rounded-full bg-gold text-black font-medium py-3 hover:bg-gold-hover transition-colors">
-              {authed ? "Open your cockpit" : "Get started"}
-            </button>
-            <div className="mt-10 pt-8 border-t border-white/5 space-y-4 text-left">
-              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600">Common questions</p>
-              {PRICING_FAQ.map((item) => (
-                <div key={item.q}>
-                  <p className="text-sm text-white">{item.q}</p>
-                  <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.a}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+                <button type="button" onClick={enter} data-testid={`pricing-cta-${plan.id}`}
+                  className={`mt-8 w-full rounded-full font-medium py-3 transition-colors ${
+                    plan.highlighted
+                      ? "bg-gold text-black hover:bg-gold-hover"
+                      : "border border-white/10 text-white hover:bg-white/5"
+                  }`}>
+                  {authed ? "Open cockpit" : plan.id === "free" ? "Get started free" : "Start free trial"}
+                </button>
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-12 max-w-2xl mx-auto space-y-4 text-left">
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600 text-center">Common questions</p>
+            {PRICING_FAQ.map((item) => (
+              <div key={item.q}>
+                <p className="text-sm text-white">{item.q}</p>
+                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.a}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -295,7 +321,7 @@ export default function Landing() {
             </button>
           </div>
           <div className="relative mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-600">
-            <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Helm · ${PRO_PRICE}/mo</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Free to start · 7-day paid trials</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Sign in with Google</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Live in minutes</span>
           </div>

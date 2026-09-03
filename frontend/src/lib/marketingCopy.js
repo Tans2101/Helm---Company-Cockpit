@@ -54,10 +54,11 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "No. Helm is one plan — the full CEO cockpit. You can preview the shell after sign-up, then activate when you're ready." },
-  { q: "Can my leadership team use Helm?", a: "Yes. Invite CFO, VP Sales, ops, and HR with role-based access. They contribute data; you see the synthesis." },
-  { q: "What integrations are included?", a: "Google Calendar, Gmail, QuickBooks, GitHub, and more — live signal flows into your briefing automatically." },
-  { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancel anytime — no annual lock-in." },
+  { q: "Is there a free plan?", a: "Yes. Free is for solo founders — manual entries and the dashboard/briefing. Paid plans add AI upload, team seats, Ask Helm, and integrations." },
+  { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
+  { q: "Can my leadership team use Helm?", a: "Yes on paid plans. Starter supports up to 3 members, Growth up to 10, Business unlimited — with role-based access packs." },
+  { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
+  { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment — use the trial to evaluate." },
 ];
 
 export const FEATURE_CATEGORIES = [
@@ -81,17 +82,80 @@ export const FEATURE_CATEGORIES = [
   },
 ];
 
-export const PRO_PRICE = 8;
+/** Canonical pricing — keep in sync with backend/plans.py */
+export const PLANS = [
+  {
+    id: "free",
+    label: "Free",
+    price: 0,
+    for: "Solo founders trying it out",
+    seats: 1,
+    trialDays: 0,
+    highlighted: false,
+    includes: [
+      "1 user",
+      "Manual financial entries",
+      "Dashboard & briefing",
+      "No AI document upload",
+      "No QuickBooks sync",
+    ],
+  },
+  {
+    id: "starter",
+    label: "Starter",
+    price: 15,
+    for: "Small businesses",
+    seats: 3,
+    trialDays: 7,
+    highlighted: true,
+    includes: [
+      "Up to 3 team members",
+      "AI document upload (30/mo)",
+      "QuickBooks sync",
+      "Ask Helm AI",
+      "Calendar",
+      "7-day free trial",
+    ],
+  },
+  {
+    id: "growth",
+    label: "Growth",
+    price: 39,
+    for: "Growing businesses",
+    seats: 10,
+    trialDays: 7,
+    highlighted: false,
+    includes: [
+      "Up to 10 members",
+      "150 AI extractions/mo",
+      "Priority sync",
+      "Advanced reports & CEO Pack",
+      "7-day free trial",
+    ],
+  },
+  {
+    id: "business",
+    label: "Business",
+    price: 99,
+    for: "Larger companies",
+    seats: null,
+    trialDays: 7,
+    highlighted: false,
+    includes: [
+      "Unlimited members",
+      "Highest AI extraction cap",
+      "Priority support",
+      "Everything in Growth",
+      "7-day free trial",
+    ],
+  },
+];
+
+/** @deprecated — use PLANS; kept for older imports */
+export const PRO_PRICE = 15;
 export const HELM_PRICE = PRO_PRICE;
 
-export const PRO_FEATURES = [
-  "AI Morning Briefing & synthesis",
-  "Full Decision Center with recommendations",
-  "Weekly CEO Pack (AI-generated)",
-  "Live integrations (Google, QuickBooks, GitHub)",
-  "Unlimited Ask Helm",
-  "Runway, pipeline, team bandwidth & reports",
-];
+export const PRO_FEATURES = PLANS.find((p) => p.id === "starter").includes;
 export const HELM_FEATURES = PRO_FEATURES;
 
 export const PRODUCT_FACTS = [

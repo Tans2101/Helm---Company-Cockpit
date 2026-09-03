@@ -37,6 +37,8 @@ from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_o
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 import access_sections as sec_access
+import plans as helm_plans
+import plan_usage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -172,9 +174,11 @@ if not OAUTH_STATE_SECRET:
 APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 if is_stale_deploy_url(APP_URL):
     APP_URL = HELM_CANONICAL_ORIGIN
-PRO_PRICE = float(os.environ.get("PRO_PRICE", "8"))
-# When false (default), all workspaces get full access; paywall code stays for later.
+# Display fallback — tier prices live in plans.PLANS; PRO_PRICE kept for legacy envs.
+PRO_PRICE = float(os.environ.get("PRO_PRICE", "99"))
+# When false (default), feature gates are open; paywall + quotas apply when true.
 BILLING_ENFORCED = os.environ.get("BILLING_ENFORCED", "false").lower() in ("1", "true", "yes")
+TRIAL_DAYS = helm_plans.TRIAL_DAYS
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX", "").strip() or None
 
@@ -359,13 +363,10 @@ async def can_section_write(principal: dict, section_id: str, pack_perm: str) ->
 
 
 def require_section(section_id: str, pack_perm: str):
+    """Section write access — Free may edit manually; AI upload uses a separate feature gate."""
     async def dep(principal=Depends(get_principal)):
         if not await can_section_write(principal, section_id, pack_perm):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
-        if BILLING_ENFORCED:
-            c = await get_ws(principal["workspace_id"])
-            if c["plan"] != "pro":
-                raise HTTPException(status_code=403, detail="Helm subscription required")
         return principal
     return dep
 
@@ -620,33 +621,99 @@ def require(action: str):
     return dep
 
 
+def workspace_plan_id(ws_or_plan) -> str:
+    plan = ws_or_plan.get("plan") if isinstance(ws_or_plan, dict) else ws_or_plan
+    return helm_plans.normalize_plan(plan)
+
+
 def workspace_is_pro(ws_or_plan) -> bool:
-    """True when billing is off (dev) or workspace has an active paid plan."""
+    """True when billing is off, or workspace is on a paid tier (Starter+). Legacy name kept for API fields."""
     if not BILLING_ENFORCED:
         return True
-    plan = ws_or_plan.get("plan") if isinstance(ws_or_plan, dict) else ws_or_plan
-    return plan == "pro"
+    return helm_plans.is_paid_plan(workspace_plan_id(ws_or_plan))
+
+
+def workspace_allows(ws_or_plan, feature: str) -> bool:
+    return helm_plans.plan_allows(workspace_plan_id(ws_or_plan), feature, billing_enforced=BILLING_ENFORCED)
 
 
 async def require_pro(principal=Depends(get_principal)):
     if not BILLING_ENFORCED:
         return principal
     c = await get_ws(principal["workspace_id"])
-    if c["plan"] != "pro":
-        raise HTTPException(status_code=403, detail="Helm subscription required")
+    if not helm_plans.is_paid_plan(c.get("plan")):
+        raise HTTPException(status_code=403, detail="A paid Helm plan is required for this action")
     return principal
 
 
+def require_feature(feature: str):
+    async def dep(principal=Depends(get_principal)):
+        c = await get_ws(principal["workspace_id"])
+        if not workspace_allows(c, feature):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Upgrade your plan to use this feature ({feature.replace('_', ' ')})",
+            )
+        return principal
+    return dep
+
+
 def require_pro_perm(action: str):
+    """Pack permission + optional plan feature gate (Free keeps core cockpit writes)."""
     async def dep(principal=Depends(get_principal)):
         if action not in perms_for(principal["pack"]):
             raise HTTPException(status_code=403, detail="You do not have permission for this action")
-        if BILLING_ENFORCED:
+        feature = helm_plans.feature_for_action(action)
+        if feature and BILLING_ENFORCED:
             c = await get_ws(principal["workspace_id"])
-            if c["plan"] != "pro":
-                raise HTTPException(status_code=403, detail="Helm subscription required")
+            if not workspace_allows(c, feature):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Upgrade your plan to use this feature",
+                )
         return principal
     return dep
+
+
+async def _seat_count(workspace_id: str) -> int:
+    return await db.memberships.count_documents({
+        "workspace_id": workspace_id,
+        "status": {"$in": ["active", "invited"]},
+    })
+
+
+async def _enforce_seat_available(workspace_id: str, plan: str | None = None) -> None:
+    if not BILLING_ENFORCED:
+        return
+    if plan is None:
+        ws = await get_ws(workspace_id)
+        plan = ws.get("plan")
+    limit = helm_plans.seats_limit(plan)
+    if limit is None:
+        return
+    used = await _seat_count(workspace_id)
+    if used >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Seat limit reached ({used}/{limit}). Upgrade your plan to invite more people.",
+        )
+
+
+async def _enforce_ai_extract_quota(principal) -> None:
+    c = await get_ws(principal["workspace_id"])
+    if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
+        raise HTTPException(status_code=403, detail="AI document upload is not included on the Free plan")
+    if not BILLING_ENFORCED:
+        return
+    limit = helm_plans.ai_extracts_limit(c.get("plan"))
+    if limit <= 0:
+        raise HTTPException(status_code=403, detail="AI document upload is not included on your plan")
+    used = await plan_usage.get_monthly_extract_count(db, principal["workspace_id"])
+    if used >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Monthly AI extraction limit reached ({used}/{limit}). Upgrade or wait until next month.",
+        )
 
 
 async def get_ws(workspace_id: str):
@@ -1233,6 +1300,7 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
     ws_id = ws["workspace_id"]
     existing = await db.memberships.find_one({"workspace_id": ws_id, "user_id": user["user_id"]})
     if not existing:
+        await _enforce_seat_available(ws_id, ws.get("plan"))
         await db.memberships.insert_one({
             "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
             "user_id": user["user_id"], "email": user["email"], "role": "member",
@@ -1265,7 +1333,17 @@ async def list_members(principal=Depends(get_principal)):
             "department": m.get("department") or "General",
             "is_self": m.get("user_id") == principal["user_id"],
         })
-    return {"members": out, "my_role": principal["role"], "my_pack": principal["pack"]}
+    ws = await get_ws(principal["workspace_id"])
+    plan = workspace_plan_id(ws)
+    seats = helm_plans.seats_limit(plan)
+    return {
+        "members": out,
+        "my_role": principal["role"],
+        "my_pack": principal["pack"],
+        "plan": plan,
+        "seats_used": len(out),
+        "seats_limit": seats,
+    }
 
 
 class InviteInput(BaseModel):
@@ -1281,6 +1359,7 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     pack = payload.pack
     if pack == "owner" and "members:manage" not in perms_for(principal["pack"]):
         raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
+    await _enforce_seat_available(principal["workspace_id"])
     role = "owner" if pack == "owner" else "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
@@ -1829,6 +1908,7 @@ async def upload_financial_document(
     file: UploadFile = File(...),
     principal=Depends(require_section("financials", "finance:write")),
 ):
+    await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
         "Upload limit reached — try again in a bit",
@@ -1889,6 +1969,7 @@ async def extract_financial_document_route(
         return doc["extracted_data"]
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
+    await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
         "Extraction limit reached — try again in a bit",
@@ -1903,6 +1984,7 @@ async def extract_financial_document_route(
             {"$set": {"status": status, "extracted_data": extracted}},
         )
         if status == "extracted":
+            await plan_usage.increment_monthly_extract(db, principal["workspace_id"])
             await log_activity(
                 principal, "financials", "document.extract",
                 f"Extracted bill data · {doc['filename']}",
@@ -2983,17 +3065,39 @@ async def google_calendar_events(principal=Depends(get_principal)):
 # ------------------------- Payments -------------------------
 async def get_billing_status(workspace_id: str, pack: str):
     c = await get_ws(workspace_id)
+    plan = workspace_plan_id(c)
+    pdef = helm_plans.plan_def(plan)
     sub_status = c.get("subscription_status") or c.get("billing_status")
     has_customer = bool(c.get("paddle_customer_id"))
+    extracts_used = await plan_usage.get_monthly_extract_count(db, workspace_id)
+    extracts_limit = helm_plans.ai_extracts_limit(plan)
+    seats_used = await _seat_count(workspace_id)
+    seats_limit = helm_plans.seats_limit(plan)
+    plans = helm_plans.public_plan_list()
+    # Attach client token readiness (same for all paid tiers)
+    client_ready = bool(PADDLE_CLIENT_TOKEN)
+    for row in plans:
+        if row["id"] != helm_plans.PLAN_FREE:
+            row["checkout_available"] = bool(row["checkout_available"] and client_ready)
     return {
-        "current_plan": c["plan"],
-        "pro_only": True,
+        "current_plan": plan,
+        "legacy_plan": c.get("plan"),
+        "plan_label": pdef["label"],
+        "is_paid": helm_plans.is_paid_plan(plan),
+        "pro_only": False,
         "billing_enforced": BILLING_ENFORCED,
-        "requires_activation": BILLING_ENFORCED and c["plan"] != "pro",
-        "pro_price": PRO_PRICE,
-        "price": PRO_PRICE,
+        "requires_activation": False,
+        "trial_days": TRIAL_DAYS,
+        "pro_price": pdef["price"] if helm_plans.is_paid_plan(plan) else helm_plans.PLANS[helm_plans.PLAN_STARTER]["price"],
+        "price": pdef["price"],
+        "plans": plans,
+        "features": dict(pdef["features"]),
+        "seats_used": seats_used,
+        "seats_limit": seats_limit,
+        "ai_extracts_used": extracts_used,
+        "ai_extracts_limit": extracts_limit,
         "can_manage": "billing:manage" in perms_for(pack),
-        "paddle_ready": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+        "paddle_ready": client_ready and helm_plans.any_paddle_price_configured(),
         "subscription_status": sub_status,
         "billing_provider": c.get("billing_provider"),
         "portal_available": has_customer and bool(PADDLE_API_KEY),
@@ -3047,22 +3151,53 @@ def _verify_paddle_signature(raw: bytes, signature: str) -> bool:
     return any(hmac.compare_digest(expected, h) for h in h1s)
 
 
+class PaddleConfigInput(BaseModel):
+    plan: str = helm_plans.PLAN_STARTER
+
+
 @api_router.post("/billing/paddle/config")
-async def paddle_config(principal=Depends(require("billing:manage"))):
-    if not (PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID):
+async def paddle_config(request: Request, principal=Depends(require("billing:manage"))):
+    if not PADDLE_CLIENT_TOKEN:
         raise HTTPException(status_code=400, detail="Paddle is not configured")
+    try:
+        raw = await request.json()
+    except Exception:
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    target = helm_plans.normalize_plan(raw.get("plan") or helm_plans.PLAN_STARTER)
+    if target == helm_plans.PLAN_FREE:
+        raise HTTPException(status_code=400, detail="Free plan does not require checkout")
+    price_id = helm_plans.paddle_price_id_for(target)
+    if not price_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Checkout for {helm_plans.plan_def(target)['label']} is not configured yet — set the Paddle price ID env var",
+        )
     nonce = uuid.uuid4().hex
     await db.paddle_intents.insert_one({
-        "_id": nonce, "workspace_id": principal["workspace_id"], "user_id": principal["user_id"],
-        "price_id": PADDLE_PRICE_ID, "used": False, "created_at": datetime.now(timezone.utc),
+        "_id": nonce,
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "price_id": price_id,
+        "plan": target,
+        "used": False,
+        "created_at": datetime.now(timezone.utc),
     })
-    return {"client_token": PADDLE_CLIENT_TOKEN, "price_id": PADDLE_PRICE_ID,
-            "environment": PADDLE_ENV, "checkout_nonce": nonce,
-            "workspace_id": principal["workspace_id"], "user_id": principal["user_id"],
-            "email": principal.get("email")}
+    return {
+        "client_token": PADDLE_CLIENT_TOKEN,
+        "price_id": price_id,
+        "plan": target,
+        "trial_days": TRIAL_DAYS,
+        "environment": PADDLE_ENV,
+        "checkout_nonce": nonce,
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "email": principal.get("email"),
+    }
 
 
-async def _paddle_provision(event):
+async def _paddle_provision(event, status: str = "active"):
     data = event.get("data") or {}
     custom = data.get("custom_data") or {}
     nonce = custom.get("checkout_nonce")
@@ -3073,12 +3208,16 @@ async def _paddle_provision(event):
     intent = await db.paddle_intents.find_one({"_id": nonce})
     if not intent or intent.get("workspace_id") != workspace_id or intent.get("user_id") != user_id:
         return
+    plan = intent.get("plan") or helm_plans.plan_for_paddle_price(intent.get("price_id")) or helm_plans.PLAN_BUSINESS
+    plan = helm_plans.normalize_plan(plan)
+    if plan == helm_plans.PLAN_FREE:
+        plan = helm_plans.PLAN_BUSINESS
     await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": {
-        "plan": "pro", "billing_provider": "paddle",
+        "plan": plan, "billing_provider": "paddle",
         "paddle_subscription_id": data.get("subscription_id") or data.get("id"),
         "paddle_customer_id": data.get("customer_id"),
         "paddle_last_event_at": event.get("occurred_at"),
-        "subscription_status": "active", "billing_status": "active",
+        "subscription_status": status, "billing_status": status,
     }, "$unset": {"canceled_at": ""}})
     await db.paddle_intents.update_one({"_id": nonce}, {"$set": {"used": True}})
 
@@ -3155,10 +3294,11 @@ async def paddle_webhook(request: Request):
             return {"received": True}
         raise
     if event_type == "transaction.completed":
-        await _paddle_provision(event)
-    elif event_type in ("subscription.created", "subscription.activated", "subscription.updated"):
-        if (event.get("data") or {}).get("status") == "active":
-            await _paddle_provision(event)
+        await _paddle_provision(event, status="active")
+    elif event_type in ("subscription.created", "subscription.activated", "subscription.updated", "subscription.trialing"):
+        status = (event.get("data") or {}).get("status") or "active"
+        if status in ("active", "trialing"):
+            await _paddle_provision(event, status=status)
     elif event_type in ("subscription.canceled", "subscription.cancelled"):
         await _paddle_downgrade(event, "canceled")
     elif event_type == "subscription.paused":
