@@ -95,9 +95,24 @@ Skip this if Clerk is configured. Clerk handles Google login for you.
 | `GOOGLE_CLIENT_SECRET` | from step 2 |
 | `ANTHROPIC_API_KEY` | from step 3 |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` |
-| `PADDLE_*` | your live Paddle keys |
-| `PRO_PRICE` | your price number |
+| `PADDLE_API_KEY` | Paddle API key |
+| `PADDLE_CLIENT_TOKEN` | Paddle.js client token |
+| `PADDLE_PRICE_ID_STARTER` | Paddle price ID for Starter ($15) — create with 7-day trial |
+| `PADDLE_PRICE_ID_GROWTH` | Paddle price ID for Growth ($39) — create with 7-day trial |
+| `PADDLE_PRICE_ID_BUSINESS` | Paddle price ID for Business ($99) — create with 7-day trial |
+| `PADDLE_WEBHOOK_SECRET` | Webhook secret |
+| `PADDLE_ENV` | `production` or `sandbox` |
+| `BILLING_ENFORCED` | `true` when ready to gate Free vs paid features |
 | `RESEND_API_KEY` / `SENDER_EMAIL` | optional until invites |
+
+**Removed / do not use:** single `PADDLE_PRICE_ID` and flat `PRO_PRICE` as the source of truth.
+Tier amounts live in `backend/plans.py` (Free $0 / Starter $15 / Growth $39 / Business $99).
+
+### Plan migration (read this)
+
+Existing workspaces with `plan: "pro"` are **migrated to Starter** on first API access (`get_ws` write-through).
+That is a **conscious choice**: Starter is the closest paid tier to the old single Pro product.
+If you want legacy Pro customers on Growth or Business instead, update those workspace documents in Mongo **before** enabling `BILLING_ENFORCED`, or after deploy with a one-off script.
 
 6. Deploy → open `https://YOUR-API.onrender.com/api/health`  
 
@@ -124,13 +139,19 @@ Then go back to Render and set `FRONTEND_URL`, `APP_URL`, `CORS_ORIGINS` to that
 
 ---
 
-## 6. Paddle webhook
+## 6. Paddle webhook + multi-tier prices
 
-In Paddle dashboard, set webhook URL to:
+1. In Paddle, create **three** products/prices (Starter / Growth / Business), each with a **7-day free trial**.
+2. Copy each price ID into Render env vars listed above.
+3. Set webhook URL to:
 
 `https://YOUR-API.onrender.com/api/webhook/paddle`
 
-**Done when:** a test event is accepted (or checkout completes and plan flips to Pro).
+**Done when:** checkout for a tier completes and the workspace `plan` becomes `starter` / `growth` / `business` (not `pro`).
+
+### Downgrades
+
+In-app downgrades are scheduled for the **end of the current billing period** (no mid-cycle refunds). Upgrades open Paddle checkout immediately.
 
 ---
 

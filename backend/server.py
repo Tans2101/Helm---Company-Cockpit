@@ -192,7 +192,6 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
 PADDLE_CLIENT_TOKEN = os.environ.get('PADDLE_CLIENT_TOKEN', '')
-PADDLE_PRICE_ID = os.environ.get('PADDLE_PRICE_ID', '')
 PADDLE_WEBHOOK_SECRET = os.environ.get('PADDLE_WEBHOOK_SECRET', '')
 PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
@@ -695,24 +694,31 @@ async def _enforce_seat_available(workspace_id: str, plan: str | None = None) ->
     if used >= limit:
         raise HTTPException(
             status_code=403,
-            detail=f"Seat limit reached ({used}/{limit}). Upgrade your plan to invite more people.",
+            detail=f"Upgrade to add more members — your plan allows {limit} seat{'s' if limit != 1 else ''} ({used}/{limit} used).",
         )
 
 
 async def _enforce_ai_extract_quota(principal) -> None:
     c = await get_ws(principal["workspace_id"])
     if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
-        raise HTTPException(status_code=403, detail="AI document upload is not included on the Free plan")
+        raise HTTPException(
+            status_code=403,
+            detail="AI document upload is not available on the Free plan — upgrade to Starter or higher.",
+        )
     if not BILLING_ENFORCED:
         return
     limit = helm_plans.ai_extracts_limit(c.get("plan"))
     if limit <= 0:
-        raise HTTPException(status_code=403, detail="AI document upload is not included on your plan")
-    used = await plan_usage.get_monthly_extract_count(db, principal["workspace_id"])
+        raise HTTPException(
+            status_code=403,
+            detail="AI document upload is not available on your plan — upgrade to continue.",
+        )
+    period = plan_usage.current_usage_period(c)
+    used = await plan_usage.get_period_extract_count(db, principal["workspace_id"], period["key"])
     if used >= limit:
         raise HTTPException(
             status_code=429,
-            detail=f"Monthly AI extraction limit reached ({used}/{limit}). Upgrade or wait until next month.",
+            detail="You've hit this month's document limit — upgrade for more.",
         )
 
 
@@ -720,6 +726,29 @@ async def get_ws(workspace_id: str):
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0})
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    # Conscious migration: legacy plan=pro → starter (see DEPLOY.md)
+    if ws.get("plan") == "pro":
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id, "plan": "pro"},
+            {"$set": {"plan": "starter", "plan_migrated_from": "pro"}},
+        )
+        ws["plan"] = "starter"
+        ws["plan_migrated_from"] = "pro"
+    # Apply scheduled downgrade when the billing period ends
+    pending = ws.get("pending_plan")
+    effective_at = plan_usage.parse_dt(ws.get("pending_plan_effective_at"))
+    if pending and effective_at and datetime.now(timezone.utc) >= effective_at:
+        target = helm_plans.normalize_plan(pending)
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id},
+            {
+                "$set": {"plan": target},
+                "$unset": {"pending_plan": "", "pending_plan_effective_at": ""},
+            },
+        )
+        ws["plan"] = target
+        ws.pop("pending_plan", None)
+        ws.pop("pending_plan_effective_at", None)
     return ws
 
 
@@ -1984,7 +2013,8 @@ async def extract_financial_document_route(
             {"$set": {"status": status, "extracted_data": extracted}},
         )
         if status == "extracted":
-            await plan_usage.increment_monthly_extract(db, principal["workspace_id"])
+            period = plan_usage.current_usage_period(await get_ws(principal["workspace_id"]))
+            await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
             await log_activity(
                 principal, "financials", "document.extract",
                 f"Extracted bill data · {doc['filename']}",
@@ -2875,7 +2905,7 @@ async def integrations(principal=Depends(get_principal)):
         anthropic_configured=helm_llm.anthropic_configured(),
         r2_configured=doc_storage.r2_configured(),
         resend_configured=bool(RESEND_API_KEY),
-        paddle_ready=bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+        paddle_ready=bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
         clerk_configured=clerk_auth.clerk_configured(),
     )
     return {
@@ -2887,7 +2917,7 @@ async def integrations(principal=Depends(get_principal)):
             "anthropic": helm_llm.anthropic_configured(),
             "r2": doc_storage.r2_configured(),
             "resend": bool(RESEND_API_KEY),
-            "paddle_ready": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+            "paddle_ready": bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
         },
     }
 
@@ -3069,16 +3099,17 @@ async def get_billing_status(workspace_id: str, pack: str):
     pdef = helm_plans.plan_def(plan)
     sub_status = c.get("subscription_status") or c.get("billing_status")
     has_customer = bool(c.get("paddle_customer_id"))
-    extracts_used = await plan_usage.get_monthly_extract_count(db, workspace_id)
+    period = plan_usage.current_usage_period(c)
+    extracts_used = await plan_usage.get_period_extract_count(db, workspace_id, period["key"])
     extracts_limit = helm_plans.ai_extracts_limit(plan)
     seats_used = await _seat_count(workspace_id)
     seats_limit = helm_plans.seats_limit(plan)
     plans = helm_plans.public_plan_list()
-    # Attach client token readiness (same for all paid tiers)
     client_ready = bool(PADDLE_CLIENT_TOKEN)
     for row in plans:
         if row["id"] != helm_plans.PLAN_FREE:
             row["checkout_available"] = bool(row["checkout_available"] and client_ready)
+    pending = c.get("pending_plan")
     return {
         "current_plan": plan,
         "legacy_plan": c.get("plan"),
@@ -3096,6 +3127,11 @@ async def get_billing_status(workspace_id: str, pack: str):
         "seats_limit": seats_limit,
         "ai_extracts_used": extracts_used,
         "ai_extracts_limit": extracts_limit,
+        "usage_period_key": period["key"],
+        "usage_period_start": period["start"].isoformat(),
+        "usage_period_end": period["end"].isoformat(),
+        "pending_plan": helm_plans.normalize_plan(pending) if pending else None,
+        "pending_plan_effective_at": c.get("pending_plan_effective_at"),
         "can_manage": "billing:manage" in perms_for(pack),
         "paddle_ready": client_ready and helm_plans.any_paddle_price_configured(),
         "subscription_status": sub_status,
@@ -3116,13 +3152,52 @@ async def billing_status(principal=Depends(get_principal)):
     return await get_billing_status(principal["workspace_id"], principal["pack"])
 
 
+class SchedulePlanInput(BaseModel):
+    plan: str
+
+
+@api_router.post("/billing/schedule-plan")
+async def schedule_plan_change(payload: SchedulePlanInput, principal=Depends(require("billing:manage"))):
+    """Schedule a downgrade for the end of the current billing period (no mid-cycle refunds)."""
+    c = await get_ws(principal["workspace_id"])
+    current = workspace_plan_id(c)
+    target = helm_plans.normalize_plan(payload.plan)
+    if target == current:
+        await db.workspaces.update_one(
+            {"workspace_id": principal["workspace_id"]},
+            {"$unset": {"pending_plan": "", "pending_plan_effective_at": ""}},
+        )
+        return {"ok": True, "current_plan": current, "pending_plan": None}
+    if helm_plans.is_upgrade(current, target):
+        raise HTTPException(
+            status_code=400,
+            detail="Upgrades require Paddle checkout — use the Upgrade button on Billing.",
+        )
+    period = plan_usage.current_usage_period(c)
+    effective_at = period["end"].isoformat()
+    await db.workspaces.update_one(
+        {"workspace_id": principal["workspace_id"]},
+        {"$set": {"pending_plan": target, "pending_plan_effective_at": effective_at}},
+    )
+    return {
+        "ok": True,
+        "current_plan": current,
+        "pending_plan": target,
+        "pending_plan_effective_at": effective_at,
+        "message": f"Downgrade to {helm_plans.plan_def(target)['label']} takes effect at the end of the current billing period. No refund for the remaining period.",
+    }
+
+
 @api_router.post("/demo/reset-plan")
 async def reset_plan(principal=Depends(require("billing:manage"))):
     if not DEMO_RESET_ENABLED:
         raise HTTPException(status_code=403, detail="Demo reset is disabled")
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {
         "$set": {"plan": "free", "subscription_status": None, "billing_status": None},
-        "$unset": {"paddle_subscription_id": "", "paddle_customer_id": ""},
+        "$unset": {
+            "paddle_subscription_id": "", "paddle_customer_id": "",
+            "pending_plan": "", "pending_plan_effective_at": "",
+        },
     })
     return {"ok": True}
 
@@ -3208,17 +3283,26 @@ async def _paddle_provision(event, status: str = "active"):
     intent = await db.paddle_intents.find_one({"_id": nonce})
     if not intent or intent.get("workspace_id") != workspace_id or intent.get("user_id") != user_id:
         return
-    plan = intent.get("plan") or helm_plans.plan_for_paddle_price(intent.get("price_id")) or helm_plans.PLAN_BUSINESS
+    plan = intent.get("plan") or helm_plans.plan_for_paddle_price(intent.get("price_id")) or helm_plans.PLAN_STARTER
     plan = helm_plans.normalize_plan(plan)
     if plan == helm_plans.PLAN_FREE:
-        plan = helm_plans.PLAN_BUSINESS
-    await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": {
+        plan = helm_plans.PLAN_STARTER
+    now_iso = event.get("occurred_at") or datetime.now(timezone.utc).isoformat()
+    set_fields = {
         "plan": plan, "billing_provider": "paddle",
         "paddle_subscription_id": data.get("subscription_id") or data.get("id"),
         "paddle_customer_id": data.get("customer_id"),
-        "paddle_last_event_at": event.get("occurred_at"),
+        "paddle_last_event_at": now_iso,
         "subscription_status": status, "billing_status": status,
-    }, "$unset": {"canceled_at": ""}})
+        "subscription_started_at": now_iso,
+    }
+    # Anchor usage periods on first provision only
+    existing = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "billing_period_start": 1})
+    if not (existing or {}).get("billing_period_start"):
+        set_fields["billing_period_start"] = now_iso
+    await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": set_fields, "$unset": {
+        "canceled_at": "", "pending_plan": "", "pending_plan_effective_at": "",
+    }})
     await db.paddle_intents.update_one({"_id": nonce}, {"$set": {"used": True}})
 
 

@@ -89,8 +89,6 @@ services:
         sync: false
       - key: PADDLE_CLIENT_TOKEN
         sync: false
-      - key: PADDLE_PRICE_ID
-        sync: false
       - key: PADDLE_PRICE_ID_STARTER
         sync: false
       - key: PADDLE_PRICE_ID_GROWTH
@@ -101,8 +99,6 @@ services:
         sync: false
       - key: PADDLE_ENV
         value: production
-      - key: PRO_PRICE
-        value: "99"
       - key: BILLING_ENFORCED
         value: "false"
       - key: RESEND_API_KEY

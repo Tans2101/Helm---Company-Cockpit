@@ -17,7 +17,7 @@ Helm integrations are split into **OAuth connections** (per workspace) and **pla
 
 | Integration | What it does | Render env vars |
 |-------------|--------------|-------------------|
-| **Paddle** | Pro checkout + customer portal | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` |
+| **Paddle** | Tiered checkout + customer portal | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID_STARTER`, `PADDLE_PRICE_ID_GROWTH`, `PADDLE_PRICE_ID_BUSINESS`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` |
 
 Set `BILLING_ENFORCED=false` while building (default) so testers get full access without checkout.
 

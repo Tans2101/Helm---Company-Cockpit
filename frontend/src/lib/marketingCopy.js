@@ -56,7 +56,7 @@ export const CEO_DAY = [
 export const PRICING_FAQ = [
   { q: "Is there a free plan?", a: "Yes. Free is for solo founders — manual entries and the dashboard/briefing. Paid plans add AI upload, team seats, Ask Helm, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Helm?", a: "Yes on paid plans. Starter supports up to 3 members, Growth up to 10, Business unlimited — with role-based access packs." },
+  { q: "Can my leadership team use Helm?", a: "Yes on paid plans. Starter supports up to 3 members, Growth up to 10, Business up to 25 — with role-based access packs." },
   { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment — use the trial to evaluate." },
 ];
@@ -110,7 +110,7 @@ export const PLANS = [
     highlighted: true,
     includes: [
       "Up to 3 team members",
-      "AI document upload (30/mo)",
+      "AI document upload (30/billing period)",
       "QuickBooks sync",
       "Ask Helm AI",
       "Calendar",
@@ -126,9 +126,9 @@ export const PLANS = [
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Up to 10 members",
-      "150 AI extractions/mo",
-      "Priority sync",
+      "Up to 10 team members",
+      "AI document upload (150/billing period)",
+      "Priority QuickBooks sync",
       "Advanced reports & CEO Pack",
       "7-day free trial",
     ],
@@ -138,12 +138,12 @@ export const PLANS = [
     label: "Business",
     price: 99,
     for: "Larger companies",
-    seats: null,
+    seats: 25,
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Unlimited members",
-      "Highest AI extraction cap",
+      "Up to 25 team members",
+      "AI document upload (500/billing period)",
       "Priority support",
       "Everything in Growth",
       "7-day free trial",
