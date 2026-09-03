@@ -17,20 +17,23 @@ const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", 
 const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
+
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-md border border-white/10 bg-[#141417] px-3 py-2 text-xs">
       {label && <p className="text-zinc-400 mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
-        <p key={i} className="text-white font-mono"><span style={{ color: p.color }}>●</span> {p.name}: {p.value}</p>
+        <p key={i} className="text-white font-mono">
+          <span style={{ color: p.color }}>●</span> {p.name}: {fmt(p.value)}
+        </p>
       ))}
     </div>
   );
 }
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
-const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
 const emptyForm = () => ({
   type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(),
   recurring: true, note: "", source_document_id: null, extract_confidence: null,
