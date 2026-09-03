@@ -17,6 +17,7 @@ import About from "@/pages/About";
 import Features from "@/pages/Features";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
+import Refunds from "@/pages/Refunds";
 import Briefing from "@/pages/Briefing";
 import MyDay from "@/pages/MyDay";
 import Pipeline from "@/pages/Pipeline";
@@ -81,6 +82,7 @@ function AppRouter() {
       <Route path="/sign-up/*" element={<SignUpPage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/refunds" element={<Refunds />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancel" element={<PaymentCancel />} />
       <Route path="/app" element={<Protected />}>
