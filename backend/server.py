@@ -2806,6 +2806,12 @@ async def integrations(principal=Depends(get_principal)):
             "r2": doc_storage.r2_configured(),
             "resend": bool(RESEND_API_KEY),
             "paddle_ready": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+            "google": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+            "quickbooks": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
+        },
+        "oauth_redirect_uris": {
+            "google": _oauth_callback_uri("google"),
+            "quickbooks": _oauth_callback_uri("quickbooks"),
         },
     }
 
@@ -2829,9 +2835,14 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown provider")
     if not cfg["configured"]:
+        missing = {
+            "google": "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
+            "quickbooks": "QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET",
+        }.get(provider, "OAuth credentials")
         return {
             "configured": False,
-            "message": "This connection isn't available on your Helm instance yet. Contact your administrator.",
+            "message": f"Not configured yet — set {missing} on the API host, then reconnect.",
+            "redirect_uri": cfg["redirect_uri"],
         }
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
               "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
@@ -2842,26 +2853,54 @@ async def integration_connect(provider: str, request: Request, principal=Depends
 async def oauth_callback(provider: str, request: Request, code: Optional[str] = None, state: Optional[str] = None, realmId: Optional[str] = None):
     cfg = _provider_config(provider)
     frontend = (APP_URL or public_api_origin()).rstrip("/")
+    integrations_path = f"{frontend}/app/integrations"
     if not cfg or not code or not state:
-        return RedirectResponse(f"{frontend}/integrations?error=oauth")
+        return RedirectResponse(f"{integrations_path}?error=oauth")
     verified = _verify_state(state)
     if not verified or verified[0] != provider:
-        return RedirectResponse(f"{frontend}/integrations?error=state")
+        return RedirectResponse(f"{integrations_path}?error=state")
     workspace_id = verified[1]
-    data = {"code": code, "client_id": cfg["client_id"], "client_secret": cfg["client_secret"],
-            "redirect_uri": cfg["redirect_uri"], "grant_type": "authorization_code"}
     try:
-        async with httpx.AsyncClient() as hc:
-            tr = await hc.post(cfg["token_uri"], data=data, headers={"Accept": "application/json"})
+        async with httpx.AsyncClient(timeout=30.0) as hc:
+            if provider == "quickbooks":
+                # Intuit requires HTTP Basic auth for token exchange
+                tr = await hc.post(
+                    cfg["token_uri"],
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "redirect_uri": cfg["redirect_uri"],
+                    },
+                    auth=(cfg["client_id"], cfg["client_secret"]),
+                    headers={"Accept": "application/json"},
+                )
+            else:
+                tr = await hc.post(
+                    cfg["token_uri"],
+                    data={
+                        "code": code,
+                        "client_id": cfg["client_id"],
+                        "client_secret": cfg["client_secret"],
+                        "redirect_uri": cfg["redirect_uri"],
+                        "grant_type": "authorization_code",
+                    },
+                    headers={"Accept": "application/json"},
+                )
+        if tr.status_code >= 400:
+            logger.error("oauth token exchange %s failed: %s", provider, tr.text[:500])
+            return RedirectResponse(f"{integrations_path}?error=token")
         tokens = tr.json()
+        if tokens.get("error"):
+            logger.error("oauth token error %s: %s", provider, tokens)
+            return RedirectResponse(f"{integrations_path}?error=token")
         if realmId:
             tokens["realmId"] = realmId
         tokens["obtained_at"] = datetime.now(timezone.utc).isoformat()
         await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": {cfg["token_field"]: tokens}})
     except Exception:
         logger.exception("oauth token exchange failed")
-        return RedirectResponse(f"{frontend}/integrations?error=token")
-    return RedirectResponse(f"{frontend}/integrations?connected={provider}")
+        return RedirectResponse(f"{integrations_path}?error=token")
+    return RedirectResponse(f"{integrations_path}?connected={provider}")
 
 
 @api_router.post("/integrations/{provider}/disconnect")
@@ -3328,8 +3367,14 @@ async def setup_status():
     mongo_ok = await _mongo_ping()
     probes = await _probe_mongo_candidates()
     clerk_sync = clerk_auth.clerk_sync_status()
+    oauth_redirects = {
+        "google": _oauth_callback_uri("google"),
+        "quickbooks": _oauth_callback_uri("quickbooks"),
+    }
     return {
         "frontend_url": FRONTEND_URL or None,
+        "app_url": APP_URL or None,
+        "public_api_origin": public_api_origin(),
         "clerk_enabled": clerk_auth.clerk_configured(),
         "clerk_jwks_host": clerk_auth.CLERK_JWKS_URL.split("/")[2] if clerk_auth.CLERK_JWKS_URL else None,
         "clerk_secret_mode": (
@@ -3355,6 +3400,36 @@ async def setup_status():
         "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
         "on_render": bool(os.environ.get("RENDER")),
         "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
+        "integrations": {
+            "google_calendar": {
+                "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+                "env": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+                "redirect_uri": oauth_redirects["google"],
+            },
+            "quickbooks": {
+                "configured": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
+                "env": ["QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_ENV"],
+                "redirect_uri": oauth_redirects["quickbooks"],
+                "env_value": QB_ENV,
+            },
+            "anthropic": {
+                "configured": helm_llm.anthropic_configured(),
+                "env": ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
+            },
+            "r2": {
+                "configured": doc_storage.r2_configured(),
+                "env": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"],
+            },
+            "resend": {
+                "configured": bool(RESEND_API_KEY),
+                "env": ["RESEND_API_KEY", "SENDER_EMAIL"],
+            },
+            "paddle": {
+                "configured": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
+                "env": ["PADDLE_API_KEY", "PADDLE_CLIENT_TOKEN", "PADDLE_PRICE_ID", "PADDLE_WEBHOOK_SECRET", "PADDLE_ENV"],
+            },
+        },
+        "oauth_redirect_uris": oauth_redirects,
     }
 
 
