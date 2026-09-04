@@ -4161,8 +4161,233 @@ async def get_department_by_type(dept_type: str, principal=Depends(get_principal
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_member": bool(membership),
         "member_role": (membership or {}).get("role"),
-        "placeholder": True,
+        "placeholder": dtype != dept_catalog.TYPE_PRODUCTION,
+        "can_manage_members": await dept_access.can_manage_department_members(
+            db, principal, doc["department_id"],
+        ),
     }
+
+
+# ------------------------- Production chain -------------------------
+PRODUCTION_STATUSES = frozenset({"not_started", "in_progress", "blocked", "done"})
+
+
+async def _production_department(principal: dict) -> dict:
+    """Enabled Production department for this workspace, with access enforced."""
+    doc = await db.departments.find_one(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_catalog.TYPE_PRODUCTION,
+            "enabled": True,
+        },
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Production department is not enabled")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to Production")
+    return doc
+
+
+def _can_lead_production(principal: dict, department_id: str, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+async def _enrich_stage_assignees(stage: dict) -> dict:
+    ids = list(stage.get("assigned_user_ids") or [])
+    assignees = []
+    for uid in ids:
+        u = await db.users.find_one({"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1})
+        assignees.append({
+            "user_id": uid,
+            "name": (u or {}).get("name"),
+            "email": (u or {}).get("email"),
+            "picture": (u or {}).get("picture"),
+        })
+    out = dict(stage)
+    out["assignees"] = assignees
+    return out
+
+
+class ProductionStageCreate(BaseModel):
+    name: str
+    status: str = "not_started"
+    assigned_user_ids: list[str] = []
+    notes: str = ""
+
+
+class ProductionStagePatch(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    assigned_user_ids: Optional[list[str]] = None
+    notes: Optional[str] = None
+
+
+class ProductionReorderInput(BaseModel):
+    stage_ids: list[str]
+
+
+@api_router.get("/production/stages")
+async def list_production_stages(principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    rows = await db.production_stages.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0},
+    ).sort("order", 1).to_list(500)
+    stages = [await _enrich_stage_assignees(r) for r in rows]
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_production(principal, dept["department_id"], membership)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "Production",
+        "stages": stages,
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_lead": is_lead,
+        "can_edit_structure": is_lead,
+        "can_update_stage": True,  # caller already passed access check
+        "statuses": sorted(PRODUCTION_STATUSES),
+    }
+
+
+@api_router.post("/production/stages")
+async def create_production_stage(payload: ProductionStageCreate, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_production(principal, dept["department_id"], membership):
+        raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can add stages")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Stage name is required")
+    status = (payload.status or "not_started").strip()
+    if status not in PRODUCTION_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    assigned = [u for u in (payload.assigned_user_ids or []) if u]
+    # Next order = max + 1
+    last = await db.production_stages.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "order": 1},
+    ).sort("order", -1).to_list(1)
+    next_order = int((last[0]["order"] if last else -1)) + 1
+    now = datetime.now(timezone.utc).isoformat()
+    stage = {
+        "id": f"pstage_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "name": name,
+        "order": next_order,
+        "status": status,
+        "assigned_user_ids": assigned,
+        "notes": (payload.notes or "").strip(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.production_stages.insert_one(stage)
+    return {"ok": True, "stage": await _enrich_stage_assignees({k: v for k, v in stage.items() if k != "_id"})}
+
+
+@api_router.patch("/production/stages/reorder")
+async def reorder_production_stages(payload: ProductionReorderInput, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_production(principal, dept["department_id"], membership):
+        raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can reorder stages")
+    ids = [s for s in (payload.stage_ids or []) if s]
+    if not ids:
+        raise HTTPException(status_code=400, detail="stage_ids is required")
+    existing = await db.production_stages.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "id": 1},
+    ).to_list(500)
+    existing_ids = {r["id"] for r in existing}
+    if set(ids) != existing_ids:
+        raise HTTPException(status_code=400, detail="stage_ids must include every stage exactly once")
+    now = datetime.now(timezone.utc).isoformat()
+    for i, sid in enumerate(ids):
+        await db.production_stages.update_one(
+            {"id": sid, "department_id": dept["department_id"]},
+            {"$set": {"order": i, "updated_at": now}},
+        )
+    return {"ok": True}
+
+
+@api_router.patch("/production/stages/{stage_id}")
+async def patch_production_stage(
+    stage_id: str,
+    payload: ProductionStagePatch,
+    principal=Depends(get_principal),
+):
+    dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_production(principal, dept["department_id"], membership)
+    stage = await db.production_stages.find_one(
+        {"id": stage_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not stage:
+        raise HTTPException(status_code=404, detail="Stage not found")
+    upd = {}
+    if payload.name is not None:
+        if not is_lead:
+            raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can rename stages")
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Stage name is required")
+        upd["name"] = name
+    if payload.status is not None:
+        status = payload.status.strip()
+        if status not in PRODUCTION_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        upd["status"] = status
+    if payload.assigned_user_ids is not None:
+        upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
+    if payload.notes is not None:
+        upd["notes"] = payload.notes.strip()
+    if not upd:
+        return {"ok": True, "stage": await _enrich_stage_assignees(stage)}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.production_stages.update_one(
+        {"id": stage_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    updated = {**stage, **upd}
+    return {"ok": True, "stage": await _enrich_stage_assignees(updated)}
+
+
+@api_router.delete("/production/stages/{stage_id}")
+async def delete_production_stage(stage_id: str, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_production(principal, dept["department_id"], membership):
+        raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can delete stages")
+    result = await db.production_stages.delete_one(
+        {"id": stage_id, "department_id": dept["department_id"]},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Stage not found")
+    # Compact order values
+    rows = await db.production_stages.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "id": 1},
+    ).sort("order", 1).to_list(500)
+    now = datetime.now(timezone.utc).isoformat()
+    for i, row in enumerate(rows):
+        await db.production_stages.update_one(
+            {"id": row["id"]},
+            {"$set": {"order": i, "updated_at": now}},
+        )
+    return {"ok": True}
 
 
 # ------------------------- Ask Helm -------------------------
@@ -5154,6 +5379,9 @@ async def _ensure_indexes():
         (db.departments, [("department_id", 1)], {"unique": True}),
         (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),
         (db.department_members, [("user_id", 1)], {}),
+        (db.production_stages, [("id", 1)], {"unique": True}),
+        (db.production_stages, [("department_id", 1), ("order", 1)], {}),
+        (db.production_stages, [("workspace_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:
