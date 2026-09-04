@@ -36,7 +36,7 @@ function ChartTooltip({ active, payload, label }) {
 
 const emptyForm = () => ({
   type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(),
-  recurring: true, note: "", source_document_id: null, extract_confidence: null,
+  recurring: true, recurrence: "monthly", note: "", source_document_id: null, extract_confidence: null,
 });
 
 function mapCategory(type, raw) {
@@ -109,6 +109,7 @@ export default function Financials() {
         amount: extracted.amount != null ? String(extracted.amount) : "",
         month: extracted.month || thisMonth(),
         recurring: entryType === "revenue",
+        recurrence: "monthly",
         note: buildNote(extracted.vendor, extracted.note),
         source_document_id: uploaded.document_id,
         extract_confidence: extracted.confidence || "medium",
@@ -170,6 +171,7 @@ export default function Financials() {
         amount: parseFloat(form.amount),
         month: form.month,
         recurring: form.recurring,
+        recurrence: form.recurring ? (form.type === "expense" ? form.recurrence : "monthly") : null,
         note: form.note,
       };
       if (form.source_document_id) payload.source_document_id = form.source_document_id;
@@ -393,7 +395,17 @@ export default function Financials() {
                     <tr key={e.id} className="border-b border-white/[0.03]" data-testid={`entry-${e.id}`}>
                       <td className="py-2.5 pr-4 font-mono text-zinc-400">{e.month}</td>
                       <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-emerald-400 bg-emerald-400/10" : "text-rose-400 bg-rose-400/10")}>{e.type}</span></td>
-                      <td className="py-2.5 pr-4 text-zinc-300">{e.category}{e.recurring && <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>}</td>
+                      <td className="py-2.5 pr-4 text-zinc-300">
+                        {e.category}
+                        {e.recurring && e.type === "revenue" && (
+                          <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>
+                        )}
+                        {e.recurring && e.type === "expense" && (
+                          <span className="ml-1.5 text-[9px] text-gold/70 font-mono">
+                            {(e.recurrence || "monthly") === "annual" ? "Annual" : "Monthly"}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount)}</td>
                       <td className="py-2.5 pr-4">
                         {e.source === "ai_upload" && e.source_document_id ? (
@@ -445,7 +457,13 @@ export default function Financials() {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 flex gap-2">
                 {["revenue", "expense"].map((t) => (
-                  <button key={t} data-testid={`type-${t}`} onClick={() => setForm((f) => ({ ...f, type: t, category: t === "revenue" ? REV_CATS[0] : EXP_CATS[0] }))}
+                  <button key={t} data-testid={`type-${t}`} onClick={() => setForm((f) => ({
+                    ...f,
+                    type: t,
+                    category: t === "revenue" ? REV_CATS[0] : EXP_CATS[0],
+                    recurring: t === "revenue" ? true : f.recurring,
+                    recurrence: f.recurrence || "monthly",
+                  }))}
                     className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-gold/10 border-gold/40 text-white" : "border-white/10 text-zinc-400 hover:bg-white/5")}>{t}</button>
                 ))}
               </div>
@@ -465,6 +483,43 @@ export default function Financials() {
                   <input data-testid="entry-recurring" type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} className="accent-gold w-4 h-4" />
                   Recurring (counts toward MRR)
                 </label>
+              )}
+              {form.type === "expense" && (
+                <div className="col-span-2 space-y-2 mt-1">
+                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                    <input
+                      data-testid="entry-recurring"
+                      type="checkbox"
+                      checked={form.recurring}
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        recurring: e.target.checked,
+                        recurrence: e.target.checked ? (f.recurrence || "monthly") : f.recurrence,
+                      }))}
+                      className="accent-gold w-4 h-4"
+                    />
+                    Recurring expense
+                  </label>
+                  {form.recurring && (
+                    <label className="block text-xs text-zinc-500">
+                      Cadence
+                      <select
+                        data-testid="entry-recurrence"
+                        value={form.recurrence || "monthly"}
+                        onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))}
+                        className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="annual">Annual</option>
+                      </select>
+                      <span className="block mt-1.5 text-[11px] text-zinc-600 leading-relaxed">
+                        {form.recurrence === "annual"
+                          ? "Annual amount is spread across months (÷12) for burn and runway."
+                          : "Counts every month from the start month onward for burn and runway."}
+                      </span>
+                    </label>
+                  )}
+                </div>
               )}
               <label className="col-span-2 text-xs text-zinc-500">Note (optional)
                 <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />

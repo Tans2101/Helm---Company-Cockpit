@@ -86,17 +86,22 @@ def _parse_iso_dt(value) -> Optional[datetime]:
 
 
 def expense_totals_by_month_category(entries: list) -> dict:
-    """Build {YYYY-MM: {category: amount}} from financial_entries (expense only)."""
+    """Build {YYYY-MM: {category: amount}} from financial_entries (expense only).
+
+    Recurring expenses are expanded through the current/latest month horizon
+    (monthly = full amount each month; annual = amount/12 each month).
+    """
+    import finance_recurrence as fin_recur
+
     by_month: dict = {}
+    horizon = fin_recur.resolve_expense_horizon(entries or [])
     for e in entries or []:
         if e.get("type") != "expense":
             continue
-        month = e.get("month")
-        if not month:
-            continue
         cat = (e.get("category") or "Other").strip() or "Other"
-        by_month.setdefault(month, {})
-        by_month[month][cat] = by_month[month].get(cat, 0.0) + float(e.get("amount") or 0)
+        for month, amt in fin_recur.iter_expense_month_amounts(e, horizon):
+            by_month.setdefault(month, {})
+            by_month[month][cat] = by_month[month].get(cat, 0.0) + float(amt)
     return by_month
 
 

@@ -844,19 +844,24 @@ def fmt_money(n):
 
 async def compute_financials(workspace_id: str):
     from collections import defaultdict
+    import finance_recurrence as fin_recur
+
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
     settings = (ws or {}).get("financial_settings") or {"cash": 0, "gross_margin": None, "currency": "usd"}
     entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
     rev_by, exp_by, rec_by = defaultdict(float), defaultdict(float), defaultdict(float)
     exp_cat = defaultdict(float)
+    horizon = fin_recur.resolve_expense_horizon(entries)
     for e in entries:
         if e["type"] == "revenue":
             rev_by[e["month"]] += e["amount"]
             if e.get("recurring"):
                 rec_by[e["month"]] += e["amount"]
         else:
-            exp_by[e["month"]] += e["amount"]
-            exp_cat[e.get("category") or "Other"] += e["amount"]
+            cat = e.get("category") or "Other"
+            for month, amt in fin_recur.iter_expense_month_amounts(e, horizon):
+                exp_by[month] += amt
+                exp_cat[cat] += amt
     months = sorted(set(list(rev_by) + list(exp_by)))
     last = months[-6:]
 
@@ -2371,8 +2376,14 @@ class FinEntryInput(BaseModel):
     amount: float
     month: str
     recurring: bool = False
+    recurrence: Optional[str] = None  # "monthly" | "annual" when recurring (expenses)
     note: Optional[str] = ""
     source_document_id: Optional[str] = None
+
+
+def _fin_entry_recurrence(payload: "FinEntryInput") -> Optional[str]:
+    import finance_recurrence as fin_recur
+    return fin_recur.normalize_recurrence(payload.recurring, payload.recurrence, payload.type)
 
 
 ALLOWED_DOC_TYPES = frozenset({"application/pdf", "image/png", "image/jpeg"})
@@ -2519,6 +2530,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
              "type": payload.type, "category": payload.category.strip() or "Other",
              "amount": round(payload.amount, 2), "month": payload.month, "recurring": payload.recurring,
+             "recurrence": _fin_entry_recurrence(payload),
              "note": (payload.note or "").strip(), "source": source, "created_by": principal["user_id"],
              "created_at": datetime.now(timezone.utc).isoformat()}
     if source_document_id:
@@ -2542,7 +2554,8 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
                   "amount": round(payload.amount, 2), "month": payload.month,
-                  "recurring": payload.recurring, "note": (payload.note or "").strip()}})
+                  "recurring": payload.recurring, "recurrence": _fin_entry_recurrence(payload),
+                  "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
     await log_activity(principal, "financials", "entry.edit",
