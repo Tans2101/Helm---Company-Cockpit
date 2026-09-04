@@ -645,9 +645,104 @@ async def send_resend_email(*, to: list, subject: str, html: str) -> dict:
     params = {"from": SENDER_EMAIL, "to": recipients, "subject": subject, "html": html}
     try:
         email = await asyncio.to_thread(resend.Emails.send, params)
+        logger.info("resend sent subject=%r to=%s id=%s", subject, recipients, (email or {}).get("id"))
         return {"sent": True, "id": (email or {}).get("id"), "to": recipients}
     except Exception:
-        logger.exception("resend send failed")
+        logger.exception("resend send failed subject=%r to=%s", subject, recipients)
+        return {"sent": False, "reason": "error"}
+
+
+async def send_notification_email(to: str | list, subject: str, body: str) -> dict:
+    """Reusable single/multi-recipient notification email via Resend. Never raises."""
+    recipients = to if isinstance(to, list) else [to]
+    return await send_resend_email(to=recipients, subject=subject, html=body)
+
+
+def _app_base_url() -> str:
+    return (APP_URL or FRONTEND_URL or HELM_CANONICAL_ORIGIN or "").rstrip("/")
+
+
+def _task_delegation_email_html(
+    *,
+    task_title: str,
+    task_note: str,
+    delegator_name: str,
+    workspace_name: str,
+    task_url: str,
+) -> str:
+    title = html.escape(task_title or "Task")
+    note = html.escape((task_note or "").strip()[:400])
+    delegator = html.escape(delegator_name or "A teammate")
+    workspace = html.escape(workspace_name or "your company")
+    url = html.escape(task_url, quote=True)
+    note_block = (
+        f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:14px 0 0 0;">{note}</p>'
+        if note else ""
+    )
+    return f"""\
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
+<tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="background:#121214;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
+<tr><td style="padding:32px 36px 8px 36px;">
+<p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0;">Task delegated</p>
+<h1 style="color:#ffffff;font-size:22px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{title}</h1>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:16px 0 0 0;">{delegator} assigned you a task in <b style="color:#ffffff;">{workspace}</b> on Helm.</p>
+{note_block}
+<table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
+<td style="background:#c9a962;border-radius:8px;">
+<a href="{url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open task in Helm &rarr;</a>
+</td></tr></table>
+</td></tr>
+</table>
+</td></tr></table></body></html>"""
+
+
+async def notify_task_delegated(
+    *,
+    assignee_user_id: str | None,
+    previous_assignee_user_id: str | None,
+    task: dict,
+    principal: dict,
+    workspace_name: str,
+) -> dict:
+    """Send delegation email only when assignee changes to a different user. Never raises / never blocks."""
+    new_uid = (assignee_user_id or "").strip() or None
+    old_uid = (previous_assignee_user_id or "").strip() or None
+    if not new_uid or new_uid == old_uid:
+        return {"sent": False, "reason": "unchanged"}
+    if new_uid == principal.get("user_id"):
+        return {"sent": False, "reason": "self_assign"}
+    try:
+        user = await db.users.find_one({"user_id": new_uid}, {"_id": 0, "email": 1, "name": 1})
+        email = _normalize_email((user or {}).get("email") or "")
+        if not email:
+            mem = await db.memberships.find_one(
+                {"workspace_id": principal["workspace_id"], "user_id": new_uid},
+                {"_id": 0, "email": 1},
+            )
+            email = _normalize_email((mem or {}).get("email") or "")
+        if not email:
+            logger.info("task delegation email skipped — no email for user_id=%s", new_uid)
+            return {"sent": False, "reason": "no_email"}
+        title = (task.get("title") or "Task").strip()
+        note = (task.get("note") or task.get("tag") or "").strip()
+        task_url = f"{_app_base_url()}/app/tasks?task={task.get('id') or ''}"
+        html_body = _task_delegation_email_html(
+            task_title=title,
+            task_note=note,
+            delegator_name=principal.get("name") or principal.get("email") or "A teammate",
+            workspace_name=workspace_name,
+            task_url=task_url,
+        )
+        result = await send_notification_email(
+            email,
+            f"Delegated to you: {title}",
+            html_body,
+        )
+        return result
+    except Exception:
+        logger.exception("notify_task_delegated failed for task=%s", task.get("id"))
         return {"sent": False, "reason": "error"}
 
 
@@ -2416,6 +2511,13 @@ async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(requi
         {"$set": {"tasks": t, "delegate_suggestions": suggestions}},
     )
     await log_activity(principal, "tasks", "delegate.assign", f"Assigned from Helm: {item['title']} → {assignee_name}")
+    await notify_task_delegated(
+        assignee_user_id=assignee_uid,
+        previous_assignee_user_id=None,
+        task=item,
+        principal=principal,
+        workspace_name=c.get("name") or "your company",
+    )
     return {"ok": True, "task": item}
 
 
@@ -3109,15 +3211,23 @@ async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("ta
         item["done_at"] = datetime.now(timezone.utc).isoformat()
     t["items"].append(item)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+    await notify_task_delegated(
+        assignee_user_id=assignee_uid,
+        previous_assignee_user_id=None,
+        task=item,
+        principal=principal,
+        workspace_name=c.get("name") or "your company",
+    )
     return {"ok": True, "task": item}
 
 
-class TaskMove(BaseModel):
-    column: str
+class TaskPatch(BaseModel):
+    column: Optional[str] = None
+    assignee_user_id: Optional[str] = None
 
 
 @api_router.patch("/tasks/{task_id}")
-async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_pro_perm("tasks:move"))):
+async def patch_task(task_id: str, payload: TaskPatch, principal=Depends(require_pro_perm("tasks:move"))):
     c = await get_ws(principal["workspace_id"])
     t = c["tasks"]
     target = next((i for i in t["items"] if i["id"] == task_id), None)
@@ -3126,15 +3236,47 @@ async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_p
     owns = target.get("assignee_user_id") == principal["user_id"]
     if target.get("assignee_user_id") and not owns and not await can_section_write(principal, "tasks", "tasks:assign"):
         raise HTTPException(status_code=403, detail="You can only move your own tasks")
-    prev_col = target.get("column")
-    target["column"] = payload.column
-    if payload.column == "done":
-        target["progress"] = 100
-        if prev_col != "done" or not target.get("done_at"):
-            target["done_at"] = datetime.now(timezone.utc).isoformat()
-    elif prev_col == "done":
-        target.pop("done_at", None)
+
+    fields = payload.model_dump(exclude_unset=True)
+    prev_assignee = target.get("assignee_user_id")
+
+    if "column" in fields and fields["column"] is not None:
+        prev_col = target.get("column")
+        target["column"] = fields["column"]
+        if fields["column"] == "done":
+            target["progress"] = 100
+            if prev_col != "done" or not target.get("done_at"):
+                target["done_at"] = datetime.now(timezone.utc).isoformat()
+        elif prev_col == "done":
+            target.pop("done_at", None)
+
+    if "assignee_user_id" in fields:
+        if not await can_section_write(principal, "tasks", "tasks:assign"):
+            raise HTTPException(status_code=403, detail="You cannot reassign tasks")
+        new_uid = (fields["assignee_user_id"] or "").strip() or None
+        if new_uid:
+            member = await db.memberships.find_one(
+                {"workspace_id": principal["workspace_id"], "user_id": new_uid, "status": "active"},
+                {"_id": 0},
+            )
+            if not member:
+                raise HTTPException(status_code=404, detail="Assignee is not in this workspace")
+            u = await db.users.find_one({"user_id": new_uid}, {"_id": 0, "name": 1})
+            target["assignee_user_id"] = new_uid
+            target["assignee"] = (u or {}).get("name") or member.get("email") or "Teammate"
+        else:
+            target["assignee_user_id"] = principal["user_id"]
+            target["assignee"] = principal.get("name") or principal.get("email") or "Me"
+
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+    if "assignee_user_id" in fields:
+        await notify_task_delegated(
+            assignee_user_id=target.get("assignee_user_id"),
+            previous_assignee_user_id=prev_assignee,
+            task=target,
+            principal=principal,
+            workspace_name=c.get("name") or "your company",
+        )
     return {"ok": True}
 
 

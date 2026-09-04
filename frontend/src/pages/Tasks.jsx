@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GripVertical, Plus, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
@@ -17,10 +18,18 @@ const emptyTask = () => ({ title: "", priority: "Medium", tag: "General", due: "
 export default function Tasks() {
   const { data, loading, error, reload, setData } = useFetch("/tasks");
   const { data: membersData } = useFetch("/members");
+  const [searchParams] = useSearchParams();
+  const focusTaskId = searchParams.get("task") || "";
   const [dragId, setDragId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyTask());
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!focusTaskId || !data?.items?.length) return;
+    const el = document.querySelector(`[data-testid="task-${focusTaskId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusTaskId, data?.items]);
 
   if (loading) return <LoadingScreen label="Loading board" />;
   if (error || !data) {
@@ -106,7 +115,11 @@ export default function Tasks() {
                   draggable
                   onDragStart={() => setDragId(t.id)}
                   data-testid={`task-${t.id}`}
-                  className={cn("group rounded-lg border border-white/5 bg-[#141417] p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-gold/30", mine && "border-l-2 border-l-gold/60")}>
+                  className={cn(
+                    "group rounded-lg border border-white/5 bg-[#141417] p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-gold/30",
+                    mine && "border-l-2 border-l-gold/60",
+                    focusTaskId === t.id && "ring-1 ring-gold/50 border-gold/40",
+                  )}>
                   <div className="flex items-start gap-2">
                     <GripVertical className="w-3.5 h-3.5 text-zinc-700 mt-0.5 group-hover:text-zinc-500" />
                     <div className="flex-1">
