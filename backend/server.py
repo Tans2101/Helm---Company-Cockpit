@@ -1527,7 +1527,8 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"decisions": c["decisions"], "is_pro": workspace_is_pro(c), "can_act": "decisions:act" in perms_for(principal["pack"])}
+    can_act = await can_section_write(principal, "decisions", "decisions:act")
+    return {"decisions": c["decisions"], "is_pro": workspace_is_pro(c), "can_act": can_act}
 
 
 class DecisionAction(BaseModel):
@@ -1536,7 +1537,7 @@ class DecisionAction(BaseModel):
 
 
 @api_router.post("/decisions/{decision_id}/action")
-async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require_pro_perm("decisions:act"))):
+async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = False
@@ -1572,7 +1573,7 @@ def _decision_fields(p: "DecisionInput"):
 
 
 @api_router.post("/decisions")
-async def create_decision(payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
+async def create_decision(payload: DecisionInput, principal=Depends(require_section("decisions", "decisions:act"))):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -1584,7 +1585,7 @@ async def create_decision(payload: DecisionInput, principal=Depends(require_pro_
 
 
 @api_router.patch("/decisions/{decision_id}")
-async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
+async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = None
@@ -1600,7 +1601,7 @@ async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depe
 
 
 @api_router.delete("/decisions/{decision_id}")
-async def delete_decision(decision_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def delete_decision(decision_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = [d for d in c["decisions"] if d["id"] != decision_id]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
@@ -2054,7 +2055,7 @@ async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("ta
     assignee_uid = principal["user_id"]
     assignee_name = principal.get("name") or principal.get("email") or "Me"
     if payload.assignee_user_id and payload.assignee_user_id != principal["user_id"]:
-        if "tasks:assign" not in perms_for(principal["pack"]):
+        if not await can_section_write(principal, "tasks", "tasks:assign"):
             raise HTTPException(status_code=403, detail="You can only create tasks for yourself")
         member = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "user_id": payload.assignee_user_id, "status": "active"}, {"_id": 0})
         if not member:
@@ -2084,7 +2085,7 @@ async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_p
     if not target:
         raise HTTPException(status_code=404, detail="Task not found")
     owns = target.get("assignee_user_id") == principal["user_id"]
-    if target.get("assignee_user_id") and not owns and "tasks:assign" not in perms_for(principal["pack"]):
+    if target.get("assignee_user_id") and not owns and not await can_section_write(principal, "tasks", "tasks:assign"):
         raise HTTPException(status_code=403, detail="You can only move your own tasks")
     target["column"] = payload.column
     if payload.column == "done":
