@@ -134,9 +134,8 @@ export default function Pipeline() {
           action={canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Open Pipeline</p><p className="font-mono text-2xl text-white mt-2" data-testid="metric-open">{money(m.open_value, sym)}</p></GlassCard>
-            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Weighted</p><p className="font-mono text-2xl text-gold mt-2">{money(m.weighted_value, sym)}</p></GlassCard>
             <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Won</p><p className="font-mono text-2xl text-emerald-400 mt-2">{money(m.won_value, sym)}</p></GlassCard>
             <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Open Deals</p><p className="font-mono text-2xl text-white mt-2">{m.open_count}</p></GlassCard>
           </div>

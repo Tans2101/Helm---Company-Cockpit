@@ -75,7 +75,7 @@ def client_and_store():
          patch.object(server, "log_activity", new_callable=AsyncMock, return_value=None), \
          patch.object(server, "can_section_write", new_callable=AsyncMock, return_value=True), \
          patch.object(server, "_deal_metrics_for_workspace", new_callable=AsyncMock, return_value={
-             "open_value": 0, "weighted_value": 0, "won_value": 0, "open_count": 0, "by_stage": [],
+             "open_value": 0, "won_value": 0, "open_count": 0, "by_stage": [],
          }):
         yield TestClient(server.app), fake
     server.app.dependency_overrides.clear()

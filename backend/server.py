@@ -2475,7 +2475,6 @@ async def onboarding_checklist(principal=Depends(get_principal)):
 
 # ------------------------- Sales pipeline -------------------------
 DEAL_STAGES = ["lead", "qualified", "proposal", "negotiation", "won", "lost"]
-STAGE_PROB = {"lead": 0.1, "qualified": 0.3, "proposal": 0.5, "negotiation": 0.7, "won": 1.0, "lost": 0.0}
 STAGE_LABEL = {"lead": "Lead", "qualified": "Qualified", "proposal": "Proposal",
                "negotiation": "Negotiation", "won": "Won", "lost": "Lost"}
 
@@ -2486,7 +2485,6 @@ def _deal_metrics(deals):
                  "count": len([d for d in deals if d["stage"] == s]),
                  "value": round(sum(d["value"] for d in deals if d["stage"] == s), 2)} for s in DEAL_STAGES]
     return {"open_value": round(sum(d["value"] for d in open_deals), 2),
-            "weighted_value": round(sum(d["value"] * STAGE_PROB.get(d["stage"], 0) for d in open_deals), 2),
             "won_value": round(sum(d["value"] for d in deals if d["stage"] == "won"), 2),
             "open_count": len(open_deals), "by_stage": by_stage}
 
@@ -2499,7 +2497,7 @@ async def _deal_metrics_for_workspace(workspace_id: str):
     ]).to_list(None)
     by_stage_map = {r["_id"]: r for r in rows}
     by_stage = []
-    open_value = weighted_value = open_count = 0.0
+    open_value = open_count = 0.0
     won_value = 0.0
     for s in DEAL_STAGES:
         row = by_stage_map.get(s, {"count": 0, "value": 0})
@@ -2509,10 +2507,9 @@ async def _deal_metrics_for_workspace(workspace_id: str):
         if s not in ("won", "lost"):
             open_value += value
             open_count += count
-            weighted_value += value * STAGE_PROB.get(s, 0)
         elif s == "won":
             won_value = value
-    return {"open_value": round(open_value, 2), "weighted_value": round(weighted_value, 2),
+    return {"open_value": round(open_value, 2),
             "won_value": round(won_value, 2), "open_count": int(open_count), "by_stage": by_stage}
 
 

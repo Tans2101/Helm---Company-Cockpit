@@ -292,7 +292,7 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up." },
   { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A grounded in your company, not the internet." },
   { nav: "Financials", path: "/app/financials", tip: "Runway, burn, and scenarios for board prep." },
-  { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and weighted pipeline at a glance." },
+  { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline at a glance." },
   { nav: "Integrations", path: "/app/integrations", tip: "Connect tools once; signal flows in automatically." },
 ];
 
