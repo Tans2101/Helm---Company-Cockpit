@@ -35,6 +35,7 @@ import Billing from "@/pages/Billing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
+import DepartmentPlaceholder from "@/pages/DepartmentPlaceholder";
 import { LoadingScreen } from "@/components/kit";
 
 function ClerkOAuthCallback() {
@@ -100,6 +101,7 @@ function AppRouter() {
         <Route path="integrations" element={<Integrations />} />
         <Route path="billing" element={<Billing />} />
         <Route path="settings" element={<AccountSettings />} />
+        <Route path="departments/:deptType" element={<DepartmentPlaceholder />} />
       </Route>
     </Routes>
   );

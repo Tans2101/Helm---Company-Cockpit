@@ -42,6 +42,8 @@ from seed_data import build_workspace, sample_financial_entries, gen_join_code
 import access_sections as sec_access
 import plans as helm_plans
 import plan_usage
+import departments_catalog as dept_catalog
+import department_access as dept_access
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -3934,6 +3936,235 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
     return {"ok": True}
 
 
+# ------------------------- Department framework -------------------------
+class EnableDepartmentInput(BaseModel):
+    type: str
+
+
+class DepartmentMemberInput(BaseModel):
+    user_id: str
+    role: str = "member"
+
+
+async def _department_in_workspace(department_id: str, workspace_id: str) -> dict:
+    doc = await db.departments.find_one(
+        {"department_id": department_id, "workspace_id": workspace_id},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Department not found")
+    return doc
+
+
+@api_router.get("/departments")
+async def list_departments(principal=Depends(get_principal)):
+    """Catalog of all 7 types with enabled + current-user membership annotations."""
+    ws_id = principal["workspace_id"]
+    enabled_rows = await db.departments.find(
+        {"workspace_id": ws_id, "enabled": True},
+        {"_id": 0},
+    ).to_list(50)
+    by_type = {d["type"]: d for d in enabled_rows}
+    my_rows = await db.department_members.find(
+        {"user_id": principal["user_id"]},
+        {"_id": 0},
+    ).to_list(100)
+    my_by_dept = {m["department_id"]: m for m in my_rows}
+    is_ceo = dept_access.is_workspace_ceo(principal)
+
+    out = []
+    for entry in dept_catalog.DEPARTMENT_CATALOG:
+        dtype = entry["type"]
+        enabled_doc = by_type.get(dtype)
+        membership = None
+        if enabled_doc:
+            membership = my_by_dept.get(enabled_doc["department_id"])
+        out.append({
+            "type": dtype,
+            "name": entry["name"],
+            "icon": entry["icon"],
+            "enabled": bool(enabled_doc),
+            "department_id": enabled_doc["department_id"] if enabled_doc else None,
+            "is_member": bool(membership),
+            "member_role": (membership or {}).get("role"),
+            "visible_in_nav": bool(enabled_doc) and (is_ceo or bool(membership)),
+        })
+    return {
+        "departments": out,
+        "is_ceo": is_ceo,
+        "can_manage": is_ceo,
+    }
+
+
+@api_router.post("/departments")
+async def enable_department(payload: EnableDepartmentInput, principal=Depends(get_principal)):
+    if not dept_access.is_workspace_ceo(principal):
+        raise HTTPException(status_code=403, detail="Only the CEO can enable departments")
+    dtype = (payload.type or "").strip().lower()
+    if dtype not in dept_catalog.VALID_DEPARTMENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unknown department type")
+    existing = await db.departments.find_one(
+        {"workspace_id": principal["workspace_id"], "type": dtype, "enabled": True},
+        {"_id": 0},
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Department already enabled")
+    now = datetime.now(timezone.utc).isoformat()
+    department_id = f"dept_{uuid.uuid4().hex[:12]}"
+    name = dept_catalog.default_name(dtype)
+    await db.departments.insert_one({
+        "department_id": department_id,
+        "workspace_id": principal["workspace_id"],
+        "type": dtype,
+        "name": name,
+        "enabled": True,
+        "created_at": now,
+    })
+    return {
+        "ok": True,
+        "department": {
+            "department_id": department_id,
+            "type": dtype,
+            "name": name,
+            "enabled": True,
+        },
+    }
+
+
+@api_router.delete("/departments/{department_id}")
+async def disable_department(department_id: str, principal=Depends(get_principal)):
+    if not dept_access.is_workspace_ceo(principal):
+        raise HTTPException(status_code=403, detail="Only the CEO can disable departments")
+    doc = await _department_in_workspace(department_id, principal["workspace_id"])
+    if await dept_access.department_has_dependent_data(db, department_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot disable this department while it still has department-specific data. Remove that data first.",
+        )
+    await db.department_members.delete_many({"department_id": department_id})
+    await db.departments.delete_one(
+        {"department_id": department_id, "workspace_id": principal["workspace_id"]},
+    )
+    return {"ok": True, "type": doc.get("type")}
+
+
+@api_router.get("/departments/{department_id}/members")
+async def list_department_members(department_id: str, principal=Depends(get_principal)):
+    doc = await _department_in_workspace(department_id, principal["workspace_id"])
+    if not doc.get("enabled"):
+        raise HTTPException(status_code=404, detail="Department not found")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to this department")
+    rows = await db.department_members.find({"department_id": department_id}, {"_id": 0}).to_list(200)
+    out = []
+    for m in rows:
+        u = await db.users.find_one({"user_id": m["user_id"]}, {"_id": 0, "name": 1, "email": 1, "picture": 1})
+        out.append({
+            "user_id": m["user_id"],
+            "role": m.get("role") or "member",
+            "created_at": m.get("created_at"),
+            "name": (u or {}).get("name"),
+            "email": (u or {}).get("email"),
+            "picture": (u or {}).get("picture"),
+        })
+    out.sort(key=lambda x: ((x.get("name") or x.get("email") or "").lower(), x["user_id"]))
+    return {
+        "department_id": department_id,
+        "type": doc["type"],
+        "name": doc.get("name") or dept_catalog.default_name(doc["type"]),
+        "members": out,
+        "can_manage": await dept_access.can_manage_department_members(db, principal, department_id),
+    }
+
+
+@api_router.post("/departments/{department_id}/members")
+async def add_department_member(
+    department_id: str,
+    payload: DepartmentMemberInput,
+    principal=Depends(get_principal),
+):
+    doc = await _department_in_workspace(department_id, principal["workspace_id"])
+    if not doc.get("enabled"):
+        raise HTTPException(status_code=404, detail="Department not found")
+    if not await dept_access.can_manage_department_members(db, principal, department_id):
+        raise HTTPException(status_code=403, detail="Only the CEO or a department lead can add members")
+    role = (payload.role or "member").strip().lower()
+    if role not in dept_catalog.DEPARTMENT_MEMBER_ROLES:
+        raise HTTPException(status_code=400, detail="Role must be member or lead")
+    user_id = (payload.user_id or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    ws_mem = await db.memberships.find_one(
+        {"workspace_id": principal["workspace_id"], "user_id": user_id, "status": "active"},
+        {"_id": 0},
+    )
+    if not ws_mem:
+        raise HTTPException(status_code=400, detail="User is not an active member of this workspace")
+    existing = await db.department_members.find_one(
+        {"department_id": department_id, "user_id": user_id},
+        {"_id": 0},
+    )
+    if existing:
+        await db.department_members.update_one(
+            {"department_id": department_id, "user_id": user_id},
+            {"$set": {"role": role}},
+        )
+        return {"ok": True, "updated": True, "role": role}
+    await db.department_members.insert_one({
+        "department_id": department_id,
+        "user_id": user_id,
+        "role": role,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "updated": False, "role": role}
+
+
+@api_router.delete("/departments/{department_id}/members/{user_id}")
+async def remove_department_member(
+    department_id: str,
+    user_id: str,
+    principal=Depends(get_principal),
+):
+    doc = await _department_in_workspace(department_id, principal["workspace_id"])
+    if not doc.get("enabled"):
+        raise HTTPException(status_code=404, detail="Department not found")
+    if not await dept_access.can_manage_department_members(db, principal, department_id):
+        raise HTTPException(status_code=403, detail="Only the CEO or a department lead can remove members")
+    result = await db.department_members.delete_one(
+        {"department_id": department_id, "user_id": user_id},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Membership not found")
+    return {"ok": True}
+
+
+@api_router.get("/departments/by-type/{dept_type}")
+async def get_department_by_type(dept_type: str, principal=Depends(get_principal)):
+    """Resolve an enabled department by catalog type; enforce access for placeholder pages."""
+    dtype = (dept_type or "").strip().lower()
+    if dtype not in dept_catalog.VALID_DEPARTMENT_TYPES:
+        raise HTTPException(status_code=404, detail="Unknown department type")
+    doc = await db.departments.find_one(
+        {"workspace_id": principal["workspace_id"], "type": dtype, "enabled": True},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Department is not enabled")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to this department")
+    membership = await dept_access.get_department_membership(db, doc["department_id"], principal["user_id"])
+    return {
+        "department_id": doc["department_id"],
+        "type": doc["type"],
+        "name": doc.get("name") or dept_catalog.default_name(doc["type"]),
+        "icon": (dept_catalog.catalog_entry(doc["type"]) or {}).get("icon"),
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_member": bool(membership),
+        "member_role": (membership or {}).get("role"),
+        "placeholder": True,
+    }
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -4919,6 +5150,10 @@ async def _ensure_indexes():
         (db.activities, [("workspace_id", 1)], {}),
         (db.updates, [("workspace_id", 1)], {}),
         (db.chat_messages, [("workspace_id", 1)], {}),
+        (db.departments, [("workspace_id", 1), ("type", 1)], {"unique": True}),
+        (db.departments, [("department_id", 1)], {"unique": True}),
+        (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),
+        (db.department_members, [("user_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:

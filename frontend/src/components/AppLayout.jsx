@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import SubscriptionGate from "@/components/SubscriptionGate";
 import CompanySetup from "@/pages/CompanySetup";
 import { helmPlanLabel, helmWorkspacePlanLabel, helmHasFullAccess } from "@/lib/helmPlan";
+import { departmentIcon } from "@/lib/departmentIcons";
 import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
 
@@ -94,7 +95,9 @@ function SidebarContent({ onNavigate, billingEnforced }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: company } = useFetch("/company");
+  const { data: deptData } = useFetch("/departments");
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
+  const deptNav = (deptData?.departments || []).filter((d) => d.visible_in_nav);
 
   return (
     <div className="flex flex-col h-full">
@@ -138,6 +141,39 @@ function SidebarContent({ onNavigate, billingEnforced }) {
             )}
           </NavLink>
         ))}
+
+        {deptNav.length > 0 && (
+          <div className="pt-3 mt-2 border-t border-white/5">
+            <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-600">Departments</p>
+            {deptNav.map((dept) => {
+              const Icon = departmentIcon(dept.icon);
+              return (
+                <NavLink
+                  key={dept.type}
+                  to={`/app/departments/${dept.type}`}
+                  onClick={onNavigate}
+                  data-testid={`sidebar-dept-${dept.type}`}
+                  className={({ isActive }) =>
+                    cn(
+                      "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
+                      isActive
+                        ? "bg-gold/[0.08] text-white"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-gold" />}
+                      <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-gold" : "text-zinc-500 group-hover:text-zinc-300")} />
+                      <span className="truncate">{dept.name}</span>
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       <div className="px-3 pb-4">

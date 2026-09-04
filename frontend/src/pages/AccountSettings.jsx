@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
 import { PageHeader, GlassCard } from "@/components/kit";
+import DepartmentsSettings from "@/components/DepartmentsSettings";
 
 export default function AccountSettings() {
   const { user, logout } = useAuth();
@@ -119,8 +120,10 @@ export default function AccountSettings() {
     <div className="max-w-2xl">
       <PageHeader
         title="Account settings"
-        subtitle="Export your data or permanently delete your account and workspace."
+        subtitle="Departments, data export, and account controls."
       />
+
+      {isOwner && <DepartmentsSettings />}
 
       <GlassCard className="p-5 mb-4 fade-up">
         <div className="flex items-center gap-1.5 mb-2 text-gold">
