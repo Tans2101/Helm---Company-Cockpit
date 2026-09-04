@@ -4267,16 +4267,16 @@ async def _paddle_provision(event, status: str = "active"):
     if not (nonce and workspace_id and user_id):
         if not sub_id or status not in ("active", "trialing"):
             return
+        recovery = {
+            "subscription_status": status,
+            "billing_status": status,
+            "paddle_last_event_at": now_iso,
+        }
+        if data.get("customer_id"):
+            recovery["paddle_customer_id"] = data["customer_id"]
         await db.workspaces.update_one(
             {"paddle_subscription_id": sub_id},
-            {"$set": {
-                "subscription_status": status,
-                "billing_status": status,
-                "paddle_last_event_at": now_iso,
-                "paddle_customer_id": data.get("customer_id") or None,
-            }, "$unset": {
-                "canceled_at": "",
-            }},
+            {"$set": recovery, "$unset": {"canceled_at": ""}},
         )
         return
 
