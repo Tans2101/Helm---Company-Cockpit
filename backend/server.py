@@ -311,14 +311,16 @@ PACK_PERMS = {
     "finance": BASE_PERMS | {"finance:write"},
     "hr": BASE_PERMS | {"people:write"},
     "sales": BASE_PERMS | {"sales:write"},
-    "ops": BASE_PERMS | {"ops:write"},
+    "ops": BASE_PERMS | {"ops:write", "telemetry:write"},
     "exec": BASE_PERMS | {
         "decisions:act", "briefing:generate", "reports:pack", "reports:write",
+        "telemetry:write",
         "members:invite", "tasks:assign",
     },
     "owner": BASE_PERMS | {
         "finance:write", "people:write", "sales:write", "ops:write",
         "decisions:act", "briefing:generate", "reports:pack", "reports:write",
+        "telemetry:write",
         "integrations:manage", "billing:manage",
         "members:invite", "members:manage", "tasks:assign", "workspace:edit",
     },
@@ -349,6 +351,33 @@ async def _membership_for(principal: dict) -> dict:
         {"user_id": principal["user_id"], "workspace_id": principal["workspace_id"], "status": "active"},
         {"_id": 0},
     ) or {}
+
+
+async def workspace_departments(workspace_id: str, ws: dict | None = None) -> list[str]:
+    """Departments actually in use — members, roster, and existing access rules."""
+    if ws is None:
+        ws = await get_ws(workspace_id)
+    depts: set[str] = set()
+    mems = await db.memberships.find(
+        {"workspace_id": workspace_id, "status": {"$in": ["active", "invited"]}},
+        {"_id": 0, "department": 1},
+    ).to_list(200)
+    for m in mems:
+        d = (m.get("department") or "General").strip()
+        if d:
+            depts.add(d)
+    for p in (ws.get("people") or {}).get("people") or []:
+        d = (p.get("department") or "").strip()
+        if d:
+            depts.add(d)
+    for section_depts in (ws.get("section_access") or {}).values():
+        if isinstance(section_depts, list):
+            for d in section_depts:
+                if str(d).strip():
+                    depts.add(str(d).strip())
+    if not depts:
+        depts.add("General")
+    return sorted(depts, key=lambda x: (x != "General", x.lower()))
 
 
 async def can_section_write(principal: dict, section_id: str, pack_perm: str) -> bool:
@@ -1457,6 +1486,7 @@ async def get_section_access(principal=Depends(get_principal)):
     ws = await get_ws(principal["workspace_id"])
     can_manage = "members:manage" in perms_for(principal["pack"])
     section_access = sec_access.normalize_section_access(ws.get("section_access"))
+    depts = await workspace_departments(principal["workspace_id"], ws)
     mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(200)
     members_out = []
     for m in mems:
@@ -1467,7 +1497,7 @@ async def get_section_access(principal=Depends(get_principal)):
         grants = sec_access.normalize_section_grants(m.get("section_grants"))
         from_pack = sec_access.sections_for_perms(perms_for(pack))
         dept = (m.get("department") or "General").strip()
-        from_dept = [sid for sid, depts in section_access.items() if dept in (depts or [])]
+        from_dept = [sid for sid, depts_map in section_access.items() if dept in (depts_map or [])]
         effective = sorted(set(from_pack) | set(grants) | set(from_dept))
         members_out.append({
             "membership_id": m["membership_id"],
@@ -1485,7 +1515,7 @@ async def get_section_access(principal=Depends(get_principal)):
     members_out.sort(key=lambda x: (x.get("name") or x["email"]).lower())
     return {
         "sections": sec_access.MANAGEABLE_SECTIONS,
-        "departments": sec_access.DEFAULT_DEPARTMENTS,
+        "departments": depts,
         "section_access": section_access,
         "members": members_out,
         "can_manage": can_manage,
@@ -2273,20 +2303,57 @@ async def telemetry(principal=Depends(get_principal)):
         funnel = c["telemetry"]["funnel"]
         sources.append({"label": "Sales Funnel", "detail": "Sample funnel — add deals for live pipeline stages", "freshness": "sample"})
     tel = c.get("telemetry") or {}
-    risks = tel.get("risks") or []
-    if risks and not metrics:
-        sources.append({"label": "Risks", "detail": "Sample risk radar — connect integrations for live signals", "freshness": "sample"})
+    manual = c.get("telemetry_manual") or {}
+    risks = manual.get("risks") if manual.get("risks") is not None else (tel.get("risks") or [])
+    if risks and not metrics and not manual.get("risks"):
+        sources.append({"label": "Risks", "detail": "Sample risk radar — edit risks below or connect integrations", "freshness": "sample"})
+    elif manual.get("risks"):
+        sources.append({"label": "Risks", "detail": "Manually maintained risk radar", "freshness": "live"})
     qb = c.get("quickbooks_tokens")
     if qb:
         sources.append({"label": "QuickBooks", "detail": "Accounting sync when connected", "freshness": "hourly"})
     if c.get("google_tokens"):
         sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
+    can_write = await can_section_write(principal, "telemetry", "telemetry:write")
     return {
         "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
         "expense_breakdown": fin["expense_breakdown"],
         "data_as_of": now.isoformat(),
         "sources": sources,
+        "can_write": can_write,
+        "notes": manual.get("notes") or "",
     }
+
+
+class TelemetryRiskInput(BaseModel):
+    risks: list
+    notes: Optional[str] = ""
+
+
+@api_router.patch("/telemetry")
+async def update_telemetry(payload: TelemetryRiskInput, principal=Depends(require_section("telemetry", "telemetry:write"))):
+    c = await get_ws(principal["workspace_id"])
+    cleaned = []
+    for r in payload.risks[:20]:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get("name") or "").strip()
+        if not name:
+            continue
+        cleaned.append({
+            "id": r.get("id") or f"r_{uuid.uuid4().hex[:8]}",
+            "name": name[:120],
+            "likelihood": max(1, min(5, int(r.get("likelihood") or 3))),
+            "impact": max(1, min(5, int(r.get("impact") or 3))),
+            "category": (r.get("category") or "General").strip()[:40],
+        })
+    manual = {"risks": cleaned, "notes": (payload.notes or "").strip()[:1000]}
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {"telemetry_manual": manual}},
+    )
+    await log_activity(principal, "telemetry", "telemetry.edit", f"Updated telemetry — {len(cleaned)} risk(s)")
+    return {"ok": True, "risks": cleaned, "notes": manual["notes"]}
 
 
 @api_router.get("/financials")
