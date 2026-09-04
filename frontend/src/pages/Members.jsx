@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, User, Trash2, Mail, Copy, Link2, Shield, Lock } from "lucide-react";
+import { UserPlus, User, Trash2, Mail, Copy, Link2, Shield, Check } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -135,7 +135,8 @@ export default function Members() {
             <SectionLabel>Member section access</SectionLabel>
           </div>
           <p className="text-sm text-zinc-500 mb-5">
-            Choose what each teammate can edit beyond their access pack. Owners (CEOs) always have full access and are not listed here.
+            Gold means they can edit that area. Items marked “via pack” come with their access pack and stay on.
+            Toggle the others to grant extra access. Owners (CEOs) always have full access and are not listed here.
           </p>
 
           {!accessData ? (
@@ -179,12 +180,13 @@ export default function Members() {
                           return (
                             <span
                               key={section.id}
-                              title={`${section.label} is included in their ${meta.label} pack`}
+                              title={`Included with their ${meta.label} pack — they already have access`}
                               data-testid={`access-${member.membership_id}-${section.id}-pack`}
-                              className="inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border border-white/10 bg-white/[0.03] text-zinc-400"
+                              className="inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border border-gold/40 bg-gold/10 text-gold"
                             >
-                              <Lock className="w-3 h-3" />
+                              <Check className="w-3 h-3" />
                               {section.label}
+                              <span className="text-[10px] font-mono uppercase tracking-wide text-gold/70">via pack</span>
                             </span>
                           );
                         }
@@ -196,10 +198,11 @@ export default function Members() {
                             data-testid={`access-${member.membership_id}-${section.id}`}
                             onClick={() => toggleGrant(member.membership_id, section.id, member)}
                             className={cn(
-                              "text-xs rounded-md px-2.5 py-1 border transition-colors",
+                              "inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors",
                               on ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-zinc-500 hover:border-white/20",
                             )}
                           >
+                            {on ? <Check className="w-3 h-3" /> : null}
                             {section.label}
                           </button>
                         );
