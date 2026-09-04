@@ -39,10 +39,51 @@ async def can_access_department(db, principal: dict, department: dict) -> bool:
     return await is_department_member(db, principal["user_id"], department["department_id"])
 
 
+async def accessible_department_ids(
+    db, principal: dict, dept_type: str,
+) -> Optional[list[str]]:
+    """Department ids of ``dept_type`` the principal may read records from.
+
+    Returns ``None`` for CEO (bypass — see all workspace records of that kind).
+    Returns a list (possibly empty) for everyone else — empty means no access.
+    """
+    if is_workspace_ceo(principal):
+        return None
+    rows = await db.departments.find(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_type,
+            "enabled": True,
+        },
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    if not rows:
+        return []
+    my_rows = await db.department_members.find(
+        {
+            "user_id": principal["user_id"],
+            "department_id": {"$in": [r["department_id"] for r in rows]},
+        },
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    return [m["department_id"] for m in my_rows]
+
+
+def apply_department_filter(base_filter: dict, department_ids: Optional[list[str]]) -> dict:
+    """Attach department_id constraint. ``None`` = CEO bypass (unchanged filter)."""
+    if department_ids is None:
+        return base_filter
+    out = dict(base_filter)
+    out["department_id"] = {"$in": list(department_ids)}
+    return out
+
+
 # Collections that would block disabling a department once features exist.
 # Add new `{dept}_stages` (and similar) names here as department features ship.
 DEPARTMENT_DEPENDENT_COLLECTIONS = (
     "production_stages",
+    "deals",
+    "financial_entries",
 )
 
 

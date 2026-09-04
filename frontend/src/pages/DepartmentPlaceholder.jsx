@@ -3,15 +3,12 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { PageHeader, LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
 
-/** Catalog types that still use this placeholder shell (Production has a real page). */
+/** Catalog types that still use this placeholder shell. */
 export const PLACEHOLDER_DEPARTMENT_TYPES = [
   "procurement",
   "legal",
   "hr",
   "engineering_maintenance",
-  // Sales + Accounting & Finance stay placeholders until the migration prompt folds them in.
-  "sales",
-  "accounting_finance",
 ];
 
 export default function DepartmentPlaceholder() {

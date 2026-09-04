@@ -103,6 +103,8 @@ function AppRouter() {
         <Route path="billing" element={<Billing />} />
         <Route path="settings" element={<AccountSettings />} />
         <Route path="departments/production" element={<Production />} />
+        <Route path="departments/sales" element={<Navigate to="/app/sales" replace />} />
+        <Route path="departments/accounting_finance" element={<Navigate to="/app/financials" replace />} />
         <Route path="departments/:deptType" element={<DepartmentPlaceholder />} />
       </Route>
     </Routes>

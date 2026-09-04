@@ -28,6 +28,7 @@ TYPE_HR = "hr"
 TYPE_ENGINEERING_MAINTENANCE = "engineering_maintenance"
 
 # Types that ship with a placeholder shell until their dedicated feature prompt.
+# Sales and Accounting & Finance use existing Pipeline / Financials pages.
 PLACEHOLDER_SHELL_TYPES = frozenset({
     TYPE_PROCUREMENT,
     TYPE_LEGAL,

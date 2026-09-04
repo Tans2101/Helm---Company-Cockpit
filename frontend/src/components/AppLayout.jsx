@@ -1,9 +1,9 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
-  LayoutDashboard, GitBranch, Activity, DollarSign, KanbanSquare,
+  LayoutDashboard, GitBranch, Activity, KanbanSquare,
   FileText, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Briefcase,
+  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -20,9 +20,7 @@ const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
-  { to: "/app/sales", label: "Pipeline", icon: Briefcase, id: "sales" },
   { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
-  { to: "/app/financials", label: "Financials", icon: DollarSign, id: "financials" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
   { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
@@ -31,6 +29,17 @@ const NAV = [
   { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:invite" },
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
+
+/** Department types that map to existing product pages (not placeholder shells). */
+const DEPT_ROUTE = {
+  sales: "/app/sales",
+  accounting_finance: "/app/financials",
+  production: "/app/departments/production",
+};
+
+function departmentNavTo(type) {
+  return DEPT_ROUTE[type] || `/app/departments/${type}`;
+}
 
 function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
   const { user } = useAuth();
@@ -147,10 +156,11 @@ function SidebarContent({ onNavigate, billingEnforced }) {
             <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-600">Departments</p>
             {deptNav.map((dept) => {
               const Icon = departmentIcon(dept.icon);
+              const to = departmentNavTo(dept.type);
               return (
                 <NavLink
                   key={dept.type}
-                  to={`/app/departments/${dept.type}`}
+                  to={to}
                   onClick={onNavigate}
                   data-testid={`sidebar-dept-${dept.type}`}
                   className={({ isActive }) =>

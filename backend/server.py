@@ -44,6 +44,7 @@ import plans as helm_plans
 import plan_usage
 import departments_catalog as dept_catalog
 import department_access as dept_access
+import department_migrate as dept_migrate
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -927,6 +928,15 @@ async def _activate_invites(user):
         {"$set": {"user_id": user["user_id"], "email": email, "status": "active",
                   "joined_at": datetime.now(timezone.utc).isoformat()}},
     )
+    # Enroll into Sales / Accounting & Finance when those departments exist.
+    mems = await db.memberships.find(
+        {"user_id": user["user_id"], "status": "active"},
+        {"_id": 0, "workspace_id": 1},
+    ).to_list(50)
+    for m in mems:
+        ws_id = m.get("workspace_id")
+        if ws_id:
+            await dept_migrate.enroll_user_in_sales_finance(db, ws_id, user["user_id"])
 
 
 async def _bootstrap(user):
@@ -1168,7 +1178,7 @@ async def _workspace_currency(workspace_id: str) -> str:
     return normalize_currency(settings.get("currency"))
 
 
-async def compute_financials(workspace_id: str):
+async def compute_financials(workspace_id: str, department_ids: Optional[list] = None):
     from collections import defaultdict
     import finance_recurrence as fin_recur
 
@@ -1179,7 +1189,10 @@ async def compute_financials(workspace_id: str):
     else:
         settings = {**settings, "currency": normalize_currency(settings.get("currency"))}
     currency = settings["currency"]
-    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    entry_filt = dept_access.apply_department_filter(
+        {"workspace_id": workspace_id}, department_ids,
+    )
+    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).to_list(5000)
     # Drop clearly invalid months so one bad CSV row cannot 500 the page
     entries = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
     horizon = fin_recur.resolve_expense_horizon(entries)
@@ -1670,6 +1683,7 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     }
     await db.memberships.insert_one(membership)
     await ensure_person_for_membership(ws_id, membership, name=user.get("name"))
+    await dept_migrate.migrate_workspace_sales_finance(db, ws_id)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -1720,6 +1734,7 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
         await db.memberships.insert_one(membership)
         existing = membership
     await ensure_person_for_membership(ws_id, existing, name=user.get("name"))
+    await dept_migrate.enroll_user_in_sales_finance(db, ws_id, user["user_id"])
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -1793,6 +1808,10 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     await db.memberships.insert_one(membership)
     display_name = (existing_user or {}).get("name") or payload.name
     await ensure_person_for_membership(principal["workspace_id"], membership, name=display_name)
+    if membership.get("user_id"):
+        await dept_migrate.enroll_user_in_sales_finance(
+            db, principal["workspace_id"], membership["user_id"],
+        )
     ws = await get_ws(principal["workspace_id"])
     app_url = APP_URL or FRONTEND_URL or str(request.base_url).rstrip("/")
     email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], PACK_LABEL.get(pack, "Member"), app_url)
@@ -2016,7 +2035,13 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
         update = {k: v for k, v in fresh.items() if k not in _PRESERVE_WS_FIELDS}
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": update})
         await db.financial_entries.delete_many({"workspace_id": ws_id})
-        await db.financial_entries.insert_many(sample_financial_entries(ws_id))
+        await dept_migrate.migrate_workspace_sales_finance(db, ws_id)
+        finance_dept_id = await dept_migrate.finance_department_id(db, ws_id)
+        samples = sample_financial_entries(ws_id)
+        if finance_dept_id:
+            for e in samples:
+                e["department_id"] = finance_dept_id
+        await db.financial_entries.insert_many(samples)
     else:
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"onboarding_done": True}})
     return {"ok": True}
@@ -2593,10 +2618,13 @@ def _deal_metrics(deals):
             "open_count": len(open_deals), "by_stage": by_stage}
 
 
-async def _deal_metrics_for_workspace(workspace_id: str):
+async def _deal_metrics_for_workspace(workspace_id: str, department_ids: Optional[list] = None):
     """Aggregate pipeline metrics in MongoDB instead of loading all deals."""
+    match = dept_access.apply_department_filter(
+        {"workspace_id": workspace_id}, department_ids,
+    )
     rows = await db.deals.aggregate([
-        {"$match": {"workspace_id": workspace_id}},
+        {"$match": match},
         {"$group": {"_id": "$stage", "count": {"$sum": 1}, "value": {"$sum": "$value"}}},
     ]).to_list(None)
     by_stage_map = {r["_id"]: r for r in rows}
@@ -2634,9 +2662,11 @@ async def list_deals(
 ):
     page_limit = clamp_limit(limit)
     ws = principal["workspace_id"]
-    filt = apply_before_filter({"workspace_id": ws}, "updated_at", before, id_field="id")
+    dept_ids = await dept_access.accessible_department_ids(db, principal, dept_catalog.TYPE_SALES)
+    base = dept_access.apply_department_filter({"workspace_id": ws}, dept_ids)
+    filt = apply_before_filter(base, "updated_at", before, id_field="id")
     deals = await db.deals.find(filt, {"_id": 0}).sort([("updated_at", -1), ("id", -1)]).limit(page_limit).to_list(page_limit)
-    metrics = await _deal_metrics_for_workspace(ws)
+    metrics = await _deal_metrics_for_workspace(ws, department_ids=dept_ids)
     cursor = next_cursor(deals, "updated_at", page_limit, id_field="id")
     currency = await _workspace_currency(ws)
     return {
@@ -2659,9 +2689,11 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
     now = datetime.now(timezone.utc).isoformat()
     currency = await _workspace_currency(principal["workspace_id"])
     creator_name = (principal.get("name") or principal.get("email") or "").strip()
+    sales_dept_id = await dept_migrate.sales_department_id(db, principal["workspace_id"])
     deal = {
         "id": f"deal_{uuid.uuid4().hex[:8]}",
         "workspace_id": principal["workspace_id"],
+        "department_id": sales_dept_id,
         "name": payload.name.strip(),
         "company": payload.company.strip(),
         "value": round(payload.value, 2),
@@ -2809,8 +2841,14 @@ async def update_telemetry(payload: TelemetryRiskInput, principal=Depends(requir
 
 @api_router.get("/financials")
 async def financials(principal=Depends(get_principal)):
-    fin = await compute_financials(principal["workspace_id"])
-    entries = await db.financial_entries.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).sort("month", -1).to_list(5000)
+    dept_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
+    )
+    fin = await compute_financials(principal["workspace_id"], department_ids=dept_ids)
+    entry_filt = dept_access.apply_department_filter(
+        {"workspace_id": principal["workspace_id"]}, dept_ids,
+    )
+    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
     return {**fin, "entries": entries,
             "can_write": await can_section_write(principal, "financials", "finance:write"),
             "can_manage": "integrations:manage" in perms_for(principal["pack"])}
@@ -2988,7 +3026,9 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
             raise HTTPException(status_code=400, detail="Document already committed to an entry")
         source = "ai_upload"
         source_document_id = payload.source_document_id
+    finance_dept_id = await dept_migrate.finance_department_id(db, principal["workspace_id"])
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
+             "department_id": finance_dept_id,
              "type": payload.type, "category": payload.category.strip() or "Other",
              "amount": round(payload.amount, 2), "month": payload.month.strip(), "recurring": payload.recurring,
              "recurrence": _fin_entry_recurrence(payload),
@@ -3115,6 +3155,7 @@ async def import_financials_csv_confirm(
     if len(payload.entries) > 5000:
         raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
     now = datetime.now(timezone.utc).isoformat()
+    finance_dept_id = await dept_migrate.finance_department_id(db, principal["workspace_id"])
     docs = []
     for raw in payload.entries:
         if not isinstance(raw, dict):
@@ -3134,6 +3175,7 @@ async def import_financials_csv_confirm(
         docs.append({
             "id": f"fe_{uuid.uuid4().hex[:10]}",
             "workspace_id": principal["workspace_id"],
+            "department_id": finance_dept_id,
             "type": entry_type,
             "category": (raw.get("category") or "Other").strip() or "Other",
             "amount": amount,
@@ -4303,7 +4345,7 @@ async def get_department_by_type(dept_type: str, principal=Depends(get_principal
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_member": bool(membership),
         "member_role": (membership or {}).get("role"),
-        "placeholder": dtype != dept_catalog.TYPE_PRODUCTION,
+        "placeholder": dtype in dept_catalog.PLACEHOLDER_SHELL_TYPES,
         "can_manage_members": await dept_access.can_manage_department_members(
             db, principal, doc["department_id"],
         ),
@@ -4791,6 +4833,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
         txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
         synced_count = 0
         now_iso = datetime.now(timezone.utc).isoformat()
+        finance_dept_id = await dept_migrate.finance_department_id(db, ws_id)
 
         for txn in txns:
             txn.pop("_qb_raw_type", None)
@@ -4816,6 +4859,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
                 entry = {
                     "id": f"fe_{uuid.uuid4().hex[:10]}",
                     "workspace_id": ws_id,
+                    "department_id": finance_dept_id,
                     "qb_txn_id": qb_txn_id,
                     "created_by": principal["user_id"],
                     "created_at": now_iso,
@@ -5506,7 +5550,9 @@ async def _ensure_indexes():
         (db.paddle_intents, [("_id", 1)], {"unique": True}),
         (db.paddle_intents, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.deals, [("workspace_id", 1)], {}),
+        (db.deals, [("workspace_id", 1), ("department_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1)], {}),
+        (db.financial_entries, [("workspace_id", 1), ("department_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
@@ -5572,11 +5618,20 @@ async def _connect_mongo_at_startup() -> None:
 @app.on_event("startup")
 async def startup():
     await _connect_mongo_at_startup()
-    # Do not block Render health checks — indexes run in background after listen.
+    # Do not block Render health checks — indexes / migrations run after listen.
     asyncio.create_task(_ensure_indexes())
+    asyncio.create_task(_run_sales_finance_migration())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
     if clerk_auth.clerk_configured():
         asyncio.create_task(clerk_auth.prefetch_jwks())
+
+
+async def _run_sales_finance_migration() -> None:
+    """Idempotent fold of Sales + Accounting/Finance into the department system."""
+    try:
+        await dept_migrate.migrate_all_workspaces_sales_finance(db)
+    except Exception:
+        logger.exception("sales/finance department migration failed")
 
 
 @app.on_event("shutdown")

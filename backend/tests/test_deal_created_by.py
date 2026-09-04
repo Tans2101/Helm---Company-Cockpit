@@ -66,6 +66,14 @@ def client_and_store():
         "user_id": "u_alice", "workspace_id": "ws1", "status": "active",
         "pack": "owner", "role": "owner", "section_grants": {},
     })
+    mock_db.departments = MagicMock()
+    mock_db.departments.find_one = AsyncMock(return_value={
+        "department_id": "dept_sales",
+        "workspace_id": "ws1",
+        "type": "sales",
+        "name": "Sales",
+        "enabled": True,
+    })
 
     async def mock_principal():
         return PRINCIPAL
@@ -95,6 +103,7 @@ def test_created_by_set_on_create_and_immutable_on_update(client_and_store):
     deal = r.json()["deal"]
     assert deal["created_by_user_id"] == "u_alice"
     assert deal["created_by_name"] == "Alice Creator"
+    assert deal["department_id"] == "dept_sales"
     deal_id = deal["id"]
 
     r2 = client.patch(f"/api/deals/{deal_id}", json={
