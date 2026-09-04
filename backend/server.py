@@ -1774,6 +1774,7 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
+<<<<<<< HEAD
     suggestions = [s for s in (c.get("decision_suggestions") or []) if s.get("status") == "suggested"]
     return {
         "decisions": c["decisions"],
@@ -1782,6 +1783,10 @@ async def decisions(principal=Depends(get_principal)):
         "is_pro": workspace_is_pro(c),
         "can_act": await can_section_write(principal, "decisions", "decisions:act"),
     }
+=======
+    can_act = await can_section_write(principal, "decisions", "decisions:act")
+    return {"decisions": c["decisions"], "is_pro": workspace_is_pro(c), "can_act": can_act}
+>>>>>>> origin/cursor/section-access-tasks-decisions-2637
 
 
 class DecisionAction(BaseModel):
