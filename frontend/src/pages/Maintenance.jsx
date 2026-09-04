@@ -51,12 +51,15 @@ export default function Maintenance() {
     assigned_technician: "",
   });
 
-  const allTickets = data?.tickets || [];
+  const allTickets = useMemo(() => data?.tickets || [], [data?.tickets]);
   const visible = useMemo(
     () => (showResolved ? allTickets : allTickets.filter((t) => t.status !== "resolved")),
     [allTickets, showResolved],
   );
-  const selected = allTickets.find((t) => t.id === selectedId) || null;
+  const selected = useMemo(
+    () => allTickets.find((t) => t.id === selectedId) || null,
+    [allTickets, selectedId],
+  );
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
 
   useEffect(() => {
@@ -72,7 +75,7 @@ export default function Maintenance() {
       status: selected.status || "reported",
       assigned_technician: selected.assigned_technician || "",
     });
-  }, [selectedId, selected?.updated_at]);
+  }, [selected]);
 
   if (loading) return <LoadingScreen label="Loading maintenance tickets" />;
   if (error) {

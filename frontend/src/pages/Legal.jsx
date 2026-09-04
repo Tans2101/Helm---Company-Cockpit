@@ -44,12 +44,15 @@ export default function Legal() {
   const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "" });
   const fileRef = useRef(null);
 
-  const allMatters = data?.matters || [];
+  const allMatters = useMemo(() => data?.matters || [], [data?.matters]);
   const visible = useMemo(
     () => (showFiled ? allMatters : allMatters.filter((m) => m.status !== "filed")),
     [allMatters, showFiled],
   );
-  const selected = allMatters.find((m) => m.id === selectedId) || null;
+  const selected = useMemo(
+    () => allMatters.find((m) => m.id === selectedId) || null,
+    [allMatters, selectedId],
+  );
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
 
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function Legal() {
       notes: selected.notes || "",
       status: selected.status || "draft",
     });
-  }, [selectedId, selected?.updated_at]);
+  }, [selected]);
 
   if (loading) return <LoadingScreen label="Loading legal matters" />;
   if (error) {

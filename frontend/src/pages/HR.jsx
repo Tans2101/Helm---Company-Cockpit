@@ -40,7 +40,7 @@ export default function HR() {
   const [form, setForm] = useState({ hire_name: "", hire_email: "" });
   const [tmplDraft, setTmplDraft] = useState([]);
 
-  const all = data?.instances || [];
+  const all = useMemo(() => data?.instances || [], [data?.instances]);
   const visible = useMemo(
     () => (showActive ? all : all.filter((i) => i.overall_status !== "active")),
     [all, showActive],
@@ -49,11 +49,13 @@ export default function HR() {
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
   const isLead = Boolean(data?.is_lead || tmplData?.can_edit_template);
   const myId = data?.my_user_id;
+  const templateSteps = tmplData?.template?.steps;
+  const templateUpdatedAt = tmplData?.template?.updated_at;
 
   useEffect(() => {
-    const steps = tmplData?.template?.steps || [];
+    const steps = templateSteps || [];
     setTmplDraft(steps.map((s) => ({ ...s })));
-  }, [tmplData?.template?.updated_at, editingTemplate]);
+  }, [templateUpdatedAt, editingTemplate, templateSteps]);
 
   if (loading) return <LoadingScreen label="Loading HR onboarding" />;
   if (error) {

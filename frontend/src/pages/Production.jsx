@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, ChevronUp, ChevronDown, Trash2, X, User } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
@@ -58,8 +58,11 @@ export default function Production() {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
-  const stages = data?.stages || [];
-  const selected = stages.find((s) => s.id === selectedId) || null;
+  const stages = useMemo(() => data?.stages || [], [data?.stages]);
+  const selected = useMemo(
+    () => stages.find((s) => s.id === selectedId) || null,
+    [stages, selectedId],
+  );
 
   useEffect(() => {
     if (!selected) {
@@ -72,7 +75,7 @@ export default function Production() {
       notes: selected.notes || "",
       assigned_user_ids: [...(selected.assigned_user_ids || [])],
     });
-  }, [selectedId, selected?.updated_at]);
+  }, [selected]);
 
   if (loading) return <LoadingScreen label="Loading production chain" />;
   if (error) {

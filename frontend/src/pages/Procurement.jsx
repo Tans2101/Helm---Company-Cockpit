@@ -41,12 +41,15 @@ export default function Procurement() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "" });
 
-  const allRequests = data?.requests || [];
+  const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
   const visible = useMemo(
     () => (showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status))),
     [allRequests, showClosed],
   );
-  const selected = allRequests.find((r) => r.id === selectedId) || null;
+  const selected = useMemo(
+    () => allRequests.find((r) => r.id === selectedId) || null,
+    [allRequests, selectedId],
+  );
 
   useEffect(() => {
     if (!selected) {
@@ -61,7 +64,7 @@ export default function Procurement() {
       notes: selected.notes || "",
       status: selected.status || "requested",
     });
-  }, [selectedId, selected?.updated_at]);
+  }, [selected]);
 
   if (loading) return <LoadingScreen label="Loading procurement" />;
   if (error) {
