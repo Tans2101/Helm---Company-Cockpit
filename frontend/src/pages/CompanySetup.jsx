@@ -238,7 +238,7 @@ export default function CompanySetup({ company }) {
                   </div>
                   <div>
                     <h2 className="text-lg text-white tracking-tight">Team & context</h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">Helm calibrates bandwidth and runway views to your size.</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Helm calibrates runway views and planning defaults to your size.</p>
                   </div>
                 </div>
                 <div className="space-y-5">
