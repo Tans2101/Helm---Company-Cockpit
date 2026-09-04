@@ -1,8 +1,18 @@
-import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { PageHeader, LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
-import { Building2 } from "lucide-react";
+import { departmentIcon } from "@/lib/departmentIcons";
+
+/** Catalog types that still use this placeholder shell (Production has a real page). */
+export const PLACEHOLDER_DEPARTMENT_TYPES = [
+  "procurement",
+  "legal",
+  "hr",
+  "engineering_maintenance",
+  // Sales + Accounting & Finance stay placeholders until the migration prompt folds them in.
+  "sales",
+  "accounting_finance",
+];
 
 export default function DepartmentPlaceholder() {
   const { deptType } = useParams();
@@ -43,14 +53,17 @@ export default function DepartmentPlaceholder() {
 
   if (!data) return null;
 
+  const Icon = departmentIcon(data.icon);
+  const name = data.name || "Department";
+
   return (
-    <div>
-      <PageHeader title={data.name} subtitle="Department workspace" />
+    <div data-testid={`dept-placeholder-${data.type}`}>
+      <PageHeader title={name} subtitle="Department workspace" />
       <GlassCard className="p-8">
         <EmptyState
-          icon={Building2}
-          title={`${data.name} — coming soon`}
-          body="Department tools will land here in a later update. Membership and access already work from Settings."
+          icon={Icon}
+          title={`${name} — coming soon`}
+          body={`${name} tools are coming soon. Reach out if there's a specific workflow you want prioritized.`}
         />
       </GlassCard>
     </div>

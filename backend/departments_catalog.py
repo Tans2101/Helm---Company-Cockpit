@@ -1,9 +1,18 @@
 """Fixed department catalog — not stored per workspace.
 
-Future department-specific feature collections should follow the
-`{department}_stages` naming convention used by `production_stages`
-(e.g. `legal_stages`, `procurement_stages`). Do not create those
-collections here — only document the pattern for later prompts.
+Future department-specific feature collections (when built) must follow the
+`{department}_stages` naming convention established by `production_stages`:
+
+  - production_stages              (exists — Production chain)
+  - procurement_stages             (future)
+  - legal_stages                   (future)
+  - hr_stages                      (future)
+  - engineering_maintenance_stages (future)
+  - sales_stages                   (future, if needed beyond Pipeline)
+  - accounting_finance_stages      (future, if needed beyond Financials)
+
+Do not create these collections here — only document the pattern so later
+prompts extend a consistent shape instead of inventing a new one each time.
 """
 from __future__ import annotations
 
@@ -17,6 +26,14 @@ TYPE_SALES = "sales"
 TYPE_LEGAL = "legal"
 TYPE_HR = "hr"
 TYPE_ENGINEERING_MAINTENANCE = "engineering_maintenance"
+
+# Types that ship with a placeholder shell until their dedicated feature prompt.
+PLACEHOLDER_SHELL_TYPES = frozenset({
+    TYPE_PROCUREMENT,
+    TYPE_LEGAL,
+    TYPE_HR,
+    TYPE_ENGINEERING_MAINTENANCE,
+})
 
 DEPARTMENT_CATALOG: list[dict[str, Any]] = [
     {
@@ -69,3 +86,8 @@ def catalog_entry(dept_type: str) -> Optional[dict[str, Any]]:
 def default_name(dept_type: str) -> str:
     entry = catalog_entry(dept_type)
     return entry["name"] if entry else dept_type
+
+
+def stages_collection_name(dept_type: str) -> str:
+    """Reserved collection name for a department's future stages feature."""
+    return f"{dept_type}_stages"
