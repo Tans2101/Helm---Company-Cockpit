@@ -6,7 +6,8 @@ Future department-specific feature collections (when built) must follow the
   - production_stages              (exists — Production chain)
   - procurement_requests           (exists — Procurement request queue)
   - procurement_stages             (unused; Procurement uses a request queue, not a chain)
-  - legal_stages                   (future)
+  - legal_matters                  (exists — Legal matter queue)
+  - legal_stages                   (unused; Legal uses a matter queue, not a chain)
   - hr_stages                      (future)
   - engineering_maintenance_stages (future)
   - sales_stages                   (future, if needed beyond Pipeline)
@@ -29,9 +30,7 @@ TYPE_HR = "hr"
 TYPE_ENGINEERING_MAINTENANCE = "engineering_maintenance"
 
 # Types that ship with a placeholder shell until their dedicated feature prompt.
-# Sales / Accounting & Finance / Production / Procurement have real pages.
 PLACEHOLDER_SHELL_TYPES = frozenset({
-    TYPE_LEGAL,
     TYPE_HR,
     TYPE_ENGINEERING_MAINTENANCE,
 })

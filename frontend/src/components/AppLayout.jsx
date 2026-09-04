@@ -36,6 +36,7 @@ const DEPT_ROUTE = {
   accounting_finance: "/app/financials",
   production: "/app/departments/production",
   procurement: "/app/departments/procurement",
+  legal: "/app/departments/legal",
 };
 
 function departmentNavTo(type) {

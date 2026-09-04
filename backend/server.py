@@ -4835,6 +4835,359 @@ async def delete_procurement_request(request_id: str, principal=Depends(get_prin
     return {"ok": True}
 
 
+# ------------------------- Legal matter queue -------------------------
+LEGAL_STATUSES = frozenset({
+    "draft", "internal_review", "counterparty_review", "signed", "filed",
+})
+LEGAL_MEMBER_STATUSES = frozenset({"draft", "internal_review"})
+LEGAL_LEAD_ONLY_STATUSES = frozenset({"counterparty_review", "signed", "filed"})
+LEGAL_MATTER_TYPES = frozenset({"contract", "compliance", "other"})
+
+
+async def _legal_department(principal: dict) -> dict:
+    doc = await db.departments.find_one(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_catalog.TYPE_LEGAL,
+            "enabled": True,
+        },
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Legal department is not enabled")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to Legal")
+    return doc
+
+
+def _can_lead_legal(principal: dict, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+async def _enrich_legal_matter(matter: dict) -> dict:
+    out = {k: v for k, v in matter.items() if k != "_id"}
+    for field, label in (("assigned_to", "assignee"), ("created_by", "creator")):
+        uid = out.get(field)
+        info = None
+        if uid:
+            u = await db.users.find_one(
+                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
+            )
+            info = {
+                "user_id": uid,
+                "name": (u or {}).get("name"),
+                "email": (u or {}).get("email"),
+                "picture": (u or {}).get("picture"),
+            }
+        out[label] = info
+    doc_ref = out.get("document_ref")
+    if isinstance(doc_ref, dict) and doc_ref.get("storage_key"):
+        out["has_document"] = True
+        out["document"] = {
+            "filename": doc_ref.get("filename"),
+            "content_type": doc_ref.get("content_type"),
+            "uploaded_at": doc_ref.get("uploaded_at"),
+            "document_id": doc_ref.get("document_id"),
+        }
+    else:
+        out["has_document"] = False
+        out["document"] = None
+    return out
+
+
+class LegalMatterCreate(BaseModel):
+    title: str
+    matter_type: str = "contract"
+    assigned_to: Optional[str] = None
+    notes: str = ""
+    status: str = "draft"
+
+
+class LegalMatterPatch(BaseModel):
+    title: Optional[str] = None
+    matter_type: Optional[str] = None
+    assigned_to: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+
+def _normalize_matter_type(raw: str) -> str:
+    t = (raw or "other").strip().lower() or "other"
+    if t in LEGAL_MATTER_TYPES:
+        return t
+    # Keep loose free-text but cap length
+    return (raw or "other").strip()[:80] or "other"
+
+
+@api_router.get("/legal/matters")
+async def list_legal_matters(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+):
+    dept = await _legal_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in LEGAL_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    rows = await db.legal_matters.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_legal(principal, membership)
+    items = [await _enrich_legal_matter(r) for r in rows]
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "Legal",
+        "matters": items,
+        "statuses": ["draft", "internal_review", "counterparty_review", "signed", "filed"],
+        "matter_types": sorted(LEGAL_MATTER_TYPES),
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_lead": is_lead,
+        "can_reassign": is_lead,
+        "can_advance_past_review": is_lead,
+        "can_delete": is_lead,
+        "my_user_id": principal["user_id"],
+    }
+
+
+@api_router.post("/legal/matters")
+async def create_legal_matter(payload: LegalMatterCreate, principal=Depends(get_principal)):
+    dept = await _legal_department(principal)
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required")
+    status = (payload.status or "draft").strip().lower()
+    if status not in LEGAL_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_legal(principal, membership)
+    if status in LEGAL_LEAD_ONLY_STATUSES and not is_lead:
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Legal lead or the CEO can set this status",
+        )
+    assigned_to = (payload.assigned_to or "").strip() or principal["user_id"]
+    now = datetime.now(timezone.utc).isoformat()
+    matter = {
+        "id": f"lmat_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "title": title,
+        "matter_type": _normalize_matter_type(payload.matter_type),
+        "assigned_to": assigned_to,
+        "created_by": principal["user_id"],
+        "status": status if status in LEGAL_MEMBER_STATUSES or is_lead else "draft",
+        "document_ref": None,
+        "notes": (payload.notes or "").strip(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.legal_matters.insert_one(dict(matter))
+    return {"ok": True, "matter": await _enrich_legal_matter(matter)}
+
+
+@api_router.patch("/legal/matters/{matter_id}")
+async def patch_legal_matter(
+    matter_id: str,
+    payload: LegalMatterPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _legal_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_legal(principal, membership)
+    matter = await db.legal_matters.find_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+
+    is_assignee = matter.get("assigned_to") == principal["user_id"]
+    can_update = is_lead or is_assignee
+    if not can_update:
+        raise HTTPException(status_code=403, detail="You can only update matters assigned to you")
+
+    upd: dict = {}
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="Title is required")
+        upd["title"] = title
+    if payload.matter_type is not None:
+        upd["matter_type"] = _normalize_matter_type(payload.matter_type)
+    if payload.notes is not None:
+        upd["notes"] = payload.notes.strip()
+
+    if payload.assigned_to is not None:
+        new_assignee = (payload.assigned_to or "").strip() or None
+        if new_assignee != matter.get("assigned_to"):
+            if not is_lead:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only a Legal lead or the CEO can reassign a matter",
+                )
+            upd["assigned_to"] = new_assignee
+
+    if payload.status is not None:
+        new_status = payload.status.strip().lower()
+        if new_status not in LEGAL_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        if new_status != matter.get("status"):
+            if new_status in LEGAL_LEAD_ONLY_STATUSES and not is_lead:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only a Legal lead or the CEO can advance past internal review",
+                )
+            if not is_lead and new_status not in LEGAL_MEMBER_STATUSES:
+                raise HTTPException(status_code=403, detail="Invalid status for your role")
+            upd["status"] = new_status
+
+    if not upd:
+        return {"ok": True, "matter": await _enrich_legal_matter(matter)}
+
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.legal_matters.update_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    return {"ok": True, "matter": await _enrich_legal_matter({**matter, **upd})}
+
+
+@api_router.post("/legal/matters/{matter_id}/document")
+async def upload_legal_matter_document(
+    matter_id: str,
+    file: UploadFile = File(...),
+    principal=Depends(get_principal),
+):
+    """Attach or replace a document on a legal matter using R2 storage."""
+    dept = await _legal_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_legal(principal, membership)
+    matter = await db.legal_matters.find_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    is_assignee = matter.get("assigned_to") == principal["user_id"]
+    if not (is_lead or is_assignee):
+        raise HTTPException(status_code=403, detail="You can only attach documents to matters assigned to you")
+
+    if file.content_type not in ALLOWED_DOC_TYPES:
+        raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
+    data = await file.read()
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if not doc_storage.r2_configured():
+        raise HTTPException(status_code=503, detail="Document storage is not configured")
+
+    filename = (file.filename or "document").replace("/", "_").replace("\\", "_")[:200]
+    try:
+        storage_key = await asyncio.to_thread(
+            doc_storage.upload_document,
+            principal["workspace_id"], data, filename, file.content_type,
+        )
+    except Exception as exc:
+        logger.exception("legal matter document upload failed")
+        raise HTTPException(status_code=500, detail="Could not store document") from exc
+
+    # Best-effort cleanup of previous file
+    old_ref = matter.get("document_ref") or {}
+    old_key = old_ref.get("storage_key") if isinstance(old_ref, dict) else None
+    if old_key and old_key != storage_key and doc_storage.r2_configured():
+        try:
+            await asyncio.to_thread(doc_storage.delete_document, old_key)
+        except Exception:
+            logger.exception("failed to delete previous legal matter document %s", old_key)
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc_id = f"ldoc_{uuid.uuid4().hex[:12]}"
+    document_ref = {
+        "document_id": doc_id,
+        "storage_key": storage_key,
+        "filename": filename,
+        "content_type": file.content_type,
+        "uploaded_by": principal["user_id"],
+        "uploaded_at": now,
+    }
+    await db.legal_matters.update_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"$set": {"document_ref": document_ref, "updated_at": now}},
+    )
+    updated = {**matter, "document_ref": document_ref, "updated_at": now}
+    return {"ok": True, "matter": await _enrich_legal_matter(updated)}
+
+
+@api_router.get("/legal/matters/{matter_id}/document")
+async def get_legal_matter_document(matter_id: str, principal=Depends(get_principal)):
+    """Return metadata + presigned URL for the matter's current document."""
+    dept = await _legal_department(principal)
+    matter = await db.legal_matters.find_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    doc_ref = matter.get("document_ref")
+    if not isinstance(doc_ref, dict) or not doc_ref.get("storage_key"):
+        raise HTTPException(status_code=404, detail="No document attached")
+    if not doc_storage.r2_configured():
+        raise HTTPException(status_code=503, detail="Document storage is not configured")
+    try:
+        presigned_url = await asyncio.to_thread(
+            doc_storage.get_presigned_url, doc_ref["storage_key"],
+        )
+    except Exception as exc:
+        logger.exception("presigned url failed for legal matter %s", matter_id)
+        raise HTTPException(status_code=500, detail="Could not generate download URL") from exc
+    return {
+        "document_id": doc_ref.get("document_id"),
+        "filename": doc_ref.get("filename"),
+        "content_type": doc_ref.get("content_type"),
+        "uploaded_at": doc_ref.get("uploaded_at"),
+        "presigned_url": presigned_url,
+    }
+
+
+@api_router.delete("/legal/matters/{matter_id}")
+async def delete_legal_matter(matter_id: str, principal=Depends(get_principal)):
+    dept = await _legal_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_legal(principal, membership):
+        raise HTTPException(status_code=403, detail="Only a Legal lead or the CEO can delete matters")
+    matter = await db.legal_matters.find_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not matter:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    doc_ref = matter.get("document_ref") or {}
+    storage_key = doc_ref.get("storage_key") if isinstance(doc_ref, dict) else None
+    await db.legal_matters.delete_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+    )
+    if storage_key and doc_storage.r2_configured():
+        try:
+            await asyncio.to_thread(doc_storage.delete_document, storage_key)
+        except Exception:
+            logger.exception("failed to delete legal matter document %s", storage_key)
+    return {"ok": True}
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -5498,7 +5851,7 @@ async def paddle_webhook(request: Request):
 # ------------------------- GDPR / account -------------------------
 _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "activities", "updates", "chat_messages",
-    "paddle_intents", "payment_transactions", "procurement_requests",
+    "paddle_intents", "payment_transactions", "procurement_requests", "legal_matters",
 )
 
 
@@ -5835,6 +6188,10 @@ async def _ensure_indexes():
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),
         (db.procurement_requests, [("workspace_id", 1)], {}),
+        (db.legal_matters, [("id", 1)], {"unique": True}),
+        (db.legal_matters, [("department_id", 1), ("created_at", -1)], {}),
+        (db.legal_matters, [("department_id", 1), ("status", 1)], {}),
+        (db.legal_matters, [("workspace_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:

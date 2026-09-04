@@ -83,6 +83,7 @@ def apply_department_filter(base_filter: dict, department_ids: Optional[list[str
 DEPARTMENT_DEPENDENT_COLLECTIONS = (
     "production_stages",
     "procurement_requests",
+    "legal_matters",
     "deals",
     "financial_entries",
 )
