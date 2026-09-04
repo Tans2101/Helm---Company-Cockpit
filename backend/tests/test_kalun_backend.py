@@ -26,7 +26,7 @@ def auth(client):
 # ---- Auth guard ----
 READ_ENDPOINTS = [
     "/api/company", "/api/briefing", "/api/decisions", "/api/telemetry",
-    "/api/financials", "/api/tasks", "/api/reports", "/api/team",
+    "/api/financials", "/api/tasks", "/api/reports",
     "/api/calendar", "/api/people", "/api/integrations", "/api/ask/history",
     "/api/billing/plans",
 ]

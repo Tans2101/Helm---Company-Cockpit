@@ -1,6 +1,6 @@
 # Helm — CEO Operating System
 
-Helm is a multi-tenant executive cockpit: morning briefing, decisions, financials, pipeline, team bandwidth, and Ask Helm AI.
+Helm is a multi-tenant executive cockpit: morning briefing, decisions, financials, pipeline, team pulse, and Ask Helm AI.
 
 ## Ownership model (production)
 

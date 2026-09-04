@@ -77,7 +77,7 @@ export const FEATURE_CATEGORIES = [
   {
     id: "people",
     label: "People & operations",
-    intro: "Team bandwidth, access, and integrations — everyone contributes, you stay in control.",
+    intro: "Team access and integrations — everyone contributes, you stay in control.",
     modules: ["Integrations", "Team & Access"],
   },
 ];

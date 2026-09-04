@@ -40,7 +40,7 @@ def _signal(type_: str, severity: str, summary: str, detail: str, related_id=Non
     return out
 
 
-# ---- Shared overdue date parsing (same rules as Team Workload) ----
+# ---- Shared overdue date parsing (used by detect_overdue_tasks) ----
 
 def parse_task_due_date(due) -> Optional[date]:
     """Return a calendar date when `due` parses cleanly.

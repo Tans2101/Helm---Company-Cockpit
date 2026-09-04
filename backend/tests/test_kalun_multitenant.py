@@ -189,7 +189,7 @@ def test_member_forbidden_integration_toggle(owner, member):
 
 MEMBER_READ_OK = [
     "/api/company", "/api/briefing", "/api/decisions", "/api/telemetry",
-    "/api/financials", "/api/tasks", "/api/reports", "/api/team",
+    "/api/financials", "/api/tasks", "/api/reports",
     "/api/calendar", "/api/people", "/api/integrations", "/api/ask/history",
     "/api/billing/plans", "/api/members", "/api/workspaces",
 ]

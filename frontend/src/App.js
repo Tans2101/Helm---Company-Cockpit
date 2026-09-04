@@ -26,7 +26,6 @@ import Telemetry from "@/pages/Telemetry";
 import Financials from "@/pages/Financials";
 import Tasks from "@/pages/Tasks";
 import Reports from "@/pages/Reports";
-import Team from "@/pages/Team";
 import CalendarPage from "@/pages/CalendarPage";
 import People from "@/pages/People";
 import AskHelm from "@/pages/AskHelm";
@@ -94,7 +93,6 @@ function AppRouter() {
         <Route path="financials" element={<Financials />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="reports" element={<Reports />} />
-        <Route path="team" element={<Team />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="people" element={<People />} />
         <Route path="ask" element={<AskHelm />} />
