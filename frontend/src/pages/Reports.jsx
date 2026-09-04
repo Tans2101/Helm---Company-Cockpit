@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { FileText, Sparkles, Plus, PenLine, Trash2, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils";
 const emptyReport = () => ({ title: "", type: "General", period: "", summary: "", metrics: [{ label: "", value: "" }, { label: "", value: "" }, { label: "", value: "" }] });
 
 export default function Reports() {
+  const { user } = useAuth();
   const { data, loading, error, reload } = useFetch("/reports");
   const [pack, setPack] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,6 +32,7 @@ export default function Reports() {
   const manual = data.manual_reports || data.reports?.filter((r) => r.source === "manual") || [];
   const auto = data.auto_reports || data.reports?.filter((r) => r.source === "auto") || [];
   const canWrite = data.can_write;
+  const canGeneratePack = (user?.perms || []).includes("reports:pack");
 
   const openAdd = () => { setEditing(null); setForm(emptyReport()); setShowForm(true); };
   const openEdit = (r) => {
@@ -138,10 +141,14 @@ export default function Reports() {
             <SectionLabel>Weekly CEO Pack</SectionLabel>
             <p className="text-sm text-zinc-400 max-w-xl mt-1">A board-ready weekly summary synthesized from your reports and live data.</p>
           </div>
-          <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
-            className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60 shrink-0">
-            <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
-          </button>
+          {canGeneratePack ? (
+            <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
+              className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60 shrink-0">
+              <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
+            </button>
+          ) : (
+            <p className="text-xs text-zinc-600 shrink-0">Owner or executive access required to generate.</p>
+          )}
         </div>
         {pack && (
           <div className="mt-4 rounded-lg border border-white/5 bg-black/30 p-5" data-testid="pack-content">

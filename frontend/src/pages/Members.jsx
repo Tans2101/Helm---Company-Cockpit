@@ -149,6 +149,7 @@ export default function Members() {
                 const meta = packMeta(member.pack);
                 const grants = draftFor(member.membership_id, member);
                 const fromPack = new Set(member.from_pack || []);
+                const fromDept = new Set(member.from_department || []);
                 return (
                   <div
                     key={member.membership_id}
@@ -174,19 +175,26 @@ export default function Members() {
                     <div className="flex flex-wrap gap-2">
                       {sections.map((section) => {
                         const packLocked = fromPack.has(section.id);
+                        const deptLocked = fromDept.has(section.id);
                         const granted = grants.includes(section.id);
-                        const on = packLocked || granted;
-                        if (packLocked) {
+                        const on = packLocked || deptLocked || granted;
+                        if (packLocked || deptLocked) {
                           return (
                             <span
                               key={section.id}
-                              title={`Included with their ${meta.label} pack — they already have access`}
-                              data-testid={`access-${member.membership_id}-${section.id}-pack`}
+                              title={
+                                packLocked
+                                  ? `Included with their ${meta.label} pack — they already have access`
+                                  : `Included via their ${member.department || "department"} access rule`
+                              }
+                              data-testid={`access-${member.membership_id}-${section.id}-${packLocked ? "pack" : "dept"}`}
                               className="inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border border-gold/40 bg-gold/10 text-gold"
                             >
                               <Check className="w-3 h-3" />
                               {section.label}
-                              <span className="text-[10px] font-mono uppercase tracking-wide text-gold/70">via pack</span>
+                              <span className="text-[10px] font-mono uppercase tracking-wide text-gold/70">
+                                {packLocked ? "via pack" : "via dept"}
+                              </span>
                             </span>
                           );
                         }

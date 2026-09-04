@@ -108,6 +108,7 @@ async def test_notify_debounce_and_slack_failure_non_blocking():
         assert r1["new_alerts"] == 1
         assert r1["emailed"] is True
         assert r1["slack"] is False  # failed but did not raise
+        assert r1["debounced"] is True  # email succeeded → debounce
         assert len(email_calls) == 1
         assert len(slack_calls) == 1
 
@@ -120,3 +121,48 @@ async def test_notify_debounce_and_slack_failure_non_blocking():
         r2 = await server._notify_high_severity_alerts(ws_id, suggestions, c2)
         assert r2["new_alerts"] == 0
         assert len(email_calls) == 1  # no second email
+
+
+@pytest.mark.asyncio
+async def test_notify_does_not_debounce_when_both_channels_fail():
+    import server
+
+    suggestions = [{
+        "id": "sug_hi",
+        "title": "Burn spike",
+        "severity": "high",
+        "signal": {
+            "type": "burn_increase",
+            "severity": "high",
+            "summary": "Cash runway / burn pressure",
+            "related_id": None,
+        },
+    }]
+    c = {
+        "name": "Notify Co",
+        "notified_signal_ids": [],
+        "slack_webhook_url": "https://hooks.slack.com/services/T/B/XXX",
+    }
+    updates = []
+
+    async def fake_email(**kwargs):
+        return {"sent": False, "reason": "no_key"}
+
+    async def fake_slack(url, text):
+        return {"ok": False, "reason": "http_error"}
+
+    async def fake_recipients(_ws):
+        return ["ceo@example.com"]
+
+    async def capture_update(*a, **k):
+        updates.append(k)
+        return None
+
+    with patch.object(server, "send_resend_email", fake_email), \
+         patch.object(server, "post_slack_webhook", fake_slack), \
+         patch.object(server, "_alert_recipient_emails", fake_recipients), \
+         patch.object(server, "db") as mock_db:
+        mock_db.workspaces.update_one = capture_update
+        r = await server._notify_high_severity_alerts("ws_x", suggestions, c)
+        assert r["debounced"] is False
+        assert updates == []  # must not write notified_signal_ids

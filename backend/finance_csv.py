@@ -45,23 +45,55 @@ HEADER_MAP = {
 
 
 def _parse_month(raw: str) -> Optional[str]:
+    import finance_recurrence as fin_recur
+
     s = (raw or "").strip()
     if not s:
         return None
-    # YYYY-MM
+    # Prefer unambiguous ISO forms first
     if re.fullmatch(r"\d{4}-\d{2}", s):
-        return s
-    # YYYY-MM-DD or similar
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%d/%m/%Y", "%Y-%m", "%b %Y", "%B %Y", "%m/%Y"):
+        return s if fin_recur.is_valid_month(s) else None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
         try:
-            dt = datetime.strptime(s, fmt)
+            dt = datetime.strptime(s, "%Y-%m-%d")
             return dt.strftime("%Y-%m")
         except ValueError:
+            return None
+    if re.fullmatch(r"\d{4}/\d{2}/\d{2}", s):
+        try:
+            dt = datetime.strptime(s, "%Y/%m/%d")
+            return dt.strftime("%Y-%m")
+        except ValueError:
+            return None
+    # Ambiguous day/month numeric forms — reject rather than guess locale
+    if re.fullmatch(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", s):
+        parts = re.split(r"[/-]", s)
+        try:
+            a, b, y = int(parts[0]), int(parts[1]), int(parts[2])
+            if y < 100:
+                y += 2000
+            # Only accept when one side must be the month (>12)
+            if a > 12 and 1 <= b <= 12:
+                dt = datetime(y, b, a)  # D/M/Y
+                return dt.strftime("%Y-%m")
+            if b > 12 and 1 <= a <= 12:
+                dt = datetime(y, a, b)  # M/D/Y
+                return dt.strftime("%Y-%m")
+            # Both <= 12 — ambiguous
+            return None
+        except ValueError:
+            return None
+    for fmt in ("%Y-%m", "%b %Y", "%B %Y", "%m/%Y"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            out = dt.strftime("%Y-%m")
+            return out if fin_recur.is_valid_month(out) else None
+        except ValueError:
             continue
-    # ISO with time
     try:
         dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-        return dt.strftime("%Y-%m")
+        out = dt.strftime("%Y-%m")
+        return out if fin_recur.is_valid_month(out) else None
     except ValueError:
         return None
 

@@ -600,18 +600,22 @@ async def _notify_high_severity_alerts(workspace_id: str, decision_suggestions: 
         slack_result = await post_slack_webhook(webhook, slack_text)
 
     new_keys = [an.signal_notify_key(s.get("signal") or s) for s in fresh]
-    updated_ids = list(notified | set(new_keys))
-    await db.workspaces.update_one(
-        {"workspace_id": workspace_id},
-        {"$set": {
-            "notified_signal_ids": updated_ids,
-            "notified_at": datetime.now(timezone.utc).isoformat(),
-        }},
-    )
+    delivered = bool(email_result.get("sent")) or bool(slack_result.get("ok"))
+    # Only debounce after at least one channel succeeds — failed delivery must retry
+    if delivered:
+        updated_ids = list(notified | set(new_keys))
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id},
+            {"$set": {
+                "notified_signal_ids": updated_ids,
+                "notified_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
     return {
         "emailed": bool(email_result.get("sent")),
         "slack": bool(slack_result.get("ok")),
         "new_alerts": len(fresh),
+        "debounced": delivered,
         "email": email_result,
         "slack_result": slack_result,
     }
@@ -770,7 +774,21 @@ def workspace_is_pro(ws_or_plan) -> bool:
 
 
 def workspace_allows(ws_or_plan, feature: str) -> bool:
-    return helm_plans.plan_allows(workspace_plan_id(ws_or_plan), feature, billing_enforced=BILLING_ENFORCED)
+    """Plan feature gate. past_due / paused subscriptions lose paid features."""
+    if not helm_plans.plan_allows(workspace_plan_id(ws_or_plan), feature, billing_enforced=BILLING_ENFORCED):
+        return False
+    if not BILLING_ENFORCED:
+        return True
+    if isinstance(ws_or_plan, dict):
+        status = (ws_or_plan.get("subscription_status") or ws_or_plan.get("billing_status") or "").lower()
+        if status in ("past_due", "paused", "canceled", "cancelled"):
+            return False
+    return True
+
+
+def _valid_fin_month(month: str) -> bool:
+    import finance_recurrence as fin_recur
+    return fin_recur.is_valid_month((month or "").strip())
 
 
 async def require_pro(principal=Depends(get_principal)):
@@ -950,19 +968,19 @@ async def compute_financials(workspace_id: str):
         settings = {**settings, "currency": normalize_currency(settings.get("currency"))}
     currency = settings["currency"]
     entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
-    rev_by, exp_by, rec_by = defaultdict(float), defaultdict(float), defaultdict(float)
-    exp_cat = defaultdict(float)
+    # Drop clearly invalid months so one bad CSV row cannot 500 the page
+    entries = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
     horizon = fin_recur.resolve_expense_horizon(entries)
-    for e in entries:
-        if e["type"] == "revenue":
-            rev_by[e["month"]] += e["amount"]
-            if e.get("recurring"):
-                rec_by[e["month"]] += e["amount"]
-        else:
-            cat = e.get("category") or "Other"
-            for month, amt in fin_recur.iter_expense_month_amounts(e, horizon):
-                exp_by[month] += amt
-                exp_cat[cat] += amt
+    rev_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="revenue", horizon_end=horizon))
+    exp_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="expense", horizon_end=horizon))
+    # Recurring-only revenue by month (for MRR) — never mix one-time sales into MRR
+    rec_entries = [e for e in entries if e.get("type") == "revenue" and e.get("recurring")]
+    rec_by = defaultdict(float, fin_recur.expand_entries_by_month(rec_entries, entry_type="revenue", horizon_end=horizon))
+    exp_cat = defaultdict(float)
+    cat_totals = fin_recur.expand_expense_category_totals(entries, horizon)
+    for _month, cats in cat_totals.items():
+        for cat, amt in cats.items():
+            exp_cat[cat] += amt
     months = sorted(set(list(rev_by) + list(exp_by)))
     last = months[-6:]
 
@@ -972,7 +990,8 @@ async def compute_financials(workspace_id: str):
     revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
     burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
     latest = months[-1] if months else None
-    mrr_val = (rec_by[latest] if latest and rec_by[latest] > 0 else (rev_by[latest] if latest else 0))
+    # MRR is recurring revenue only — never fall back to one-time sales
+    mrr_val = float(rec_by[latest]) if latest else 0.0
     cash = settings.get("cash") or 0
     net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
     avg_burn = sum(net) / len(net) if net else 0
@@ -989,8 +1008,12 @@ async def compute_financials(workspace_id: str):
             {"name": "Aggressive Hire", "runway": round(cash / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
         ]
     mrr_delta = 0
-    if len(revenue_series) >= 2 and revenue_series[-2]["revenue"] > 0:
-        mrr_delta = round((revenue_series[-1]["revenue"] - revenue_series[-2]["revenue"]) / revenue_series[-2]["revenue"] * 100, 1)
+    rec_months = sorted(rec_by.keys())
+    if len(rec_months) >= 2:
+        prev_m, curr_m = rec_months[-2], rec_months[-1]
+        prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
+        if prev_r > 0:
+            mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
     return {
         "mrr": fmt_money(mrr_val, currency), "arr": fmt_money(mrr_val * 12, currency), "runway_months": runway,
         "burn": fmt_money(burn_val, currency), "cash": fmt_money(cash, currency),
@@ -1998,11 +2021,11 @@ async def list_activities(
 ):
     page_limit = clamp_limit(limit)
     ws = principal["workspace_id"]
-    filt = apply_before_filter({"workspace_id": ws}, "created_at", before)
-    acts = await db.activities.find(filt, {"_id": 0}).sort("created_at", -1).limit(page_limit).to_list(page_limit)
+    filt = apply_before_filter({"workspace_id": ws}, "created_at", before, id_field="activity_id")
+    acts = await db.activities.find(filt, {"_id": 0}).sort([("created_at", -1), ("activity_id", -1)]).limit(page_limit).to_list(page_limit)
     for a in acts:
         a["ago"] = _rel_time(a["created_at"])
-    cursor = next_cursor(acts, "created_at", page_limit)
+    cursor = next_cursor(acts, "created_at", page_limit, id_field="activity_id")
     return {"items": acts, "activities": acts, "next_cursor": cursor}
 
 
@@ -2381,16 +2404,16 @@ async def list_deals(
 ):
     page_limit = clamp_limit(limit)
     ws = principal["workspace_id"]
-    filt = apply_before_filter({"workspace_id": ws}, "updated_at", before)
-    deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
+    filt = apply_before_filter({"workspace_id": ws}, "updated_at", before, id_field="id")
+    deals = await db.deals.find(filt, {"_id": 0}).sort([("updated_at", -1), ("id", -1)]).limit(page_limit).to_list(page_limit)
     metrics = await _deal_metrics_for_workspace(ws)
-    cursor = next_cursor(deals, "updated_at", page_limit)
+    cursor = next_cursor(deals, "updated_at", page_limit, id_field="id")
     currency = await _workspace_currency(ws)
     return {
         "items": deals,
         "deals": deals,
         "next_cursor": cursor,
-        "can_write": "sales:write" in perms_for(principal["pack"]),
+        "can_write": await can_section_write(principal, "sales", "sales:write"),
         "metrics": metrics,
         "currency": currency,
         "currency_symbol": currency_symbol(currency),
@@ -2708,21 +2731,36 @@ async def get_financial_document(
 async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
+    if not _valid_fin_month(payload.month):
+        raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
+    if payload.amount < 0:
+        raise HTTPException(status_code=400, detail="amount must be non-negative")
     source = "manual"
     source_document_id = None
-    if payload.source_document_id:
-        src_doc = await db.documents.find_one(
-            {"id": payload.source_document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
+    if source_document_id:
+        # Atomic claim: only transition uploaded/extracted → committing once
+        from pymongo import ReturnDocument
+        claim = await db.documents.find_one_and_update(
+            {
+                "id": payload.source_document_id,
+                "workspace_id": principal["workspace_id"],
+                "status": {"$in": ["uploaded", "extracted"]},
+            },
+            {"$set": {"status": "committing"}},
+            return_document=ReturnDocument.AFTER,
         )
-        if not src_doc:
-            raise HTTPException(status_code=400, detail="Source document not found")
-        if src_doc.get("status") == "committed":
+        if not claim:
+            src_doc = await db.documents.find_one(
+                {"id": payload.source_document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
+            )
+            if not src_doc:
+                raise HTTPException(status_code=400, detail="Source document not found")
             raise HTTPException(status_code=400, detail="Document already committed to an entry")
         source = "ai_upload"
         source_document_id = payload.source_document_id
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
              "type": payload.type, "category": payload.category.strip() or "Other",
-             "amount": round(payload.amount, 2), "month": payload.month, "recurring": payload.recurring,
+             "amount": round(payload.amount, 2), "month": payload.month.strip(), "recurring": payload.recurring,
              "recurrence": _fin_entry_recurrence(payload),
              "note": (payload.note or "").strip(), "source": source, "created_by": principal["user_id"],
              "created_at": datetime.now(timezone.utc).isoformat()}
@@ -2743,10 +2781,16 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
 
 @api_router.patch("/financials/entries/{entry_id}")
 async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
+    if payload.type not in ("revenue", "expense"):
+        raise HTTPException(status_code=400, detail="type must be revenue or expense")
+    if not _valid_fin_month(payload.month):
+        raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
+    if payload.amount < 0:
+        raise HTTPException(status_code=400, detail="amount must be non-negative")
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
-                  "amount": round(payload.amount, 2), "month": payload.month,
+                  "amount": round(payload.amount, 2), "month": payload.month.strip(),
                   "recurring": payload.recurring, "recurrence": _fin_entry_recurrence(payload),
                   "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
@@ -2855,7 +2899,7 @@ async def import_financials_csv_confirm(
         if amount < 0:
             continue
         month = (raw.get("month") or "").strip()
-        if not re.fullmatch(r"\d{4}-\d{2}", month):
+        if not re.fullmatch(r"\d{4}-\d{2}", month) or not _valid_fin_month(month):
             continue
         docs.append({
             "id": f"fe_{uuid.uuid4().hex[:10]}",
@@ -4215,8 +4259,27 @@ async def _paddle_provision(event, status: str = "active"):
     nonce = custom.get("checkout_nonce")
     workspace_id = custom.get("workspace_id")
     user_id = custom.get("user_id")
+    sub_id = data.get("subscription_id") or data.get("id")
+    now_iso = event.get("occurred_at") or datetime.now(timezone.utc).isoformat()
+
+    # Recovery path: subscription reactivated / updated without checkout nonce
+    # (e.g. past_due → active). Bind by paddle_subscription_id.
     if not (nonce and workspace_id and user_id):
+        if not sub_id or status not in ("active", "trialing"):
+            return
+        await db.workspaces.update_one(
+            {"paddle_subscription_id": sub_id},
+            {"$set": {
+                "subscription_status": status,
+                "billing_status": status,
+                "paddle_last_event_at": now_iso,
+                "paddle_customer_id": data.get("customer_id") or None,
+            }, "$unset": {
+                "canceled_at": "",
+            }},
+        )
         return
+
     intent = await db.paddle_intents.find_one({"_id": nonce})
     if not intent or intent.get("workspace_id") != workspace_id or intent.get("user_id") != user_id:
         return
@@ -4224,10 +4287,9 @@ async def _paddle_provision(event, status: str = "active"):
     plan = helm_plans.normalize_plan(plan)
     if plan == helm_plans.PLAN_FREE:
         plan = helm_plans.PLAN_STARTER
-    now_iso = event.get("occurred_at") or datetime.now(timezone.utc).isoformat()
     set_fields = {
         "plan": plan, "billing_provider": "paddle",
-        "paddle_subscription_id": data.get("subscription_id") or data.get("id"),
+        "paddle_subscription_id": sub_id,
         "paddle_customer_id": data.get("customer_id"),
         "paddle_last_event_at": now_iso,
         "subscription_status": status, "billing_status": status,

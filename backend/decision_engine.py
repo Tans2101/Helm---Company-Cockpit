@@ -90,21 +90,12 @@ def _parse_iso_dt(value) -> Optional[datetime]:
 def expense_totals_by_month_category(entries: list) -> dict:
     """Build {YYYY-MM: {category: amount}} from financial_entries (expense only).
 
-    Recurring expenses are expanded through the current/latest month horizon
-    (monthly = full amount each month; annual = amount/12 each month).
+    Recurring expenses use non-overlapping rate windows (see finance_recurrence).
     """
     import finance_recurrence as fin_recur
 
-    by_month: dict = {}
     horizon = fin_recur.resolve_expense_horizon(entries or [])
-    for e in entries or []:
-        if e.get("type") != "expense":
-            continue
-        cat = (e.get("category") or "Other").strip() or "Other"
-        for month, amt in fin_recur.iter_expense_month_amounts(e, horizon):
-            by_month.setdefault(month, {})
-            by_month[month][cat] = by_month[month].get(cat, 0.0) + float(amt)
-    return by_month
+    return fin_recur.expand_expense_category_totals(entries or [], horizon)
 
 
 def detect_runway_risk(fin: dict) -> Optional[dict]:

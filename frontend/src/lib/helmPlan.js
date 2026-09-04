@@ -5,7 +5,8 @@ const PAID = new Set(["starter", "growth", "business", "pro"]);
 export function normalizePlan(plan) {
   if (!plan) return "free";
   const p = String(plan).toLowerCase();
-  if (p === "pro") return "business";
+  // Legacy "pro" maps to Starter on the backend (see plans.py / DEPLOY.md)
+  if (p === "pro") return "starter";
   return p;
 }
 

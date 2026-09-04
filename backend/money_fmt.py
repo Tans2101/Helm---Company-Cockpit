@@ -35,8 +35,18 @@ def fmt_money(n, currency="usd") -> str:
     sym = currency_symbol(currency)
     if a >= 1_000_000:
         s = f"{sym}{a / 1_000_000:.2f}M"
+    elif a >= 999_500:
+        # Keep $999,999 from rendering as "$1000K"
+        s = f"{sym}{a / 1_000_000:.2f}M"
     elif a >= 1_000:
-        s = f"{sym}{a / 1_000:.0f}K"
+        # One decimal keeps $1.5K from rounding to $2K
+        rounded = round(a / 1_000, 1)
+        if rounded >= 1000:
+            s = f"{sym}{a / 1_000_000:.2f}M"
+        elif rounded == int(rounded):
+            s = f"{sym}{int(rounded)}K"
+        else:
+            s = f"{sym}{rounded:.1f}K"
     else:
         s = f"{sym}{a:,.0f}"
     return f"-{s}" if neg else s

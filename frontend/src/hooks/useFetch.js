@@ -11,8 +11,13 @@ export function useFetch(path, deps = []) {
     if (!path) { setLoading(false); return; }
     let mounted = true;
     setLoading(true);
+    setError(null);
     api.get(path)
-      .then((r) => { if (mounted) setData(r.data); })
+      .then((r) => {
+        if (!mounted) return;
+        setData(r.data);
+        setError(null);
+      })
       .catch((e) => { if (mounted) setError(e); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
@@ -31,4 +36,19 @@ export function fetchErrorMessage(error, fallback = "Could not load data. Check 
   if (error?.message === "clerk-token-timeout") return "Sign-in is still loading. Wait a moment and try again.";
   if (error?.code === "ECONNABORTED") return "Request timed out. The server may be busy — try again.";
   return error?.message || fallback;
+}
+
+/** Parse API error detail when responseType was blob (e.g. CSV download). */
+export async function blobErrorDetail(error, fallback = "Request failed") {
+  const data = error?.response?.data;
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.detail === "string") return parsed.detail;
+    } catch {
+      /* ignore */
+    }
+  }
+  return fetchErrorMessage(error, fallback);
 }

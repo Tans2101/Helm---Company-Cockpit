@@ -428,6 +428,10 @@ export default function Financials() {
                 className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover">
                 <Plus className="w-4 h-4" /> Log first entry
               </button>
+              <button data-testid="empty-settings-btn" onClick={openSettings}
+                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-4 py-2 hover:bg-white/5">
+                <PenLine className="w-4 h-4" /> Cash & currency
+              </button>
             </div>
           ) : <p className="text-sm text-zinc-600">Ask a workspace owner or finance teammate to add data.</p>}
         />

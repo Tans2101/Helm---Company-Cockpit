@@ -41,15 +41,37 @@ def client():
     mock_db.documents.insert_one = AsyncMock(return_value=None)
     mock_db.documents.find_one = AsyncMock(return_value=None)
     mock_db.documents.update_one = AsyncMock(return_value=None)
+    mock_db.documents.find_one_and_update = AsyncMock(return_value=None)
     mock_db.activities = MagicMock()
     mock_db.activities.insert_one = AsyncMock(return_value=None)
     mock_db.document_rate_events = MagicMock()
     mock_db.document_rate_events.count_documents = AsyncMock(return_value=0)
     mock_db.document_rate_events.insert_one = AsyncMock(return_value=None)
+    mock_db.workspaces = MagicMock()
+    mock_db.workspaces.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_doc_test",
+        "plan": "business",
+        "subscription_status": "active",
+        "financial_settings": {"currency": "usd"},
+    })
+    mock_db.memberships = MagicMock()
+    mock_db.memberships.find_one = AsyncMock(return_value={
+        "user_id": MOCK_PRINCIPAL["user_id"], "workspace_id": "ws_doc_test",
+        "status": "active", "pack": "owner", "role": "owner", "section_grants": {},
+    })
 
     with patch.object(server, "db", mock_db), patch.object(server.doc_storage, "r2_configured", return_value=True), patch.object(
         server.doc_storage, "upload_document", return_value="ws_doc_test/test-key.pdf"
-    ), patch.object(server, "log_activity", new_callable=AsyncMock, return_value=None):
+    ), patch.object(server, "log_activity", new_callable=AsyncMock, return_value=None), patch.object(
+        server, "can_section_write", new_callable=AsyncMock, return_value=True
+    ), patch.object(
+        server, "get_ws", new_callable=AsyncMock, return_value={
+            "workspace_id": "ws_doc_test", "plan": "business", "subscription_status": "active",
+            "billing_period_start": "2026-01-01T00:00:00+00:00",
+        }
+    ), patch.object(server, "BILLING_ENFORCED", False), patch.object(
+        server.plan_usage, "increment_period_extract", new_callable=AsyncMock, return_value=None
+    ):
         yield TestClient(server.app)
     server.app.dependency_overrides.clear()
 

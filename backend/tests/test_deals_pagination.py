@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import server  # noqa: E402
+from pagination import CURSOR_SEP, decode_cursor
 
 MOCK_PRINCIPAL = {
     "user_id": "test-user-pagination",
@@ -27,31 +28,50 @@ MOCK_PRINCIPAL = {
 
 
 class FakeCursor:
-    def __init__(self, items, sort_field: str):
+    def __init__(self, items, sort_field: str, id_field: str = "id"):
         self._all = list(items)
         self._sort_field = sort_field
+        self._id_field = id_field
         self._filt: dict = {}
         self._limit: int | None = None
         self._projection: dict | None = None
+        self._sort_specs = [(sort_field, -1)]
 
-    def sort(self, field, direction):
-        assert field == self._sort_field
-        self._all.sort(key=lambda x: x[field], reverse=direction == -1)
+    def sort(self, *args):
+        # Motor accepts .sort([("f", -1), ("id", -1)]) or .sort("f", -1)
+        if len(args) == 1 and isinstance(args[0], list):
+            self._sort_specs = list(args[0])
+        elif len(args) == 2:
+            self._sort_specs = [(args[0], args[1])]
         return self
 
     def limit(self, n):
         self._limit = n
         return self
 
+    def _matches(self, item, filt: dict) -> bool:
+        if "$or" in filt:
+            base = {k: v for k, v in filt.items() if k != "$or"}
+            if base and not self._matches(item, base):
+                return False
+            return any(self._matches(item, clause) for clause in filt["$or"])
+        for key, expected in filt.items():
+            if key == "$or":
+                continue
+            val = item.get(key)
+            if isinstance(expected, dict):
+                if "$lt" in expected and not (val is not None and val < expected["$lt"]):
+                    return False
+                if "$lte" in expected and not (val is not None and val <= expected["$lte"]):
+                    return False
+            elif val != expected:
+                return False
+        return True
+
     async def to_list(self, n):
-        items = self._all
-        ws = self._filt.get("workspace_id")
-        if ws is not None:
-            items = [i for i in items if i.get("workspace_id") == ws]
-        before = self._filt.get(self._sort_field, {})
-        if isinstance(before, dict) and "$lt" in before:
-            cutoff = before["$lt"]
-            items = [i for i in items if i[self._sort_field] < cutoff]
+        items = [i for i in self._all if self._matches(i, self._filt)]
+        for field, direction in reversed(self._sort_specs):
+            items.sort(key=lambda x: x.get(field) or "", reverse=direction == -1)
         if self._limit is not None:
             items = items[: self._limit]
         elif n is not None:
@@ -84,12 +104,13 @@ class FakeAggregateCursor:
 
 
 class FakeCollection:
-    def __init__(self, docs, sort_field: str):
+    def __init__(self, docs, sort_field: str, id_field: str = "id"):
         self._docs = docs
         self._sort_field = sort_field
+        self._id_field = id_field
 
     def find(self, filt, projection=None):
-        cursor = FakeCursor(self._docs, self._sort_field)
+        cursor = FakeCursor(self._docs, self._sort_field, self._id_field)
         cursor._filt = dict(filt or {})
         cursor._projection = projection
         return cursor
@@ -144,9 +165,20 @@ def deals_client():
     deals = _make_deals(60)
     mock_db = type("DB", (), {})()
     mock_db.deals = FakeCollection(deals, "updated_at")
-    mock_db.activities = FakeCollection([], "created_at")
+    mock_db.activities = FakeCollection([], "created_at", id_field="activity_id")
+    mock_db.workspaces = type("W", (), {})()
+    mock_db.workspaces.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_pagination",
+        "financial_settings": {"currency": "usd"},
+    })
+    mock_db.memberships = type("M", (), {})()
+    mock_db.memberships.find_one = AsyncMock(return_value={
+        "user_id": MOCK_PRINCIPAL["user_id"], "workspace_id": "ws_pagination",
+        "status": "active", "pack": "owner", "role": "owner", "section_grants": {},
+    })
 
-    with patch.object(server, "db", mock_db):
+    with patch.object(server, "db", mock_db), \
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
         yield TestClient(server.app), deals
     server.app.dependency_overrides.clear()
 
@@ -175,6 +207,9 @@ def test_deals_pagination_returns_all_sixty_without_duplicates(deals_client):
         cursor = body["next_cursor"]
         if cursor is None:
             break
+        # Composite cursor
+        ts, iid = decode_cursor(cursor)
+        assert ts and iid
 
     assert len(seen_ids) == 60
     assert set(seen_ids) == {d["id"] for d in all_deals}
@@ -189,11 +224,55 @@ def test_deals_limit_capped_at_200():
     deals = _make_deals(5)
     mock_db = type("DB", (), {})()
     mock_db.deals = FakeCollection(deals, "updated_at")
-    mock_db.activities = FakeCollection([], "created_at")
+    mock_db.activities = FakeCollection([], "created_at", id_field="activity_id")
+    mock_db.workspaces = type("W", (), {})()
+    mock_db.workspaces.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_pagination",
+        "financial_settings": {"currency": "usd"},
+    })
 
-    with patch.object(server, "db", mock_db):
+    with patch.object(server, "db", mock_db), \
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
         client = TestClient(server.app)
         r = client.get("/api/deals", params={"limit": 500})
         assert r.status_code == 200
         assert len(r.json()["items"]) == 5
+    server.app.dependency_overrides.clear()
+
+
+def test_tied_timestamps_not_skipped():
+    """Same updated_at across the page boundary must not drop deals."""
+    async def mock_principal():
+        return MOCK_PRINCIPAL
+
+    server.app.dependency_overrides[server.get_principal] = mock_principal
+    ts = "2025-06-01T12:00:00Z"
+    deals = [
+        {"id": f"deal_{i:03d}", "workspace_id": "ws_pagination", "name": f"D{i}",
+         "company": "Co", "value": 100, "stage": "lead", "owner_name": "R",
+         "close_date": "", "created_at": ts, "updated_at": ts}
+        for i in range(5)
+    ]
+    mock_db = type("DB", (), {})()
+    mock_db.deals = FakeCollection(deals, "updated_at")
+    mock_db.activities = FakeCollection([], "created_at", id_field="activity_id")
+    mock_db.workspaces = type("W", (), {})()
+    mock_db.workspaces.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_pagination", "financial_settings": {"currency": "usd"},
+    })
+
+    with patch.object(server, "db", mock_db), \
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
+        client = TestClient(server.app)
+        r1 = client.get("/api/deals", params={"limit": 2})
+        assert r1.status_code == 200
+        page1 = r1.json()["items"]
+        assert len(page1) == 2
+        cursor = r1.json()["next_cursor"]
+        assert CURSOR_SEP in cursor
+        r2 = client.get("/api/deals", params={"limit": 2, "before": cursor})
+        page2 = r2.json()["items"]
+        ids = [d["id"] for d in page1 + page2]
+        assert len(ids) == len(set(ids))
+        assert len(ids) == 4
     server.app.dependency_overrides.clear()

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Download, Trash2, AlertTriangle, ScrollText } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
 import { PageHeader, GlassCard } from "@/components/kit";
 
 export default function AccountSettings() {
@@ -69,8 +69,7 @@ export default function AccountSettings() {
       URL.revokeObjectURL(url);
       toast.success("Activity log downloaded");
     } catch (e) {
-      const detail = e?.response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : "Could not export activity log");
+      toast.error(await blobErrorDetail(e, "Could not export activity log"));
     } finally {
       setBusy(null);
     }
@@ -139,6 +138,15 @@ export default function AccountSettings() {
         >
           {busy === "export" ? "Exporting…" : "Export data"}
         </button>
+        {(user?.perms || []).includes("billing:manage") && (
+          <a
+            href="/app/billing"
+            data-testid="settings-billing-link"
+            className="ml-3 inline-flex items-center rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2.5 hover:bg-white/5"
+          >
+            Billing
+          </a>
+        )}
       </GlassCard>
 
       {canExportActivity && (

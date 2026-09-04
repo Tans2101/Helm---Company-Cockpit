@@ -214,7 +214,7 @@ export default function Pipeline() {
               <label className="text-xs text-zinc-500">Company
                 <input data-testid="deal-company" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder="Acme" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
-              <label className="text-xs text-zinc-500">Value ($)
+              <label className="text-xs text-zinc-500">Value ({sym})
                 <input data-testid="deal-value" type="number" min="0" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="25000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500">Stage

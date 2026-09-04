@@ -19,7 +19,7 @@ const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
-  { to: "/app/sales", label: "Pipeline", icon: Briefcase, id: "sales", perm: "sales:write" },
+  { to: "/app/sales", label: "Pipeline", icon: Briefcase, id: "sales" },
   { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
   { to: "/app/financials", label: "Financials", icon: DollarSign, id: "financials" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
@@ -151,7 +151,18 @@ function SidebarContent({ onNavigate, billingEnforced }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
-            <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
+            {(user?.perms || []).includes("billing:manage") ? (
+              <button
+                type="button"
+                data-testid="sidebar-billing-link"
+                onClick={() => { navigate("/app/billing"); onNavigate?.(); }}
+                className="text-[10px] text-zinc-600 truncate hover:text-gold transition-colors text-left"
+              >
+                {helmPlanLabel(company?.plan, isPro, billingEnforced)} · Billing
+              </button>
+            ) : (
+              <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
+            )}
           </div>
           <button
             data-testid="settings-link"

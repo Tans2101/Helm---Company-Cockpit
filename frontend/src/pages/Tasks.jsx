@@ -41,13 +41,19 @@ export default function Tasks() {
   );
 
   const move = async (taskId, column) => {
-    const prev = data.items;
-    const items = data.items.map((t) => (t.id === taskId ? { ...t, column } : t));
-    setData({ ...data, items });
+    let snapshot = null;
+    setData((prev) => {
+      if (!prev) return prev;
+      snapshot = prev;
+      return {
+        ...prev,
+        items: prev.items.map((t) => (t.id === taskId ? { ...t, column } : t)),
+      };
+    });
     try {
       await api.patch(`/tasks/${taskId}`, { column });
     } catch (e) {
-      setData({ ...data, items: prev });
+      if (snapshot) setData(snapshot);
       toast.error(e?.response?.data?.detail || "Failed to move task");
     }
   };
