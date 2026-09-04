@@ -1,10 +1,18 @@
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { PageHeader, LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
 
-/** Catalog types that still use this placeholder shell (none — all departments have pages). */
-export const PLACEHOLDER_DEPARTMENT_TYPES = [];
+/** Real department pages — keep in sync with App.js routes / AppLayout DEPT_ROUTE. */
+const REAL_DEPARTMENT_PAGES = {
+  production: "/app/departments/production",
+  procurement: "/app/departments/procurement",
+  legal: "/app/departments/legal",
+  engineering_maintenance: "/app/departments/engineering_maintenance",
+  hr: "/app/departments/hr",
+  sales: "/app/sales",
+  accounting_finance: "/app/financials",
+};
 
 export default function DepartmentPlaceholder() {
   const { deptType } = useParams();
@@ -44,6 +52,12 @@ export default function DepartmentPlaceholder() {
   }
 
   if (!data) return null;
+
+  const realTo = REAL_DEPARTMENT_PAGES[data.type];
+  // Dedicated routes take precedence in App.js; this catches any miss and avoids a false "coming soon".
+  if (realTo) {
+    return <Navigate to={realTo} replace />;
+  }
 
   const Icon = departmentIcon(data.icon);
   const name = data.name || "Department";
