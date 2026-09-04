@@ -82,6 +82,7 @@ def apply_department_filter(base_filter: dict, department_ids: Optional[list[str
 # Add new `{dept}_stages` (and similar) names here as department features ship.
 DEPARTMENT_DEPENDENT_COLLECTIONS = (
     "production_stages",
+    "procurement_requests",
     "deals",
     "financial_entries",
 )

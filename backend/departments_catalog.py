@@ -4,7 +4,8 @@ Future department-specific feature collections (when built) must follow the
 `{department}_stages` naming convention established by `production_stages`:
 
   - production_stages              (exists — Production chain)
-  - procurement_stages             (future)
+  - procurement_requests           (exists — Procurement request queue)
+  - procurement_stages             (unused; Procurement uses a request queue, not a chain)
   - legal_stages                   (future)
   - hr_stages                      (future)
   - engineering_maintenance_stages (future)
@@ -28,9 +29,8 @@ TYPE_HR = "hr"
 TYPE_ENGINEERING_MAINTENANCE = "engineering_maintenance"
 
 # Types that ship with a placeholder shell until their dedicated feature prompt.
-# Sales and Accounting & Finance use existing Pipeline / Financials pages.
+# Sales / Accounting & Finance / Production / Procurement have real pages.
 PLACEHOLDER_SHELL_TYPES = frozenset({
-    TYPE_PROCUREMENT,
     TYPE_LEGAL,
     TYPE_HR,
     TYPE_ENGINEERING_MAINTENANCE,

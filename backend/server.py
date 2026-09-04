@@ -4574,6 +4574,267 @@ async def delete_production_stage(stage_id: str, principal=Depends(get_principal
     return {"ok": True}
 
 
+# ------------------------- Procurement request queue -------------------------
+PROCUREMENT_STATUSES = frozenset({
+    "requested", "approved", "ordered", "delivered", "rejected",
+})
+PROCUREMENT_CLOSED_STATUSES = frozenset({"delivered", "rejected"})
+PROCUREMENT_APPROVAL_STATUSES = frozenset({"approved", "rejected"})
+
+
+async def _procurement_department(principal: dict) -> dict:
+    """Enabled Procurement department for this workspace, with access enforced."""
+    doc = await db.departments.find_one(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_catalog.TYPE_PROCUREMENT,
+            "enabled": True,
+        },
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Procurement department is not enabled")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to Procurement")
+    return doc
+
+
+def _can_lead_procurement(principal: dict, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+async def _enrich_procurement_request(req: dict) -> dict:
+    out = {k: v for k, v in req.items() if k != "_id"}
+    for field, label in (("requested_by", "requester"), ("approved_by", "approver")):
+        uid = out.get(field)
+        info = None
+        if uid:
+            u = await db.users.find_one(
+                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
+            )
+            info = {
+                "user_id": uid,
+                "name": (u or {}).get("name"),
+                "email": (u or {}).get("email"),
+                "picture": (u or {}).get("picture"),
+            }
+        out[label] = info
+    return out
+
+
+class ProcurementRequestCreate(BaseModel):
+    item: str
+    quantity: float = 1
+    vendor_name: str = ""
+    cost: Optional[float] = None
+    notes: str = ""
+
+
+class ProcurementRequestPatch(BaseModel):
+    item: Optional[str] = None
+    quantity: Optional[float] = None
+    vendor_name: Optional[str] = None
+    cost: Optional[float] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+
+@api_router.get("/procurement/requests")
+async def list_procurement_requests(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+):
+    dept = await _procurement_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in PROCUREMENT_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    rows = await db.procurement_requests.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_procurement(principal, membership)
+    items = [await _enrich_procurement_request(r) for r in rows]
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "Procurement",
+        "requests": items,
+        "statuses": ["requested", "approved", "ordered", "delivered", "rejected"],
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_lead": is_lead,
+        "can_approve": is_lead,
+        "my_user_id": principal["user_id"],
+    }
+
+
+@api_router.post("/procurement/requests")
+async def create_procurement_request(
+    payload: ProcurementRequestCreate,
+    principal=Depends(get_principal),
+):
+    dept = await _procurement_department(principal)
+    item = (payload.item or "").strip()
+    if not item:
+        raise HTTPException(status_code=400, detail="Item is required")
+    try:
+        quantity = float(payload.quantity)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Quantity must be a number")
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+    cost = payload.cost
+    if cost is not None:
+        try:
+            cost = round(float(cost), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Cost must be a number")
+        if cost < 0:
+            raise HTTPException(status_code=400, detail="Cost must be non-negative")
+    now = datetime.now(timezone.utc).isoformat()
+    req = {
+        "id": f"preq_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "item": item,
+        "quantity": quantity,
+        "vendor_name": (payload.vendor_name or "").strip(),
+        "cost": cost,
+        "requested_by": principal["user_id"],
+        "approved_by": None,
+        "status": "requested",
+        "notes": (payload.notes or "").strip(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.procurement_requests.insert_one(dict(req))
+    return {"ok": True, "request": await _enrich_procurement_request(req)}
+
+
+@api_router.patch("/procurement/requests/{request_id}")
+async def patch_procurement_request(
+    request_id: str,
+    payload: ProcurementRequestPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _procurement_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_procurement(principal, membership)
+    req = await db.procurement_requests.find_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    is_owner = req.get("requested_by") == principal["user_id"]
+    owner_can_edit_content = is_owner and req.get("status") == "requested"
+    can_edit_content = is_lead or owner_can_edit_content
+
+    upd: dict = {}
+    content_touched = False
+
+    if payload.item is not None:
+        content_touched = True
+        item = payload.item.strip()
+        if not item:
+            raise HTTPException(status_code=400, detail="Item is required")
+        upd["item"] = item
+    if payload.quantity is not None:
+        content_touched = True
+        try:
+            quantity = float(payload.quantity)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Quantity must be a number")
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="Quantity must be positive")
+        upd["quantity"] = quantity
+    if payload.vendor_name is not None:
+        content_touched = True
+        upd["vendor_name"] = payload.vendor_name.strip()
+    if payload.cost is not None:
+        content_touched = True
+        try:
+            cost = round(float(payload.cost), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Cost must be a number")
+        if cost < 0:
+            raise HTTPException(status_code=400, detail="Cost must be non-negative")
+        upd["cost"] = cost
+    if payload.notes is not None:
+        content_touched = True
+        upd["notes"] = payload.notes.strip()
+
+    if content_touched and not can_edit_content:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only edit your own requests while they are still requested",
+        )
+
+    if payload.status is not None:
+        new_status = payload.status.strip().lower()
+        if new_status not in PROCUREMENT_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        if new_status != req.get("status"):
+            if new_status in PROCUREMENT_APPROVAL_STATUSES:
+                if not is_lead:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Only a Procurement lead or the CEO can approve or reject requests",
+                    )
+                upd["status"] = new_status
+                if new_status == "approved":
+                    upd["approved_by"] = principal["user_id"]
+                # rejected leaves approved_by unchanged / None
+            else:
+                # ordered / delivered / back to requested — members may advance open work
+                upd["status"] = new_status
+
+    if not upd:
+        return {"ok": True, "request": await _enrich_procurement_request(req)}
+
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.procurement_requests.update_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    return {"ok": True, "request": await _enrich_procurement_request({**req, **upd})}
+
+
+@api_router.delete("/procurement/requests/{request_id}")
+async def delete_procurement_request(request_id: str, principal=Depends(get_principal)):
+    dept = await _procurement_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_procurement(principal, membership)
+    req = await db.procurement_requests.find_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    is_owner = req.get("requested_by") == principal["user_id"]
+    if is_lead:
+        pass
+    elif is_owner and req.get("status") == "requested":
+        pass
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the requester (while still requested) or a lead/CEO can delete this request",
+        )
+    await db.procurement_requests.delete_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+    )
+    return {"ok": True}
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -5237,7 +5498,7 @@ async def paddle_webhook(request: Request):
 # ------------------------- GDPR / account -------------------------
 _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "activities", "updates", "chat_messages",
-    "paddle_intents", "payment_transactions",
+    "paddle_intents", "payment_transactions", "procurement_requests",
 )
 
 
@@ -5570,6 +5831,10 @@ async def _ensure_indexes():
         (db.production_stages, [("id", 1)], {"unique": True}),
         (db.production_stages, [("department_id", 1), ("order", 1)], {}),
         (db.production_stages, [("workspace_id", 1)], {}),
+        (db.procurement_requests, [("id", 1)], {"unique": True}),
+        (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
+        (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),
+        (db.procurement_requests, [("workspace_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:

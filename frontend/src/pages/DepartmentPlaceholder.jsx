@@ -5,7 +5,6 @@ import { departmentIcon } from "@/lib/departmentIcons";
 
 /** Catalog types that still use this placeholder shell. */
 export const PLACEHOLDER_DEPARTMENT_TYPES = [
-  "procurement",
   "legal",
   "hr",
   "engineering_maintenance",
