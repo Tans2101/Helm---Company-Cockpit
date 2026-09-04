@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, User, Trash2, Mail, Copy, Link2, Shield } from "lucide-react";
+import { UserPlus, User, Trash2, Mail, Copy, Link2, Shield, Lock } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -22,8 +22,13 @@ export default function Members() {
   const [pack, setPack] = useState("member");
   const [inviteDept, setInviteDept] = useState(DEFAULT_DEPARTMENTS[0]);
   const [busy, setBusy] = useState(false);
-  const [accessDraft, setAccessDraft] = useState(null);
+  /** Draft: membership_id → section_id[] (only CEO-editable grants, not pack/dept). */
+  const [grantsDraft, setGrantsDraft] = useState(null);
   const [accessBusy, setAccessBusy] = useState(false);
+
+  useEffect(() => {
+    setGrantsDraft(null);
+  }, [accessData]);
 
   if (loading) return <LoadingScreen label="Loading team" />;
   if (error || !data) {
@@ -38,7 +43,37 @@ export default function Members() {
 
   const packOptions = PACKS.filter((p) => p.id !== "owner" || canManageOwners);
   const sections = accessData?.sections || [];
-  const sectionAccess = accessDraft ?? accessData?.section_access ?? {};
+  const accessMembers = accessData?.members || [];
+
+  const draftFor = (membershipId, member) => {
+    if (grantsDraft && Object.prototype.hasOwnProperty.call(grantsDraft, membershipId)) {
+      return grantsDraft[membershipId];
+    }
+    return member?.section_grants || [];
+  };
+
+  const toggleGrant = (membershipId, sectionId, member) => {
+    const current = draftFor(membershipId, member);
+    const next = current.includes(sectionId)
+      ? current.filter((id) => id !== sectionId)
+      : [...current, sectionId];
+    setGrantsDraft({ ...(grantsDraft || {}), [membershipId]: next });
+  };
+
+  const saveAccess = async () => {
+    if (!grantsDraft) return;
+    setAccessBusy(true);
+    try {
+      await api.patch("/access/member-grants", { grants: grantsDraft });
+      toast.success("Member access saved");
+      setGrantsDraft(null);
+      reloadAccess();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save");
+    } finally {
+      setAccessBusy(false);
+    }
+  };
 
   const invite = async () => {
     if (!email.trim()) return;
@@ -48,6 +83,7 @@ export default function Members() {
       toast.success(res.auto_joined ? "Member added instantly" : res.email_sent ? "Invitation email sent" : "Invitation created");
       setEmail("");
       reload();
+      reloadAccess();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not invite");
     } finally {
@@ -59,39 +95,27 @@ export default function Members() {
     try {
       await api.patch(`/members/${m.membership_id}`, { pack: newPack, department });
       reload();
+      reloadAccess();
       toast.success("Access updated");
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const remove = async (m) => {
-    try { await api.delete(`/members/${m.membership_id}`); reload(); toast.success("Member removed"); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    try {
+      await api.delete(`/members/${m.membership_id}`);
+      reload();
+      reloadAccess();
+      toast.success("Member removed");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const copyCode = () => {
     if (codeData?.join_code) { navigator.clipboard?.writeText(codeData.join_code); toast.success("Invite code copied"); }
   };
 
-  const toggleDept = (sectionId, dept) => {
-    const current = sectionAccess[sectionId] || [];
-    const next = current.includes(dept) ? current.filter((d) => d !== dept) : [...current, dept];
-    setAccessDraft({ ...sectionAccess, [sectionId]: next });
-  };
-
-  const saveAccess = async () => {
-    setAccessBusy(true);
-    try {
-      await api.patch("/access/sections", { section_access: sectionAccess });
-      toast.success("Section access saved");
-      setAccessDraft(null);
-      reloadAccess();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
-    finally { setAccessBusy(false); }
-  };
-
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Team & Access" subtitle="Invite teammates with access packs, assign departments, and control which departments can edit each section." />
+      <PageHeader title="Team & Access" subtitle="Invite teammates with access packs, and control what each person can edit." />
 
       {canManageOwners && (
         <div className="flex gap-1 mb-6 p-1 rounded-lg border border-white/10 bg-white/[0.02] w-fit">
@@ -108,37 +132,95 @@ export default function Members() {
         <GlassCard className="p-5 mb-6 fade-up" data-testid="manage-access-panel">
           <div className="flex items-center gap-2 mb-2 text-gold">
             <Shield className="w-4 h-4" />
-            <SectionLabel>Department section access</SectionLabel>
+            <SectionLabel>Member section access</SectionLabel>
           </div>
-          <p className="text-sm text-zinc-500 mb-5">Choose which departments can edit each area — on top of their access pack. Owners always have full access.</p>
-          <div className="space-y-5">
-            {sections.map((section) => (
-              <div key={section.id} className="border-b border-white/5 pb-4 last:border-0">
-                <p className="text-white text-sm font-medium">{section.label}</p>
-                <p className="text-xs text-zinc-600 mb-2">{section.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {DEFAULT_DEPARTMENTS.map((dept) => {
-                    const on = (sectionAccess[section.id] || []).includes(dept);
-                    return (
-                      <button
-                        key={dept}
-                        type="button"
-                        data-testid={`access-${section.id}-${dept}`}
-                        onClick={() => toggleDept(section.id, dept)}
-                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", on ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-zinc-500 hover:border-white/20")}
-                      >
-                        {dept}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-          <button data-testid="save-access-btn" onClick={saveAccess} disabled={accessBusy}
-            className="mt-5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60">
-            {accessBusy ? "Saving…" : "Save access rules"}
-          </button>
+          <p className="text-sm text-zinc-500 mb-5">
+            Choose what each teammate can edit beyond their access pack. Owners (CEOs) always have full access and are not listed here.
+          </p>
+
+          {!accessData ? (
+            <p className="text-sm text-zinc-500">Loading access…</p>
+          ) : accessMembers.length === 0 ? (
+            <p className="text-sm text-zinc-500" data-testid="access-empty">No team members to manage yet. Invite someone from the Team tab.</p>
+          ) : (
+            <div className="space-y-6">
+              {accessMembers.map((member) => {
+                const meta = packMeta(member.pack);
+                const grants = draftFor(member.membership_id, member);
+                const fromPack = new Set(member.from_pack || []);
+                return (
+                  <div
+                    key={member.membership_id}
+                    className="border-b border-white/5 pb-5 last:border-0 last:pb-0"
+                    data-testid={`access-member-${member.membership_id}`}
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      {member.picture ? (
+                        <img src={member.picture} alt="" className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                          <User className="w-3.5 h-3.5 text-zinc-500" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{member.name || member.email}</p>
+                        <p className="text-xs text-zinc-500 truncate">{member.email} · {member.department || "General"}</p>
+                      </div>
+                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide rounded px-2 py-1 border shrink-0", meta.style)}>
+                        <meta.icon className="w-3 h-3" />{meta.label}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sections.map((section) => {
+                        const packLocked = fromPack.has(section.id);
+                        const granted = grants.includes(section.id);
+                        const on = packLocked || granted;
+                        if (packLocked) {
+                          return (
+                            <span
+                              key={section.id}
+                              title={`${section.label} is included in their ${meta.label} pack`}
+                              data-testid={`access-${member.membership_id}-${section.id}-pack`}
+                              className="inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border border-white/10 bg-white/[0.03] text-zinc-400"
+                            >
+                              <Lock className="w-3 h-3" />
+                              {section.label}
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={section.id}
+                            type="button"
+                            title={section.description}
+                            data-testid={`access-${member.membership_id}-${section.id}`}
+                            onClick={() => toggleGrant(member.membership_id, section.id, member)}
+                            className={cn(
+                              "text-xs rounded-md px-2.5 py-1 border transition-colors",
+                              on ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-zinc-500 hover:border-white/20",
+                            )}
+                          >
+                            {section.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {accessMembers.length > 0 && (
+            <button
+              data-testid="save-access-btn"
+              onClick={saveAccess}
+              disabled={accessBusy || !grantsDraft}
+              className="mt-5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60"
+            >
+              {accessBusy ? "Saving…" : "Save access"}
+            </button>
+          )}
         </GlassCard>
       )}
 

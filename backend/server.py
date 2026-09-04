@@ -349,11 +349,15 @@ async def _membership_for(principal: dict) -> dict:
 
 
 async def can_section_write(principal: dict, section_id: str, pack_perm: str) -> bool:
-    """Pack permission OR CEO-granted department access for a section."""
+    """Pack permission OR CEO-granted member/department access for a section."""
     if pack_perm in perms_for(principal["pack"]):
         return True
-    ws = await get_ws(principal["workspace_id"])
     membership = await _membership_for(principal)
+    # Per-member grants (preferred)
+    if section_id in sec_access.normalize_section_grants(membership.get("section_grants")):
+        return True
+    # Legacy department grants
+    ws = await get_ws(principal["workspace_id"])
     dept = (membership.get("department") or "General").strip()
     allowed = (ws.get("section_access") or {}).get(section_id) or []
     return dept in allowed
@@ -1259,11 +1263,13 @@ async def list_members(principal=Depends(get_principal)):
     out = []
     for m in mems:
         u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
+        pack = pack_of(m)
         out.append({
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
-            "pack": pack_of(m), "status": m["status"], "name": (u or {}).get("name"),
+            "pack": pack, "status": m["status"], "name": (u or {}).get("name"),
             "picture": (u or {}).get("picture"), "user_id": m.get("user_id"),
             "department": m.get("department") or "General",
+            "section_grants": sec_access.normalize_section_grants(m.get("section_grants")),
             "is_self": m.get("user_id") == principal["user_id"],
         })
     return {"members": out, "my_role": principal["role"], "my_pack": principal["pack"]}
@@ -1331,26 +1337,85 @@ class SectionAccessInput(BaseModel):
     section_access: dict
 
 
+class MemberGrantsInput(BaseModel):
+    """Map membership_id → list of manageable section ids the CEO grants that person."""
+    grants: dict
+
+
 @api_router.get("/access/sections")
 async def get_section_access(principal=Depends(get_principal)):
     ws = await get_ws(principal["workspace_id"])
     can_manage = "members:manage" in perms_for(principal["pack"])
+    section_access = sec_access.normalize_section_access(ws.get("section_access"))
+    mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(200)
+    members_out = []
+    for m in mems:
+        pack = pack_of(m)
+        if pack == "owner":
+            continue  # Owners/CEOs always have full access — not managed here
+        u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
+        grants = sec_access.normalize_section_grants(m.get("section_grants"))
+        from_pack = sec_access.sections_for_perms(perms_for(pack))
+        dept = (m.get("department") or "General").strip()
+        from_dept = [sid for sid, depts in section_access.items() if dept in (depts or [])]
+        effective = sorted(set(from_pack) | set(grants) | set(from_dept))
+        members_out.append({
+            "membership_id": m["membership_id"],
+            "email": m["email"],
+            "name": (u or {}).get("name") or m["email"],
+            "picture": (u or {}).get("picture"),
+            "pack": pack,
+            "department": dept,
+            "status": m.get("status"),
+            "section_grants": grants,
+            "from_pack": from_pack,
+            "from_department": from_dept,
+            "effective": effective,
+        })
+    members_out.sort(key=lambda x: (x.get("name") or x["email"]).lower())
     return {
         "sections": sec_access.MANAGEABLE_SECTIONS,
         "departments": sec_access.DEFAULT_DEPARTMENTS,
-        "section_access": sec_access.normalize_section_access(ws.get("section_access")),
+        "section_access": section_access,
+        "members": members_out,
         "can_manage": can_manage,
     }
 
 
 @api_router.patch("/access/sections")
 async def update_section_access(payload: SectionAccessInput, principal=Depends(require_pro_perm("members:manage"))):
+    """Legacy department → section map (kept for API compatibility). Prefer /access/member-grants."""
     normalized = sec_access.normalize_section_access(payload.section_access)
     await db.workspaces.update_one(
         {"workspace_id": principal["workspace_id"]},
         {"$set": {"section_access": normalized}},
     )
     return {"ok": True, "section_access": normalized}
+
+
+@api_router.patch("/access/member-grants")
+async def update_member_grants(payload: MemberGrantsInput, principal=Depends(require_pro_perm("members:manage"))):
+    """CEO sets per-member section grants. Owners are ignored — they always have full access."""
+    if not isinstance(payload.grants, dict):
+        raise HTTPException(status_code=400, detail="grants must be an object")
+    ws_id = principal["workspace_id"]
+    updated = 0
+    for membership_id, raw_grants in payload.grants.items():
+        mid = str(membership_id).strip()
+        if not mid:
+            continue
+        m = await db.memberships.find_one({"membership_id": mid, "workspace_id": ws_id}, {"_id": 0})
+        if not m:
+            continue
+        if pack_of(m) == "owner":
+            continue
+        grants = sec_access.normalize_section_grants(raw_grants if isinstance(raw_grants, list) else [])
+        await db.memberships.update_one(
+            {"membership_id": mid, "workspace_id": ws_id},
+            {"$set": {"section_grants": grants}},
+        )
+        updated += 1
+    return {"ok": True, "updated": updated}
 
 
 @api_router.delete("/members/{membership_id}")
@@ -1713,7 +1778,7 @@ async def decisions(principal=Depends(get_principal)):
         "suggestions": suggestions,
         "insights_generated_at": c.get("insights_generated_at"),
         "is_pro": workspace_is_pro(c),
-        "can_act": "decisions:act" in perms_for(principal["pack"]),
+        "can_act": await can_section_write(principal, "decisions", "decisions:act"),
     }
 
 
@@ -1723,7 +1788,7 @@ class DecisionAction(BaseModel):
 
 
 @api_router.post("/decisions/{decision_id}/action")
-async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require_pro_perm("decisions:act"))):
+async def decision_action(decision_id: str, payload: DecisionAction, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = False
@@ -1760,7 +1825,7 @@ def _decision_fields(p: "DecisionInput"):
 
 
 @api_router.post("/decisions")
-async def create_decision(payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
+async def create_decision(payload: DecisionInput, principal=Depends(require_section("decisions", "decisions:act"))):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -1781,7 +1846,7 @@ async def create_decision(payload: DecisionInput, principal=Depends(require_pro_
 
 
 @api_router.post("/decisions/generate-suggestions")
-async def generate_decision_suggestions(principal=Depends(require_pro_perm("decisions:act"))):
+async def generate_decision_suggestions(principal=Depends(require_section("decisions", "decisions:act"))):
     result = await _generate_insights(principal["workspace_id"], raise_on_rate_limit=True)
     c = await get_ws(principal["workspace_id"])
     return {
@@ -1792,7 +1857,7 @@ async def generate_decision_suggestions(principal=Depends(require_pro_perm("deci
 
 
 @api_router.post("/decisions/suggestions/{suggestion_id}/approve")
-async def approve_decision_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def approve_decision_suggestion(suggestion_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     suggestions = list(c.get("decision_suggestions") or [])
     sug = next((s for s in suggestions if s.get("id") == suggestion_id), None)
@@ -1824,7 +1889,7 @@ async def approve_decision_suggestion(suggestion_id: str, principal=Depends(requ
 
 
 @api_router.post("/decisions/suggestions/{suggestion_id}/dismiss")
-async def dismiss_decision_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def dismiss_decision_suggestion(suggestion_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     suggestions = list(c.get("decision_suggestions") or [])
     before = len(suggestions)
@@ -1839,7 +1904,7 @@ async def dismiss_decision_suggestion(suggestion_id: str, principal=Depends(requ
 
 
 @api_router.post("/delegates/suggestions/{suggestion_id}/assign")
-async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     """Promote a delegate suggestion into a real task assigned to the suggested owner."""
     c = await get_ws(principal["workspace_id"])
     suggestions = list(c.get("delegate_suggestions") or [])
@@ -1883,7 +1948,7 @@ async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(requi
 
 
 @api_router.post("/delegates/suggestions/{suggestion_id}/dismiss")
-async def dismiss_delegate_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def dismiss_delegate_suggestion(suggestion_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     suggestions = list(c.get("delegate_suggestions") or [])
     before = len(suggestions)
@@ -1897,7 +1962,7 @@ async def dismiss_delegate_suggestion(suggestion_id: str, principal=Depends(requ
     return {"ok": True}
 
 @api_router.patch("/decisions/{decision_id}")
-async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
+async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = c["decisions"]
     found = None
@@ -1913,7 +1978,7 @@ async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depe
 
 
 @api_router.delete("/decisions/{decision_id}")
-async def delete_decision(decision_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+async def delete_decision(decision_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
     c = await get_ws(principal["workspace_id"])
     decisions = [d for d in c["decisions"] if d["id"] != decision_id]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
@@ -2367,7 +2432,7 @@ async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("ta
     assignee_uid = principal["user_id"]
     assignee_name = principal.get("name") or principal.get("email") or "Me"
     if payload.assignee_user_id and payload.assignee_user_id != principal["user_id"]:
-        if "tasks:assign" not in perms_for(principal["pack"]):
+        if not await can_section_write(principal, "tasks", "tasks:assign"):
             raise HTTPException(status_code=403, detail="You can only create tasks for yourself")
         member = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "user_id": payload.assignee_user_id, "status": "active"}, {"_id": 0})
         if not member:
@@ -2397,7 +2462,7 @@ async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_p
     if not target:
         raise HTTPException(status_code=404, detail="Task not found")
     owns = target.get("assignee_user_id") == principal["user_id"]
-    if target.get("assignee_user_id") and not owns and "tasks:assign" not in perms_for(principal["pack"]):
+    if target.get("assignee_user_id") and not owns and not await can_section_write(principal, "tasks", "tasks:assign"):
         raise HTTPException(status_code=403, detail="You can only move your own tasks")
     target["column"] = payload.column
     if payload.column == "done":
