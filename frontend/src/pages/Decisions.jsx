@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, X, Sparkles, Plus, PenLine, Trash2 } from "lucide-react";
+import { Check, X, Sparkles, Plus, PenLine, Trash2, RefreshCw } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
@@ -12,7 +12,16 @@ const statusStyle = {
   rejected: "text-rose-400 bg-rose-400/10 border-rose-400/20",
   delegated: "text-sky-400 bg-sky-400/10 border-sky-400/20",
 };
-const emptyForm = () => ({ title: "", category: "General", description: "", recommendation: "", confidence: "", due: "", impact: "Medium" });
+const emptyForm = () => ({ title: "", category: "General", description: "", recommendation: "", due: "", impact: "Medium" });
+
+function ConfidenceBadge({ confidence, ai }) {
+  if (confidence == null || confidence === "") return null;
+  return (
+    <span className={cn("ml-auto font-mono text-xs", ai ? "text-amber-300" : "text-gold")}>
+      {confidence}%{ai ? " AI estimate" : " confidence"}
+    </span>
+  );
+}
 
 export default function Decisions() {
   const { data, loading, error, reload } = useFetch("/decisions");
@@ -22,6 +31,7 @@ export default function Decisions() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
 
   if (loading) return <LoadingScreen label="Loading decisions" />;
   if (error || !data) {
@@ -34,18 +44,27 @@ export default function Decisions() {
     );
   }
   const canAct = data.can_act;
+  const suggestions = data.suggestions || [];
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
     setEditing(d.id);
-    setForm({ title: d.title, category: d.category, description: d.description || "", recommendation: d.recommendation || "", confidence: d.confidence ?? "", due: d.due === "—" ? "" : d.due, impact: d.impact });
+    setForm({
+      title: d.title,
+      category: d.category,
+      description: d.description || "",
+      recommendation: d.recommendation || "",
+      due: d.due === "—" ? "" : d.due,
+      impact: d.impact,
+    });
     setShowForm(true);
   };
 
   const save = async () => {
     if (!form.title.trim()) { toast.error("Add a title"); return; }
     setSaving(true);
-    const payload = { ...form, confidence: form.confidence === "" ? null : parseInt(form.confidence) };
+    // Manual decisions use Impact only — never invent a confidence %
+    const payload = { ...form, confidence: null };
     try {
       if (editing) { await api.patch(`/decisions/${editing}`, payload); toast.success("Decision updated"); }
       else { await api.post("/decisions", payload); toast.success("Decision added"); }
@@ -67,10 +86,54 @@ export default function Decisions() {
     catch (e) { toast.error("Could not delete"); }
   };
 
+  const approveSuggestion = async (id) => {
+    setBusy(id);
+    try {
+      await api.post(`/decisions/suggestions/${id}/approve`);
+      toast.success("Suggestion accepted — now a pending decision");
+      reload();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not approve"); }
+    finally { setBusy(null); }
+  };
+
+  const dismissSuggestion = async (id) => {
+    setBusy(id);
+    try {
+      await api.post(`/decisions/suggestions/${id}/dismiss`);
+      toast.success("Suggestion dismissed");
+      reload();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not dismiss"); }
+    finally { setBusy(null); }
+  };
+
+  const regenerate = async () => {
+    setGenBusy(true);
+    try {
+      await api.post("/decisions/generate-suggestions");
+      toast.success("Suggestions refreshed from live signals");
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not regenerate suggestions");
+    } finally {
+      setGenBusy(false);
+    }
+  };
+
   const addBtn = canAct ? (
-    <button data-testid="new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
-      <Plus className="w-4 h-4" /> New decision
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        data-testid="refresh-suggestions-btn"
+        onClick={regenerate}
+        disabled={genBusy}
+        className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 hover:bg-white/5 disabled:opacity-60"
+      >
+        <RefreshCw className={cn("w-4 h-4", genBusy && "animate-spin")} />
+        {genBusy ? "Scanning…" : "Refresh suggestions"}
+      </button>
+      <button data-testid="new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
+        <Plus className="w-4 h-4" /> New decision
+      </button>
+    </div>
   ) : null;
 
   const pending = data.decisions.filter((d) => d.status === "pending");
@@ -78,21 +141,93 @@ export default function Decisions() {
 
   return (
     <div>
-      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Log a call, get it owned, track the outcome." action={addBtn} />
+      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals — you confirm before anything becomes a real call." action={addBtn} />
 
-      {data.decisions.length === 0 ? (
-        <EmptyState title="No decisions yet" body="Log the calls that need to be made — approvals, hires, trade-offs — and track who owns each one."
+      {suggestions.length > 0 && (
+        <div className="mb-8" data-testid="suggested-decisions">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <SectionLabel>Suggested by Helm</SectionLabel>
+            <span className="font-mono text-xs text-amber-300/80">{suggestions.length}</span>
+          </div>
+          <div className="space-y-3">
+            {suggestions.map((s) => (
+              <GlassCard key={s.id} className="p-5 fade-up border-amber-400/20 bg-amber-400/[0.03]" data-testid={`suggestion-${s.id}`}>
+                <div className="flex flex-col lg:flex-row lg:items-start gap-5">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300 border border-amber-400/30 rounded px-1.5 py-0.5">
+                        AI Suggested — verify before acting
+                      </span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 border border-white/10 rounded px-1.5 py-0.5">{s.category}</span>
+                      <span className="text-[10px] font-mono text-zinc-600">Impact: {s.impact}</span>
+                    </div>
+                    <h3 className="text-lg text-white font-medium tracking-tight">{s.title}</h3>
+                    {s.description && <p className="text-sm text-zinc-500 mt-1">{s.description}</p>}
+                    {s.recommendation && (
+                      <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/[0.04] p-3">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span className="text-[11px] font-mono uppercase tracking-wider text-amber-300">Helm recommendation</span>
+                          <ConfidenceBadge confidence={s.confidence} ai />
+                        </div>
+                        <p className="text-sm text-zinc-200 leading-relaxed">{s.recommendation}</p>
+                        {s.confidence != null && (
+                          <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
+                            <div className="h-full bg-amber-400/70 rounded-full" style={{ width: `${s.confidence}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {canAct && (
+                    <div className="flex lg:flex-col gap-2 lg:w-40">
+                      <button
+                        data-testid={`approve-suggestion-${s.id}`}
+                        disabled={busy === s.id}
+                        onClick={() => approveSuggestion(s.id)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium py-2 hover:bg-gold-hover disabled:opacity-50"
+                      >
+                        <Check className="w-4 h-4" /> Accept
+                      </button>
+                      <button
+                        data-testid={`dismiss-suggestion-${s.id}`}
+                        disabled={busy === s.id}
+                        onClick={() => dismissSuggestion(s.id)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-400 text-sm py-2 hover:bg-white/5 hover:text-rose-400 disabled:opacity-50"
+                      >
+                        <X className="w-4 h-4" /> Dismiss
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.decisions.length === 0 && suggestions.length === 0 ? (
+        <EmptyState title="No decisions yet" body="Log the calls that need to be made — or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
           action={canAct ? <button data-testid="empty-new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Log first decision</button> : null} />
       ) : (
         <>
+          {pending.length > 0 && <SectionLabel className="mb-4">Open decisions</SectionLabel>}
           <div className="space-y-4">
-            {pending.map((d) => (
+            {pending.map((d) => {
+              const isAi = d.source === "ai_suggested";
+              return (
               <GlassCard key={d.id} className="p-5 fade-up" data-testid={`decision-${d.id}`}>
                 <div className="flex flex-col lg:flex-row lg:items-start gap-5">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 border border-white/10 rounded px-1.5 py-0.5">{d.category}</span>
                       <span className={cn("text-[10px] font-mono uppercase tracking-wider rounded px-1.5 py-0.5 border", statusStyle[d.status])}>{d.status}</span>
+                      {isAi && (
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300/90 border border-amber-400/20 rounded px-1.5 py-0.5">
+                          From Helm
+                        </span>
+                      )}
                       <span className="text-[10px] font-mono text-zinc-600">Impact: {d.impact} · Due {d.due}</span>
                       {canAct && (
                         <span className="ml-auto flex items-center gap-1">
@@ -105,16 +240,18 @@ export default function Decisions() {
                     {d.description && <p className="text-sm text-zinc-500 mt-1">{d.description}</p>}
 
                     {d.recommendation && (
-                      <div className="mt-4 rounded-lg border border-gold/20 bg-gold/[0.04] p-3">
+                      <div className={cn("mt-4 rounded-lg border p-3", isAi ? "border-amber-400/20 bg-amber-400/[0.04]" : "border-gold/20 bg-gold/[0.04]")}>
                         <div className="flex items-center gap-1.5 mb-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-gold" />
-                          <span className="text-[11px] font-mono uppercase tracking-wider text-gold">Recommendation</span>
-                          {d.confidence != null && <span className="ml-auto font-mono text-xs text-gold">{d.confidence}% confidence</span>}
+                          <Sparkles className={cn("w-3.5 h-3.5", isAi ? "text-amber-300" : "text-gold")} />
+                          <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-amber-300" : "text-gold")}>
+                            {isAi ? "Helm recommendation" : "Recommendation"}
+                          </span>
+                          <ConfidenceBadge confidence={d.confidence} ai={isAi} />
                         </div>
                         <p className="text-sm text-zinc-200 leading-relaxed">{d.recommendation}</p>
                         {d.confidence != null && (
                           <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
-                            <div className="h-full bg-gold rounded-full" style={{ width: `${d.confidence}%` }} />
+                            <div className={cn("h-full rounded-full", isAi ? "bg-amber-400/70" : "bg-gold")} style={{ width: `${d.confidence}%` }} />
                           </div>
                         )}
                       </div>
@@ -137,7 +274,7 @@ export default function Decisions() {
                   </div>
                 </div>
               </GlassCard>
-            ))}
+            );})}
           </div>
 
           {resolved.length > 0 && (

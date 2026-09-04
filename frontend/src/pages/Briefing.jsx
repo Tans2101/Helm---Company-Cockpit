@@ -16,6 +16,7 @@ export default function Briefing() {
   const { data: company, loading: companyLoading, error: companyError, reload: reloadCompany } = useFetch("/company");
   const { data: checklist } = useFetch("/onboarding/checklist");
   const [genLoading, setGenLoading] = useState(false);
+  const [delegateBusy, setDelegateBusy] = useState(null);
   const navigate = useNavigate();
 
   const loading = briefingLoading || companyLoading;
@@ -44,6 +45,32 @@ export default function Briefing() {
       toast.error(e?.response?.data?.detail || "Could not generate briefing");
     } finally {
       setGenLoading(false);
+    }
+  };
+
+  const assignDelegate = async (id) => {
+    setDelegateBusy(id);
+    try {
+      await api.post(`/delegates/suggestions/${id}/assign`);
+      toast.success("Task created from Helm suggestion");
+      reloadBriefing();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not assign task");
+    } finally {
+      setDelegateBusy(null);
+    }
+  };
+
+  const dismissDelegate = async (id) => {
+    setDelegateBusy(id);
+    try {
+      await api.post(`/delegates/suggestions/${id}/dismiss`);
+      toast.success("Suggestion dismissed");
+      reloadBriefing();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not dismiss");
+    } finally {
+      setDelegateBusy(null);
     }
   };
 
@@ -148,6 +175,9 @@ export default function Briefing() {
             <span className="font-mono text-xs text-gold">{data.what_to_decide.length}</span>
           </div>
           <div className="space-y-3">
+            {data.what_to_decide.length === 0 && (
+              <p className="text-xs text-zinc-600 leading-relaxed">No open decisions yet. Log one or wait for Helm to draft from live signals.</p>
+            )}
             {data.what_to_decide.map((d) => (
               <button key={d.id} onClick={() => navigate("/app/decisions")} data-testid={`decide-${d.id}`}
                 className="w-full text-left rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-gold/30 hover:bg-white/[0.04] group">
@@ -156,10 +186,17 @@ export default function Briefing() {
                   <ArrowUpRight className="w-4 h-4 text-zinc-600 group-hover:text-gold shrink-0" />
                 </div>
                 <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.detail}</p>
-                <span className={cn("inline-block mt-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded",
-                  d.urgency === "high" ? "text-rose-400 bg-rose-400/10" : "text-amber-400 bg-amber-400/10")}>
-                  {d.urgency} priority
-                </span>
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <span className={cn("inline-block text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded",
+                    d.urgency === "high" ? "text-rose-400 bg-rose-400/10" : "text-amber-400 bg-amber-400/10")}>
+                    {d.urgency} priority
+                  </span>
+                  {d.source === "ai_suggested" && (
+                    <span className="inline-block text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded text-amber-300 bg-amber-400/10">
+                      AI suggested{d.confidence != null ? ` · ${d.confidence}% est.` : ""}
+                    </span>
+                  )}
+                </div>
               </button>
             ))}
           </div>
@@ -169,14 +206,37 @@ export default function Briefing() {
         <GlassCard className="p-5 fade-up">
           <SectionLabel className="mb-4">What to delegate</SectionLabel>
           <div className="space-y-3">
+            {data.what_to_delegate.length === 0 && (
+              <p className="text-xs text-zinc-600 leading-relaxed">No handoffs suggested. Overdue tasks and recurring blockers will appear here.</p>
+            )}
             {data.what_to_delegate.map((d, i) => (
-              <div key={i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`delegate-${i}`}>
+              <div key={d.id || i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`delegate-${d.id || i}`}>
                 <p className="text-sm text-white leading-snug">{d.title}</p>
                 <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.detail}</p>
                 <div className="flex items-center gap-1.5 mt-2 text-gold">
                   <UserCheck className="w-3.5 h-3.5" />
-                  <span className="text-xs">{d.owner}</span>
+                  <span className="text-xs">{d.owner || d.suggested_owner_name}</span>
                 </div>
+                {d.source === "ai_suggested" && d.id && (
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      data-testid={`assign-delegate-${d.id}`}
+                      disabled={delegateBusy === d.id}
+                      onClick={() => assignDelegate(d.id)}
+                      className="flex-1 rounded-md bg-gold text-black text-xs font-medium py-1.5 hover:bg-gold-hover disabled:opacity-50"
+                    >
+                      Assign as task
+                    </button>
+                    <button
+                      data-testid={`dismiss-delegate-${d.id}`}
+                      disabled={delegateBusy === d.id}
+                      onClick={() => dismissDelegate(d.id)}
+                      className="rounded-md border border-white/10 text-zinc-400 text-xs px-2 py-1.5 hover:bg-white/5 disabled:opacity-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -32,6 +32,7 @@ import quickbooks as qb_sync
 import google_oauth as gcal
 import integrations_catalog as integ_catalog
 import clerk_auth
+import decision_engine
 from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
@@ -1463,6 +1464,13 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
+    # Lazy refresh of AI decision/delegate suggestions when stale (>24h)
+    if _insights_stale(c) and helm_llm.anthropic_configured():
+        try:
+            await _generate_insights(c["workspace_id"], raise_on_rate_limit=False)
+            c = await get_ws(principal["workspace_id"])
+        except Exception:
+            logger.exception("lazy insights generation failed for %s", c.get("workspace_id"))
     b = dict(c["briefing"])
     is_pro = workspace_is_pro(c)
     fin = await compute_financials(c["workspace_id"])
@@ -1483,7 +1491,179 @@ async def briefing(principal=Depends(get_principal)):
     b["team_updates"] = [{"user_name": u.get("user_name"), "text": u.get("text"),
                           "blocker": u.get("blocker", False), "mood": u.get("mood"),
                           "ago": _rel_time(u.get("updated_at", ""))} for u in ups]
+    b["what_to_decide"] = _briefing_what_to_decide(c)
+    b["what_to_delegate"] = _briefing_what_to_delegate(c)
+    b["insights_generated_at"] = c.get("insights_generated_at")
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
+
+
+INSIGHTS_STALE_HOURS = 24
+_IMPACT_RANK = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def _insights_stale(c: dict) -> bool:
+    raw = c.get("insights_generated_at")
+    if not raw:
+        return True
+    try:
+        taken = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if taken.tzinfo is None:
+            taken = taken.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return datetime.now(timezone.utc) - taken >= timedelta(hours=INSIGHTS_STALE_HOURS)
+
+
+def _briefing_what_to_decide(c: dict) -> list:
+    """Pending decisions + AI suggestions for the Briefing column."""
+    items = []
+    for d in c.get("decisions") or []:
+        if d.get("status") != "pending":
+            continue
+        items.append({
+            "id": d["id"],
+            "title": d.get("title") or "Untitled",
+            "detail": (d.get("recommendation") or d.get("description") or "").strip(),
+            "urgency": "high" if d.get("impact") == "High" else "medium",
+            "impact": d.get("impact") or "Medium",
+            "due": d.get("due") or "",
+            "source": d.get("source") or "manual",
+            "confidence": d.get("confidence"),
+        })
+    for s in c.get("decision_suggestions") or []:
+        if s.get("status") != "suggested":
+            continue
+        items.append({
+            "id": s["id"],
+            "title": s.get("title") or "Untitled",
+            "detail": (s.get("recommendation") or s.get("description") or "").strip(),
+            "urgency": "high" if s.get("impact") == "High" else "medium",
+            "impact": s.get("impact") or "Medium",
+            "due": s.get("due") or "",
+            "source": "ai_suggested",
+            "confidence": s.get("confidence"),
+        })
+
+    def sort_key(x):
+        return (_IMPACT_RANK.get(x.get("impact"), 9), x.get("due") or "9999")
+
+    items.sort(key=sort_key)
+    return items[:5]
+
+
+def _briefing_what_to_delegate(c: dict) -> list:
+    out = []
+    for s in c.get("delegate_suggestions") or []:
+        if s.get("status") and s.get("status") != "suggested":
+            continue
+        out.append({
+            "id": s["id"],
+            "title": s.get("title") or "Untitled",
+            "detail": s.get("detail") or "",
+            "owner": s.get("suggested_owner_name") or "Unassigned",
+            "suggested_owner_user_id": s.get("suggested_owner_user_id"),
+            "suggested_owner_name": s.get("suggested_owner_name"),
+            "source": "ai_suggested",
+        })
+        if len(out) >= 5:
+            break
+    return out
+
+
+async def _recent_updates(workspace_id: str, days: int = 7) -> list:
+    today = datetime.now(timezone.utc).date()
+    day_list = [(today - timedelta(days=i)).isoformat() for i in range(days)]
+    return await db.updates.find(
+        {"workspace_id": workspace_id, "day": {"$in": day_list}},
+        {"_id": 0},
+    ).to_list(500)
+
+
+async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = True) -> dict:
+    """Detect signals, draft AI suggestions, replace workspace suggestion lists."""
+    if await doc_rate_limit.insights_over_limit(db, workspace_id):
+        if raise_on_rate_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="Suggestion regeneration limit reached — try again tomorrow",
+            )
+        return {"skipped": "rate_limited"}
+
+    if not helm_llm.anthropic_configured():
+        if raise_on_rate_limit:
+            raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
+        return {"skipped": "ai_unconfigured"}
+
+    c = await get_ws(workspace_id)
+    fin = await compute_financials(workspace_id)
+    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    expense_by_month = decision_engine.expense_totals_by_month_category(entries)
+    deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
+    tasks = list((c.get("tasks") or {}).get("items") or [])
+    updates = await _recent_updates(workspace_id, days=7)
+    signals = decision_engine.collect_signals(
+        fin=fin,
+        expense_by_month=expense_by_month,
+        deals=deals,
+        tasks=tasks,
+        updates=updates,
+    )
+    company_context = {
+        "name": c.get("name"),
+        "stage": c.get("stage"),
+        "employees": c.get("employees"),
+        "mrr": fin.get("mrr"),
+        "runway_months": fin.get("runway_months"),
+        "burn": fin.get("burn"),
+    }
+    decision_suggestions = []
+    delegate_suggestions = []
+    now = datetime.now(timezone.utc).isoformat()
+    for sig in signals:
+        try:
+            if sig.get("type") in decision_engine.DECISION_SIGNAL_TYPES:
+                draft = await helm_llm.draft_decision(sig, company_context)
+                decision_suggestions.append({
+                    "id": f"sug_{uuid.uuid4().hex[:10]}",
+                    "status": "suggested",
+                    "source": "ai_suggested",
+                    "signal_type": sig.get("type"),
+                    "signal": sig,
+                    "created_at": now,
+                    **draft,
+                    "due": "",
+                    "owner": None,
+                })
+            elif sig.get("type") in decision_engine.DELEGATE_SIGNAL_TYPES:
+                draft = await helm_llm.draft_delegate(sig, company_context)
+                delegate_suggestions.append({
+                    "id": f"del_{uuid.uuid4().hex[:10]}",
+                    "status": "suggested",
+                    "source": "ai_suggested",
+                    "signal_type": sig.get("type"),
+                    "signal": sig,
+                    "created_at": now,
+                    **draft,
+                })
+        except Exception:
+            logger.exception("draft failed for signal %s", sig.get("type"))
+
+    await doc_rate_limit.record_insights_event(db, workspace_id)
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {
+            "decision_suggestions": decision_suggestions,
+            "delegate_suggestions": delegate_suggestions,
+            "insights_generated_at": now,
+        }},
+    )
+    return {
+        "ok": True,
+        "signals": len(signals),
+        "decision_suggestions": len(decision_suggestions),
+        "delegate_suggestions": len(delegate_suggestions),
+        "insights_generated_at": now,
+    }
 
 
 @api_router.get("/activities")
@@ -1527,7 +1707,14 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    return {"decisions": c["decisions"], "is_pro": workspace_is_pro(c), "can_act": "decisions:act" in perms_for(principal["pack"])}
+    suggestions = [s for s in (c.get("decision_suggestions") or []) if s.get("status") == "suggested"]
+    return {
+        "decisions": c["decisions"],
+        "suggestions": suggestions,
+        "insights_generated_at": c.get("insights_generated_at"),
+        "is_pro": workspace_is_pro(c),
+        "can_act": "decisions:act" in perms_for(principal["pack"]),
+    }
 
 
 class DecisionAction(BaseModel):
@@ -1564,6 +1751,7 @@ class DecisionInput(BaseModel):
 
 
 def _decision_fields(p: "DecisionInput"):
+    # Manual creates should not invent a confidence %; AI drafts set it explicitly.
     conf = None if p.confidence is None else max(0, min(100, int(p.confidence)))
     return {"title": p.title.strip(), "category": p.category.strip() or "General",
             "description": p.description.strip(), "recommendation": (p.recommendation or "").strip(),
@@ -1576,12 +1764,137 @@ async def create_decision(payload: DecisionInput, principal=Depends(require_pro_
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
-    d = {"id": f"d_{uuid.uuid4().hex[:8]}", "status": "pending", "owner": None, **_decision_fields(payload)}
+    d = {
+        "id": f"d_{uuid.uuid4().hex[:8]}",
+        "status": "pending",
+        "owner": None,
+        "source": "manual",
+        **_decision_fields(payload),
+    }
+    # Manual form never sends a meaningful confidence — drop empty/zero noise
+    if payload.confidence is None:
+        d["confidence"] = None
     decisions = c["decisions"] + [d]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
     await log_activity(principal, "decisions", "decision.create", f"New decision: {d['title']}")
     return {"ok": True, "decision": d}
 
+
+@api_router.post("/decisions/generate-suggestions")
+async def generate_decision_suggestions(principal=Depends(require_pro_perm("decisions:act"))):
+    result = await _generate_insights(principal["workspace_id"], raise_on_rate_limit=True)
+    c = await get_ws(principal["workspace_id"])
+    return {
+        **result,
+        "suggestions": [s for s in (c.get("decision_suggestions") or []) if s.get("status") == "suggested"],
+        "delegate_suggestions": [s for s in (c.get("delegate_suggestions") or []) if s.get("status") == "suggested"],
+    }
+
+
+@api_router.post("/decisions/suggestions/{suggestion_id}/approve")
+async def approve_decision_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+    c = await get_ws(principal["workspace_id"])
+    suggestions = list(c.get("decision_suggestions") or [])
+    sug = next((s for s in suggestions if s.get("id") == suggestion_id), None)
+    if not sug or sug.get("status") != "suggested":
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    decision = {
+        "id": f"d_{uuid.uuid4().hex[:8]}",
+        "title": sug.get("title") or "Untitled",
+        "category": sug.get("category") or "General",
+        "description": sug.get("description") or "",
+        "recommendation": sug.get("recommendation") or "",
+        "confidence": sug.get("confidence"),
+        "status": "pending",
+        "owner": None,
+        "due": sug.get("due") or "—",
+        "impact": sug.get("impact") if sug.get("impact") in ("High", "Medium", "Low") else "Medium",
+        "source": "ai_suggested",
+        "from_suggestion_id": suggestion_id,
+        "signal_type": sug.get("signal_type"),
+    }
+    decisions = list(c.get("decisions") or []) + [decision]
+    suggestions = [s for s in suggestions if s.get("id") != suggestion_id]
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {"decisions": decisions, "decision_suggestions": suggestions}},
+    )
+    await log_activity(principal, "decisions", "suggestion.approve", f"Accepted Helm suggestion: {decision['title']}")
+    return {"ok": True, "decision": decision}
+
+
+@api_router.post("/decisions/suggestions/{suggestion_id}/dismiss")
+async def dismiss_decision_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+    c = await get_ws(principal["workspace_id"])
+    suggestions = list(c.get("decision_suggestions") or [])
+    before = len(suggestions)
+    suggestions = [s for s in suggestions if s.get("id") != suggestion_id]
+    if len(suggestions) == before:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {"decision_suggestions": suggestions}},
+    )
+    return {"ok": True}
+
+
+@api_router.post("/delegates/suggestions/{suggestion_id}/assign")
+async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+    """Promote a delegate suggestion into a real task assigned to the suggested owner."""
+    c = await get_ws(principal["workspace_id"])
+    suggestions = list(c.get("delegate_suggestions") or [])
+    sug = next((s for s in suggestions if s.get("id") == suggestion_id), None)
+    if not sug or (sug.get("status") and sug.get("status") != "suggested"):
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    t = c["tasks"]
+    assignee_uid = sug.get("suggested_owner_user_id") or principal["user_id"]
+    assignee_name = sug.get("suggested_owner_name") or principal.get("name") or "Me"
+    if sug.get("suggested_owner_user_id"):
+        member = await db.memberships.find_one(
+            {"workspace_id": principal["workspace_id"], "user_id": sug["suggested_owner_user_id"], "status": "active"},
+            {"_id": 0},
+        )
+        if member:
+            u = await db.users.find_one({"user_id": sug["suggested_owner_user_id"]}, {"_id": 0, "name": 1})
+            assignee_uid = sug["suggested_owner_user_id"]
+            assignee_name = (u or {}).get("name") or member.get("email") or assignee_name
+    item = {
+        "id": f"t_{uuid.uuid4().hex[:8]}",
+        "title": (sug.get("title") or "Follow up").strip()[:200],
+        "assignee": assignee_name,
+        "assignee_user_id": assignee_uid,
+        "priority": "High" if (sug.get("signal") or {}).get("severity") == "high" else "Medium",
+        "column": "backlog",
+        "tag": "Delegated",
+        "due": "",
+        "progress": 0,
+        "source": "ai_suggested",
+        "from_suggestion_id": suggestion_id,
+        "note": sug.get("detail") or "",
+    }
+    t["items"].append(item)
+    suggestions = [s for s in suggestions if s.get("id") != suggestion_id]
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {"tasks": t, "delegate_suggestions": suggestions}},
+    )
+    await log_activity(principal, "tasks", "delegate.assign", f"Assigned from Helm: {item['title']} → {assignee_name}")
+    return {"ok": True, "task": item}
+
+
+@api_router.post("/delegates/suggestions/{suggestion_id}/dismiss")
+async def dismiss_delegate_suggestion(suggestion_id: str, principal=Depends(require_pro_perm("decisions:act"))):
+    c = await get_ws(principal["workspace_id"])
+    suggestions = list(c.get("delegate_suggestions") or [])
+    before = len(suggestions)
+    suggestions = [s for s in suggestions if s.get("id") != suggestion_id]
+    if len(suggestions) == before:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {"delegate_suggestions": suggestions}},
+    )
+    return {"ok": True}
 
 @api_router.patch("/decisions/{decision_id}")
 async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depends(require_pro_perm("decisions:act"))):
@@ -3454,6 +3767,8 @@ async def _ensure_indexes():
         (db.documents, [("id", 1)], {"unique": True}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
+        (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
+        (db.insights_rate_events, [("workspace_id", 1)], {}),
         (db.activities, [("workspace_id", 1)], {}),
         (db.updates, [("workspace_id", 1)], {}),
         (db.chat_messages, [("workspace_id", 1)], {}),
