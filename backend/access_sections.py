@@ -18,7 +18,6 @@ DEFAULT_DEPARTMENTS: list[str] = [
     "General",
 ]
 
-<<<<<<< HEAD
 # Sections CEOs can grant beyond pack permissions (pack unlocks still apply separately).
 MANAGEABLE_SECTIONS: list[dict[str, str]] = [
     {
@@ -57,24 +56,12 @@ MANAGEABLE_SECTIONS: list[dict[str, str]] = [
         "perm": "decisions:act",
         "description": "Approve, delegate, or reject decision cards.",
     },
-=======
-# Sections the CEO can grant department write access to (beyond access packs).
-MANAGEABLE_SECTIONS = [
-    {"id": "financials", "label": "Financials", "perm": "finance:write",
-     "description": "Revenue, expenses, runway, and document uploads."},
-    {"id": "people", "label": "People", "perm": "people:write",
-     "description": "Team roster and headcount."},
-    {"id": "sales", "label": "Pipeline", "perm": "sales:write",
-     "description": "Deals, stages, and pipeline value."},
-    {"id": "reports", "label": "Reports", "perm": "reports:write",
-     "description": "Manual reports and weekly CEO pack inputs."},
-    {"id": "tasks", "label": "Tasks", "perm": "tasks:assign",
-     "description": "Create tasks and assign work to teammates."},
-    {"id": "decisions", "label": "Decisions", "perm": "decisions:act",
-     "description": "Approve, delegate, or reject decision cards."},
-    {"id": "telemetry", "label": "Telemetry", "perm": "telemetry:write",
-     "description": "KPI notes, risk radar, and manual telemetry inputs."},
->>>>>>> origin/cursor/manage-access-telemetry-2637
+    {
+        "id": "telemetry",
+        "label": "Telemetry",
+        "perm": "telemetry:write",
+        "description": "KPI notes, risk radar, and manual telemetry inputs.",
+    },
 ]
 
 

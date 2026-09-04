@@ -47,11 +47,21 @@ Add to Render:
 
 ---
 
-## Step 4 — Enable Google in Clerk
+## Step 4 — Enable Google in Clerk (production requires your own Google app)
 
-1. **Configure** → **SSO connections** (or **User & authentication** → **Social**)
-2. Enable **Google**
-3. Clerk provides a Google setup wizard — follow it (you use **Clerk’s** Google app, not a separate Google Cloud OAuth client for login)
+1. **Configure** → **SSO connections** → **Google**
+2. Enable **Google** for sign-up and sign-in
+3. Toggle **Use custom credentials** (required for **production** / `pk_live_` instances)
+4. Copy the **Authorized redirect URI** shown in Clerk (for `clerk.helmcontrol.online` it is exactly):
+   ```text
+   https://clerk.helmcontrol.online/v1/oauth_callback
+   ```
+5. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → **APIs & Services** → **Credentials** → your **OAuth 2.0 Client ID**:
+   - **Authorized redirect URIs** → paste the URI from step 4 (must match **exactly** — no trailing slash, no `www`, not `accounts.helmcontrol.online`)
+   - **Authorized JavaScript origins** → add `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`
+6. Paste the Google **Client ID** and **Client Secret** back into Clerk → Google → Save
+
+Development (`pk_test_`) can use Clerk’s shared Google credentials. Production (`pk_live_`) **cannot** — you must use your own Google Cloud OAuth client.
 
 ---
 
@@ -121,8 +131,9 @@ Helm’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail
 | Problem | Fix |
 |--------|-----|
 | Blank login / Clerk error | Check `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel; redeploy |
-| 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render |
-| **"Could not connect your account" after Google sign-in** | Google OAuth only needs the publishable key. Connecting your Helm account needs the matching **`sk_live_`** on Render from the **same** Clerk instance as `pk_live_` on Vercel (`clerk.helmcontrol.online`). In Clerk Dashboard → API keys, copy Secret key → Render `CLERK_SECRET_KEY`, redeploy Render. Check `/api/auth/config` → `clerk_secret_mode_match: true`, `clerk_api_ok: true`. |
+| 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render || **"Could not connect your account" after Google sign-in** | Google OAuth only needs the publishable key. Connecting your Helm account needs the matching **`sk_live_`** on Render from the **same** Clerk instance as `pk_live_` on Vercel (`clerk.helmcontrol.online`). In Clerk Dashboard → API keys, copy Secret key → Render `CLERK_SECRET_KEY`, redeploy Render. Check `/api/auth/config` → `clerk_secret_mode_match: true`, `clerk_api_ok: true`. |
 | **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Add `https://clerk.helmcontrol.online/v1/oauth_callback` to Google Cloud Console → Credentials → Authorized redirect URIs. Verify: `GET /api/setup/google-oauth` → `"ok": true`. |
+
+| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Clerk sends users to Google with `https://clerk.helmcontrol.online/v1/oauth_callback`. Add that **exact** URI under **Authorized redirect URIs** in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) for the OAuth client ID configured in Clerk → SSO → Google. Also add JS origins: `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`. Wait 1–5 min after saving. Verify: `GET https://helm-company-cockpit.onrender.com/api/setup/google-oauth` → `"ok": true`. |
 | Password too long / strict (e.g. 15+ characters) | **Not set by Helm.** In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **User & authentication** → **Email** → **Password** → lower **Minimum password length** (default is often 8). Or sign in with **Google** to skip password entirely. |
 | New account every login | Atlas `MONGO_URL` wrong or DB not persistent — see `docs/ATLAS_SETUP.md` |
