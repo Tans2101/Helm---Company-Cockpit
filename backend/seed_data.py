@@ -177,7 +177,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         "join_code": gen_join_code(),
         "financial_settings": {"cash": 0 if empty else 3100000, "gross_margin": None if empty else 74, "currency": "usd"},
         "briefing": briefing, "decisions": decisions, "telemetry": telemetry,
-        "tasks": tasks, "reports": reports, "team": team, "calendar": calendar,
+        "tasks": tasks, "reports": [], "manual_reports": ([] if empty else reports), "team": team, "calendar": calendar,
         "people": people, "integrations": integrations,
         "google_tokens": None, "quickbooks_tokens": None,
         "created_at": datetime.now(timezone.utc).isoformat(),

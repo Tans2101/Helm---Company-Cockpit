@@ -763,6 +763,8 @@ async def compute_financials(workspace_id: str):
         "expense_breakdown": expense_breakdown, "settings": settings,
         "mrr_delta": mrr_delta, "spark": [r["revenue"] for r in revenue_series],
         "burn_tone": "negative" if burn_val > 0 else "positive", "has_data": bool(entries),
+        "mrr_value": round(float(mrr_val or 0)),
+        "burn_value": round(float(burn_val or 0)),
     }
 
 
@@ -2067,6 +2069,9 @@ async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("ta
             "priority": payload.priority if payload.priority in ("High", "Medium", "Low") else "Medium",
             "column": payload.column or "backlog", "tag": (payload.tag or "General").strip(),
             "due": (payload.due or "").strip(), "progress": 0}
+    if item["column"] == "done":
+        item["progress"] = 100
+        item["done_at"] = datetime.now(timezone.utc).isoformat()
     t["items"].append(item)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
     return {"ok": True, "task": item}
@@ -2086,9 +2091,14 @@ async def move_task(task_id: str, payload: TaskMove, principal=Depends(require_p
     owns = target.get("assignee_user_id") == principal["user_id"]
     if target.get("assignee_user_id") and not owns and "tasks:assign" not in perms_for(principal["pack"]):
         raise HTTPException(status_code=403, detail="You can only move your own tasks")
+    prev_col = target.get("column")
     target["column"] = payload.column
     if payload.column == "done":
         target["progress"] = 100
+        if prev_col != "done" or not target.get("done_at"):
+            target["done_at"] = datetime.now(timezone.utc).isoformat()
+    elif prev_col == "done":
+        target.pop("done_at", None)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
     return {"ok": True}
 
@@ -2208,29 +2218,146 @@ async def delete_note(note_id: str, principal=Depends(get_principal)):
     return {"ok": True}
 
 
-def _computed_report_cards(c, fin, items, ups, headcount):
-    done = len([t for t in items if t.get("column") == "done"])
-    inprog = len([t for t in items if t.get("column") == "in_progress"])
-    openc = len([t for t in items if t.get("column") != "done"])
-    blocked = len([u for u in ups if u.get("blocker")])
+def _parse_iso_dt(value) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def _shipped_in_window(items, *, now: Optional[datetime] = None, days: int = 7) -> int:
+    """Count tasks that entered done within the last `days` (requires done_at)."""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+    n = 0
+    for t in items:
+        if t.get("column") != "done":
+            continue
+        done_at = _parse_iso_dt(t.get("done_at"))
+        if done_at is not None and done_at >= cutoff:
+            n += 1
+    return n
+
+
+def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "") -> str:
+    if prev is None and curr is None:
+        return "first week — no trend yet"
+    if prev is None:
+        return "first week — no trend yet"
+    try:
+        delta = float(curr if curr is not None else 0) - float(prev if prev is not None else 0)
+    except (TypeError, ValueError):
+        return "first week — no trend yet"
+    if abs(delta) < 0.05:
+        return f"flat vs last week{suffix}"
+    sign = "+" if delta > 0 else ""
+    if money:
+        return f"{sign}{fmt_money(delta)} vs last week{suffix}"
+    if float(delta).is_integer():
+        return f"{sign}{int(delta)} vs last week{suffix}"
+    return f"{sign}{delta:.1f} vs last week{suffix}"
+
+
+def _report_metric_snapshot(fin, items, ups, headcount) -> dict:
+    return {
+        "taken_at": datetime.now(timezone.utc).isoformat(),
+        "mrr": int(fin.get("mrr_value") or 0),
+        "arr": int(fin.get("mrr_value") or 0) * 12,
+        "runway_months": fin.get("runway_months"),
+        "burn": int(fin.get("burn_value") or 0),
+        "headcount": int(headcount or 0),
+        "updates_count": len(ups or []),
+        "blocked_count": len([u for u in (ups or []) if u.get("blocker")]),
+        "shipped_week": _shipped_in_window(items or []),
+        "open_tasks": len([t for t in (items or []) if t.get("column") != "done"]),
+        "in_progress": len([t for t in (items or []) if t.get("column") == "in_progress"]),
+    }
+
+
+async def _apply_report_snapshot(workspace_id: str, current: dict) -> Optional[dict]:
+    """Lazy weekly snapshot: return prior baseline for diffs; rotate when ≥7 days old or missing."""
+    c = await get_ws(workspace_id)
+    prior = c.get("report_snapshot")
+    now = datetime.now(timezone.utc)
+    taken = _parse_iso_dt((prior or {}).get("taken_at")) if prior else None
+    rotate = prior is None or taken is None or (now - taken) >= timedelta(days=7)
+    if rotate:
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id},
+            {"$set": {"report_snapshot": current}},
+        )
+        # First store has no prior trend; subsequent weekly rotations diff against the old snap.
+        return prior if (prior and taken is not None) else None
+    return prior
+
+
+def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
+    curr = _report_metric_snapshot(fin, items, ups, headcount)
+    first_week = prior is None
+    period = "First week" if first_week else "Vs last week"
+
+    mrr_trend = _signed_delta(curr["mrr"], None if first_week else prior.get("mrr"), money=True)
+    runway_trend = _signed_delta(
+        curr["runway_months"],
+        None if first_week else prior.get("runway_months"),
+        suffix=" mo",
+    )
+    burn_trend = _signed_delta(curr["burn"], None if first_week else prior.get("burn"), money=True)
+    hc_trend = _signed_delta(curr["headcount"], None if first_week else prior.get("headcount"))
+    updates_trend = _signed_delta(curr["updates_count"], None if first_week else prior.get("updates_count"))
+    blocked_trend = _signed_delta(curr["blocked_count"], None if first_week else prior.get("blocked_count"))
+    shipped_trend = _signed_delta(curr["shipped_week"], None if first_week else prior.get("shipped_week"))
+
+    if first_week:
+        fin_summary = (
+            f"MRR {fin['mrr']} · runway {fin['runway_months'] or '—'}mo · burn {fin['burn']} — "
+            f"first week — no trend yet."
+        )
+        team_summary = (
+            f"{curr['headcount']} people · {curr['updates_count']} update(s) today · "
+            f"{curr['blocked_count']} blocked — first week — no trend yet."
+        )
+        exec_summary = (
+            f"{curr['shipped_week']} shipped this week · {curr['in_progress']} in progress · "
+            f"{curr['open_tasks']} open — first week — no trend yet."
+        )
+    else:
+        fin_summary = f"MRR {mrr_trend} · runway {runway_trend} · burn {burn_trend}."
+        team_summary = f"Headcount {hc_trend} · updates {updates_trend} · blocked {blocked_trend}."
+        exec_summary = (
+            f"Shipped this week {curr['shipped_week']} ({shipped_trend}) · "
+            f"{curr['in_progress']} in progress · {curr['open_tasks']} open."
+        )
+
     return [
-        {"id": "auto_fin", "title": "Financial Snapshot", "type": "Finance", "period": "Live",
-         "summary": f"MRR {fin['mrr']} · ARR {fin['arr']} · runway {fin['runway_months'] or '—'}mo · net burn {fin['burn']}.",
-         "metrics": [{"label": "MRR", "value": fin["mrr"]},
-                     {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—"},
-                     {"label": "Burn", "value": fin["burn"]}],
+        {"id": "auto_fin", "title": "Financial Snapshot", "type": "Finance", "period": period,
+         "summary": fin_summary,
+         "metrics": [
+             {"label": "MRR", "value": fin["mrr"] if first_week else mrr_trend},
+             {"label": "Runway", "value": (f"{fin['runway_months']}mo" if fin["runway_months"] else "—") if first_week else runway_trend},
+             {"label": "Burn", "value": fin["burn"] if first_week else burn_trend},
+         ],
          "source": "auto"},
-        {"id": "auto_team", "title": "Team Pulse", "type": "People", "period": "Today",
-         "summary": f"{headcount} people · {len(ups)} daily update(s) today · {blocked} blocked.",
-         "metrics": [{"label": "Headcount", "value": str(headcount)},
-                     {"label": "Updates", "value": str(len(ups))},
-                     {"label": "Blocked", "value": str(blocked)}],
+        {"id": "auto_team", "title": "Team Pulse", "type": "People", "period": period,
+         "summary": team_summary,
+         "metrics": [
+             {"label": "Headcount", "value": str(curr["headcount"]) if first_week else hc_trend},
+             {"label": "Updates", "value": str(curr["updates_count"]) if first_week else updates_trend},
+             {"label": "Blocked", "value": str(curr["blocked_count"]) if first_week else blocked_trend},
+         ],
          "source": "auto"},
-        {"id": "auto_exec", "title": "Execution", "type": "Delivery", "period": "Live",
-         "summary": f"{done} shipped · {inprog} in progress · {openc} open across the board.",
-         "metrics": [{"label": "Shipped", "value": str(done)},
-                     {"label": "In progress", "value": str(inprog)},
-                     {"label": "Open", "value": str(openc)}],
+        {"id": "auto_exec", "title": "Execution", "type": "Delivery", "period": period,
+         "summary": exec_summary,
+         "metrics": [
+             {"label": "Shipped", "value": str(curr["shipped_week"]) if first_week else f"{curr['shipped_week']} ({shipped_trend})"},
+             {"label": "In progress", "value": str(curr["in_progress"])},
+             {"label": "Open", "value": str(curr["open_tasks"])},
+         ],
          "source": "auto"},
     ]
 
@@ -2244,7 +2371,9 @@ async def reports(principal=Depends(get_principal)):
     ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
     headcount = c.get("employees") or len(c["people"]["people"])
     manual = list(c.get("manual_reports") or [])
-    auto = _computed_report_cards(c, fin, items, ups, headcount)
+    current = _report_metric_snapshot(fin, items, ups, headcount)
+    prior = await _apply_report_snapshot(c["workspace_id"], current)
+    auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     can_write = await can_section_write(principal, "reports", "reports:write")
     return {
         "reports": manual + auto,
@@ -2319,15 +2448,36 @@ async def delete_report(report_id: str, principal=Depends(require_section("repor
     return {"ok": True}
 
 
+def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dict:
+    """Assemble LLM context: manual reports + week-over-week trend cards."""
+    manual = list(c.get("manual_reports") or [])
+    auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
+    return {
+        "company": c["name"],
+        "financials": fin,
+        "kpis": (c.get("telemetry") or {}).get("kpis") or [],
+        "reports": [{"title": r["title"], "summary": r["summary"]} for r in manual],
+        "trends": [{"title": r["title"], "summary": r["summary"], "metrics": r.get("metrics")} for r in auto],
+    }
+
+
 @api_router.post("/reports/weekly-pack")
 async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     c = await get_ws(principal["workspace_id"])
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
-    context = {"company": c["name"], "financials": await compute_financials(c["workspace_id"]),
-               "kpis": c["telemetry"]["kpis"], "reports": [{"title": r["title"], "summary": r["summary"]} for r in c["reports"]]}
+    fin = await compute_financials(c["workspace_id"])
+    items = c["tasks"]["items"]
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
+    headcount = c.get("employees") or len(c["people"]["people"])
+    prior = c.get("report_snapshot")
+    taken = _parse_iso_dt((prior or {}).get("taken_at")) if prior else None
+    baseline = prior if taken else None
+    context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
     system = ("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: "
-              "Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific.")
+              "Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific. "
+              "Use both manual reports and the week-over-week trend cards.")
     text = await helm_llm.complete(system, f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack.")
     return {"content": text}
 
