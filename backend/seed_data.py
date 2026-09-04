@@ -120,22 +120,14 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
     ]
 
     team = {
-        "members": [
-            {"name": "Maya Chen", "role": "Head of Growth", "utilization": 118, "status": "overloaded", "capacity": 40, "allocated": 47},
-            {"name": "Devin Okoro", "role": "Lead Engineer", "utilization": 104, "status": "high", "capacity": 40, "allocated": 42},
-            {"name": "Priya Nair", "role": "Infra Engineer", "utilization": 88, "status": "healthy", "capacity": 40, "allocated": 35},
-            {"name": "Leo Martins", "role": "Product Designer", "utilization": 72, "status": "healthy", "capacity": 40, "allocated": 29},
-            {"name": "Sara Kim", "role": "Account Executive", "utilization": 95, "status": "high", "capacity": 40, "allocated": 38},
-            {"name": "Tom Wells", "role": "Support Lead", "utilization": 64, "status": "available", "capacity": 40, "allocated": 26},
-        ],
-        "avg_utilization": 90, "overloaded_count": 1,
+        "members": [],
     }
 
     calendar = {
         "meetings": [
             {"id": "m1", "title": "Acme final review", "time": "09:30", "duration": 45, "attendees": 4, "type": "Sales", "prep": "Bring 3-yr pricing + security pack. Champion: VP Eng.", "importance": "high"},
             {"id": "m2", "title": "Weekly leadership sync", "time": "11:00", "duration": 30, "attendees": 5, "type": "Internal", "prep": "Decide infra reservation + GTM hire.", "importance": "medium"},
-            {"id": "m3", "title": "1:1 with Maya", "time": "14:00", "duration": 30, "attendees": 2, "type": "1:1", "prep": "Address 118% utilization — redistribute or hire.", "importance": "high"},
+            {"id": "m3", "title": "1:1 with Maya", "time": "14:00", "duration": 30, "attendees": 2, "type": "1:1", "prep": "Address open pipeline load — redistribute or hire.", "importance": "high"},
             {"id": "m4", "title": "Investor update call", "time": "16:00", "duration": 30, "attendees": 3, "type": "Board", "prep": "Lead with NRR 118% and CAC payback trend.", "importance": "medium"},
         ],
         "focus_hours": 3.5, "meeting_hours": 2.25,
@@ -162,7 +154,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         decisions = []
         tasks = {"columns": [{"id": "backlog", "name": "To-Do"}, {"id": "in_progress", "name": "In Progress"}, {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"}], "items": []}
         reports = []
-        team = {"members": [], "avg_utilization": 0, "overloaded_count": 0}
+        team = {"members": []}
         calendar = {"meetings": [], "focus_hours": 0, "meeting_hours": 0}
         people = {"people": [], "avg_trust": 0}
 

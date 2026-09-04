@@ -4,7 +4,7 @@ Covers:
 - Decisions CRUD (POST/PATCH/DELETE with owner=200, member=403; empty title=400) and the pre-existing /action endpoint.
 - GET /decisions returns can_act flag.
 - GET /telemetry is derived from real data (kpis include Headcount + Open Tasks always; MRR/ARR/Runway/Net Burn only if financials exist).
-- GET /team is built from active memberships (real users), utilization + open_tasks + posted_today/blocked from today's updates.
+- GET /team is built from active memberships (real users), open/overdue task counts + posted_today/blocked from today's updates.
 - GET /reports returns exactly 3 computed cards (Financial Snapshot, Team Pulse, Execution).
 - POST /reports/weekly-pack still Pro-gated (403 when free).
 - GET /onboarding/checklist returns 4 steps with done+route, and complete boolean.
@@ -180,15 +180,24 @@ class TestTeamComputed:
         assert r.status_code == 200
         j = r.json()
         assert "members" in j and isinstance(j["members"], list)
-        assert "avg_utilization" in j
-        assert "overloaded_count" in j
+        assert "total_open_tasks" in j
+        assert "total_overdue" in j
+        assert "members_blocked" in j
+        assert "avg_utilization" not in j
+        assert "overloaded_count" not in j
         # Cross-check: members count should equal active memberships count
         mems = owner.get(f"{BASE_URL}/api/members").json()
         active = [m for m in (mems.get("members") or []) if m.get("status") == "active"]
         assert len(j["members"]) == len(active)
+        assert j.get("headcount") == len(active)
         for m in j["members"]:
-            for k in ("name", "role", "utilization", "status", "open_tasks", "posted_today", "blocked"):
+            for k in ("name", "role", "open_tasks", "overdue_tasks", "posted_today", "blocked"):
                 assert k in m
+            assert "utilization" not in m
+            assert "status" not in m
+        assert j["total_open_tasks"] == sum(m["open_tasks"] for m in j["members"])
+        assert j["total_overdue"] == sum(m["overdue_tasks"] for m in j["members"])
+        assert j["members_blocked"] == sum(1 for m in j["members"] if m["blocked"])
 
 
 # ---------------- Reports (computed) ----------------

@@ -24,7 +24,7 @@ const NAV = [
   { to: "/app/financials", label: "Financials", icon: DollarSign, id: "financials" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
   { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
-  { to: "/app/team", label: "Team Bandwidth", icon: Users2, id: "team" },
+  { to: "/app/team", label: "Team Workload", icon: Users2, id: "team" },
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/app/people", label: "People", icon: Contact, id: "people" },
   { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },

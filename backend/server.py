@@ -9,7 +9,7 @@ import secrets
 import asyncio
 import logging
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 from urllib.parse import urlencode, urlparse
 from collections import defaultdict
@@ -2332,30 +2332,77 @@ async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     return {"content": text}
 
 
+def _parse_task_due_date(due) -> Optional[date]:
+    """Return a calendar date when `due` parses cleanly.
+
+    Free-text due dates (e.g. "Wed", "This week") cannot be evaluated for overdue status.
+    """
+    if due is None:
+        return None
+    s = str(due).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%d/%m/%Y", "%b %d %Y", "%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _count_overdue_tasks(open_items, today: Optional[date] = None) -> int:
+    today = today or datetime.now(timezone.utc).date()
+    n = 0
+    for t in open_items:
+        due_d = _parse_task_due_date(t.get("due"))
+        if due_d is not None and due_d < today:
+            n += 1
+    return n
+
+
 @api_router.get("/team")
 async def team(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     mems = await db.memberships.find({"workspace_id": c["workspace_id"], "status": "active"}, {"_id": 0}).to_list(200)
     day = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(timezone.utc).date()
     ups = {u["user_id"]: u for u in await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)}
     items = c["tasks"]["items"]
-    members, total, overloaded = [], 0, 0
+    members = []
+    total_open = 0
+    total_overdue = 0
+    members_blocked = 0
     for m in mems:
         uid = m.get("user_id")
         u = await db.users.find_one({"user_id": uid}, {"_id": 0, "name": 1}) if uid else None
         name = (u or {}).get("name") or m["email"]
-        open_t = len([t for t in items if t.get("assignee_user_id") == uid and t.get("column") != "done"])
-        util = min(open_t * 25, 130)
-        status = ("overloaded" if util >= 100 else "high" if util >= 70 else "healthy" if util >= 30 else "available")
-        if util >= 100:
-            overloaded += 1
-        total += util
+        open_items = [t for t in items if t.get("assignee_user_id") == uid and t.get("column") != "done"]
+        open_t = len(open_items)
+        overdue_t = _count_overdue_tasks(open_items, today)
         upd = ups.get(uid)
-        members.append({"name": name, "role": PACK_LABEL.get(pack_of(m), "Member"), "utilization": util,
-                        "status": status, "open_tasks": open_t,
-                        "posted_today": bool(upd), "blocked": bool(upd and upd.get("blocker"))})
-    avg = round(total / len(members)) if members else 0
-    return {"members": members, "avg_utilization": avg, "overloaded_count": overloaded}
+        blocked = bool(upd and upd.get("blocker"))
+        if blocked:
+            members_blocked += 1
+        total_open += open_t
+        total_overdue += overdue_t
+        members.append({
+            "name": name,
+            "role": PACK_LABEL.get(pack_of(m), "Member"),
+            "open_tasks": open_t,
+            "overdue_tasks": overdue_t,
+            "posted_today": bool(upd),
+            "blocked": blocked,
+        })
+    return {
+        "members": members,
+        "headcount": len(members),
+        "total_open_tasks": total_open,
+        "total_overdue": total_overdue,
+        "members_blocked": members_blocked,
+    }
 
 
 async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:
