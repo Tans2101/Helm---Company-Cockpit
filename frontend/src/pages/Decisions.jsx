@@ -45,6 +45,20 @@ export default function Decisions() {
   }
   const canAct = data.can_act;
   const suggestions = data.suggestions || [];
+  const allMembers = membersData?.members || [];
+  const selfMember = allMembers.find((m) => m.is_self);
+  // Other people only — self is listed once as "Myself"
+  const seenUsers = new Set();
+  const delegateMembers = [];
+  for (const m of allMembers) {
+    if (m.is_self) continue;
+    if (m.status === "invited" && !m.user_id) continue;
+    const key = m.user_id || m.email;
+    if (!key || seenUsers.has(key)) continue;
+    seenUsers.add(key);
+    delegateMembers.push(m);
+  }
+  const selfLabel = selfMember?.name || selfMember?.email || "Myself";
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
@@ -264,7 +278,12 @@ export default function Decisions() {
                         <button data-testid={`approve-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "approved")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium py-2 transition-colors hover:bg-gold-hover disabled:opacity-50"><Check className="w-4 h-4" /> Approve</button>
                         <select data-testid={`delegate-${d.id}`} disabled={busy === d.id} defaultValue="" onChange={(e) => e.target.value && act(d.id, "delegated", e.target.value)} className="flex-1 rounded-md border border-white/10 text-white text-sm py-2 px-2 bg-[#141417] transition-colors hover:bg-white/5 focus:outline-none focus:border-gold/40 disabled:opacity-50">
                           <option value="">Delegate to…</option>
-                          {(membersData?.members || []).map((m) => <option key={m.membership_id} value={m.name || m.email}>{m.name || m.email}</option>)}
+                          {selfMember && (
+                            <option value={selfLabel}>Myself</option>
+                          )}
+                          {delegateMembers.map((m) => (
+                            <option key={m.membership_id} value={m.name || m.email}>{m.name || m.email}</option>
+                          ))}
                         </select>
                         <button data-testid={`reject-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "rejected")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-400 text-sm py-2 transition-colors hover:bg-white/5 hover:text-rose-400 disabled:opacity-50"><X className="w-4 h-4" /> Reject</button>
                       </>

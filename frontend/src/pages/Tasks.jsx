@@ -35,7 +35,10 @@ export default function Tasks() {
 
   const canCreate = data.can_create;
   const canAssign = data.can_assign;
-  const assignableMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
+  // Exclude self — "Myself" is already the empty default option
+  const assignableMembers = (membersData?.members || []).filter(
+    (m) => m.user_id && m.status === "active" && !m.is_self && m.user_id !== data.my_user_id,
+  );
 
   const move = async (taskId, column) => {
     const prev = data.items;
