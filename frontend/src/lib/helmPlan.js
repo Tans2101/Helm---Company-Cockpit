@@ -1,16 +1,35 @@
-/** User-facing plan labels — internal DB may still use "free" / "pro". */
+/** User-facing plan labels and entitlement helpers. */
+
+const PAID = new Set(["starter", "growth", "business", "pro"]);
+
+export function normalizePlan(plan) {
+  if (!plan) return "free";
+  const p = String(plan).toLowerCase();
+  if (p === "pro") return "business";
+  return p;
+}
+
 export function helmPlanLabel(plan, isPro, billingEnforced = true) {
-  if (!billingEnforced || isPro || plan === "pro") return "Active";
-  return "Preview";
+  if (!billingEnforced) return "Active";
+  const id = normalizePlan(plan);
+  if (id === "free") return "Free";
+  if (id === "starter") return "Starter";
+  if (id === "growth") return "Growth";
+  if (id === "business" || isPro) return "Business";
+  return "Free";
 }
 
 export function helmWorkspacePlanLabel(plan, billingEnforced = true) {
-  if (!billingEnforced || plan === "pro") return "Active";
-  if (plan === "free") return "Preview";
-  return plan || "Preview";
+  return helmPlanLabel(plan, PAID.has(normalizePlan(plan)), billingEnforced);
 }
 
-/** Full cockpit access — false only when billing is enforced and plan is not pro. */
+/** Cockpit access — Free and all paid tiers can enter the app. */
 export function helmHasFullAccess(plan, billingEnforced = true) {
-  return !billingEnforced || plan === "pro";
+  if (!billingEnforced) return true;
+  return true; // Free tier is a real plan; feature gates handle upgrades
+}
+
+export function helmIsPaidPlan(plan, billingEnforced = true) {
+  if (!billingEnforced) return true;
+  return PAID.has(normalizePlan(plan));
 }

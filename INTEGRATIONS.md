@@ -13,7 +13,7 @@ Users never create API keys. Once you paste keys on Render, owners click **Conne
 | **Anthropic** | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | [Anthropic Console](https://console.anthropic.com/settings/keys) |
 | **Cloudflare R2** | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT` | Cloudflare → R2 → Manage API tokens |
 | **Resend** | `RESEND_API_KEY`, `SENDER_EMAIL` | [Resend](https://resend.com/) — optional until invites |
-| **Paddle** | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID*`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` | Paddle dashboard — when charging |
+| **Paddle** | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID_STARTER` / `_GROWTH` / `_BUSINESS` (or legacy `PADDLE_PRICE_ID`), `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` | Paddle dashboard — when charging |
 | **Clerk** | already on Render | Sign-in |
 
 ## OAuth redirect URIs (register exactly)

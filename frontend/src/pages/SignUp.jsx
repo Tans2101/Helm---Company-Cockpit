@@ -10,7 +10,7 @@ import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
-import { TAGLINE, CATEGORY, PRO_PRICE } from "@/lib/marketingCopy";
+import { TAGLINE, CATEGORY } from "@/lib/marketingCopy";
 import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
 
 export default function SignUpPage() {
@@ -91,7 +91,7 @@ function SignUpClerk() {
             {TAGLINE}
           </h1>
           <p className="text-zinc-400 text-base md:text-lg mt-6 leading-relaxed">
-            Create your account, set up your workspace, then activate Helm (${PRO_PRICE}/mo) to run the full cockpit.
+            Create your account and set up your workspace. Start on Free, or upgrade anytime — paid plans include a 7-day trial.
           </p>
         </div>
         <p className="text-xs text-zinc-700">
