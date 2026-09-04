@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, AlertTriangle } from "lucide-react";
+import { Download, Trash2, AlertTriangle, ScrollText } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -9,12 +9,19 @@ import { PageHeader, GlassCard } from "@/components/kit";
 export default function AccountSettings() {
   const { user, logout } = useAuth();
   const { data: company } = useFetch("/company");
-  const isOwner = user?.role === "owner";
+  const isOwner = user?.role === "owner" || user?.pack === "owner";
+  const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
   const [busy, setBusy] = useState(null);
   const [confirmAccount, setConfirmAccount] = useState("");
   const [confirmWorkspace, setConfirmWorkspace] = useState("");
   const [showAccountConfirm, setShowAccountConfirm] = useState(false);
   const [showWorkspaceConfirm, setShowWorkspaceConfirm] = useState(false);
+  const [actStart, setActStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [actEnd, setActEnd] = useState(() => new Date().toISOString().slice(0, 10));
 
   const emailConfirm = (user?.email || "").trim().toLowerCase();
   const workspaceConfirm = (company?.name || "").trim();
@@ -35,6 +42,35 @@ export default function AccountSettings() {
       toast.success("Export downloaded");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not export data");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportActivity = async () => {
+    if (!actStart || !actEnd) {
+      toast.error("Choose a start and end date");
+      return;
+    }
+    setBusy("activity");
+    try {
+      const res = await api.get("/activities/export", {
+        params: { start: actStart, end: actEnd, format: "csv" },
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `helm-activity-${actStart}-to-${actEnd}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Activity log downloaded");
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : "Could not export activity log");
     } finally {
       setBusy(null);
     }
@@ -104,6 +140,36 @@ export default function AccountSettings() {
           {busy === "export" ? "Exporting…" : "Export data"}
         </button>
       </GlassCard>
+
+      {canExportActivity && (
+        <GlassCard className="p-5 mb-4 fade-up" data-testid="export-activity-card">
+          <div className="flex items-center gap-1.5 mb-2 text-gold">
+            <ScrollText className="w-4 h-4" />
+            <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export activity log</span>
+          </div>
+          <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+            Download a CSV audit trail (timestamp, actor, area, action, message) for a date range. Owner/admin only.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <label className="text-xs text-zinc-500">Start
+              <input data-testid="activity-export-start" type="date" value={actStart} onChange={(e) => setActStart(e.target.value)}
+                className="mt-1 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white" />
+            </label>
+            <label className="text-xs text-zinc-500">End
+              <input data-testid="activity-export-end" type="date" value={actEnd} onChange={(e) => setActEnd(e.target.value)}
+                className="mt-1 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white" />
+            </label>
+          </div>
+          <button
+            data-testid="export-activity-btn"
+            onClick={exportActivity}
+            disabled={!!busy}
+            className="rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-4 py-2.5 transition-colors hover:bg-gold/15 disabled:opacity-60"
+          >
+            {busy === "activity" ? "Exporting…" : "Export activity log"}
+          </button>
+        </GlassCard>
+      )}
 
       <GlassCard className="p-5 mb-4 fade-up border-rose-500/20">
         <div className="flex items-center gap-1.5 mb-2 text-rose-400">

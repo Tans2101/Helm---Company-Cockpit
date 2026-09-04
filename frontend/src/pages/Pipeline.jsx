@@ -14,7 +14,7 @@ const stageStyle = {
   won: "text-emerald-300 bg-emerald-400/10",
   lost: "text-rose-300 bg-rose-400/10",
 };
-const money = (n) => "$" + (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n);
+const money = (n, sym = "$") => sym + (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n);
 const emptyForm = () => ({ name: "", company: "", value: "", stage: "lead", owner_name: "", close_date: "" });
 const PAGE_LIMIT = 200;
 
@@ -36,7 +36,13 @@ export default function Pipeline() {
     const { data } = await api.get("/deals", { params });
     const page = data.items || data.deals || [];
     setDeals((prev) => (append ? [...prev, ...page] : page));
-    setMeta({ can_write: data.can_write, metrics: data.metrics, stages: data.stages });
+    setMeta({
+      can_write: data.can_write,
+      metrics: data.metrics,
+      stages: data.stages,
+      currency: data.currency || "usd",
+      currency_symbol: data.currency_symbol || "$",
+    });
     setNextCursor(data.next_cursor ?? null);
     return data;
   }, []);
@@ -82,6 +88,7 @@ export default function Pipeline() {
   }
   const canWrite = meta.can_write;
   const m = meta.metrics;
+  const sym = meta.currency_symbol || "$";
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
@@ -128,9 +135,9 @@ export default function Pipeline() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Open Pipeline</p><p className="font-mono text-2xl text-white mt-2" data-testid="metric-open">{money(m.open_value)}</p></GlassCard>
-            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Weighted</p><p className="font-mono text-2xl text-gold mt-2">{money(m.weighted_value)}</p></GlassCard>
-            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Won</p><p className="font-mono text-2xl text-emerald-400 mt-2">{money(m.won_value)}</p></GlassCard>
+            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Open Pipeline</p><p className="font-mono text-2xl text-white mt-2" data-testid="metric-open">{money(m.open_value, sym)}</p></GlassCard>
+            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Weighted</p><p className="font-mono text-2xl text-gold mt-2">{money(m.weighted_value, sym)}</p></GlassCard>
+            <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Won</p><p className="font-mono text-2xl text-emerald-400 mt-2">{money(m.won_value, sym)}</p></GlassCard>
             <GlassCard className="p-5 fade-up"><p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Open Deals</p><p className="font-mono text-2xl text-white mt-2">{m.open_count}</p></GlassCard>
           </div>
 
@@ -139,16 +146,25 @@ export default function Pipeline() {
               <div key={s.stage}>
                 <div className="flex items-center gap-2 mb-2">
                   <SectionLabel>{s.label}</SectionLabel>
-                  <span className="text-xs font-mono text-zinc-600">{s.count} · {money(s.value)}</span>
+                  <span className="text-xs font-mono text-zinc-600">{s.count} · {money(s.value, sym)}</span>
                 </div>
                 <div className="space-y-2">
                   {deals.filter((d) => d.stage === s.stage).map((d) => (
                     <GlassCard key={d.id} className="p-4 fade-up flex items-center gap-4 group" data-testid={`deal-${d.id}`}>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{d.name}</p>
-                        <p className="text-xs text-zinc-500 truncate">{d.company || "—"}{d.owner_name ? ` · ${d.owner_name}` : ""}{d.close_date ? ` · close ${d.close_date}` : ""}</p>
+                        <p className="text-xs text-zinc-500 truncate">
+                          {d.company || "—"}
+                          {d.owner_name ? ` · Owner ${d.owner_name}` : ""}
+                          {d.close_date ? ` · close ${d.close_date}` : ""}
+                        </p>
+                        {d.created_by_name ? (
+                          <p className="text-[11px] text-zinc-600 mt-0.5" data-testid={`deal-added-by-${d.id}`}>
+                            Added by {d.created_by_name}
+                          </p>
+                        ) : null}
                       </div>
-                      <span className="font-mono text-sm text-white shrink-0">{money(d.value)}</span>
+                      <span className="font-mono text-sm text-white shrink-0">{money(d.value, sym)}</span>
                       {canWrite ? (
                         <select value={d.stage} onChange={(e) => changeStage(d, e.target.value)} data-testid={`deal-stage-${d.id}`}
                           className={cn("text-[11px] font-mono rounded px-2 py-1 border border-white/10 bg-[#141417] focus:outline-none focus:border-gold/40", stageStyle[d.stage])}>

@@ -18,7 +18,7 @@ import httpx
 import jwt
 import resend
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
-from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -33,6 +33,8 @@ import google_oauth as gcal
 import integrations_catalog as integ_catalog
 import clerk_auth
 import decision_engine
+import money_fmt
+from money_fmt import fmt_money, normalize_currency, currency_symbol, CURRENCY_SYMBOLS
 from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
@@ -514,6 +516,107 @@ async def send_invite_email(to_email: str, inviter_name: str, workspace_name: st
         return {"sent": False, "reason": "error"}
 
 
+async def send_resend_email(*, to: list, subject: str, html: str) -> dict:
+    """Shared Resend send helper (best-effort). `to` may include multiple recipients in one send."""
+    recipients = [e for e in (to or []) if e and "@" in str(e)]
+    if not recipients:
+        return {"sent": False, "reason": "no_recipients"}
+    if not RESEND_API_KEY:
+        logger.info("RESEND_API_KEY not set — skipping email: %s", subject)
+        return {"sent": False, "reason": "no_key"}
+    resend.api_key = RESEND_API_KEY
+    params = {"from": SENDER_EMAIL, "to": recipients, "subject": subject, "html": html}
+    try:
+        email = await asyncio.to_thread(resend.Emails.send, params)
+        return {"sent": True, "id": (email or {}).get("id"), "to": recipients}
+    except Exception:
+        logger.exception("resend send failed")
+        return {"sent": False, "reason": "error"}
+
+
+async def post_slack_webhook(webhook_url: str, text: str) -> dict:
+    """Best-effort Slack Incoming Webhook post. Never raises."""
+    url = (webhook_url or "").strip()
+    if not url.startswith("https://hooks.slack.com/"):
+        return {"ok": False, "reason": "invalid_or_missing"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json={"text": text})
+        if r.status_code >= 400:
+            logger.warning("slack webhook failed status=%s body=%s", r.status_code, r.text[:200])
+            return {"ok": False, "reason": "http_error", "status": r.status_code}
+        return {"ok": True}
+    except Exception:
+        logger.exception("slack webhook post failed")
+        return {"ok": False, "reason": "error"}
+
+
+# Packs that should receive high-severity CEO alerts (owner + executive/"manager")
+ALERT_RECIPIENT_PACKS = frozenset({"owner", "exec"})
+
+
+async def _alert_recipient_emails(workspace_id: str) -> list[str]:
+    mems = await db.memberships.find(
+        {"workspace_id": workspace_id, "status": "active"},
+        {"_id": 0, "user_id": 1, "pack": 1, "role": 1, "email": 1},
+    ).to_list(200)
+    emails = []
+    seen = set()
+    for m in mems:
+        if pack_of(m) not in ALERT_RECIPIENT_PACKS and m.get("role") != "owner":
+            continue
+        email = (m.get("email") or "").strip().lower()
+        if not email:
+            u = await db.users.find_one({"user_id": m["user_id"]}, {"_id": 0, "email": 1})
+            email = ((u or {}).get("email") or "").strip().lower()
+        if email and email not in seen:
+            seen.add(email)
+            emails.append(email)
+    return emails
+
+
+async def _notify_high_severity_alerts(workspace_id: str, decision_suggestions: list, c: dict) -> dict:
+    """Email + optional Slack for newly seen high-severity signals. Best-effort; never blocks."""
+    import alert_notify as an
+
+    notified = set(c.get("notified_signal_ids") or [])
+    fresh = an.new_high_alerts(decision_suggestions, notified)
+    if not fresh:
+        return {"emailed": False, "slack": False, "new_alerts": 0}
+
+    app_url = APP_URL or FRONTEND_URL or HELM_CANONICAL_ORIGIN
+    ws_name = c.get("name") or "Your workspace"
+    html = an.build_alert_email_html(ws_name, fresh, app_url)
+    slack_text = an.build_slack_text(ws_name, fresh, app_url)
+    recipients = await _alert_recipient_emails(workspace_id)
+    email_result = await send_resend_email(
+        to=recipients,
+        subject=f"Helm alert: {len(fresh)} high-severity signal{'s' if len(fresh) != 1 else ''} — {ws_name}",
+        html=html,
+    )
+    slack_result = {"ok": False, "reason": "not_configured"}
+    webhook = (c.get("slack_webhook_url") or "").strip()
+    if webhook:
+        slack_result = await post_slack_webhook(webhook, slack_text)
+
+    new_keys = [an.signal_notify_key(s.get("signal") or s) for s in fresh]
+    updated_ids = list(notified | set(new_keys))
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {
+            "notified_signal_ids": updated_ids,
+            "notified_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return {
+        "emailed": bool(email_result.get("sent")),
+        "slack": bool(slack_result.get("ok")),
+        "new_alerts": len(fresh),
+        "email": email_result,
+        "slack_result": slack_result,
+    }
+
+
 # ------------------------- Auth / principal -------------------------
 def _looks_like_jwt(token: str) -> bool:
     return token.count(".") == 2
@@ -829,17 +932,10 @@ async def _enforce_document_rate_limit(principal, action: str, limit: int, messa
 
 
 # ------------------------- Financials (computed from entries) -------------------------
-def fmt_money(n):
-    n = float(n or 0)
-    neg = n < 0
-    a = abs(n)
-    if a >= 1_000_000:
-        s = f"${a/1_000_000:.2f}M"
-    elif a >= 1_000:
-        s = f"${a/1_000:.0f}K"
-    else:
-        s = f"${a:,.0f}"
-    return f"-{s}" if neg else s
+async def _workspace_currency(workspace_id: str) -> str:
+    ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
+    settings = (ws or {}).get("financial_settings") or {}
+    return normalize_currency(settings.get("currency"))
 
 
 async def compute_financials(workspace_id: str):
@@ -848,6 +944,11 @@ async def compute_financials(workspace_id: str):
 
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
     settings = (ws or {}).get("financial_settings") or {"cash": 0, "gross_margin": None, "currency": "usd"}
+    if not settings.get("currency"):
+        settings = {**settings, "currency": "usd"}
+    else:
+        settings = {**settings, "currency": normalize_currency(settings.get("currency"))}
+    currency = settings["currency"]
     entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
     rev_by, exp_by, rec_by = defaultdict(float), defaultdict(float), defaultdict(float)
     exp_cat = defaultdict(float)
@@ -891,11 +992,12 @@ async def compute_financials(workspace_id: str):
     if len(revenue_series) >= 2 and revenue_series[-2]["revenue"] > 0:
         mrr_delta = round((revenue_series[-1]["revenue"] - revenue_series[-2]["revenue"]) / revenue_series[-2]["revenue"] * 100, 1)
     return {
-        "mrr": fmt_money(mrr_val), "arr": fmt_money(mrr_val * 12), "runway_months": runway,
-        "burn": fmt_money(burn_val), "cash": fmt_money(cash),
+        "mrr": fmt_money(mrr_val, currency), "arr": fmt_money(mrr_val * 12, currency), "runway_months": runway,
+        "burn": fmt_money(burn_val, currency), "cash": fmt_money(cash, currency),
         "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
         "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
         "expense_breakdown": expense_breakdown, "settings": settings,
+        "currency": currency, "currency_symbol": currency_symbol(currency),
         "mrr_delta": mrr_delta, "spark": [r["revenue"] for r in revenue_series],
         "burn_tone": "negative" if burn_val > 0 else "positive", "has_data": bool(entries),
         "mrr_value": round(float(mrr_val or 0)),
@@ -1806,6 +1908,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
 
     c = await get_ws(workspace_id)
     fin = await compute_financials(workspace_id)
+    currency = fin.get("currency") or "usd"
     entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
     expense_by_month = decision_engine.expense_totals_by_month_category(entries)
     deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
@@ -1817,6 +1920,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         deals=deals,
         tasks=tasks,
         updates=updates,
+        currency=currency,
     )
     company_context = {
         "name": c.get("name"),
@@ -1839,6 +1943,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
                     "source": "ai_suggested",
                     "signal_type": sig.get("type"),
                     "signal": sig,
+                    "severity": sig.get("severity"),
                     "created_at": now,
                     **draft,
                     "due": "",
@@ -1852,6 +1957,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
                     "source": "ai_suggested",
                     "signal_type": sig.get("type"),
                     "signal": sig,
+                    "severity": sig.get("severity"),
                     "created_at": now,
                     **draft,
                 })
@@ -1867,12 +1973,20 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
             "insights_generated_at": now,
         }},
     )
+    notify = {"emailed": False, "slack": False, "new_alerts": 0}
+    try:
+        # Re-read workspace so notified_signal_ids / slack webhook are current
+        c_fresh = await get_ws(workspace_id)
+        notify = await _notify_high_severity_alerts(workspace_id, decision_suggestions, c_fresh)
+    except Exception:
+        logger.exception("high-severity notify failed (non-blocking)")
     return {
         "ok": True,
         "signals": len(signals),
         "decision_suggestions": len(decision_suggestions),
         "delegate_suggestions": len(delegate_suggestions),
         "insights_generated_at": now,
+        "notifications": notify,
     }
 
 
@@ -1890,6 +2004,58 @@ async def list_activities(
         a["ago"] = _rel_time(a["created_at"])
     cursor = next_cursor(acts, "created_at", page_limit)
     return {"items": acts, "activities": acts, "next_cursor": cursor}
+
+
+@api_router.get("/activities/export")
+async def export_activities(
+    start: str = Query(..., description="Start date YYYY-MM-DD (inclusive)"),
+    end: str = Query(..., description="End date YYYY-MM-DD (inclusive)"),
+    format: str = Query("csv"),
+    principal=Depends(get_principal),
+):
+    """Owner/admin activity audit export. Non-admins get 403."""
+    if "members:manage" not in perms_for(principal["pack"]):
+        raise HTTPException(status_code=403, detail="Only workspace owners/admins can export the activity log")
+    if (format or "csv").lower() != "csv":
+        raise HTTPException(status_code=400, detail="Only format=csv is supported")
+    try:
+        start_d = datetime.strptime(start.strip()[:10], "%Y-%m-%d").date()
+        end_d = datetime.strptime(end.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start and end must be YYYY-MM-DD")
+    if end_d < start_d:
+        raise HTTPException(status_code=400, detail="end must be on or after start")
+    start_iso = datetime(start_d.year, start_d.month, start_d.day, tzinfo=timezone.utc).isoformat()
+    end_exclusive = datetime(end_d.year, end_d.month, end_d.day, tzinfo=timezone.utc) + timedelta(days=1)
+    end_iso = end_exclusive.isoformat()
+    acts = await db.activities.find(
+        {
+            "workspace_id": principal["workspace_id"],
+            "created_at": {"$gte": start_iso, "$lt": end_iso},
+        },
+        {"_id": 0},
+    ).sort("created_at", 1).to_list(50000)
+
+    import csv as csv_mod
+    import io as io_mod
+    buf = io_mod.StringIO()
+    writer = csv_mod.writer(buf)
+    writer.writerow(["timestamp", "actor_name", "area", "action", "message"])
+    for a in acts:
+        writer.writerow([
+            a.get("created_at") or "",
+            a.get("actor_name") or "",
+            a.get("module") or "",
+            a.get("action") or "",
+            a.get("summary") or "",
+        ])
+    data = buf.getvalue()
+    filename = f"helm-activity-{start_d.isoformat()}-to-{end_d.isoformat()}.csv"
+    return Response(
+        content=data,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @api_router.post("/briefing/generate")
@@ -2035,15 +2201,22 @@ async def approve_decision_suggestion(suggestion_id: str, principal=Depends(requ
 
 @api_router.post("/decisions/suggestions/{suggestion_id}/dismiss")
 async def dismiss_decision_suggestion(suggestion_id: str, principal=Depends(require_section("decisions", "decisions:act"))):
+    import alert_notify as an
     c = await get_ws(principal["workspace_id"])
     suggestions = list(c.get("decision_suggestions") or [])
+    sug = next((s for s in suggestions if s.get("id") == suggestion_id), None)
     before = len(suggestions)
     suggestions = [s for s in suggestions if s.get("id") != suggestion_id]
     if len(suggestions) == before:
         raise HTTPException(status_code=404, detail="Suggestion not found")
+    # Allow re-notify if the same signal recurs after dismiss
+    notified = list(c.get("notified_signal_ids") or [])
+    if sug:
+        key = an.signal_notify_key(sug.get("signal") or sug)
+        notified = [k for k in notified if k != key]
     await db.workspaces.update_one(
         {"workspace_id": c["workspace_id"]},
-        {"$set": {"decision_suggestions": suggestions}},
+        {"$set": {"decision_suggestions": suggestions, "notified_signal_ids": notified}},
     )
     return {"ok": True}
 
@@ -2212,12 +2385,15 @@ async def list_deals(
     deals = await db.deals.find(filt, {"_id": 0}).sort("updated_at", -1).limit(page_limit).to_list(page_limit)
     metrics = await _deal_metrics_for_workspace(ws)
     cursor = next_cursor(deals, "updated_at", page_limit)
+    currency = await _workspace_currency(ws)
     return {
         "items": deals,
         "deals": deals,
         "next_cursor": cursor,
         "can_write": "sales:write" in perms_for(principal["pack"]),
         "metrics": metrics,
+        "currency": currency,
+        "currency_symbol": currency_symbol(currency),
         "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES],
     }
 
@@ -2228,13 +2404,25 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
         raise HTTPException(status_code=400, detail="Deal name is required")
     stage = payload.stage if payload.stage in DEAL_STAGES else "lead"
     now = datetime.now(timezone.utc).isoformat()
-    deal = {"id": f"deal_{uuid.uuid4().hex[:8]}", "workspace_id": principal["workspace_id"],
-            "name": payload.name.strip(), "company": payload.company.strip(), "value": round(payload.value, 2),
-            "stage": stage, "owner_name": payload.owner_name.strip() or (principal.get("name") or ""),
-            "close_date": payload.close_date.strip(), "created_at": now, "updated_at": now}
+    currency = await _workspace_currency(principal["workspace_id"])
+    creator_name = (principal.get("name") or principal.get("email") or "").strip()
+    deal = {
+        "id": f"deal_{uuid.uuid4().hex[:8]}",
+        "workspace_id": principal["workspace_id"],
+        "name": payload.name.strip(),
+        "company": payload.company.strip(),
+        "value": round(payload.value, 2),
+        "stage": stage,
+        "owner_name": payload.owner_name.strip() or creator_name,
+        "created_by_user_id": principal["user_id"],
+        "created_by_name": creator_name,
+        "close_date": payload.close_date.strip(),
+        "created_at": now,
+        "updated_at": now,
+    }
     await db.deals.insert_one(dict(deal))
     await log_activity(principal, "sales", "deal.create",
-                       f"New deal: {deal['name']} · {fmt_money(deal['value'])} ({STAGE_LABEL[stage]})",
+                       f"New deal: {deal['name']} · {fmt_money(deal['value'], currency)} ({STAGE_LABEL[stage]})",
                        {"value": deal["value"], "stage": stage})
     return {"ok": True, "deal": deal}
 
@@ -2245,20 +2433,24 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
     if not d:
         raise HTTPException(status_code=404, detail="Deal not found")
     stage = payload.stage if payload.stage in DEAL_STAGES else d["stage"]
+    # created_by_* are set once at creation and never edited here
     upd = {"name": payload.name.strip() or d["name"], "company": payload.company.strip(),
            "value": round(payload.value, 2), "stage": stage,
            "owner_name": payload.owner_name.strip() or d.get("owner_name", ""),
            "close_date": payload.close_date.strip(), "updated_at": datetime.now(timezone.utc).isoformat()}
     await db.deals.update_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
     if stage != d["stage"]:
+        currency = await _workspace_currency(principal["workspace_id"])
         if stage == "won":
-            summary = f"Won {upd['name']} · {fmt_money(upd['value'])}"
+            summary = f"Won {upd['name']} · {fmt_money(upd['value'], currency)}"
         elif stage == "lost":
             summary = f"Lost {upd['name']}"
         else:
             summary = f"{upd['name']} moved to {STAGE_LABEL[stage]}"
         await log_activity(principal, "sales", "deal.stage", summary, {"stage": stage})
-    return {"ok": True}
+    # Return updated deal including immutable created_by fields
+    updated = {**d, **upd}
+    return {"ok": True, "deal": updated}
 
 
 @api_router.delete("/deals/{deal_id}")
@@ -2295,8 +2487,9 @@ async def telemetry(principal=Depends(get_principal)):
     sources.append({"label": "People & Tasks", "detail": "Headcount and open tasks from workspace data", "freshness": "live"})
     deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
     metrics = _deal_metrics(deals) if deals else None
+    currency = fin.get("currency") or "usd"
     if metrics:
-        kpis.append({"label": "Pipeline", "value": fmt_money(metrics["open_value"]),
+        kpis.append({"label": "Pipeline", "value": fmt_money(metrics["open_value"], currency),
                      "delta": 0, "tone": "neutral", "spark": []})
         sources.append({"label": "Pipeline", "detail": "Live from deals in your CRM board", "freshness": "live"})
     revenue_trend = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)}
@@ -2543,7 +2736,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
             {"$set": {"status": "committed", "linked_entry_id": entry["id"]}},
         )
     await log_activity(principal, "financials", "entry.add",
-                       f"Logged {payload.type} · {entry['category']} {fmt_money(entry['amount'])} ({payload.month})",
+                       f"Logged {payload.type} · {entry['category']} {fmt_money(entry['amount'], await _workspace_currency(principal['workspace_id']))} ({payload.month})",
                        {"type": payload.type, "amount": entry["amount"], "month": payload.month})
     return {"ok": True, "entry": entry}
 
@@ -2576,19 +2769,119 @@ async def delete_fin_entry(entry_id: str, principal=Depends(require_section("fin
 class FinSettingsInput(BaseModel):
     cash: float
     gross_margin: Optional[float] = None
+    currency: Optional[str] = None
 
 
 @api_router.put("/financials/settings")
 async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_section("financials", "finance:write"))):
-    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]},
-                                   {"$set": {"financial_settings.cash": round(payload.cash, 2),
-                                             "financial_settings.gross_margin": payload.gross_margin}})
+    currency = normalize_currency(payload.currency) if payload.currency is not None else None
+    sets = {
+        "financial_settings.cash": round(payload.cash, 2),
+        "financial_settings.gross_margin": payload.gross_margin,
+    }
+    if currency is not None:
+        sets["financial_settings.currency"] = currency
+    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": sets})
     fin = await compute_financials(principal["workspace_id"])
     runway = fin["runway_months"]
+    cur = fin.get("currency") or "usd"
     await log_activity(principal, "financials", "settings.update",
-                       f"Updated cash to {fmt_money(payload.cash)}" + (f" — runway now {runway}mo" if runway else ""),
-                       {"cash": payload.cash, "runway_months": runway})
-    return {"ok": True}
+                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f" — runway now {runway}mo" if runway else ""),
+                       {"cash": payload.cash, "runway_months": runway, "currency": cur})
+    return {"ok": True, "settings": fin.get("settings"), "currency": cur}
+
+
+class CsvImportConfirmInput(BaseModel):
+    entries: list
+
+
+@api_router.post("/financials/import-csv")
+async def import_financials_csv_preview(
+    file: UploadFile = File(...),
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    """Parse + validate CSV; return preview without writing to financial_entries."""
+    import finance_csv as fin_csv
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="CSV too large (max 5MB)")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("latin-1")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="Could not decode CSV as UTF-8 or Latin-1")
+    try:
+        parsed = fin_csv.parse_financial_csv(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("csv parse failed")
+        raise HTTPException(status_code=400, detail="Malformed CSV — check headers and row formatting")
+    return {
+        "ok": True,
+        "preview": True,
+        "committed": False,
+        "filename": file.filename,
+        **parsed,
+    }
+
+
+@api_router.post("/financials/import-csv/confirm")
+async def import_financials_csv_confirm(
+    payload: CsvImportConfirmInput,
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    """Bulk-insert previously previewed valid rows with source=csv_import."""
+    if not payload.entries:
+        raise HTTPException(status_code=400, detail="No entries to import")
+    if len(payload.entries) > 5000:
+        raise HTTPException(status_code=400, detail="Too many rows (max 5000)")
+    now = datetime.now(timezone.utc).isoformat()
+    docs = []
+    for raw in payload.entries:
+        if not isinstance(raw, dict):
+            continue
+        entry_type = (raw.get("type") or "").strip().lower()
+        if entry_type not in ("revenue", "expense"):
+            continue
+        try:
+            amount = round(float(raw.get("amount")), 2)
+        except (TypeError, ValueError):
+            continue
+        if amount < 0:
+            continue
+        month = (raw.get("month") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}", month):
+            continue
+        docs.append({
+            "id": f"fe_{uuid.uuid4().hex[:10]}",
+            "workspace_id": principal["workspace_id"],
+            "type": entry_type,
+            "category": (raw.get("category") or "Other").strip() or "Other",
+            "amount": amount,
+            "month": month,
+            "recurring": bool(raw.get("recurring")),
+            "recurrence": None,
+            "note": (raw.get("note") or "").strip(),
+            "source": "csv_import",
+            "created_by": principal["user_id"],
+            "created_at": now,
+        })
+    if not docs:
+        raise HTTPException(status_code=400, detail="No valid entries to import")
+    await db.financial_entries.insert_many(docs)
+    for d in docs:
+        d.pop("_id", None)
+    await log_activity(
+        principal, "financials", "entry.import",
+        f"Imported {len(docs)} entr{'y' if len(docs) == 1 else 'ies'} from CSV",
+        {"count": len(docs), "source": "csv_import"},
+    )
+    return {"ok": True, "committed": True, "imported_count": len(docs), "entries": docs}
 
 
 @api_router.get("/tasks")
@@ -2814,7 +3107,7 @@ def _shipped_in_window(items, *, now: Optional[datetime] = None, days: int = 7) 
     return n
 
 
-def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "") -> str:
+def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "", currency: str = "usd") -> str:
     if prev is None and curr is None:
         return "first week — no trend yet"
     if prev is None:
@@ -2827,7 +3120,7 @@ def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "") -> str:
         return f"flat vs last week{suffix}"
     sign = "+" if delta > 0 else ""
     if money:
-        return f"{sign}{fmt_money(delta)} vs last week{suffix}"
+        return f"{sign}{fmt_money(delta, currency)} vs last week{suffix}"
     if float(delta).is_integer():
         return f"{sign}{int(delta)} vs last week{suffix}"
     return f"{sign}{delta:.1f} vs last week{suffix}"
@@ -2870,14 +3163,15 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
     curr = _report_metric_snapshot(fin, items, ups, headcount)
     first_week = prior is None
     period = "First week" if first_week else "Vs last week"
+    currency = fin.get("currency") or "usd"
 
-    mrr_trend = _signed_delta(curr["mrr"], None if first_week else prior.get("mrr"), money=True)
+    mrr_trend = _signed_delta(curr["mrr"], None if first_week else prior.get("mrr"), money=True, currency=currency)
     runway_trend = _signed_delta(
         curr["runway_months"],
         None if first_week else prior.get("runway_months"),
         suffix=" mo",
     )
-    burn_trend = _signed_delta(curr["burn"], None if first_week else prior.get("burn"), money=True)
+    burn_trend = _signed_delta(curr["burn"], None if first_week else prior.get("burn"), money=True, currency=currency)
     hc_trend = _signed_delta(curr["headcount"], None if first_week else prior.get("headcount"))
     updates_trend = _signed_delta(curr["updates_count"], None if first_week else prior.get("updates_count"))
     blocked_trend = _signed_delta(curr["blocked_count"], None if first_week else prior.get("blocked_count"))
@@ -3494,6 +3788,8 @@ async def integrations(principal=Depends(get_principal)):
         "integrations": ints,
         "is_pro": workspace_is_pro(c),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+        "slack_webhook_configured": bool((c.get("slack_webhook_url") or "").strip()),
+        "slack_webhook_url": (c.get("slack_webhook_url") or "") if "integrations:manage" in perms_for(principal["pack"]) else "",
         "platform": {
             "clerk": clerk_auth.clerk_configured(),
             "anthropic": helm_llm.anthropic_configured(),
@@ -3508,6 +3804,26 @@ async def integrations(principal=Depends(get_principal)):
             "quickbooks": _oauth_callback_uri("quickbooks"),
         },
     }
+
+
+class SlackWebhookInput(BaseModel):
+    webhook_url: str = ""
+
+
+@api_router.put("/integrations/slack-webhook")
+async def update_slack_webhook(payload: SlackWebhookInput, principal=Depends(require_pro_perm("integrations:manage"))):
+    url = (payload.webhook_url or "").strip()
+    if url and not url.startswith("https://hooks.slack.com/"):
+        raise HTTPException(status_code=400, detail="Webhook URL must start with https://hooks.slack.com/")
+    await db.workspaces.update_one(
+        {"workspace_id": principal["workspace_id"]},
+        {"$set": {"slack_webhook_url": url}},
+    )
+    await log_activity(
+        principal, "integrations", "slack.webhook",
+        "Updated Slack alert webhook" if url else "Cleared Slack alert webhook",
+    )
+    return {"ok": True, "slack_webhook_configured": bool(url)}
 
 
 @api_router.post("/integrations/{integration_id}/toggle")

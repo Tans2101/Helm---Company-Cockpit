@@ -8,6 +8,8 @@ from __future__ import annotations
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
+from money_fmt import fmt_money_plain
+
 
 SEVERITIES = ("high", "medium", "low")
 STALLED_DEAL_DAYS = 14
@@ -149,7 +151,7 @@ def detect_runway_risk(fin: dict) -> Optional[dict]:
     )
 
 
-def detect_expense_spike(expense_by_month: dict) -> list:
+def detect_expense_spike(expense_by_month: dict, *, currency: str = "usd") -> list:
     """Fire per category where latest month spend is up >25% vs prior month."""
     months = sorted(expense_by_month.keys())
     if len(months) < 2:
@@ -171,7 +173,8 @@ def detect_expense_spike(expense_by_month: dict) -> list:
             severity,
             summary=f"{cat} spend up {delta_pct}% MoM",
             detail=(
-                f"{cat}: ${prev_amt:,.0f} in {prev_m} → ${curr_amt:,.0f} in {curr_m} "
+                f"{cat}: {fmt_money_plain(prev_amt, currency)} in {prev_m} → "
+                f"{fmt_money_plain(curr_amt, currency)} in {curr_m} "
                 f"(+{delta_pct}%)."
             ),
             related_id=cat,
@@ -185,7 +188,13 @@ def detect_expense_spike(expense_by_month: dict) -> list:
     return out
 
 
-def detect_stalled_deals(deals: list, *, now: Optional[datetime] = None, days: int = STALLED_DEAL_DAYS) -> list:
+def detect_stalled_deals(
+    deals: list,
+    *,
+    now: Optional[datetime] = None,
+    days: int = STALLED_DEAL_DAYS,
+    currency: str = "usd",
+) -> list:
     """Fire for open deals with no stage change (updated_at) in `days` days."""
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
@@ -200,7 +209,7 @@ def detect_stalled_deals(deals: list, *, now: Optional[datetime] = None, days: i
         idle_days = (now - updated).days
         name = d.get("name") or "Untitled deal"
         value = d.get("value")
-        value_s = f"${float(value):,.0f}" if value is not None else "unknown value"
+        value_s = fmt_money_plain(value, currency) if value is not None else "unknown value"
         severity = "high" if idle_days >= days * 2 else "medium"
         out.append(_signal(
             "stalled_deal",
@@ -334,14 +343,15 @@ def collect_signals(
     deals: list,
     tasks: list,
     updates: list,
+    currency: str = "usd",
 ) -> list:
     """Run all detectors and return a flat list of signals."""
     signals = []
     runway = detect_runway_risk(fin)
     if runway:
         signals.append(runway)
-    signals.extend(detect_expense_spike(expense_by_month))
-    signals.extend(detect_stalled_deals(deals))
+    signals.extend(detect_expense_spike(expense_by_month, currency=currency))
+    signals.extend(detect_stalled_deals(deals, currency=currency))
     signals.extend(detect_overdue_tasks(tasks))
     signals.extend(detect_recurring_blockers(updates))
     # Cap volume so one regenerate can't spawn dozens of LLM calls

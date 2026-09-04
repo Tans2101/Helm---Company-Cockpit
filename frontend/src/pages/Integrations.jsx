@@ -154,6 +154,8 @@ export default function Integrations() {
   const { data, loading, error, reload } = useFetch("/integrations");
   const [params, setParams] = useSearchParams();
   const [qbSyncing, setQbSyncing] = useState(false);
+  const [slackUrl, setSlackUrl] = useState("");
+  const [slackBusy, setSlackBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -168,6 +170,10 @@ export default function Integrations() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  useEffect(() => {
+    if (data?.slack_webhook_url != null) setSlackUrl(data.slack_webhook_url || "");
+  }, [data?.slack_webhook_url]);
 
   if (loading) return <LoadingScreen label="Loading integrations" />;
   if (error || !data) {
@@ -228,6 +234,20 @@ export default function Integrations() {
     }
   };
 
+  const saveSlackWebhook = async () => {
+    if (!gate()) return;
+    setSlackBusy(true);
+    try {
+      await api.put("/integrations/slack-webhook", { webhook_url: slackUrl.trim() });
+      toast.success(slackUrl.trim() ? "Slack webhook saved" : "Slack webhook cleared");
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save webhook");
+    } finally {
+      setSlackBusy(false);
+    }
+  };
+
   const connectable = data.integrations.filter((i) => i.kind === "oauth" && !i.coming_soon);
   const roadmap = data.integrations.filter((i) => i.coming_soon);
   const connectedCount = connectable.filter((i) => i.connected).length;
@@ -276,6 +296,42 @@ export default function Integrations() {
               {" "}(see INTEGRATIONS.md).
             </p>
           ) : null}
+        </GlassCard>
+      )}
+
+      {data.can_manage && (
+        <GlassCard className="p-5 mb-8 fade-up" data-testid="slack-webhook-card">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare className="w-4 h-4 text-gold" />
+            <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">Slack alerts (optional)</p>
+          </div>
+          <p className="text-sm text-zinc-500 mb-3 leading-relaxed">
+            Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel. Leave blank to disable.
+          </p>
+          <label className="text-xs text-zinc-500 block">
+            Incoming webhook URL
+            <input
+              data-testid="slack-webhook-input"
+              value={slackUrl}
+              onChange={(e) => setSlackUrl(e.target.value)}
+              placeholder="https://hooks.slack.com/services/…"
+              className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+            />
+          </label>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="save-slack-webhook-btn"
+              disabled={slackBusy}
+              onClick={saveSlackWebhook}
+              className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60"
+            >
+              {slackBusy ? "Saving…" : "Save webhook"}
+            </button>
+            {data.slack_webhook_configured && (
+              <span className="text-xs text-emerald-400 font-mono">Configured</span>
+            )}
+          </div>
         </GlassCard>
       )}
 

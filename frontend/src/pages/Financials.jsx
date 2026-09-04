@@ -4,7 +4,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
@@ -16,18 +16,26 @@ const REV_CATS = ["Subscriptions", "Enterprise", "Services", "Other"];
 const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", "Other"];
 const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const CURRENCY_OPTIONS = [
+  { code: "usd", label: "USD ($)" },
+  { code: "php", label: "PHP (₱)" },
+  { code: "eur", label: "EUR (€)" },
+  { code: "gbp", label: "GBP (£)" },
+  { code: "sgd", label: "SGD (S$)" },
+  { code: "inr", label: "INR (₹)" },
+];
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
-const fmt = (n) => `$${Number(n || 0).toLocaleString()}`;
+const fmt = (n, sym = "$") => `${sym}${Number(n || 0).toLocaleString()}`;
 
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, symbol = "$" }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-md border border-white/10 bg-[#141417] px-3 py-2 text-xs">
       {label && <p className="text-zinc-400 mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
         <p key={i} className="text-white font-mono">
-          <span style={{ color: p.color }}>●</span> {p.name}: {fmt(p.value)}
+          <span style={{ color: p.color }}>●</span> {p.name}: {fmt(p.value, symbol)}
         </p>
       ))}
     </div>
@@ -69,7 +77,11 @@ export default function Financials() {
   const [showSettings, setShowSettings] = useState(false);
   const [cash, setCash] = useState("");
   const [gm, setGm] = useState("");
+  const [currency, setCurrency] = useState("usd");
+  const [csvPreview, setCsvPreview] = useState(null);
+  const [csvBusy, setCsvBusy] = useState(false);
   const fileInputRef = useRef(null);
+  const csvInputRef = useRef(null);
 
   const processBillFile = useCallback(async (file) => {
     if (!file) return;
@@ -160,6 +172,7 @@ export default function Financials() {
 
   const canWrite = data.can_write;
   const finActs = (activityData?.items || activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
+  const sym = data.currency_symbol || "$";
 
   const submitEntry = async () => {
     if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
@@ -194,7 +207,11 @@ export default function Financials() {
   const saveSettings = async () => {
     setBusy(true);
     try {
-      await api.put("/financials/settings", { cash: parseFloat(cash || 0), gross_margin: gm ? parseFloat(gm) : null });
+      await api.put("/financials/settings", {
+        cash: parseFloat(cash || 0),
+        gross_margin: gm ? parseFloat(gm) : null,
+        currency,
+      });
       toast.success("Updated");
       setShowSettings(false);
       reload();
@@ -206,7 +223,49 @@ export default function Financials() {
   const openSettings = () => {
     setCash(String(data.settings?.cash ?? ""));
     setGm(data.settings?.gross_margin != null ? String(data.settings.gross_margin) : "");
+    setCurrency(data.settings?.currency || data.currency || "usd");
     setShowSettings(true);
+  };
+
+  const previewCsv = async (file) => {
+    if (!file) return;
+    if (!file.name?.toLowerCase().endsWith(".csv") && file.type && !file.type.includes("csv") && file.type !== "text/plain") {
+      toast.error("Please choose a .csv file");
+      return;
+    }
+    setCsvBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data: preview } = await api.post("/financials/import-csv", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setCsvPreview(preview);
+      toast.success(`Parsed ${preview.valid_count || 0} row(s) — review before importing`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not parse CSV");
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
+  const confirmCsvImport = async () => {
+    if (!csvPreview?.valid?.length) {
+      toast.error("No valid rows to import");
+      return;
+    }
+    setCsvBusy(true);
+    try {
+      const { data: res } = await api.post("/financials/import-csv/confirm", { entries: csvPreview.valid });
+      toast.success(`Imported ${res.imported_count} entr${res.imported_count === 1 ? "y" : "ies"}`);
+      setCsvPreview(null);
+      reload();
+      reloadActs();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Import failed");
+    } finally {
+      setCsvBusy(false);
+    }
   };
 
   const headline = [
@@ -226,15 +285,37 @@ export default function Financials() {
         data-testid="bill-file-input"
         onChange={onFilePick}
       />
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        data-testid="csv-file-input"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          previewCsv(f);
+        }}
+      />
       <button
         type="button"
         data-testid="upload-bill-btn"
-        disabled={uploadBusy}
+        disabled={uploadBusy || csvBusy}
         onClick={() => fileInputRef.current?.click()}
         className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-gold/15 disabled:opacity-60"
       >
         <Upload className="w-4 h-4" />
         {uploadBusy ? "Reading bill…" : "Upload a bill"}
+      </button>
+      <button
+        type="button"
+        data-testid="import-csv-btn"
+        disabled={uploadBusy || csvBusy}
+        onClick={() => csvInputRef.current?.click()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+      >
+        <FileSpreadsheet className="w-4 h-4" />
+        {csvBusy ? "Reading CSV…" : "Import from CSV"}
       </button>
       <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
         className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
@@ -247,6 +328,71 @@ export default function Financials() {
     <div>
       <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
 
+      {csvPreview && (
+        <GlassCard className="p-5 mb-6 fade-up" data-testid="csv-import-preview">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-gold">CSV import preview</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                {csvPreview.valid_count} ready · {csvPreview.skipped_count} skipped
+                {csvPreview.filename ? ` · ${csvPreview.filename}` : ""} — nothing is saved until you confirm.
+              </p>
+            </div>
+            <button type="button" onClick={() => setCsvPreview(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+          </div>
+          {csvPreview.valid?.length > 0 && (
+            <div className="overflow-x-auto mb-4 max-h-48 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
+                    <th className="py-2 pr-3">Month</th><th className="py-2 pr-3">Type</th>
+                    <th className="py-2 pr-3">Category</th><th className="py-2 pr-3 text-right">Amount</th>
+                    <th className="py-2">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvPreview.valid.slice(0, 50).map((r, i) => (
+                    <tr key={i} className="border-b border-white/[0.03]" data-testid={`csv-valid-${i}`}>
+                      <td className="py-1.5 pr-3 font-mono text-zinc-400">{r.month}</td>
+                      <td className="py-1.5 pr-3 text-zinc-300">{r.type}</td>
+                      <td className="py-1.5 pr-3 text-zinc-300">{r.category}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono text-white">{fmt(r.amount, sym)}</td>
+                      <td className="py-1.5 text-zinc-500 truncate max-w-[140px]">{r.note || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {csvPreview.valid.length > 50 && (
+                <p className="text-xs text-zinc-600 mt-2">Showing first 50 of {csvPreview.valid.length} valid rows.</p>
+              )}
+            </div>
+          )}
+          {csvPreview.skipped?.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3" data-testid="csv-skipped-list">
+              <p className="text-xs text-amber-200 mb-2">Skipped rows</p>
+              <ul className="space-y-1 max-h-28 overflow-y-auto">
+                {csvPreview.skipped.map((s) => (
+                  <li key={s.row} className="text-xs text-zinc-400 font-mono">Row {s.row}: {s.reason}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-testid="confirm-csv-import-btn"
+              disabled={csvBusy || !csvPreview.valid?.length}
+              onClick={confirmCsvImport}
+              className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60"
+            >
+              {csvBusy ? "Importing…" : `Confirm import (${csvPreview.valid_count || 0})`}
+            </button>
+            <button type="button" onClick={() => setCsvPreview(null)} className="rounded-md border border-white/10 text-zinc-400 text-sm px-4 py-2 hover:bg-white/5">
+              Cancel
+            </button>
+          </div>
+        </GlassCard>
+      )}
       {canWrite && (
         <div
           data-testid="bill-dropzone"
@@ -322,8 +468,8 @@ export default function Financials() {
                   <defs><linearGradient id="rev" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={GOLD} stopOpacity={0.35} /><stop offset="100%" stopColor={GOLD} stopOpacity={0} /></linearGradient></defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
-                  <Tooltip content={<ChartTooltip />} />
+                  <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
+                  <Tooltip content={<ChartTooltip symbol={sym} />} />
                   <Area type="monotone" dataKey="revenue" name="Revenue" stroke={GOLD} strokeWidth={2} fill="url(#rev)" />
                   <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#71717a" strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
                 </AreaChart>
@@ -338,7 +484,7 @@ export default function Financials() {
               {data.expense_breakdown.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={170}>
-                    <PieChart><Pie data={data.expense_breakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={2} stroke="none">{data.expense_breakdown.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip content={<ChartTooltip />} /></PieChart>
+                    <PieChart><Pie data={data.expense_breakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={72} paddingAngle={2} stroke="none">{data.expense_breakdown.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}</Pie><Tooltip content={<ChartTooltip symbol={sym} />} /></PieChart>
                   </ResponsiveContainer>
                   <div className="space-y-1 mt-1">
                     {data.expense_breakdown.map((e, i) => (
@@ -358,8 +504,8 @@ export default function Financials() {
                   <BarChart data={data.burn_series} margin={{ left: -8, right: 8 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
                     <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+                    <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
+                    <Tooltip content={<ChartTooltip symbol={sym} />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                     <Bar dataKey="burn" name="Net burn" fill={GOLD} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -406,7 +552,7 @@ export default function Financials() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount)}</td>
+                      <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount, sym)}</td>
                       <td className="py-2.5 pr-4">
                         {e.source === "ai_upload" && e.source_document_id ? (
                           <button
@@ -472,7 +618,7 @@ export default function Financials() {
                   {(form.type === "revenue" ? REV_CATS : EXP_CATS).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-zinc-500">Amount (USD)
+              <label className="text-xs text-zinc-500">Amount ({(data.currency || "usd").toUpperCase()})
                 <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500">Month
@@ -535,11 +681,23 @@ export default function Financials() {
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowSettings(false)} />
           <GlassCard className="relative w-full max-w-sm m-4 rounded-2xl p-6" data-testid="settings-form">
             <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Cash & margin</h3><button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
-            <label className="text-xs text-zinc-500 block">Cash in bank (USD)
+            <label className="text-xs text-zinc-500 block">Cash in bank
               <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
             </label>
             <label className="text-xs text-zinc-500 block mt-3">Gross margin % (optional)
               <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            </label>
+            <label className="text-xs text-zinc-500 block mt-3">Currency
+              <select
+                data-testid="settings-currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+              >
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
             </label>
             <button data-testid="save-settings-btn" onClick={saveSettings} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
           </GlassCard>
