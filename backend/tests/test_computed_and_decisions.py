@@ -214,6 +214,7 @@ class TestReportsComputed:
             assert card.get("source") == "auto"
             assert "summary" in card and card["summary"]
             assert "metrics" in card and len(card["metrics"]) >= 3
+            assert card.get("period") in ("First week", "Vs last week", "Live", "Today")
         assert j["can_write"] is True
 
     def test_weekly_pack_is_pro_gated_403_when_free(self, owner):

@@ -91,15 +91,16 @@ export default function Reports() {
     <div>
       <PageHeader
         title="Reports"
-        subtitle="Your manual reports plus live snapshots from financials, people, and tasks — each card has a clear purpose."
+        subtitle="Your manual write-ups plus week-over-week trends from financials, people, and tasks."
         action={action}
       />
 
       <GlassCard className="p-4 mb-6 fade-up border-white/5">
         <p className="text-sm text-zinc-400 leading-relaxed">
           <span className="text-white">How Reports works:</span> Add your own reports (sales recap, ops uptime, procurement, etc.).
-          Helm also shows <span className="text-zinc-300">live auto-cards</span> computed from your workspace data.
-          Automatic integrations will feed these later — for now you control the narrative.
+          Helm also shows <span className="text-zinc-300">week-over-week trend cards</span> — what changed since last week,
+          not a restatement of numbers you already see on Financials, Team, and Tasks.
+          The Weekly CEO Pack synthesizes your manual reports with those trends.
         </p>
       </GlassCard>
 
@@ -122,7 +123,7 @@ export default function Reports() {
 
       {auto.length > 0 && (
         <>
-          <SectionLabel className="mb-3">Live from your data</SectionLabel>
+          <SectionLabel className="mb-3">Week-over-week trends</SectionLabel>
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             {auto.map((r, i) => (
               <ReportCard key={r.id} report={r} index={i} badge="Auto" />
