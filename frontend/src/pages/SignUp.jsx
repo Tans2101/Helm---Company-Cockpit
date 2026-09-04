@@ -124,6 +124,12 @@ function SignUpClerk() {
           <p className="mt-4 text-center text-xs text-zinc-600">
             <Link to="/" className="hover:text-zinc-400 transition-colors">← Back to home</Link>
             <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
+            <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
+            <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/refunds" className="hover:text-zinc-400 transition-colors">Refunds</Link>
+            <span className="mx-2 text-zinc-700">·</span>
             <Link to="/login" className="hover:text-zinc-400 transition-colors">Sign in</Link>
           </p>
         </div>

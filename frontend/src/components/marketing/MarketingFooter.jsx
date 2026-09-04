@@ -11,6 +11,7 @@ const FOOTER_LINKS = [
   { to: "/sign-up", label: "Create account" },
   { to: "/privacy", label: "Privacy" },
   { to: "/terms", label: "Terms" },
+  { to: "/refunds", label: "Refunds" },
 ];
 
 export default function MarketingFooter() {

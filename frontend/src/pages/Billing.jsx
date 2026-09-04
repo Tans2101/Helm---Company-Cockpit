@@ -162,6 +162,8 @@ export default function Billing() {
         <Link to="/terms" className="text-zinc-500 hover:text-zinc-300 transition-colors">Terms</Link>
         {" · "}
         <Link to="/privacy" className="text-zinc-500 hover:text-zinc-300 transition-colors">Privacy</Link>
+        {" · "}
+        <Link to="/refunds" className="text-zinc-500 hover:text-zinc-300 transition-colors">Refunds</Link>
       </p>
     </div>
   );
