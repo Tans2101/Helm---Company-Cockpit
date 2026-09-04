@@ -84,6 +84,7 @@ DEPARTMENT_DEPENDENT_COLLECTIONS = (
     "production_stages",
     "procurement_requests",
     "legal_matters",
+    "maintenance_tickets",
     "deals",
     "financial_entries",
 )

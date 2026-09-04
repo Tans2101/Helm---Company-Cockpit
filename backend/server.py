@@ -5188,6 +5188,251 @@ async def delete_legal_matter(matter_id: str, principal=Depends(get_principal)):
     return {"ok": True}
 
 
+# ------------------------- Engineering & Maintenance ticket queue -------------------------
+MAINTENANCE_STATUSES = frozenset({"reported", "diagnosed", "in_repair", "resolved"})
+MAINTENANCE_PRIORITIES = frozenset({"low", "medium", "high"})
+_MAINT_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+async def _maintenance_department(principal: dict) -> dict:
+    doc = await db.departments.find_one(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+            "enabled": True,
+        },
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(
+            status_code=404,
+            detail="Engineering & Maintenance department is not enabled",
+        )
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to Engineering & Maintenance",
+        )
+    return doc
+
+
+def _can_lead_maintenance(principal: dict, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+async def _enrich_maintenance_ticket(ticket: dict) -> dict:
+    out = {k: v for k, v in ticket.items() if k != "_id"}
+    for field, label in (("reported_by", "reporter"), ("assigned_technician", "technician")):
+        uid = out.get(field)
+        info = None
+        if uid:
+            u = await db.users.find_one(
+                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
+            )
+            info = {
+                "user_id": uid,
+                "name": (u or {}).get("name"),
+                "email": (u or {}).get("email"),
+                "picture": (u or {}).get("picture"),
+            }
+        out[label] = info
+    return out
+
+
+def _sort_maintenance_tickets(rows: list) -> list:
+    """Unresolved first, then high → medium → low priority, then newest."""
+    def key(t):
+        resolved = 1 if t.get("status") == "resolved" else 0
+        pri = _MAINT_PRIORITY_RANK.get(t.get("priority") or "medium", 9)
+        created = t.get("created_at") or ""
+        return (resolved, pri, created)
+
+    return sorted(rows, key=key)
+
+
+class MaintenanceTicketCreate(BaseModel):
+    equipment_name: str
+    description: str = ""
+    priority: str = "medium"
+    notes: str = ""
+    assigned_technician: Optional[str] = None
+
+
+class MaintenanceTicketPatch(BaseModel):
+    equipment_name: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+    assigned_technician: Optional[str] = None
+
+
+@api_router.get("/maintenance/tickets")
+async def list_maintenance_tickets(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+):
+    dept = await _maintenance_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in MAINTENANCE_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    if priority is not None:
+        pr = priority.strip().lower()
+        if pr not in MAINTENANCE_PRIORITIES:
+            raise HTTPException(status_code=400, detail="Invalid priority filter")
+        filt["priority"] = pr
+    rows = await db.maintenance_tickets.find(filt, {"_id": 0}).to_list(1000)
+    rows = _sort_maintenance_tickets(rows)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_maintenance(principal, membership)
+    items = [await _enrich_maintenance_ticket(r) for r in rows]
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "Engineering & Maintenance",
+        "tickets": items,
+        "statuses": ["reported", "diagnosed", "in_repair", "resolved"],
+        "priorities": ["low", "medium", "high"],
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_lead": is_lead,
+        "can_assign": is_lead,
+        "can_delete": is_lead,
+        "my_user_id": principal["user_id"],
+    }
+
+
+@api_router.post("/maintenance/tickets")
+async def create_maintenance_ticket(
+    payload: MaintenanceTicketCreate,
+    principal=Depends(get_principal),
+):
+    dept = await _maintenance_department(principal)
+    equipment = (payload.equipment_name or "").strip()
+    if not equipment:
+        raise HTTPException(status_code=400, detail="Equipment name is required")
+    priority = (payload.priority or "medium").strip().lower()
+    if priority not in MAINTENANCE_PRIORITIES:
+        raise HTTPException(status_code=400, detail="Invalid priority")
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_maintenance(principal, membership)
+    assigned = None
+    if is_lead and payload.assigned_technician is not None:
+        assigned = (payload.assigned_technician or "").strip() or None
+    now = datetime.now(timezone.utc).isoformat()
+    ticket = {
+        "id": f"mtkt_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "equipment_name": equipment,
+        "description": (payload.description or "").strip(),
+        "reported_by": principal["user_id"],
+        "assigned_technician": assigned,
+        "priority": priority,
+        "status": "reported",
+        "notes": (payload.notes or "").strip(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.maintenance_tickets.insert_one(dict(ticket))
+    return {"ok": True, "ticket": await _enrich_maintenance_ticket(ticket)}
+
+
+@api_router.patch("/maintenance/tickets/{ticket_id}")
+async def patch_maintenance_ticket(
+    ticket_id: str,
+    payload: MaintenanceTicketPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _maintenance_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_maintenance(principal, membership)
+    ticket = await db.maintenance_tickets.find_one(
+        {"id": ticket_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    is_tech = ticket.get("assigned_technician") == principal["user_id"]
+    can_update = is_lead or is_tech
+    if not can_update:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only update tickets assigned to you",
+        )
+
+    upd: dict = {}
+    if payload.equipment_name is not None:
+        name = payload.equipment_name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Equipment name is required")
+        upd["equipment_name"] = name
+    if payload.description is not None:
+        upd["description"] = payload.description.strip()
+    if payload.notes is not None:
+        upd["notes"] = payload.notes.strip()
+    if payload.priority is not None:
+        pr = payload.priority.strip().lower()
+        if pr not in MAINTENANCE_PRIORITIES:
+            raise HTTPException(status_code=400, detail="Invalid priority")
+        upd["priority"] = pr
+    if payload.status is not None:
+        st = payload.status.strip().lower()
+        if st not in MAINTENANCE_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        upd["status"] = st
+
+    if payload.assigned_technician is not None:
+        new_tech = (payload.assigned_technician or "").strip() or None
+        if new_tech != ticket.get("assigned_technician"):
+            if not is_lead:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only a lead or the CEO can assign a technician",
+                )
+            upd["assigned_technician"] = new_tech
+
+    if not upd:
+        return {"ok": True, "ticket": await _enrich_maintenance_ticket(ticket)}
+
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.maintenance_tickets.update_one(
+        {"id": ticket_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    return {"ok": True, "ticket": await _enrich_maintenance_ticket({**ticket, **upd})}
+
+
+@api_router.delete("/maintenance/tickets/{ticket_id}")
+async def delete_maintenance_ticket(ticket_id: str, principal=Depends(get_principal)):
+    dept = await _maintenance_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_maintenance(principal, membership):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a lead or the CEO can delete tickets",
+        )
+    result = await db.maintenance_tickets.delete_one(
+        {"id": ticket_id, "department_id": dept["department_id"]},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return {"ok": True}
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -5852,6 +6097,7 @@ async def paddle_webhook(request: Request):
 _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "activities", "updates", "chat_messages",
     "paddle_intents", "payment_transactions", "procurement_requests", "legal_matters",
+    "maintenance_tickets",
 )
 
 
@@ -6192,6 +6438,10 @@ async def _ensure_indexes():
         (db.legal_matters, [("department_id", 1), ("created_at", -1)], {}),
         (db.legal_matters, [("department_id", 1), ("status", 1)], {}),
         (db.legal_matters, [("workspace_id", 1)], {}),
+        (db.maintenance_tickets, [("id", 1)], {"unique": True}),
+        (db.maintenance_tickets, [("department_id", 1), ("status", 1)], {}),
+        (db.maintenance_tickets, [("department_id", 1), ("priority", 1)], {}),
+        (db.maintenance_tickets, [("workspace_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:

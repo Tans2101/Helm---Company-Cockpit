@@ -37,6 +37,7 @@ const DEPT_ROUTE = {
   production: "/app/departments/production",
   procurement: "/app/departments/procurement",
   legal: "/app/departments/legal",
+  engineering_maintenance: "/app/departments/engineering_maintenance",
 };
 
 function departmentNavTo(type) {
