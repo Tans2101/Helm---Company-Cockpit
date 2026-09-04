@@ -382,6 +382,121 @@ async def workspace_departments(workspace_id: str, ws: dict | None = None) -> li
     return sorted(depts, key=lambda x: (x != "General", x.lower()))
 
 
+def _avg_trust(people_list):
+    scores = [p.get("trust_score", 0) for p in people_list if isinstance(p.get("trust_score"), (int, float))]
+    return round(sum(scores) / len(scores)) if scores else 0
+
+
+def _display_name_from_email(email: str) -> str:
+    local = (email or "").split("@")[0]
+    cleaned = re.sub(r"[._+\-]+", " ", local).strip()
+    return cleaned.title() if cleaned else "Team member"
+
+
+def _find_linked_person(roster: list, membership: dict):
+    mid = membership.get("membership_id")
+    email = _normalize_email(membership.get("email") or "")
+    user_id = membership.get("user_id")
+    for p in roster:
+        if mid and p.get("membership_id") == mid:
+            return p
+    for p in roster:
+        if email and _normalize_email(p.get("email") or "") == email:
+            return p
+    if user_id:
+        for p in roster:
+            if p.get("user_id") == user_id:
+                return p
+    return None
+
+
+async def ensure_person_for_membership(workspace_id: str, membership: dict, name: str | None = None) -> dict:
+    """Upsert a People roster row for a Team & Access membership. Members always appear in People."""
+    ws = await get_ws(workspace_id)
+    people = dict(ws.get("people") or {"people": [], "avg_trust": 0})
+    roster = list(people.get("people") or [])
+    people["people"] = roster
+
+    email = _normalize_email(membership.get("email") or "")
+    user_id = membership.get("user_id")
+    dept = (membership.get("department") or "General").strip() or "General"
+    display_name = (name or "").strip() or None
+    if not display_name and user_id:
+        u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "name": 1})
+        display_name = ((u or {}).get("name") or "").strip() or None
+    if not display_name:
+        display_name = _display_name_from_email(email)
+
+    found = _find_linked_person(roster, membership)
+    if found:
+        found["membership_id"] = membership["membership_id"]
+        if email:
+            found["email"] = email
+        if user_id:
+            found["user_id"] = user_id
+        if dept:
+            found["department"] = dept
+        # Prefer a real account name over an email-derived placeholder
+        if name and name.strip():
+            found["name"] = name.strip()
+        elif user_id and display_name and (
+            not found.get("name")
+            or (email and found.get("name") == _display_name_from_email(email))
+        ):
+            found["name"] = display_name
+        person = found
+    else:
+        person = {
+            "id": f"p_{uuid.uuid4().hex[:8]}",
+            "name": display_name,
+            "role": "",
+            "department": dept,
+            "trust_score": 80,
+            "quality": "B+",
+            "tasks_done": 0,
+            "tenure": "New",
+            "membership_id": membership["membership_id"],
+            "email": email or None,
+            "user_id": user_id,
+        }
+        roster.append(person)
+
+    people["avg_trust"] = _avg_trust(roster)
+    headcount = len(roster)
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {"people": people, "employees": headcount}},
+    )
+    return person
+
+
+async def sync_members_into_people(workspace_id: str) -> dict:
+    """Backfill: every active/invited membership has a People row."""
+    mems = await db.memberships.find(
+        {"workspace_id": workspace_id, "status": {"$in": ["active", "invited"]}},
+        {"_id": 0},
+    ).to_list(200)
+    for m in mems:
+        await ensure_person_for_membership(workspace_id, m)
+    return await get_ws(workspace_id)
+
+
+async def unlink_person_membership(workspace_id: str, membership_id: str):
+    """Keep the roster person when access is revoked — just clear the login link."""
+    ws = await get_ws(workspace_id)
+    people = dict(ws.get("people") or {"people": [], "avg_trust": 0})
+    changed = False
+    for p in people.get("people") or []:
+        if p.get("membership_id") == membership_id:
+            p.pop("membership_id", None)
+            changed = True
+    if changed:
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id},
+            {"$set": {"people": people}},
+        )
+
+
 async def can_section_write(principal: dict, section_id: str, pack_perm: str) -> bool:
     """Pack permission OR CEO-granted member/department access for a section."""
     if pack_perm in perms_for(principal["pack"]):
@@ -1450,11 +1565,14 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
     doc = build_workspace(ws_id, payload.name.strip() or "New Company", user["user_id"], empty=True)
     await db.workspaces.insert_one(doc)
-    await db.memberships.insert_one({
+    membership = {
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
         "user_id": user["user_id"], "email": user["email"], "role": "owner",
-        "pack": "owner", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+        "pack": "owner", "department": "General", "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.memberships.insert_one(membership)
+    await ensure_person_for_membership(ws_id, membership, name=user.get("name"))
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -1493,14 +1611,18 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
     if not ws:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     ws_id = ws["workspace_id"]
-    existing = await db.memberships.find_one({"workspace_id": ws_id, "user_id": user["user_id"]})
+    existing = await db.memberships.find_one({"workspace_id": ws_id, "user_id": user["user_id"]}, {"_id": 0})
     if not existing:
         await _enforce_seat_available(ws_id, ws.get("plan"))
-        await db.memberships.insert_one({
+        membership = {
             "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
             "user_id": user["user_id"], "email": user["email"], "role": "member",
-            "pack": "member", "status": "active", "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+            "pack": "member", "department": "General", "status": "active",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.memberships.insert_one(membership)
+        existing = membership
+    await ensure_person_for_membership(ws_id, existing, name=user.get("name"))
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
     return {"ok": True, "workspace_id": ws_id}
 
@@ -1547,6 +1669,7 @@ class InviteInput(BaseModel):
     email: EmailStr
     pack: str = "member"
     department: str = "General"
+    name: Optional[str] = None
 
 
 @api_router.post("/members/invite")
@@ -1563,13 +1686,16 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     if existing:
         raise HTTPException(status_code=400, detail="Already a member or invited")
     existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    await db.memberships.insert_one({
+    membership = {
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
         "user_id": existing_user["user_id"] if existing_user else None, "email": email,
         "role": role, "pack": pack, "department": payload.department.strip() or "General",
         "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }
+    await db.memberships.insert_one(membership)
+    display_name = (existing_user or {}).get("name") or payload.name
+    await ensure_person_for_membership(principal["workspace_id"], membership, name=display_name)
     ws = await get_ws(principal["workspace_id"])
     app_url = APP_URL or FRONTEND_URL or str(request.base_url).rstrip("/")
     email_result = await send_invite_email(email, principal.get("name") or "Your team lead", ws["name"], PACK_LABEL.get(pack, "Member"), app_url)
@@ -1599,6 +1725,8 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
     if payload.department is not None:
         upd["department"] = payload.department.strip() or "General"
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
+    m2 = {**m, **upd}
+    await ensure_person_for_membership(principal["workspace_id"], m2)
     return {"ok": True}
 
 
@@ -1696,6 +1824,7 @@ async def remove_member(membership_id: str, principal=Depends(require_pro_perm("
     if m.get("user_id") == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot remove yourself")
     await db.memberships.delete_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]})
+    await unlink_person_membership(principal["workspace_id"], membership_id)
     return {"ok": True}
 
 
@@ -3652,16 +3781,22 @@ async def delete_calendar_event(event_id: str, principal=Depends(get_principal))
 
 @api_router.get("/people")
 async def people(principal=Depends(get_principal)):
-    c = await get_ws(principal["workspace_id"])
+    c = await sync_members_into_people(principal["workspace_id"])
     data = dict(c["people"])
+    mem_ids = {
+        m["membership_id"]
+        for m in await db.memberships.find(
+            {"workspace_id": principal["workspace_id"], "status": {"$in": ["active", "invited"]}},
+            {"_id": 0, "membership_id": 1},
+        ).to_list(200)
+    }
+    for p in data.get("people") or []:
+        mid = p.get("membership_id")
+        p["has_access"] = bool(mid and mid in mem_ids)
     data["can_write"] = await can_section_write(principal, "people", "people:write")
+    data["can_invite_to_access"] = "members:invite" in perms_for(principal["pack"])
     data["departments"] = sec_access.DEFAULT_DEPARTMENTS
     return data
-
-
-def _avg_trust(people_list):
-    scores = [p.get("trust_score", 0) for p in people_list if isinstance(p.get("trust_score"), (int, float))]
-    return round(sum(scores) / len(scores)) if scores else 0
 
 
 class PersonInput(BaseModel):
@@ -3672,6 +3807,9 @@ class PersonInput(BaseModel):
     quality: str = "B+"
     tasks_done: int = 0
     tenure: str = ""
+    invite_to_access: bool = False
+    email: Optional[EmailStr] = None
+    pack: str = "member"
 
 
 def _person_fields(payload: PersonInput):
@@ -3682,21 +3820,68 @@ def _person_fields(payload: PersonInput):
 
 
 @api_router.post("/people")
-async def add_person(payload: PersonInput, principal=Depends(require_section("people", "people:write"))):
+async def add_person(payload: PersonInput, request: Request, principal=Depends(require_section("people", "people:write"))):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
+    invite = bool(payload.invite_to_access)
+    email = _normalize_email(str(payload.email)) if payload.email else ""
+    if invite:
+        if "members:invite" not in perms_for(principal["pack"]):
+            raise HTTPException(status_code=403, detail="You do not have permission to invite to Team & Access")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required to include in Team & Access")
+        if payload.pack not in VALID_PACKS:
+            raise HTTPException(status_code=400, detail="Unknown access pack")
+        if payload.pack == "owner" and "members:manage" not in perms_for(principal["pack"]):
+            raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
+        existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Already a member or invited — they should already be on the roster")
+        await _enforce_seat_available(principal["workspace_id"])
+
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     person = {"id": f"p_{uuid.uuid4().hex[:8]}", **_person_fields(payload)}
+    if email:
+        person["email"] = email
+
+    invite_meta = None
+    if invite:
+        pack = payload.pack
+        role = "owner" if pack == "owner" else "member"
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+        membership = {
+            "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
+            "user_id": existing_user["user_id"] if existing_user else None, "email": email,
+            "role": role, "pack": pack, "department": person["department"],
+            "status": "active" if existing_user else "invited",
+            "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.memberships.insert_one(membership)
+        person["membership_id"] = membership["membership_id"]
+        person["user_id"] = membership.get("user_id")
+        person["has_access"] = True
+        ws = c
+        app_url = APP_URL or FRONTEND_URL or str(request.base_url).rstrip("/")
+        email_result = await send_invite_email(
+            email, principal.get("name") or "Your team lead", ws["name"],
+            PACK_LABEL.get(pack, "Member"), app_url,
+        )
+        invite_meta = {"auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False)}
+
     people["people"].append(person)
     people["avg_trust"] = _avg_trust(people["people"])
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})
-    await log_activity(principal, "people", "person.add",
-                       f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f" — headcount now {headcount}",
-                       {"headcount": headcount})
-    return {"ok": True, "person": person}
+    summary = f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f" — headcount now {headcount}"
+    if invite:
+        summary += " · invited to Team & Access"
+    await log_activity(principal, "people", "person.add", summary, {"headcount": headcount})
+    out = {"ok": True, "person": person}
+    if invite_meta:
+        out.update(invite_meta)
+    return out
 
 
 @api_router.patch("/people/{person_id}")
@@ -3706,11 +3891,20 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
     found = None
     for p in people["people"]:
         if p["id"] == person_id:
-            p.update(_person_fields(payload))
+            fields = _person_fields(payload)
+            p.update(fields)
+            if payload.email:
+                p["email"] = _normalize_email(str(payload.email))
             found = p
             break
     if not found:
         raise HTTPException(status_code=404, detail="Person not found")
+    # Keep linked membership department in sync
+    if found.get("membership_id"):
+        await db.memberships.update_one(
+            {"membership_id": found["membership_id"], "workspace_id": principal["workspace_id"]},
+            {"$set": {"department": found["department"]}},
+        )
     people["avg_trust"] = _avg_trust(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"people": people}})
     await log_activity(principal, "people", "person.edit", f"Updated {found['name']}'s profile")
@@ -3722,6 +3916,16 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
     c = await get_ws(principal["workspace_id"])
     people = c["people"]
     person = next((p for p in people["people"] if p["id"] == person_id), None)
+    if person and person.get("membership_id"):
+        still = await db.memberships.find_one(
+            {"membership_id": person["membership_id"], "workspace_id": principal["workspace_id"]},
+            {"_id": 0, "membership_id": 1},
+        )
+        if still:
+            raise HTTPException(
+                status_code=400,
+                detail="This person has Team & Access login — remove them from Team & Access first",
+            )
     people["people"] = [p for p in people["people"] if p["id"] != person_id]
     people["avg_trust"] = _avg_trust(people["people"])
     headcount = len(people["people"])

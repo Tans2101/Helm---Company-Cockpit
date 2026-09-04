@@ -115,7 +115,7 @@ export default function Members() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Team & Access" subtitle="Invite teammates with access packs, and control what each person can edit." />
+      <PageHeader title="Team & Access" subtitle="Invite teammates with access packs — they also appear on the People roster." />
 
       {canManageOwners && (
         <div className="flex gap-1 mb-6 p-1 rounded-lg border border-white/10 bg-white/[0.02] w-fit">
