@@ -4224,16 +4224,14 @@ async def disable_department(department_id: str, principal=Depends(get_principal
     if not dept_access.is_workspace_ceo(principal):
         raise HTTPException(status_code=403, detail="Only the CEO can disable departments")
     doc = await _department_in_workspace(department_id, principal["workspace_id"])
-    if await dept_access.department_has_dependent_data(db, department_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot disable this department while it still has department-specific data. Remove that data first.",
-        )
+    # Clear department-owned feature data (stages, queues, HR template, etc.).
+    # Core workspace records (deals / financial entries) are left intact.
+    cleared = await dept_access.clear_department_feature_data(db, department_id)
     await db.department_members.delete_many({"department_id": department_id})
     await db.departments.delete_one(
         {"department_id": department_id, "workspace_id": principal["workspace_id"]},
     )
-    return {"ok": True, "type": doc.get("type")}
+    return {"ok": True, "type": doc.get("type"), "cleared": cleared}
 
 
 @api_router.get("/departments/{department_id}/members")

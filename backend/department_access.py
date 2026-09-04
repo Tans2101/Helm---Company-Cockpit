@@ -1,7 +1,10 @@
 """Department membership helpers — reusable by department-scoped endpoints."""
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger("helm")
 
 
 def is_workspace_ceo(principal: dict) -> bool:
@@ -78,23 +81,25 @@ def apply_department_filter(base_filter: dict, department_ids: Optional[list[str
     return out
 
 
-# Collections that would block disabling a department once features exist.
-# Add new `{dept}_stages` (and similar) names here as department features ship.
-DEPARTMENT_DEPENDENT_COLLECTIONS = (
+# Feature collections owned by a department — cleared when the department is disabled.
+# Do NOT include deals / financial_entries: those are core workspace data that keep
+# their department_id but must not permanently block disable.
+DEPARTMENT_FEATURE_COLLECTIONS = (
     "production_stages",
     "procurement_requests",
     "legal_matters",
     "maintenance_tickets",
     "hr_onboarding_instances",
     "hr_onboarding_template",
-    "deals",
-    "financial_entries",
 )
+
+# Back-compat alias used by older call sites / tests.
+DEPARTMENT_DEPENDENT_COLLECTIONS = DEPARTMENT_FEATURE_COLLECTIONS
 
 
 async def department_has_dependent_data(db, department_id: str) -> bool:
     """True if any department-specific feature data exists under this department."""
-    for name in DEPARTMENT_DEPENDENT_COLLECTIONS:
+    for name in DEPARTMENT_FEATURE_COLLECTIONS:
         coll = getattr(db, name, None)
         if coll is None:
             continue
@@ -105,3 +110,45 @@ async def department_has_dependent_data(db, department_id: str) -> bool:
         if found:
             return True
     return False
+
+
+async def clear_department_feature_data(db, department_id: str) -> dict[str, int]:
+    """Delete all feature rows for a department. Returns {collection: deleted_count}."""
+    cleared: dict[str, int] = {}
+    # Best-effort cleanup of legal matter files in R2 before wiping rows.
+    legal = getattr(db, "legal_matters", None)
+    if legal is not None:
+        try:
+            rows = await legal.find(
+                {"department_id": department_id},
+                {"_id": 0, "document_ref": 1},
+            ).to_list(5000)
+        except Exception:
+            rows = []
+        if rows:
+            try:
+                import storage as doc_storage
+                if doc_storage.r2_configured():
+                    import asyncio
+                    for row in rows:
+                        ref = row.get("document_ref") or {}
+                        key = ref.get("storage_key") if isinstance(ref, dict) else None
+                        if key:
+                            try:
+                                await asyncio.to_thread(doc_storage.delete_document, key)
+                            except Exception:
+                                logger.exception("failed to delete legal doc %s on dept clear", key)
+            except Exception:
+                logger.exception("legal matter R2 cleanup skipped")
+
+    for name in DEPARTMENT_FEATURE_COLLECTIONS:
+        coll = getattr(db, name, None)
+        if coll is None:
+            continue
+        try:
+            res = await coll.delete_many({"department_id": department_id})
+            cleared[name] = int(getattr(res, "deleted_count", 0) or 0)
+        except Exception:
+            logger.exception("failed clearing %s for department %s", name, department_id)
+            cleared[name] = 0
+    return cleared

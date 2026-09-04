@@ -228,14 +228,29 @@ def test_by_type_access_denied_for_non_member(dept_api):
     assert r.status_code == 403
 
 
-def test_disable_blocked_with_dependent_data(dept_api):
+def test_disable_clears_dependent_data(dept_api):
     client, depts, members, mock_db, as_ceo, as_member = dept_api
     client.post("/api/departments", json={"type": "production"})
     dept_id = depts.rows[0]["department_id"]
     mock_db.production_stages.find_one = AsyncMock(return_value={"_id": "x"})
+    mock_db.production_stages.delete_many = AsyncMock(return_value=MagicMock(deleted_count=2))
+    # Other feature collections used by clear_department_feature_data
+    for name in (
+        "procurement_requests", "legal_matters", "maintenance_tickets",
+        "hr_onboarding_instances", "hr_onboarding_template",
+    ):
+        coll = MagicMock()
+        coll.delete_many = AsyncMock(return_value=MagicMock(deleted_count=0))
+        # legal_matters.find used for R2 cleanup
+        cursor = MagicMock()
+        cursor.to_list = AsyncMock(return_value=[])
+        coll.find = MagicMock(return_value=cursor)
+        setattr(mock_db, name, coll)
     r = client.delete(f"/api/departments/{dept_id}")
-    assert r.status_code == 400
-    assert "department-specific data" in r.json()["detail"]
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+    mock_db.production_stages.delete_many.assert_called()
+    assert not any(d["department_id"] == dept_id for d in depts.rows)
 
 
 def test_add_and_remove_member(dept_api):

@@ -59,6 +59,10 @@ export default function DepartmentsSettings() {
     setBusyType(dept.type);
     try {
       if (dept.enabled) {
+        const ok = window.confirm(
+          `Disable ${dept.name}?\n\nThis removes its department tools data (stages, requests, tickets, onboarding, etc.) for everyone. Pipeline deals and financial entries are kept.`,
+        );
+        if (!ok) return;
         await api.delete(`/departments/${dept.department_id}`);
         toast.success(`${dept.name} disabled`);
         if (expanded === dept.department_id) setExpanded(null);
