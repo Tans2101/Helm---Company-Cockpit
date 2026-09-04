@@ -85,6 +85,8 @@ DEPARTMENT_DEPENDENT_COLLECTIONS = (
     "procurement_requests",
     "legal_matters",
     "maintenance_tickets",
+    "hr_onboarding_instances",
+    "hr_onboarding_template",
     "deals",
     "financial_entries",
 )

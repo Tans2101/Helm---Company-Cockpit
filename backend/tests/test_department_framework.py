@@ -139,6 +139,23 @@ def dept_api():
     # production_stages for dependent-data guard
     mock_db.production_stages = MagicMock()
     mock_db.production_stages.find_one = AsyncMock(return_value=None)
+    # HR enable seeds default onboarding template
+    hr_templates = []
+
+    async def hr_find_one(query, projection=None):
+        for r in hr_templates:
+            if all(r.get(k) == v for k, v in query.items()):
+                return dict(r)
+        return None
+
+    async def hr_insert_one(doc):
+        hr_templates.append(dict(doc))
+
+    mock_db.hr_onboarding_template = MagicMock()
+    mock_db.hr_onboarding_template.find_one = AsyncMock(side_effect=hr_find_one)
+    mock_db.hr_onboarding_template.insert_one = AsyncMock(side_effect=hr_insert_one)
+    mock_db.hr_onboarding_instances = MagicMock()
+    mock_db.hr_onboarding_instances.find_one = AsyncMock(return_value=None)
 
     async def as_ceo():
         return CEO

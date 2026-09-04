@@ -10,7 +10,9 @@ Future department-specific feature collections (when built) must follow the
   - legal_stages                   (unused; Legal uses a matter queue, not a chain)
   - maintenance_tickets            (exists — Engineering & Maintenance ticket queue)
   - engineering_maintenance_stages (unused; Eng & Maint uses a ticket queue, not a chain)
-  - hr_stages                      (future)
+  - hr_onboarding_template         (exists — HR onboarding template)
+  - hr_onboarding_instances        (exists — per-hire onboarding instances)
+  - hr_stages                      (unused; HR uses onboarding templates, not a chain)
   - sales_stages                   (future, if needed beyond Pipeline)
   - accounting_finance_stages      (future, if needed beyond Financials)
 
@@ -31,9 +33,8 @@ TYPE_HR = "hr"
 TYPE_ENGINEERING_MAINTENANCE = "engineering_maintenance"
 
 # Types that ship with a placeholder shell until their dedicated feature prompt.
-PLACEHOLDER_SHELL_TYPES = frozenset({
-    TYPE_HR,
-})
+# All seven catalog departments now have dedicated pages.
+PLACEHOLDER_SHELL_TYPES = frozenset()
 
 DEPARTMENT_CATALOG: list[dict[str, Any]] = [
     {

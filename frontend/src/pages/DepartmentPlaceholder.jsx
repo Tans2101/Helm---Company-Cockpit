@@ -3,10 +3,8 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { PageHeader, LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
 
-/** Catalog types that still use this placeholder shell. */
-export const PLACEHOLDER_DEPARTMENT_TYPES = [
-  "hr",
-];
+/** Catalog types that still use this placeholder shell (none — all departments have pages). */
+export const PLACEHOLDER_DEPARTMENT_TYPES = [];
 
 export default function DepartmentPlaceholder() {
   const { deptType } = useParams();

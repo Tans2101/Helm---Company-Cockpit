@@ -40,6 +40,7 @@ import Production from "@/pages/Production";
 import Procurement from "@/pages/Procurement";
 import Legal from "@/pages/Legal";
 import Maintenance from "@/pages/Maintenance";
+import HR from "@/pages/HR";
 import { LoadingScreen } from "@/components/kit";
 
 function ClerkOAuthCallback() {
@@ -109,6 +110,7 @@ function AppRouter() {
         <Route path="departments/procurement" element={<Procurement />} />
         <Route path="departments/legal" element={<Legal />} />
         <Route path="departments/engineering_maintenance" element={<Maintenance />} />
+        <Route path="departments/hr" element={<HR />} />
         <Route path="departments/sales" element={<Navigate to="/app/sales" replace />} />
         <Route path="departments/accounting_finance" element={<Navigate to="/app/financials" replace />} />
         <Route path="departments/:deptType" element={<DepartmentPlaceholder />} />

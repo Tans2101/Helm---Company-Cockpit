@@ -4204,6 +4204,10 @@ async def enable_department(payload: EnableDepartmentInput, principal=Depends(ge
         "enabled": True,
         "created_at": now,
     })
+    if dtype == dept_catalog.TYPE_HR:
+        await _ensure_hr_onboarding_template(
+            principal["workspace_id"], department_id,
+        )
     return {
         "ok": True,
         "department": {
@@ -5433,6 +5437,322 @@ async def delete_maintenance_ticket(ticket_id: str, principal=Depends(get_princi
     return {"ok": True}
 
 
+# ------------------------- HR onboarding -------------------------
+HR_DEFAULT_TEMPLATE_STEPS = ("Offer", "Paperwork", "Orientation", "Active")
+HR_STEP_STATUSES = frozenset({"not_started", "in_progress", "done"})
+HR_OVERALL_STATUSES = frozenset({"in_progress", "active"})
+
+
+async def _hr_department(principal: dict) -> dict:
+    doc = await db.departments.find_one(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_catalog.TYPE_HR,
+            "enabled": True,
+        },
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="HR department is not enabled")
+    if not await dept_access.can_access_department(db, principal, doc):
+        raise HTTPException(status_code=403, detail="You do not have access to HR")
+    return doc
+
+
+def _can_lead_hr(principal: dict, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+def _default_hr_template_steps() -> list[dict]:
+    return [
+        {"id": f"hstep_{uuid.uuid4().hex[:8]}", "name": name, "order": i}
+        for i, name in enumerate(HR_DEFAULT_TEMPLATE_STEPS)
+    ]
+
+
+async def _ensure_hr_onboarding_template(workspace_id: str, department_id: str) -> dict:
+    """Return existing template or create the default Offer→…→Active checklist."""
+    existing = await db.hr_onboarding_template.find_one(
+        {"department_id": department_id},
+        {"_id": 0},
+    )
+    if existing:
+        return existing
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": f"hrtpl_{uuid.uuid4().hex[:10]}",
+        "department_id": department_id,
+        "workspace_id": workspace_id,
+        "steps": _default_hr_template_steps(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hr_onboarding_template.insert_one(dict(doc))
+    return doc
+
+
+def _derive_overall_status(steps: list) -> str:
+    if steps and all((s.get("status") == "done") for s in steps):
+        return "active"
+    return "in_progress"
+
+
+async def _enrich_hr_instance(inst: dict) -> dict:
+    out = {k: v for k, v in inst.items() if k != "_id"}
+    steps = []
+    for step in out.get("steps") or []:
+        s = dict(step)
+        uid = s.get("assigned_to")
+        assignee = None
+        if uid:
+            u = await db.users.find_one(
+                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
+            )
+            assignee = {
+                "user_id": uid,
+                "name": (u or {}).get("name"),
+                "email": (u or {}).get("email"),
+                "picture": (u or {}).get("picture"),
+            }
+        s["assignee"] = assignee
+        steps.append(s)
+    out["steps"] = steps
+    done = sum(1 for s in steps if s.get("status") == "done")
+    out["progress"] = {"done": done, "total": len(steps)}
+    return out
+
+
+def _sort_hr_instances(rows: list) -> list:
+    """In-progress first, then newest."""
+    def key(r):
+        closed = 1 if r.get("overall_status") == "active" else 0
+        return (closed, r.get("created_at") or "")
+    return sorted(rows, key=key)
+
+
+class HrTemplatePatch(BaseModel):
+    steps: list
+
+
+class HrOnboardingCreate(BaseModel):
+    hire_name: str
+    hire_email: str = ""
+
+
+class HrOnboardingPatch(BaseModel):
+    step_id: str
+    status: Optional[str] = None
+    assigned_to: Optional[str] = None
+    hire_name: Optional[str] = None
+    hire_email: Optional[str] = None
+
+
+@api_router.get("/hr/template")
+async def get_hr_template(principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    tmpl = await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "template": {k: v for k, v in tmpl.items() if k != "_id"},
+        "is_lead": is_lead,
+        "can_edit_template": is_lead,
+        "my_user_id": principal["user_id"],
+    }
+
+
+@api_router.patch("/hr/template")
+async def patch_hr_template(payload: HrTemplatePatch, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can edit the template")
+    tmpl = await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
+    raw_steps = payload.steps if isinstance(payload.steps, list) else []
+    cleaned = []
+    for i, raw in enumerate(raw_steps):
+        if not isinstance(raw, dict):
+            continue
+        name = (raw.get("name") or "").strip()
+        if not name:
+            continue
+        step_id = (raw.get("id") or "").strip() or f"hstep_{uuid.uuid4().hex[:8]}"
+        cleaned.append({"id": step_id, "name": name[:120], "order": i})
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Template must have at least one step")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.hr_onboarding_template.update_one(
+        {"id": tmpl["id"], "department_id": dept["department_id"]},
+        {"$set": {"steps": cleaned, "updated_at": now}},
+    )
+    updated = {**tmpl, "steps": cleaned, "updated_at": now}
+    return {"ok": True, "template": {k: v for k, v in updated.items() if k != "_id"}}
+
+
+@api_router.get("/hr/onboarding")
+async def list_hr_onboarding(
+    principal=Depends(get_principal),
+    overall_status: Optional[str] = Query(None),
+):
+    dept = await _hr_department(principal)
+    await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
+    filt: dict = {"department_id": dept["department_id"]}
+    if overall_status is not None:
+        st = overall_status.strip().lower()
+        if st not in HR_OVERALL_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid overall_status filter")
+        filt["overall_status"] = st
+    rows = await db.hr_onboarding_instances.find(filt, {"_id": 0}).to_list(1000)
+    rows = _sort_hr_instances(rows)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    items = [await _enrich_hr_instance(r) for r in rows]
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "instances": items,
+        "is_lead": is_lead,
+        "can_create": is_lead,
+        "can_delete": is_lead,
+        "my_user_id": principal["user_id"],
+        "step_statuses": sorted(HR_STEP_STATUSES),
+    }
+
+
+@api_router.post("/hr/onboarding")
+async def create_hr_onboarding(payload: HrOnboardingCreate, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can start onboarding")
+    hire_name = (payload.hire_name or "").strip()
+    if not hire_name:
+        raise HTTPException(status_code=400, detail="Hire name is required")
+    tmpl = await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
+    steps = []
+    for s in sorted(tmpl.get("steps") or [], key=lambda x: x.get("order", 0)):
+        steps.append({
+            "id": f"histep_{uuid.uuid4().hex[:8]}",
+            "name": s.get("name") or "Step",
+            "order": int(s.get("order") or 0),
+            "status": "not_started",
+            "assigned_to": None,
+        })
+    if not steps:
+        raise HTTPException(status_code=400, detail="Template has no steps — edit the template first")
+    now = datetime.now(timezone.utc).isoformat()
+    inst = {
+        "id": f"hronb_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "hire_name": hire_name,
+        "hire_email": (payload.hire_email or "").strip().lower(),
+        "steps": steps,
+        "overall_status": "in_progress",
+        "created_by": principal["user_id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hr_onboarding_instances.insert_one(dict(inst))
+    return {"ok": True, "instance": await _enrich_hr_instance(inst)}
+
+
+@api_router.patch("/hr/onboarding/{instance_id}")
+async def patch_hr_onboarding(
+    instance_id: str,
+    payload: HrOnboardingPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    inst = await db.hr_onboarding_instances.find_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not inst:
+        raise HTTPException(status_code=404, detail="Onboarding instance not found")
+
+    steps = [dict(s) for s in (inst.get("steps") or [])]
+    step_id = (payload.step_id or "").strip()
+    step = next((s for s in steps if s.get("id") == step_id), None)
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+
+    is_assignee = step.get("assigned_to") == principal["user_id"]
+    if not is_lead and not is_assignee:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only update steps assigned to you",
+        )
+
+    upd_top: dict = {}
+    if payload.hire_name is not None or payload.hire_email is not None:
+        if not is_lead:
+            raise HTTPException(status_code=403, detail="Only a lead or CEO can edit hire details")
+        if payload.hire_name is not None:
+            name = payload.hire_name.strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="Hire name is required")
+            upd_top["hire_name"] = name
+        if payload.hire_email is not None:
+            upd_top["hire_email"] = payload.hire_email.strip().lower()
+
+    if payload.assigned_to is not None:
+        new_assignee = (payload.assigned_to or "").strip() or None
+        if new_assignee != step.get("assigned_to") and not is_lead:
+            # Assignees may not reassign; leads can
+            raise HTTPException(status_code=403, detail="Only a lead or CEO can reassign steps")
+        if is_lead:
+            step["assigned_to"] = new_assignee
+
+    if payload.status is not None:
+        st = payload.status.strip().lower()
+        if st not in HR_STEP_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid step status")
+        step["status"] = st
+
+    overall = _derive_overall_status(steps)
+    now = datetime.now(timezone.utc).isoformat()
+    set_fields = {"steps": steps, "overall_status": overall, "updated_at": now, **upd_top}
+    await db.hr_onboarding_instances.update_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+        {"$set": set_fields},
+    )
+    updated = {**inst, **set_fields}
+    return {"ok": True, "instance": await _enrich_hr_instance(updated)}
+
+
+@api_router.delete("/hr/onboarding/{instance_id}")
+async def delete_hr_onboarding(instance_id: str, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can delete onboarding")
+    result = await db.hr_onboarding_instances.delete_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Onboarding instance not found")
+    return {"ok": True}
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -6097,7 +6417,7 @@ async def paddle_webhook(request: Request):
 _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "activities", "updates", "chat_messages",
     "paddle_intents", "payment_transactions", "procurement_requests", "legal_matters",
-    "maintenance_tickets",
+    "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
 )
 
 
@@ -6442,6 +6762,11 @@ async def _ensure_indexes():
         (db.maintenance_tickets, [("department_id", 1), ("status", 1)], {}),
         (db.maintenance_tickets, [("department_id", 1), ("priority", 1)], {}),
         (db.maintenance_tickets, [("workspace_id", 1)], {}),
+        (db.hr_onboarding_template, [("department_id", 1)], {"unique": True}),
+        (db.hr_onboarding_template, [("id", 1)], {"unique": True}),
+        (db.hr_onboarding_instances, [("id", 1)], {"unique": True}),
+        (db.hr_onboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
+        (db.hr_onboarding_instances, [("workspace_id", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:
