@@ -31,12 +31,12 @@ function BriefingPreview() {
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gold">Monday · Morning Briefing</p>
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
       </div>
-      <h3 className="text-white text-lg md:text-xl font-light mt-3 leading-snug">Good morning, Alex.</h3>
+      <p className="text-white text-lg md:text-xl font-light mt-3 leading-snug">Good morning, Alex.</p>
       <p className="text-zinc-400 text-sm mt-1.5 leading-relaxed">Revenue is ahead of plan — but engineering capacity risk is rising.</p>
       <div className="grid grid-cols-3 gap-2 mt-4">
         {[["MRR", "$248K"], ["Runway", "17mo"], ["Burn", "$182K"]].map(([l, v]) => (
           <div key={l} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
-            <p className="text-[9px] font-mono uppercase tracking-wider text-zinc-500">{l}</p>
+            <p className="text-[9px] font-mono uppercase tracking-wider text-zinc-400">{l}</p>
             <p className="font-mono text-white text-base mt-1">{v}</p>
           </div>
         ))}
@@ -83,7 +83,7 @@ export default function Landing() {
                 See how it works
               </a>
             </motion.div>
-            <motion.p variants={fade} initial="hidden" animate="show" custom={4} className="mt-6 text-xs text-zinc-600">{AUDIENCE}</motion.p>
+            <motion.p variants={fade} initial="hidden" animate="show" custom={4} className="mt-6 text-xs text-zinc-400">{AUDIENCE}</motion.p>
           </div>
           <motion.div initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
             <BriefingPreview />
@@ -98,7 +98,7 @@ export default function Landing() {
             {PRODUCT_FACTS.map((s, i) => (
               <motion.div key={s.l} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center">
                 <p className="font-mono text-3xl md:text-4xl text-white">{s.v}</p>
-                <p className="mt-2 text-xs text-zinc-500 leading-snug">{s.l}</p>
+                <p className="mt-2 text-xs text-zinc-400 leading-snug">{s.l}</p>
               </motion.div>
             ))}
           </div>
@@ -113,7 +113,7 @@ export default function Landing() {
             <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight max-w-2xl leading-tight">
               Built for the CEO everyone's counting on.
             </h2>
-            <p className="mt-4 text-zinc-500 max-w-xl">{AUDIENCE}</p>
+            <p className="mt-4 text-zinc-400 max-w-xl">{AUDIENCE}</p>
           </motion.div>
           <div className="mt-12 grid md:grid-cols-3 gap-5">
             {WHO_HELM_IS_FOR.map((item, i) => (
@@ -145,7 +145,7 @@ export default function Landing() {
                 className="rounded-2xl border border-white/[0.06] bg-[#121214]/60 p-5">
                 <p className="font-mono text-[10px] uppercase tracking-wider text-gold">{step.time}</p>
                 <h3 className="mt-3 text-white font-medium">{step.title}</h3>
-                <p className="mt-2 text-xs text-zinc-500 leading-relaxed">{step.body}</p>
+                <p className="mt-2 text-xs text-zinc-400 leading-relaxed">{step.body}</p>
               </motion.div>
             ))}
           </div>
@@ -239,7 +239,7 @@ export default function Landing() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="text-center mb-12">
             <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Pricing</p>
             <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">Plans that scale with you</h2>
-            <p className="mt-3 text-zinc-500">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
+            <p className="mt-3 text-zinc-400">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
           </motion.div>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {PLANS.map((plan, i) => (
@@ -259,9 +259,9 @@ export default function Landing() {
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gold">{plan.label}</p>
                 <p className="font-mono text-4xl text-white mt-3">
                   {plan.price === 0 ? "$0" : `$${plan.price}`}
-                  {plan.price > 0 && <span className="text-base text-zinc-600">/mo</span>}
+                  {plan.price > 0 && <span className="text-base text-zinc-400">/mo</span>}
                 </p>
-                <p className="text-sm text-zinc-500 mt-2 min-h-[2.5rem]">{plan.for}</p>
+                <p className="text-sm text-zinc-400 mt-2 min-h-[2.5rem]">{plan.for}</p>
                 {plan.trialDays > 0 && (
                   <p className="text-[11px] font-mono text-gold/80 mt-1">{plan.trialDays}-day free trial</p>
                 )}
@@ -284,11 +284,11 @@ export default function Landing() {
             ))}
           </div>
           <div className="mt-12 max-w-2xl mx-auto space-y-4 text-left">
-            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-600 text-center">Common questions</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400 text-center">Common questions</p>
             {PRICING_FAQ.map((item) => (
               <div key={item.q}>
                 <p className="text-sm text-white">{item.q}</p>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.a}</p>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{item.a}</p>
               </div>
             ))}
           </div>
@@ -320,7 +320,7 @@ export default function Landing() {
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
-          <div className="relative mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-600">
+          <div className="relative mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-400">
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Free to start · 7-day paid trials</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Sign in with Google</span>
             <span className="inline-flex items-center gap-1.5"><Check className="w-3 h-3 text-gold" /> Live in minutes</span>

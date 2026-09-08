@@ -7,13 +7,13 @@ import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 
 const buildDir = join(process.cwd(), "build", "static", "js");
-const files = readdirSync(buildDir).filter((f) => f.startsWith("main.") && f.endsWith(".js"));
+const files = readdirSync(buildDir).filter((f) => f.endsWith(".js"));
 if (!files.length) {
-  console.error("verify-auth-build: no main.*.js in build/static/js");
+  console.error("verify-auth-build: no *.js in build/static/js");
   process.exit(1);
 }
 
-const bundle = readFileSync(join(buildDir, files[0]), "utf8");
+const bundle = files.map((f) => readFileSync(join(buildDir, f), "utf8")).join("\n");
 const required = [
   "treatPendingAsSignedOut:!1",
   "auth/clerk/exchange",
@@ -28,4 +28,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`verify-auth-build: ok (${files[0]})`);
+console.log(`verify-auth-build: ok (${files.length} js files)`);

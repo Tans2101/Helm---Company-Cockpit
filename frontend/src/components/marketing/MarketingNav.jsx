@@ -19,7 +19,7 @@ function isActive(path, active) {
 export default function MarketingNav({ authed, onEnter, active }) {
   const [open, setOpen] = useState(false);
   const linkClass = (path) =>
-    `text-sm transition-colors ${isActive(path, active) ? "text-white" : "text-zinc-500 hover:text-white"}`;
+    `text-sm transition-colors ${isActive(path, active) ? "text-white" : "text-zinc-400 hover:text-white"}`;
 
   return (
     <header className="fixed top-0 inset-x-0 z-50">
@@ -37,7 +37,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
 
           <div className="flex items-center gap-2">
             {!authed && (
-              <Link to="/login" className="hidden sm:inline text-sm text-zinc-500 hover:text-white transition-colors mr-1">
+              <Link to="/login" className="hidden sm:inline text-sm text-zinc-400 hover:text-white transition-colors mr-1">
                 Sign in
               </Link>
             )}
