@@ -36,6 +36,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import AccountSettings from "@/pages/AccountSettings";
 import DepartmentPlaceholder from "@/pages/DepartmentPlaceholder";
+import NotFound from "@/pages/NotFound";
 import Production from "@/pages/Production";
 import Procurement from "@/pages/Procurement";
 import Legal from "@/pages/Legal";
@@ -114,7 +115,9 @@ function AppRouter() {
         <Route path="departments/sales" element={<Navigate to="/app/sales" replace />} />
         <Route path="departments/accounting_finance" element={<Navigate to="/app/financials" replace />} />
         <Route path="departments/:deptType" element={<DepartmentPlaceholder />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
