@@ -1877,6 +1877,15 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
         )
     except Exception:
         logger.exception("referral attribution failed for workspace %s", ws_id)
+        try:
+            await helm_referrals.attribute_signup(
+                db,
+                referral_code=payload.referral_code,
+                new_user=user,
+                new_workspace={"workspace_id": ws_id},
+            )
+        except Exception:
+            logger.exception("referral attribution retry failed for workspace %s", ws_id)
     return {"ok": True, "workspace_id": ws_id}
 
 

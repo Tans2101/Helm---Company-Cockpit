@@ -225,6 +225,55 @@ async def test_attribute_signup_promotes_sent_row():
 
 
 @pytest.mark.asyncio
+async def test_attribute_signup_does_not_steal_prior_signed_up():
+    users = _users_store([
+        {"user_id": "ceo1", "referral_code": "aabbccddeeff0011", "active_workspace_id": "ws_ceo"},
+        {"user_id": "new1", "email": "friend@co.com"},
+    ])
+    rows = [{
+        "referral_id": "rfr_first",
+        "referrer_user_id": "ceo1",
+        "referred_email": "friend@co.com",
+        "status": "signed_up",
+        "referred_workspace_id": "ws_first",
+        "referrer_workspace_id": "ws_ceo",
+    }]
+    workspaces = [{"workspace_id": "ws_second"}]
+    db = _db(users=users, referrals=_referrals_store(rows), workspaces=_workspaces_store(workspaces))
+    await helm_referrals.attribute_signup(
+        db,
+        referral_code="aabbccddeeff0011",
+        new_user={"user_id": "new1", "email": "friend@co.com"},
+        new_workspace={"workspace_id": "ws_second"},
+    )
+    assert len(rows) == 2
+    first = next(r for r in rows if r["referral_id"] == "rfr_first")
+    assert first["referred_workspace_id"] == "ws_first"
+    assert first["status"] == "signed_up"
+    second = next(r for r in rows if r["referral_id"] != "rfr_first")
+    assert second["referred_workspace_id"] == "ws_second"
+    assert second["status"] == "signed_up"
+
+
+@pytest.mark.asyncio
+async def test_lookup_referral_code_is_case_insensitive():
+    users = _users_store([
+        {"user_id": "ceo1", "referral_code": "aabbccddeeff0011", "active_workspace_id": "ws_ceo"},
+        {"user_id": "new1", "email": "new@example.com"},
+    ])
+    workspaces = [{"workspace_id": "ws_new"}]
+    db = _db(users=users, referrals=_referrals_store([]), workspaces=_workspaces_store(workspaces))
+    referrer = await helm_referrals.attribute_signup(
+        db,
+        referral_code="AABBCCDDEEFF0011",
+        new_user={"user_id": "new1", "email": "new@example.com"},
+        new_workspace={"workspace_id": "ws_new"},
+    )
+    assert referrer["user_id"] == "ceo1"
+    assert workspaces[0]["referred_by"] == "ceo1"
+
+
+@pytest.mark.asyncio
 async def test_mark_referral_converted():
     rows = [{
         "referral_id": "rfr_1",

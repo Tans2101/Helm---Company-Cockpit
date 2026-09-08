@@ -10,11 +10,13 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 import plans as helm_plans
 import product_analytics as helm_analytics
 
-_CODE_RE = re.compile(r"^[A-Za-z0-9]{8,32}$")
+# token_hex(8) → 16 lowercase hex chars (same family as teammate invite_token).
+_CODE_RE = re.compile(r"^[a-f0-9]{16}$")
 REFERRAL_STATUSES = ("sent", "signed_up", "converted")
 
 
@@ -36,9 +38,16 @@ def _normalize_email(email: str | None) -> str:
     return str(email or "").strip().lower()
 
 
-async def lookup_referrer_by_code(db, code: str):
-    token = str(code or "").strip()
+def normalize_referral_code(code: str | None) -> str:
+    token = str(code or "").strip().lower()
     if not token or not _CODE_RE.match(token):
+        return ""
+    return token
+
+
+async def lookup_referrer_by_code(db, code: str):
+    token = normalize_referral_code(code)
+    if not token:
         return None
     return await db.users.find_one({"referral_code": token}, {"_id": 0})
 
@@ -51,7 +60,7 @@ async def ensure_referral_code(db, user_id: str) -> str:
     user = await db.users.find_one({"user_id": uid}, {"_id": 0, "referral_code": 1})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    existing = str(user.get("referral_code") or "").strip()
+    existing = str(user.get("referral_code") or "").strip().lower()
     if existing:
         return existing
     for _ in range(8):
@@ -59,17 +68,20 @@ async def ensure_referral_code(db, user_id: str) -> str:
         taken = await db.users.find_one({"referral_code": code}, {"_id": 0, "user_id": 1})
         if taken:
             continue
-        result = await db.users.update_one(
-            {
-                "user_id": uid,
-                "$or": [
-                    {"referral_code": {"$exists": False}},
-                    {"referral_code": None},
-                    {"referral_code": ""},
-                ],
-            },
-            {"$set": {"referral_code": code}},
-        )
+        try:
+            result = await db.users.update_one(
+                {
+                    "user_id": uid,
+                    "$or": [
+                        {"referral_code": {"$exists": False}},
+                        {"referral_code": None},
+                        {"referral_code": ""},
+                    ],
+                },
+                {"$set": {"referral_code": code}},
+            )
+        except DuplicateKeyError:
+            continue
         if getattr(result, "modified_count", 0) or getattr(result, "matched_count", 0):
             fresh = await db.users.find_one({"user_id": uid}, {"_id": 0, "referral_code": 1})
             if fresh and fresh.get("referral_code"):
@@ -110,7 +122,7 @@ async def record_sent_invite(db, *, referrer_user_id: str, referrer_workspace_id
 
 async def attribute_signup(db, *, referral_code: str | None, new_user: dict, new_workspace: dict):
     """Tag a newly created company workspace if the founder used a referral link."""
-    code = str(referral_code or "").strip()
+    code = normalize_referral_code(referral_code)
     if not code:
         return None
     referrer = await lookup_referrer_by_code(db, code)
@@ -133,7 +145,7 @@ async def attribute_signup(db, *, referral_code: str | None, new_user: dict, new
             {
                 "referrer_user_id": referrer["user_id"],
                 "referred_email": referred_email,
-                "status": {"$in": ["sent", "signed_up"]},
+                "status": "sent",
             }
         )
 

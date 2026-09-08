@@ -15,6 +15,7 @@ import { helmPlanLabel, helmWorkspacePlanLabel, helmHasFullAccess } from "@/lib/
 import { departmentIcon } from "@/lib/departmentIcons";
 import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
+import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -65,7 +66,8 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
     const name = window.prompt("Name your new company workspace");
     if (!name) return;
     try {
-      await api.post("/workspaces", { name });
+      await api.post("/workspaces", withReferralPayload({ name }));
+      consumeReferralCode();
       window.location.href = "/app";
     } catch (e) { toast.error("Could not create workspace"); }
   };

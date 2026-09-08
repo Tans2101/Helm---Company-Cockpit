@@ -4,7 +4,7 @@ import { Building2, KeyRound, ArrowRight, LogOut } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/kit";
-import { consumeReferralCode, peekReferralCode } from "@/lib/referral";
+import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 
 export default function WorkspaceGate() {
   const { user, logout } = useAuth();
@@ -17,8 +17,7 @@ export default function WorkspaceGate() {
     if (!name.trim()) { toast.error("Name your company"); return; }
     setBusy(true);
     try {
-      const referral_code = peekReferralCode();
-      await api.post("/workspaces", { name: name.trim(), ...(referral_code ? { referral_code } : {}) });
+      await api.post("/workspaces", withReferralPayload({ name: name.trim() }));
       consumeReferralCode();
       window.location.href = "/app";
     } catch (e) { toast.error("Could not create company"); setBusy(false); }

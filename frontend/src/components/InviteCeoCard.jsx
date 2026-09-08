@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Handshake } from "lucide-react";
 import { api } from "@/lib/api";
-import { useFetch } from "@/hooks/useFetch";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { GlassCard } from "@/components/kit";
 
 const STATUS_LABEL = {
@@ -12,26 +12,18 @@ const STATUS_LABEL = {
 };
 
 export default function InviteCeoCard() {
-  const { data, reload } = useFetch("/referrals");
-  const [shareUrl, setShareUrl] = useState("");
+  const { data, error, loading, setData } = useFetch("/referrals");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimer = useRef(null);
 
-  useEffect(() => {
-    if (data?.share_url) setShareUrl(data.share_url);
-  }, [data]);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.post("/referrals", {})
-      .then((r) => {
-        if (cancelled) return;
-        if (r.data?.share_url) setShareUrl(r.data.share_url);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
   }, []);
+
+  const shareUrl = data?.share_url || "";
+  const rows = data?.referrals || [];
 
   const copyLink = async () => {
     if (!shareUrl) return;
@@ -39,7 +31,8 @@ export default function InviteCeoCard() {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       toast.success("Referral link copied");
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Could not copy — select the link instead");
     }
@@ -49,10 +42,10 @@ export default function InviteCeoCard() {
     if (!email.trim()) return;
     setBusy(true);
     try {
-      await api.post("/referrals", { email: email.trim() });
+      const { data: res } = await api.post("/referrals", { email: email.trim() });
       setEmail("");
+      if (res) setData(res);
       toast.success("Invite recorded");
-      reload();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not record invite");
     } finally {
@@ -60,7 +53,9 @@ export default function InviteCeoCard() {
     }
   };
 
-  const rows = data?.referrals || [];
+  const linkValue = error
+    ? fetchErrorMessage(error, "Could not load referral link")
+    : (shareUrl || (loading ? "Generating link…" : "Could not load referral link"));
 
   return (
     <GlassCard className="p-5 mb-4 fade-up" data-testid="invite-ceo-card">
@@ -75,7 +70,7 @@ export default function InviteCeoCard() {
         <input
           data-testid="referral-link-input"
           readOnly
-          value={shareUrl || "Generating link…"}
+          value={linkValue}
           className="flex-1 rounded-md border border-white/10 bg-[#141417] px-3 py-2.5 text-sm text-white font-mono truncate"
         />
         <button

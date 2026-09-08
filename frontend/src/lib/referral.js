@@ -1,11 +1,11 @@
 const STORAGE_KEY = "helm_referral_code";
-const CODE_RE = /^[A-Za-z0-9]{8,32}$/;
+const CODE_RE = /^[A-Fa-f0-9]{16}$/;
 
 export function persistReferralFromSearch(search) {
   try {
     const params = new URLSearchParams(search || (typeof window !== "undefined" ? window.location.search : ""));
-    const code = (params.get("ref") || "").trim();
-    if (code && CODE_RE.test(code)) {
+    const code = (params.get("ref") || "").trim().toLowerCase();
+    if (CODE_RE.test(code)) {
       localStorage.setItem(STORAGE_KEY, code);
     }
   } catch {
@@ -15,7 +15,7 @@ export function persistReferralFromSearch(search) {
 
 export function peekReferralCode() {
   try {
-    const code = (localStorage.getItem(STORAGE_KEY) || "").trim();
+    const code = (localStorage.getItem(STORAGE_KEY) || "").trim().toLowerCase();
     return CODE_RE.test(code) ? code : "";
   } catch {
     return "";
@@ -30,4 +30,10 @@ export function consumeReferralCode() {
     /* ignore */
   }
   return code;
+}
+
+/** Include a pending ?ref= code on workspace create, then clear it after success. */
+export function withReferralPayload(body) {
+  const referral_code = peekReferralCode();
+  return referral_code ? { ...body, referral_code } : body;
 }
