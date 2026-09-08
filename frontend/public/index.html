@@ -4,6 +4,16 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#f7f6f2" />
+        <script>
+          try {
+            var helmTheme = localStorage.getItem("helm_appearance") || "system";
+            var resolvedHelmTheme = helmTheme === "system"
+              ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+              : helmTheme;
+            document.documentElement.dataset.theme = resolvedHelmTheme;
+            document.documentElement.style.colorScheme = resolvedHelmTheme;
+          } catch (e) {}
+        </script>
         <meta name="description" content="Helm — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people — funded or not." />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />

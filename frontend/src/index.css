@@ -177,6 +177,82 @@ input.cl-otpCodeFieldInput {
   border-color: #dddcd5 !important;
 }
 
+html[data-theme="light"] body {
+  background-color: #f5f6f3;
+  background-image: none;
+}
+
+html[data-theme="light"] .app-shell {
+  background: #f5f6f3;
+  color: #18211c;
+}
+
+html[data-theme="light"] .app-shell.grain::before {
+  display: none;
+}
+
+html[data-theme="light"] .app-shell .text-white {
+  color: #18211c !important;
+}
+
+html[data-theme="light"] .app-shell .text-zinc-300 {
+  color: #3e4841 !important;
+}
+
+html[data-theme="light"] .app-shell .text-zinc-400 {
+  color: #556159 !important;
+}
+
+html[data-theme="light"] .app-shell .text-zinc-500 {
+  color: #68736b !important;
+}
+
+html[data-theme="light"] .app-shell .text-zinc-600 {
+  color: #7a847d !important;
+}
+
+html[data-theme="light"] .app-shell [class*="border-white"] {
+  border-color: rgba(24, 33, 28, 0.12) !important;
+}
+
+html[data-theme="light"] .app-shell [class*="bg-[#09090b]"],
+html[data-theme="light"] .app-shell [class*="bg-[#0d0d0f]"] {
+  background-color: #eef0ec !important;
+}
+
+html[data-theme="light"] .app-shell [class*="bg-[#121214]"],
+html[data-theme="light"] .app-shell [class*="bg-[#141417]"] {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .app-shell [class*="bg-white/"] {
+  background-color: rgba(24, 33, 28, 0.035) !important;
+}
+
+html[data-theme="light"] .app-shell [class*="hover:text-white"]:hover {
+  color: #18211c !important;
+}
+
+html[data-theme="light"] .app-shell [class*="hover:bg-white"]:hover {
+  background-color: rgba(24, 33, 28, 0.06) !important;
+}
+
+html[data-theme="light"] .app-shell input,
+html[data-theme="light"] .app-shell textarea,
+html[data-theme="light"] .app-shell select {
+  color: #18211c;
+  caret-color: #735b1f;
+}
+
+html[data-theme="light"] .app-shell input::placeholder,
+html[data-theme="light"] .app-shell textarea::placeholder {
+  color: #89918b;
+}
+
+html[data-theme="light"] .app-shell .glass {
+  background: rgba(255, 255, 255, 0.9);
+}
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }

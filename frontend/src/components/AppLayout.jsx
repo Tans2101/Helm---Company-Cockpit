@@ -255,7 +255,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen grain">
+    <div className="app-shell min-h-screen grain">
       {pastDue && (
         <div className="lg:pl-[260px] bg-amber-500/10 border-b border-amber-500/30 px-5 py-2.5 text-center text-sm text-amber-200" data-testid="global-past-due-banner">
           Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Helm access.

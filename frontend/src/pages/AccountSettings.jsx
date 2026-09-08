@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, AlertTriangle, ScrollText } from "lucide-react";
+import { Download, Trash2, AlertTriangle, ScrollText, Sun, Moon, Monitor, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
 import { PageHeader, GlassCard } from "@/components/kit";
 import DepartmentsSettings from "@/components/DepartmentsSettings";
 import InviteCeoCard from "@/components/InviteCeoCard";
+import { useTheme } from "@/context/ThemeContext";
+
+const APPEARANCE_OPTIONS = [
+  { id: "light", label: "Light", description: "Bright and easy to read", icon: Sun },
+  { id: "dark", label: "Dark", description: "Lower light for focused work", icon: Moon },
+  { id: "system", label: "System", description: "Match this device", icon: Monitor },
+];
 
 export default function AccountSettings() {
   const { user, logout } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const { data: company } = useFetch("/company");
   const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
@@ -121,8 +129,50 @@ export default function AccountSettings() {
     <div className="max-w-2xl">
       <PageHeader
         title="Account settings"
-        subtitle="Departments, referrals, data export, and account controls."
+        subtitle="Appearance, departments, referrals, data export, and account controls."
       />
+
+      <GlassCard className="p-5 mb-4 fade-up" data-testid="appearance-settings">
+        <div className="flex items-center gap-1.5 mb-2 text-gold">
+          <Sun className="w-4 h-4" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
+        </div>
+        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+          Choose how the Helm cockpit looks on this device. Your choice is saved for your next visit.
+        </p>
+        <div className="grid sm:grid-cols-3 gap-2" role="group" aria-label="Color theme">
+          {APPEARANCE_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const selected = theme === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                data-testid={`theme-${option.id}`}
+                aria-pressed={selected}
+                onClick={() => setTheme(option.id)}
+                className={`relative rounded-lg border p-3 text-left transition-colors ${
+                  selected
+                    ? "border-gold/50 bg-gold/10"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Icon className={`h-4 w-4 ${selected ? "text-gold" : "text-zinc-500"}`} />
+                  {selected && <Check className="h-3.5 w-3.5 text-gold" />}
+                </div>
+                <p className="mt-3 text-sm font-medium text-white">{option.label}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">{option.description}</p>
+              </button>
+            );
+          })}
+        </div>
+        {theme === "system" && (
+          <p className="mt-3 text-xs text-zinc-600">
+            This device is currently using {resolvedTheme} mode.
+          </p>
+        )}
+      </GlassCard>
 
       {isOwner && <InviteCeoCard />}
       {isOwner && <DepartmentsSettings />}

@@ -17,6 +17,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import SignUpPage from "@/pages/SignUp";
 import { LoadingScreen } from "@/components/kit";
+import { useTheme } from "@/context/ThemeContext";
 
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
@@ -57,6 +58,24 @@ function ClerkOAuthCallback() {
       signUpForceRedirectUrl={redirectUrl}
       signInFallbackRedirectUrl={redirectUrl}
       signUpFallbackRedirectUrl={redirectUrl}
+    />
+  );
+}
+
+function HelmToaster() {
+  const { resolvedTheme } = useTheme();
+  const light = resolvedTheme === "light";
+  return (
+    <Toaster
+      theme={resolvedTheme}
+      position="top-right"
+      toastOptions={{
+        style: {
+          background: light ? "#ffffff" : "#141417",
+          border: `1px solid ${light ? "#d8ddd7" : "rgba(255,255,255,0.08)"}`,
+          color: light ? "#18211c" : "#ffffff",
+        },
+      }}
     />
   );
 }
@@ -140,7 +159,7 @@ function ClerkAuthShell() {
           <ClerkHelmBridge />
           <AppRouter />
           <CookieNotice />
-          <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
+          <HelmToaster />
         </BrowserRouter>
       </ErrorBoundary>
     </AuthProvider>
@@ -154,7 +173,7 @@ function HelmAppShell() {
         <BrowserRouter>
           <AppRouter />
           <CookieNotice />
-          <Toaster theme="dark" position="top-right" toastOptions={{ style: { background: "#141417", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" } }} />
+          <HelmToaster />
         </BrowserRouter>
       </ErrorBoundary>
     </AuthProvider>
