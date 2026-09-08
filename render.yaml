@@ -121,3 +121,23 @@ services:
         sync: false
       - key: SENDER_EMAIL
         sync: false
+      - key: INTERNAL_CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: helm-retention-checks
+    runtime: python
+    plan: starter
+    repo: https://github.com/Tans2101/Helm---Company-Cockpit
+    branch: main
+    rootDir: backend
+    schedule: "0 13 * * *"
+    buildCommand: pip install --upgrade pip
+    startCommand: python scripts/run_retention_cron.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: INTERNAL_CRON_SECRET
+        sync: false
+      - key: RETENTION_CRON_URL
+        value: https://www.helmcontrol.online/api/internal/run-retention-checks

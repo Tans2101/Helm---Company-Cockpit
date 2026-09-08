@@ -42,6 +42,7 @@ from seed_data import build_workspace, sample_financial_entries, gen_join_code
 import access_sections as sec_access
 import plans as helm_plans
 import plan_usage
+import retention as helm_retention
 import departments_catalog as dept_catalog
 import department_access as dept_access
 import department_migrate as dept_migrate
@@ -203,6 +204,7 @@ PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
 CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
 SETUP_SECRET = os.environ.get("SETUP_SECRET", "").strip()
+INTERNAL_CRON_SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or "").strip() or SETUP_SECRET
 
 _INSECURE_SESSION_SECRETS = frozenset({
     "change-me-in-production",
@@ -604,12 +606,42 @@ def _allowed_auth_redirect(url: str) -> bool:
     return False
 
 
+def _secret_header_matches(provided: str, expected: str) -> bool:
+    if not provided or not expected:
+        return False
+    try:
+        return hmac.compare_digest(provided, expected)
+    except (TypeError, ValueError):
+        return False
+
+
 def _require_setup_secret(request: Request) -> None:
     if not SETUP_SECRET:
         raise HTTPException(status_code=503, detail="Setup endpoint disabled (set SETUP_SECRET on Render)")
     provided = request.headers.get("X-Setup-Secret", "").strip()
-    if not provided or not hmac.compare_digest(provided, SETUP_SECRET):
+    if not _secret_header_matches(provided, SETUP_SECRET):
         raise HTTPException(status_code=401, detail="Invalid setup secret")
+
+
+def _require_internal_cron(request: Request) -> None:
+    """Shared-secret gate for Render cron (trial / inactivity emails)."""
+    if not INTERNAL_CRON_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail="Retention cron disabled (set INTERNAL_CRON_SECRET or SETUP_SECRET)",
+        )
+    provided = (
+        request.headers.get("X-Helm-Cron-Secret")
+        or request.headers.get("X-Setup-Secret")
+        or ""
+    ).strip()
+    if provided.lower().startswith("bearer "):
+        provided = provided[7:].strip()
+    if _secret_header_matches(provided, INTERNAL_CRON_SECRET):
+        return
+    if SETUP_SECRET and _secret_header_matches(provided, SETUP_SECRET):
+        return
+    raise HTTPException(status_code=401, detail="Invalid cron secret")
 
 
 def _sign_state(provider: str, workspace_id: str) -> str:
@@ -2151,6 +2183,13 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
+    try:
+        await db.workspaces.update_one(
+            {"workspace_id": c["workspace_id"]},
+            {"$set": {"last_active_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    except Exception:
+        logger.debug("last_active_at update skipped", exc_info=True)
     # Lazy refresh of AI decision/delegate suggestions when stale (>24h)
     if _insights_stale(c) and helm_llm.anthropic_configured():
         try:
@@ -6420,6 +6459,20 @@ async def paddle_config(request: Request, principal=Depends(require("billing:man
     }
 
 
+def _paddle_trial_fields(data: dict, status: str, existing: dict | None = None) -> dict:
+    """Persist trial end from Paddle. Only clear the once-flag when the end date changes."""
+    if status != "trialing":
+        return {}
+    out = {}
+    end = helm_retention.trial_end_from_paddle_payload(data)
+    if not end:
+        return out
+    out["trial_ends_at"] = end
+    if existing is not None and existing.get("trial_ends_at") != end:
+        out["trial_reminder_sent"] = False
+    return out
+
+
 async def _paddle_provision(event, status: str = "active"):
     data = event.get("data") or {}
     custom = data.get("custom_data") or {}
@@ -6441,6 +6494,7 @@ async def _paddle_provision(event, status: str = "active"):
         }
         if data.get("customer_id"):
             recovery["paddle_customer_id"] = data["customer_id"]
+        recovery.update(_paddle_trial_fields(data, status))
         await db.workspaces.update_one(
             {"paddle_subscription_id": sub_id},
             {"$set": recovery, "$unset": {"canceled_at": ""}},
@@ -6463,9 +6517,13 @@ async def _paddle_provision(event, status: str = "active"):
         "subscription_started_at": now_iso,
     }
     # Anchor usage periods on first provision only
-    existing = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "billing_period_start": 1})
+    existing = await db.workspaces.find_one(
+        {"workspace_id": workspace_id},
+        {"_id": 0, "billing_period_start": 1, "trial_ends_at": 1},
+    )
     if not (existing or {}).get("billing_period_start"):
         set_fields["billing_period_start"] = now_iso
+    set_fields.update(_paddle_trial_fields(data, status, existing))
     await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": set_fields, "$unset": {
         "canceled_at": "", "pending_plan": "", "pending_plan_effective_at": "",
     }})
@@ -6811,6 +6869,19 @@ async def cleanup_orphaned_documents_admin(request: Request):
     """Delete uncommitted document uploads older than DOC_ORPHAN_RETENTION_DAYS (default 7)."""
     _require_setup_secret(request)
     return await document_cleanup.cleanup_orphaned_documents(db)
+
+
+@api_router.post("/internal/run-retention-checks")
+async def internal_run_retention_checks(request: Request):
+    """Daily Render cron: trial-ending reminder + inactivity nudge. Shared-secret header required."""
+    _require_internal_cron(request)
+    return await helm_retention.run_retention_checks(
+        db,
+        trial_days=TRIAL_DAYS,
+        app_base_url=_app_base_url(),
+        send_email=send_notification_email,
+        recipient_emails=_alert_recipient_emails,
+    )
 
 
 @api_router.get("/health")

@@ -175,6 +175,27 @@ curl -sf -X POST "https://YOUR-API.onrender.com/api/admin/cleanup-orphaned-docum
 
 ---
 
+## 7b. Retention emails (trial ending + inactivity)
+
+Helm does not run an in-process scheduler. A **Render Cron Job** (see `render.yaml` → `helm-retention-checks`) hits once a day:
+
+`POST https://www.helmcontrol.online/api/internal/run-retention-checks`
+
+Protect it with a shared secret (same value on the web service and the cron job):
+
+```bash
+curl -sf -X POST "https://www.helmcontrol.online/api/internal/run-retention-checks" \
+  -H "X-Helm-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
+```
+
+`X-Setup-Secret` is also accepted if it matches `SETUP_SECRET`. Set `INTERNAL_CRON_SECRET` on both services to the same string.
+
+- Trial reminder: workspaces with `subscription_status=trialing` whose trial ends within ~2 days, once per trial (`trial_reminder_sent`).
+- Inactivity nudge: no Briefing visit (`last_active_at`) for 5+ days, once per inactivity window (`inactivity_nudge_sent_at`).
+- Both skip empty workspaces (no pending decisions, overdue tasks, pipeline moves, or recent activity).
+
+---
+
 ## 8. Smoke test (must pass before you tell anyone)
 
 1. Open your domain → **Continue with Google**  
