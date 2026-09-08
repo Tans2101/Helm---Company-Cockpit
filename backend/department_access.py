@@ -4,12 +4,63 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+import departments_catalog as dept_catalog
+
 logger = logging.getLogger("helm")
+
+UNASSIGNED_DEPARTMENT_LABEL = "Unassigned"
 
 
 def is_workspace_ceo(principal: dict) -> bool:
     """Owner pack / role = company CEO for department admin actions."""
     return principal.get("pack") == "owner" or principal.get("role") == "owner"
+
+
+def display_department_names(names: list[str] | None) -> str:
+    """Human-readable department list for roster rows. Empty → Unassigned."""
+    cleaned = [n.strip() for n in (names or []) if n and str(n).strip()]
+    return ", ".join(cleaned) if cleaned else UNASSIGNED_DEPARTMENT_LABEL
+
+
+def attach_real_departments(row: dict, names: list[str] | None) -> dict:
+    """Overlay response fields from department_members (does not persist)."""
+    cleaned = [n.strip() for n in (names or []) if n and str(n).strip()]
+    row["departments"] = cleaned
+    row["department"] = display_department_names(cleaned)
+    return row
+
+
+async def department_names_by_user_id(db, workspace_id: str) -> dict[str, list[str]]:
+    """Map user_id → enabled department display names for a workspace."""
+    enabled = await db.departments.find(
+        {"workspace_id": workspace_id, "enabled": True},
+        {"_id": 0, "department_id": 1, "name": 1, "type": 1},
+    ).to_list(50)
+    if not enabled:
+        return {}
+    id_to_name: dict[str, str] = {}
+    for d in enabled:
+        did = d.get("department_id")
+        if not did:
+            continue
+        name = (d.get("name") or "").strip() or dept_catalog.default_name(d.get("type") or "")
+        id_to_name[did] = name
+    rows = await db.department_members.find(
+        {"department_id": {"$in": list(id_to_name)}},
+        {"_id": 0, "department_id": 1, "user_id": 1},
+    ).to_list(2000)
+    out: dict[str, list[str]] = {}
+    for row in rows:
+        uid = row.get("user_id")
+        name = id_to_name.get(row.get("department_id"))
+        if not uid or not name:
+            continue
+        bucket = out.setdefault(uid, [])
+        if name not in bucket:
+            bucket.append(name)
+    for uid, names in out.items():
+        out[uid] = sorted(names, key=str.lower)
+    return out
 
 
 async def get_department_membership(db, department_id: str, user_id: str) -> Optional[dict]:

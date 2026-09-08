@@ -143,6 +143,8 @@ def api_client():
             return cursor
 
     mem_find_cursor = MemFind()
+    empty_cursor = MagicMock()
+    empty_cursor.to_list = AsyncMock(return_value=[])
     mock_db = MagicMock()
     mock_db.memberships.find_one = AsyncMock(return_value=None)
     mock_db.memberships.insert_one = AsyncMock(side_effect=insert_mem)
@@ -152,6 +154,8 @@ def api_client():
     mock_db.users.find_one = AsyncMock(return_value=None)
     mock_db.workspaces.update_one = AsyncMock(side_effect=update_ws)
     mock_db.workspaces.find_one = AsyncMock(return_value=ws)
+    mock_db.departments.find = MagicMock(return_value=empty_cursor)
+    mock_db.department_members.find = MagicMock(return_value=empty_cursor)
 
     server.app.dependency_overrides[server.get_principal] = mock_principal
 
@@ -223,3 +227,118 @@ def test_delete_person_blocked_when_has_access(api_client):
     r = client.delete("/api/people/p_alex")
     assert r.status_code == 400
     assert "Team & Access" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_department_names_by_user_id_maps_memberships():
+    import department_access as da
+
+    depts_cursor = MagicMock()
+    depts_cursor.to_list = AsyncMock(return_value=[
+        {"department_id": "d1", "name": "Sales", "type": "sales"},
+        {"department_id": "d2", "name": "Production", "type": "production"},
+    ])
+    mem_cursor = MagicMock()
+    mem_cursor.to_list = AsyncMock(return_value=[
+        {"department_id": "d1", "user_id": "u_alex"},
+        {"department_id": "d2", "user_id": "u_alex"},
+        {"department_id": "d1", "user_id": "u_sam"},
+    ])
+    mock_db = MagicMock()
+    mock_db.departments.find = MagicMock(return_value=depts_cursor)
+    mock_db.department_members.find = MagicMock(return_value=mem_cursor)
+    out = await da.department_names_by_user_id(mock_db, "ws_test")
+    assert out["u_alex"] == ["Production", "Sales"]
+    assert out["u_sam"] == ["Sales"]
+
+
+def test_invite_ignores_legacy_department_payload(api_client):
+    client, _, inserted_mems, _ = api_client
+    r = client.post("/api/members/invite", json={
+        "email": "alex@acme.com",
+        "pack": "member",
+        "department": "Engineering",
+        "name": "Alex",
+    })
+    assert r.status_code == 200, r.text
+    assert "department" not in inserted_mems[0]
+
+
+def test_people_get_overlays_real_departments_not_stale_label(api_client):
+    client, ws, _, mock_db = api_client
+    ws["people"] = {
+        "people": [
+            {
+                "id": "p_alex",
+                "name": "Alex",
+                "role": "AE",
+                "department": "General",
+                "user_id": "u_alex",
+                "trust_score": 80,
+                "quality": "B+",
+                "tasks_done": 0,
+                "tenure": "New",
+            },
+            {
+                "id": "p_pat",
+                "name": "Pat",
+                "role": "Ops",
+                "department": "Operations",
+                "trust_score": 80,
+                "quality": "B+",
+                "tasks_done": 0,
+                "tenure": "New",
+            },
+        ],
+        "avg_trust": 80,
+    }
+    depts_cursor = MagicMock()
+    depts_cursor.to_list = AsyncMock(return_value=[
+        {"department_id": "d_sales", "name": "Sales", "type": "sales", "enabled": True},
+    ])
+    mem_cursor = MagicMock()
+    mem_cursor.to_list = AsyncMock(return_value=[
+        {"department_id": "d_sales", "user_id": "u_alex"},
+    ])
+    mock_db.departments.find = MagicMock(return_value=depts_cursor)
+    mock_db.department_members.find = MagicMock(return_value=mem_cursor)
+
+    r = client.get("/api/people")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "departments" not in body
+    alex = next(p for p in body["people"] if p["id"] == "p_alex")
+    pat = next(p for p in body["people"] if p["id"] == "p_pat")
+    assert alex["departments"] == ["Sales"]
+    assert alex["department"] == "Sales"
+    assert pat["departments"] == []
+    assert pat["department"] == "Unassigned"
+
+
+def test_edit_person_does_not_write_legacy_department(api_client):
+    client, ws, _, mock_db = api_client
+    ws["people"] = {
+        "people": [{
+            "id": "p_alex",
+            "name": "Alex",
+            "role": "Engineer",
+            "department": "Engineering",
+            "membership_id": "mem_alex",
+            "trust_score": 80,
+            "quality": "B+",
+            "tasks_done": 0,
+            "tenure": "New",
+        }],
+        "avg_trust": 80,
+    }
+    r = client.patch("/api/people/p_alex", json={
+        "name": "Alex",
+        "role": "Senior Engineer",
+        "department": "Sales",
+        "trust_score": 80,
+    })
+    assert r.status_code == 200, r.text
+    stored = next(p for p in ws["people"]["people"] if p["id"] == "p_alex")
+    assert stored["role"] == "Senior Engineer"
+    assert stored.get("department") == "Engineering"
+    assert mock_db.memberships.update_one.await_count == 0

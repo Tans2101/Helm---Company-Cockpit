@@ -1,57 +1,21 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
-import { DEFAULT_DEPARTMENTS, CUSTOM_DEPT } from "@/lib/departments";
+import { formatDepartmentNames } from "@/lib/departments";
 import { PACKS, hasPerm } from "@/lib/access";
 
 const emptyForm = () => ({
   name: "",
   role: "",
-  department: DEFAULT_DEPARTMENTS[0],
-  customDepartment: "",
   inviteToAccess: false,
   email: "",
   pack: "member",
 });
-
-function resolveDepartment(form) {
-  if (form.department === CUSTOM_DEPT) return form.customDepartment.trim() || "General";
-  return form.department || "General";
-}
-
-function DepartmentField({ form, setForm }) {
-  const isCustom = form.department === CUSTOM_DEPT;
-  return (
-    <>
-      <label className="text-xs text-zinc-500">Department
-        <select
-          data-testid="person-dept"
-          value={form.department}
-          onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-          className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
-        >
-          {DEFAULT_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-          <option value={CUSTOM_DEPT}>Custom department…</option>
-        </select>
-      </label>
-      {isCustom && (
-        <label className="col-span-2 text-xs text-zinc-500">Custom department
-          <input
-            data-testid="person-dept-custom"
-            value={form.customDepartment}
-            onChange={(e) => setForm((f) => ({ ...f, customDepartment: e.target.value }))}
-            placeholder="e.g. Customer Success"
-            className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
-          />
-        </label>
-      )}
-    </>
-  );
-}
 
 export default function People() {
   const { user } = useAuth();
@@ -73,18 +37,16 @@ export default function People() {
   }
   const canWrite = data.can_write;
   const canInvite = data.can_invite_to_access || hasPerm(user, "members:invite");
-  const deptOptions = data.departments || DEFAULT_DEPARTMENTS;
   const packOptions = PACKS.filter((p) => p.id !== "owner" || hasPerm(user, "members:manage"));
+  const editingPerson = editing ? (data.people || []).find((p) => p.id === editing) : null;
+  const assignedDeptCount = new Set((data.people || []).flatMap((p) => p.departments || [])).size;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (p) => {
-    const known = deptOptions.includes(p.department);
     setEditing(p.id);
     setForm({
       name: p.name,
       role: p.role,
-      department: known ? p.department : CUSTOM_DEPT,
-      customDepartment: known ? "" : (p.department || ""),
       inviteToAccess: false,
       email: p.email || "",
       pack: "member",
@@ -94,13 +56,11 @@ export default function People() {
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
-    const department = resolveDepartment(form);
-    if (form.department === CUSTOM_DEPT && !department) { toast.error("Enter a custom department"); return; }
     if (!editing && form.inviteToAccess) {
       if (!form.email.trim()) { toast.error("Email is required to include in Team & Access"); return; }
     }
     setBusy(true);
-    const payload = { name: form.name.trim(), role: form.role.trim(), department };
+    const payload = { name: form.name.trim(), role: form.role.trim() };
     if (!editing && form.inviteToAccess) {
       payload.invite_to_access = true;
       payload.email = form.email.trim();
@@ -147,7 +107,7 @@ export default function People() {
         <PageHeader title="People" subtitle="Your team roster — linked with Team & Access for anyone who can log in." action={action} />
         <EmptyState title="No people yet" body="Add your team here — invites from Team & Access show up automatically."
           action={canWrite ? <button data-testid="empty-add-person-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add first person</button> : null} />
-        {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, close: () => setShowForm(false), canInvite, packOptions }} />}
+        {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, person: editingPerson, close: () => setShowForm(false), canInvite, packOptions }} />}
       </div>
     );
   }
@@ -163,7 +123,7 @@ export default function People() {
         </GlassCard>
         <GlassCard className="p-5 fade-up">
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Departments</p>
-          <p className="font-mono text-3xl text-white mt-2">{new Set(data.people.map((p) => p.department)).size}</p>
+          <p className="font-mono text-3xl text-white mt-2" data-testid="people-dept-count">{assignedDeptCount}</p>
         </GlassCard>
       </div>
 
@@ -182,7 +142,9 @@ export default function People() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500">{p.role || "—"} · {p.department}</p>
+                <p className="text-xs text-zinc-500" data-testid={`person-depts-${p.id}`}>
+                  {p.role || "—"} · {formatDepartmentNames(p)}
+                </p>
               </div>
               {canWrite && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -195,12 +157,12 @@ export default function People() {
         ))}
       </div>
 
-      {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, close: () => setShowForm(false), canInvite, packOptions }} />}
+      {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, person: editingPerson, close: () => setShowForm(false), canInvite, packOptions }} />}
     </div>
   );
 }
 
-function PersonForm({ form, setForm, submit, busy, editing, close, canInvite, packOptions }) {
+function PersonForm({ form, setForm, submit, busy, editing, person, close, canInvite, packOptions }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -211,10 +173,20 @@ function PersonForm({ form, setForm, submit, busy, editing, close, canInvite, pa
           <label className="col-span-2 text-xs text-zinc-500">Name
             <input data-testid="person-name" value={form.name} onChange={set("name")} placeholder="Jane Doe" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
           </label>
-          <label className="text-xs text-zinc-500">Role
+          <label className="col-span-2 text-xs text-zinc-500">Role
             <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
           </label>
-          <DepartmentField form={form} setForm={setForm} />
+          <div className="col-span-2 text-xs text-zinc-500">
+            <p className="uppercase tracking-wide text-[10px] text-zinc-600 mb-1">Departments</p>
+            <p className="text-sm text-zinc-300" data-testid="person-depts-readonly">
+              {editing ? formatDepartmentNames(person) : "Unassigned"}
+            </p>
+            <p className="mt-1 text-zinc-600">
+              Assign access in{" "}
+              <Link to="/app/members" className="text-gold hover:underline">Team & Access</Link>
+              {" "}→ department membership — not from this roster field.
+            </p>
+          </div>
           {!editing && canInvite && (
             <div className="col-span-2 mt-1 space-y-3 border-t border-white/5 pt-3">
               <label className="flex items-start gap-2 text-sm text-zinc-300 cursor-pointer">

@@ -422,7 +422,6 @@ async def ensure_person_for_membership(workspace_id: str, membership: dict, name
 
     email = _normalize_email(membership.get("email") or "")
     user_id = membership.get("user_id")
-    dept = (membership.get("department") or "General").strip() or "General"
     display_name = (name or "").strip() or None
     if not display_name and user_id:
         u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "name": 1})
@@ -437,8 +436,6 @@ async def ensure_person_for_membership(workspace_id: str, membership: dict, name
             found["email"] = email
         if user_id:
             found["user_id"] = user_id
-        if dept:
-            found["department"] = dept
         # Prefer a real account name over an email-derived placeholder
         if name and name.strip():
             found["name"] = name.strip()
@@ -453,7 +450,6 @@ async def ensure_person_for_membership(workspace_id: str, membership: dict, name
             "id": f"p_{uuid.uuid4().hex[:8]}",
             "name": display_name,
             "role": "",
-            "department": dept,
             "trust_score": 80,
             "quality": "B+",
             "tasks_done": 0,
@@ -1576,17 +1572,19 @@ async def _user_session_payload(user: dict) -> dict:
             "pack_label": None,
         }
     pack = pack_of(membership)
-    return {
+    payload = {
         **base,
         "workspace_id": membership["workspace_id"],
         "needs_workspace": False,
         "role": membership["role"],
         "pack": pack,
-        "department": membership.get("department") or "General",
         "perms": sorted(perms_for(pack)),
         "default_route": PACK_HOME.get(pack, "/app"),
         "pack_label": PACK_LABEL.get(pack, "Member"),
     }
+    by_user = await dept_access.department_names_by_user_id(db, membership["workspace_id"])
+    dept_access.attach_real_departments(payload, by_user.get(user["user_id"]) or [])
+    return payload
 
 
 def _bearer_token(request: Request) -> str:
@@ -1678,7 +1676,7 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     membership = {
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
         "user_id": user["user_id"], "email": user["email"], "role": "owner",
-        "pack": "owner", "department": "General", "status": "active",
+        "pack": "owner", "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.memberships.insert_one(membership)
@@ -1728,7 +1726,7 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
         membership = {
             "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": ws_id,
             "user_id": user["user_id"], "email": user["email"], "role": "member",
-            "pack": "member", "department": "General", "status": "active",
+            "pack": "member", "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.memberships.insert_one(membership)
@@ -1760,10 +1758,12 @@ async def list_members(principal=Depends(get_principal)):
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
             "pack": pack, "status": m["status"], "name": (u or {}).get("name"),
             "picture": (u or {}).get("picture"), "user_id": m.get("user_id"),
-            "department": m.get("department") or "General",
             "section_grants": sec_access.normalize_section_grants(m.get("section_grants")),
             "is_self": m.get("user_id") == principal["user_id"],
         })
+    by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    for row in out:
+        dept_access.attach_real_departments(row, by_user.get(row.get("user_id") or "") or [])
     ws = await get_ws(principal["workspace_id"])
     plan = workspace_plan_id(ws)
     seats = helm_plans.seats_limit(plan)
@@ -1780,7 +1780,8 @@ async def list_members(principal=Depends(get_principal)):
 class InviteInput(BaseModel):
     email: EmailStr
     pack: str = "member"
-    department: str = "General"
+    # Legacy free-text label — ignored. Department access is department_members.
+    department: Optional[str] = None
     name: Optional[str] = None
 
 
@@ -1801,7 +1802,7 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
     membership = {
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
         "user_id": existing_user["user_id"] if existing_user else None, "email": email,
-        "role": role, "pack": pack, "department": payload.department.strip() or "General",
+        "role": role, "pack": pack,
         "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -1820,6 +1821,7 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
 
 class RoleInput(BaseModel):
     pack: str
+    # Legacy free-text label — ignored; do not write membership.department.
     department: Optional[str] = None
 
 
@@ -1838,8 +1840,6 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
     pack = payload.pack
     role = "owner" if pack == "owner" else "member"
     upd = {"role": role, "pack": pack}
-    if payload.department is not None:
-        upd["department"] = payload.department.strip() or "General"
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
     m2 = {**m, **upd}
     await ensure_person_for_membership(principal["workspace_id"], m2)
@@ -1870,22 +1870,28 @@ async def get_section_access(principal=Depends(get_principal)):
         u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
         grants = sec_access.normalize_section_grants(m.get("section_grants"))
         from_pack = sec_access.sections_for_perms(perms_for(pack))
-        dept = (m.get("department") or "General").strip()
-        from_dept = [sid for sid, depts_map in section_access.items() if dept in (depts_map or [])]
+        # Legacy free-text label still drives old section_access department grants.
+        legacy_dept = (m.get("department") or "").strip()
+        from_dept = [sid for sid, depts_map in section_access.items() if legacy_dept and legacy_dept in (depts_map or [])]
         effective = sorted(set(from_pack) | set(grants) | set(from_dept))
-        members_out.append({
+        row = {
             "membership_id": m["membership_id"],
             "email": m["email"],
             "name": (u or {}).get("name") or m["email"],
             "picture": (u or {}).get("picture"),
             "pack": pack,
-            "department": dept,
             "status": m.get("status"),
             "section_grants": grants,
             "from_pack": from_pack,
             "from_department": from_dept,
             "effective": effective,
-        })
+            "user_id": m.get("user_id"),
+            "legacy_department": legacy_dept or None,
+        }
+        members_out.append(row)
+    by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    for row in members_out:
+        dept_access.attach_real_departments(row, by_user.get(row.get("user_id") or "") or [])
     members_out.sort(key=lambda x: (x.get("name") or x["email"]).lower())
     return {
         "sections": sec_access.MANAGEABLE_SECTIONS,
@@ -3976,16 +3982,19 @@ async def people(principal=Depends(get_principal)):
     for p in data.get("people") or []:
         mid = p.get("membership_id")
         p["has_access"] = bool(mid and mid in mem_ids)
+    by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    for p in data.get("people") or []:
+        dept_access.attach_real_departments(p, by_user.get(p.get("user_id") or "") or [])
     data["can_write"] = await can_section_write(principal, "people", "people:write")
     data["can_invite_to_access"] = "members:invite" in perms_for(principal["pack"])
-    data["departments"] = sec_access.DEFAULT_DEPARTMENTS
     return data
 
 
 class PersonInput(BaseModel):
     name: str
     role: str = ""
-    department: str = ""
+    # Legacy free-text label — ignored. Real departments live in department_members.
+    department: Optional[str] = None
     trust_score: int = 80
     quality: str = "B+"
     tasks_done: int = 0
@@ -3997,7 +4006,6 @@ class PersonInput(BaseModel):
 
 def _person_fields(payload: PersonInput):
     return {"name": payload.name.strip(), "role": payload.role.strip(),
-            "department": payload.department.strip() or "General",
             "trust_score": payload.trust_score, "quality": payload.quality,
             "tasks_done": payload.tasks_done, "tenure": payload.tenure.strip() or "New"}
 
@@ -4036,7 +4044,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
         membership = {
             "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
             "user_id": existing_user["user_id"] if existing_user else None, "email": email,
-            "role": role, "pack": pack, "department": person["department"],
+            "role": role, "pack": pack,
             "status": "active" if existing_user else "invited",
             "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -4061,6 +4069,8 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
     if invite:
         summary += " · invited to Team & Access"
     await log_activity(principal, "people", "person.add", summary, {"headcount": headcount})
+    by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    dept_access.attach_real_departments(person, by_user.get(person.get("user_id") or "") or [])
     out = {"ok": True, "person": person}
     if invite_meta:
         out.update(invite_meta)
@@ -4082,12 +4092,6 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
             break
     if not found:
         raise HTTPException(status_code=404, detail="Person not found")
-    # Keep linked membership department in sync
-    if found.get("membership_id"):
-        await db.memberships.update_one(
-            {"membership_id": found["membership_id"], "workspace_id": principal["workspace_id"]},
-            {"$set": {"department": found["department"]}},
-        )
     people["avg_trust"] = _avg_trust(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"people": people}})
     await log_activity(principal, "people", "person.edit", f"Updated {found['name']}'s profile")

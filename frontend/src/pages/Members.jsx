@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
 import { PACKS, packMeta, hasPerm } from "@/lib/access";
-import { DEFAULT_DEPARTMENTS } from "@/lib/departments";
+import { formatDepartmentNames } from "@/lib/departments";
 import { cn } from "@/lib/utils";
 
 export default function Members() {
@@ -20,7 +20,6 @@ export default function Members() {
   const [tab, setTab] = useState("team");
   const [email, setEmail] = useState("");
   const [pack, setPack] = useState("member");
-  const [inviteDept, setInviteDept] = useState(DEFAULT_DEPARTMENTS[0]);
   const [busy, setBusy] = useState(false);
   /** Draft: membership_id → section_id[] (only CEO-editable grants, not pack/dept). */
   const [grantsDraft, setGrantsDraft] = useState(null);
@@ -79,7 +78,7 @@ export default function Members() {
     if (!email.trim()) return;
     setBusy(true);
     try {
-      const { data: res } = await api.post("/members/invite", { email: email.trim(), pack, department: inviteDept });
+      const { data: res } = await api.post("/members/invite", { email: email.trim(), pack });
       toast.success(res.auto_joined ? "Member added instantly" : res.email_sent ? "Invitation email sent" : "Invitation created");
       setEmail("");
       reload();
@@ -91,9 +90,9 @@ export default function Members() {
     }
   };
 
-  const changePack = async (m, newPack, department) => {
+  const changePack = async (m, newPack) => {
     try {
-      await api.patch(`/members/${m.membership_id}`, { pack: newPack, department });
+      await api.patch(`/members/${m.membership_id}`, { pack: newPack });
       reload();
       reloadAccess();
       toast.success("Access updated");
@@ -166,7 +165,7 @@ export default function Members() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white truncate">{member.name || member.email}</p>
-                        <p className="text-xs text-zinc-500 truncate">{member.email} · {member.department || "General"}</p>
+                        <p className="text-xs text-zinc-500 truncate">{member.email} · {formatDepartmentNames(member)}</p>
                       </div>
                       <span className={cn("inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide rounded px-2 py-1 border shrink-0", meta.style)}>
                         <meta.icon className="w-3 h-3" />{meta.label}
@@ -185,7 +184,7 @@ export default function Members() {
                               title={
                                 packLocked
                                   ? `Included with their ${meta.label} pack — they already have access`
-                                  : `Included via their ${member.department || "department"} access rule`
+                                  : `Included via their ${member.legacy_department || "department"} access rule`
                               }
                               data-testid={`access-${member.membership_id}-${section.id}-${packLocked ? "pack" : "dept"}`}
                               className="inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border border-gold/40 bg-gold/10 text-gold"
@@ -250,10 +249,6 @@ export default function Members() {
                     onKeyDown={(e) => e.key === "Enter" && invite()} placeholder="teammate@company.com"
                     className="flex-1 bg-transparent text-white text-sm placeholder:text-zinc-600 focus:outline-none py-2.5" />
                 </div>
-                <select data-testid="invite-dept-select" value={inviteDept} onChange={(e) => setInviteDept(e.target.value)}
-                  className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40">
-                  {DEFAULT_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
                 <select data-testid="invite-pack-select" value={pack} onChange={(e) => setPack(e.target.value)}
                   className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40">
                   {packOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -263,7 +258,7 @@ export default function Members() {
                   {busy ? "Inviting…" : "Invite"}
                 </button>
               </div>
-              <p className="text-xs text-zinc-500 mt-2.5" data-testid="pack-desc">{packMeta(pack).label} · {inviteDept} — {packMeta(pack).desc}</p>
+              <p className="text-xs text-zinc-500 mt-2.5" data-testid="pack-desc">{packMeta(pack).label} — {packMeta(pack).desc}</p>
             </GlassCard>
           )}
 
@@ -298,7 +293,7 @@ export default function Members() {
                         <p className="text-sm text-white truncate">{m.name || m.email}</p>
                         {m.is_self && <span className="text-[10px] text-zinc-600">(you)</span>}
                       </div>
-                      <p className="text-xs text-zinc-500 truncate">{m.email} · {m.department || "General"}</p>
+                      <p className="text-xs text-zinc-500 truncate">{m.email} · {formatDepartmentNames(m)}</p>
                     </div>
                     {m.status === "invited" && (
                       <span className="text-[10px] font-mono uppercase tracking-wide text-amber-400 bg-amber-400/10 rounded px-2 py-1">Invited</span>
@@ -308,11 +303,7 @@ export default function Members() {
                     </span>
                     {canEditThis && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        <select value={m.department || "General"} onChange={(e) => changePack(m, m.pack || m.role, e.target.value)}
-                          className="text-[11px] text-zinc-300 bg-[#141417] border border-white/10 rounded px-2 py-1 focus:outline-none focus:border-gold/40">
-                          {DEFAULT_DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                        <select value={m.pack || m.role} onChange={(e) => changePack(m, e.target.value, m.department)}
+                        <select value={m.pack || m.role} onChange={(e) => changePack(m, e.target.value)}
                           data-testid={`pack-select-${m.email}`}
                           className="text-[11px] text-zinc-300 bg-[#141417] border border-white/10 rounded px-2 py-1 focus:outline-none focus:border-gold/40">
                           {PACKS.filter((p) => p.id !== "owner" || canManageOwners).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
