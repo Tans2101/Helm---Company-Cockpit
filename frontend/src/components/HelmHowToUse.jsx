@@ -22,6 +22,7 @@ const MODULE_ICONS = {
   "Ask Helm": MessageSquareText,
   Financials: DollarSign,
   Pipeline: Briefcase,
+  Departments: Building2,
   Integrations: Plug,
 };
 
