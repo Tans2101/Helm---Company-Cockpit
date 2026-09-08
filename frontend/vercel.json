@@ -22,7 +22,7 @@
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/|__clerk).*)",
+      "source": "/((?!api/|__clerk|robots\\.txt|sitemap\\.xml).*)",
       "destination": "/index.html"
     }
   ]

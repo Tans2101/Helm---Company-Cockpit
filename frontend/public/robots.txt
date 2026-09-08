@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /features
+Allow: /terms
+Allow: /privacy
+Allow: /refunds
+Disallow: /app/
+Disallow: /login/sso-callback
+Disallow: /sign-up/sso-callback
+Disallow: /payment/
+
+Sitemap: https://www.helmcontrol.online/sitemap.xml
