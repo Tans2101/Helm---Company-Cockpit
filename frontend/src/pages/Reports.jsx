@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { FileText, Sparkles, Plus, PenLine, Trash2, X } from "lucide-react";
-import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download } from "lucide-react";
+import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
@@ -14,9 +14,16 @@ export default function Reports() {
   const { data, loading, error, reload } = useFetch("/reports");
   const [pack, setPack] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyReport());
   const [editing, setEditing] = useState(null);
+
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
 
   if (loading) return <LoadingScreen label="Loading reports" />;
   if (error || !data) {
@@ -83,6 +90,43 @@ export default function Reports() {
     }
   };
 
+  const copyPack = async () => {
+    if (!pack) return;
+    try {
+      await navigator.clipboard.writeText(pack);
+      setCopied(true);
+      toast.success("Weekly pack copied");
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — select the text instead");
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (!pack) return;
+    setExporting(true);
+    try {
+      const res = await api.post("/reports/weekly-pack/export-pdf", { content: pack }, { responseType: "blob" });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = res.headers["content-disposition"] || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.download = match?.[1] || "Helm-Weekly-Pack.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded");
+    } catch (e) {
+      toast.error(await blobErrorDetail(e, "Could not download PDF"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const action = canWrite ? (
     <button data-testid="add-report-btn" onClick={openAdd}
       className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
@@ -139,7 +183,7 @@ export default function Reports() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <SectionLabel>Weekly CEO Pack</SectionLabel>
-            <p className="text-sm text-zinc-400 max-w-xl mt-1">A board-ready weekly summary synthesized from your reports and live data.</p>
+            <p className="text-sm text-zinc-400 max-w-xl mt-1">A weekly summary ready to share with your leadership team, investors, or accountant.</p>
           </div>
           {canGeneratePack ? (
             <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
@@ -152,6 +196,29 @@ export default function Reports() {
         </div>
         {pack && (
           <div className="mt-4 rounded-lg border border-white/5 bg-black/30 p-5" data-testid="pack-content">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <button
+                data-testid="copy-pack-btn"
+                type="button"
+                onClick={copyPack}
+                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {copied ? "Copied" : "Copy"}
+              </button>
+              {canGeneratePack && (
+                <button
+                  data-testid="download-pack-pdf-btn"
+                  type="button"
+                  onClick={downloadPdf}
+                  disabled={exporting}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {exporting ? "Building PDF…" : "Download PDF"}
+                </button>
+              )}
+            </div>
             <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-200 leading-relaxed">{pack}</pre>
           </div>
         )}

@@ -4022,11 +4022,39 @@ async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     taken = _parse_iso_dt((prior or {}).get("taken_at")) if prior else None
     baseline = prior if taken else None
     context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
-    system = ("You are Helm, writing the Weekly CEO Pack. Produce a board-ready weekly summary in markdown with sections: "
+    system = ("You are Helm, writing the Weekly CEO Pack. Produce a weekly summary in markdown that a CEO can share "
+              "with their leadership team, investors, or accountant. Use sections: "
               "Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific. "
               "Use both manual reports and the week-over-week trend cards.")
     text = await helm_llm.complete(system, f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack.")
     return {"content": text}
+
+
+class WeeklyPackExportInput(BaseModel):
+    content: str
+
+
+@api_router.post("/reports/weekly-pack/export-pdf")
+async def weekly_pack_export_pdf(payload: WeeklyPackExportInput, principal=Depends(require_pro_perm("reports:pack"))):
+    import weekly_pack_export as pack_pdf
+
+    content = (payload.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Pack content is required")
+    c = await get_ws(principal["workspace_id"])
+    try:
+        pdf = pack_pdf.render_weekly_pack_pdf(content, workspace_name=c.get("name") or "Company")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("weekly pack PDF export failed")
+        raise HTTPException(status_code=500, detail="Could not build PDF")
+    filename = pack_pdf.pdf_filename(c.get("name") or "Company")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:

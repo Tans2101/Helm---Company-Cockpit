@@ -116,6 +116,7 @@ async def test_weekly_pack_llm_user_prompt_contains_manual_report(mongo):
     captured = {}
 
     async def fake_complete(system, user, **kwargs):
+        captured["system"] = system
         captured["user"] = user
         return "# ok"
 
@@ -128,6 +129,8 @@ async def test_weekly_pack_llm_user_prompt_contains_manual_report(mongo):
     assert title in captured["user"]
     assert summary in captured["user"]
     assert '"trends"' in captured["user"]
+    assert "board-ready" not in captured["system"].lower()
+    assert "board" not in captured["system"].lower()
 
 
 class TestReportSnapshotsHTTP:
