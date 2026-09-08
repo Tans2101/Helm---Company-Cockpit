@@ -99,10 +99,15 @@ def expense_totals_by_month_category(entries: list) -> dict:
 
 
 def detect_runway_risk(fin: dict) -> Optional[dict]:
-    """Fire if runway < 6 months, or burn rose materially month over month."""
+    """Fire if runway < 6 months, or burn rose materially month over month.
+
+    Missing cash (`cash_entered` false / `runway_months` None) is not zero runway.
+    """
     if not fin or not fin.get("has_data"):
         return None
     runway = fin.get("runway_months")
+    if fin.get("cash_entered") is False:
+        runway = None
     burn_series = fin.get("burn_series") or []
     reasons = []
     severity = "medium"

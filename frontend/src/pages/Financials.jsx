@@ -221,7 +221,7 @@ export default function Financials() {
   };
 
   const openSettings = () => {
-    setCash(String(data.settings?.cash ?? ""));
+    setCash(data.cash_entered ? String(data.settings?.cash ?? 0) : "");
     setGm(data.settings?.gross_margin != null ? String(data.settings.gross_margin) : "");
     setCurrency(data.settings?.currency || data.currency || "usd");
     setShowSettings(true);
@@ -269,9 +269,11 @@ export default function Financials() {
   };
 
   const headline = [
-    { label: "MRR", value: data.mrr }, { label: "ARR", value: data.arr },
-    { label: "Runway", value: data.runway_months ? `${data.runway_months}mo` : "—" },
-    { label: "Net Burn", value: data.burn }, { label: "Cash", value: data.cash },
+    { label: "MRR", value: data.mrr_known === false ? "Add data" : data.mrr },
+    { label: "ARR", value: data.mrr_known === false ? "Add data" : data.arr },
+    { label: "Runway", value: data.runway_months != null ? `${data.runway_months}mo` : "Add data" },
+    { label: "Net Burn", value: data.burn_known === false ? "Add data" : data.burn },
+    { label: "Cash", value: data.cash_entered === false ? "Add data" : data.cash },
     { label: "Gross Margin", value: data.gross_margin },
   ];
 

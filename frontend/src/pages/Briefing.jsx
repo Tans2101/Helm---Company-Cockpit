@@ -117,7 +117,7 @@ export default function Briefing() {
               <span className={cn("w-1.5 h-1.5 rounded-full", toneDot[m.tone])} />
             </div>
             <div className="mt-3 flex items-end justify-between">
-              <span className="font-mono text-2xl md:text-3xl text-white">{m.value}</span>
+              <span className={cn("font-mono text-2xl md:text-3xl", m.missing ? "text-zinc-500" : "text-white")}>{m.value}</span>
               <Delta value={m.delta} tone={m.tone} />
             </div>
           </GlassCard>

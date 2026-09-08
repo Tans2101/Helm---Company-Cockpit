@@ -28,7 +28,31 @@ def test_runway_risk_fires_when_runway_low():
     assert "4.2" in sig["detail"]
 
 
-def test_runway_risk_silent_when_healthy():
+def test_runway_risk_silent_when_cash_not_entered():
+    fin = {
+        "has_data": True,
+        "cash_entered": False,
+        "runway_months": None,
+        "burn": "—",
+        "cash": "—",
+        "burn_series": [{"month": "Jul", "burn": 40000}, {"month": "Aug", "burn": 41000}],
+    }
+    assert eng.detect_runway_risk(fin) is None
+
+
+def test_runway_risk_fires_on_confirmed_zero_cash():
+    fin = {
+        "has_data": True,
+        "cash_entered": True,
+        "runway_months": 0.0,
+        "burn": "$50K",
+        "cash": "$0",
+        "burn_series": [{"month": "Jul", "burn": 40000}, {"month": "Aug", "burn": 40000}],
+    }
+    sig = eng.detect_runway_risk(fin)
+    assert sig is not None
+    assert sig["type"] == "runway_risk"
+    assert "0" in sig["detail"]
     fin = {
         "has_data": True,
         "runway_months": 18,

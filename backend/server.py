@@ -34,7 +34,7 @@ import integrations_catalog as integ_catalog
 import clerk_auth
 import decision_engine
 import money_fmt
-from money_fmt import fmt_money, normalize_currency, currency_symbol, CURRENCY_SYMBOLS
+from money_fmt import fmt_money, normalize_currency, currency_symbol, CURRENCY_SYMBOLS, entered_cash_amount
 from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
@@ -1283,11 +1283,11 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
     import finance_recurrence as fin_recur
 
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
-    settings = (ws or {}).get("financial_settings") or {"cash": 0, "gross_margin": None, "currency": "usd"}
+    settings = dict((ws or {}).get("financial_settings") or {})
     if not settings.get("currency"):
-        settings = {**settings, "currency": "usd"}
+        settings["currency"] = "usd"
     else:
-        settings = {**settings, "currency": normalize_currency(settings.get("currency"))}
+        settings["currency"] = normalize_currency(settings.get("currency"))
     currency = settings["currency"]
     entry_filt = dept_access.apply_department_filter(
         {"workspace_id": workspace_id}, department_ids,
@@ -1316,21 +1316,25 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
     burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
     latest = months[-1] if months else None
     # MRR is recurring revenue only — never fall back to one-time sales
+    has_ledger = bool(entries)
+    mrr_known = has_ledger
     mrr_val = float(rec_by[latest]) if latest else 0.0
-    cash = settings.get("cash") or 0
+    cash_val = entered_cash_amount(settings)
+    cash_entered = cash_val is not None
     net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
     avg_burn = sum(net) / len(net) if net else 0
-    runway = round(cash / avg_burn, 1) if avg_burn > 0 else None
+    runway = round(cash_val / avg_burn, 1) if cash_entered and avg_burn > 0 else None
+    burn_known = has_ledger
     burn_val = (exp_by[latest] - rev_by[latest]) if latest else 0
     total_exp = sum(exp_cat.values())
     expense_breakdown = ([{"name": k, "value": round(v / total_exp * 100)} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])] if total_exp else [])
     gm = settings.get("gross_margin")
     scenarios = []
-    if runway:
+    if cash_entered and avg_burn > 0:
         scenarios = [
             {"name": "Base", "runway": runway, "desc": "Current net burn held."},
-            {"name": "Efficient", "runway": round(cash / (avg_burn * 0.8), 1), "desc": "Trim burn 20%."},
-            {"name": "Aggressive Hire", "runway": round(cash / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
+            {"name": "Efficient", "runway": round(cash_val / (avg_burn * 0.8), 1), "desc": "Trim burn 20%."},
+            {"name": "Aggressive Hire", "runway": round(cash_val / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
         ]
     mrr_delta = 0
     rec_months = sorted(rec_by.keys())
@@ -1340,16 +1344,62 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         if prev_r > 0:
             mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
     return {
-        "mrr": fmt_money(mrr_val, currency), "arr": fmt_money(mrr_val * 12, currency), "runway_months": runway,
-        "burn": fmt_money(burn_val, currency), "cash": fmt_money(cash, currency),
+        "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
+        "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
+        "runway_months": runway,
+        "burn": fmt_money(burn_val, currency) if burn_known else "—",
+        "cash": fmt_money(cash_val, currency) if cash_entered else "—",
         "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
         "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
         "expense_breakdown": expense_breakdown, "settings": settings,
         "currency": currency, "currency_symbol": currency_symbol(currency),
-        "mrr_delta": mrr_delta, "spark": [r["revenue"] for r in revenue_series],
-        "burn_tone": "negative" if burn_val > 0 else "positive", "has_data": bool(entries),
-        "mrr_value": round(float(mrr_val or 0)),
-        "burn_value": round(float(burn_val or 0)),
+        "mrr_delta": mrr_delta if mrr_known else 0,
+        "spark": [r["revenue"] for r in revenue_series],
+        "burn_tone": "negative" if burn_known and burn_val > 0 else "positive",
+        "has_data": has_ledger,
+        "mrr_known": mrr_known,
+        "burn_known": burn_known,
+        "cash_entered": cash_entered,
+        "cash_value": cash_val,
+        "mrr_value": round(float(mrr_val or 0)) if mrr_known else None,
+        "burn_value": round(float(burn_val or 0)) if burn_known else None,
+    }
+
+
+def financials_for_synthesis(fin: dict) -> dict:
+    """Numbers for AI prompts: missing fields stay null instead of looking like $0."""
+    cash_entered = bool(fin.get("cash_entered"))
+    mrr_known = bool(fin.get("mrr_known"))
+    burn_known = bool(fin.get("burn_known"))
+    runway = fin.get("runway_months")
+    unknown = []
+    if not cash_entered:
+        unknown.append("cash_balance_not_entered")
+    if not mrr_known:
+        unknown.append("revenue_and_expenses_not_entered")
+    if not burn_known:
+        unknown.append("burn_not_entered")
+    if runway is None:
+        unknown.append("runway_not_computable")
+    return {
+        "cash": fin.get("cash_value") if cash_entered else None,
+        "cash_entered": cash_entered,
+        "mrr": fin.get("mrr_value") if mrr_known else None,
+        "mrr_known": mrr_known,
+        "burn": fin.get("burn_value") if burn_known else None,
+        "burn_known": burn_known,
+        "runway_months": runway,
+        "currency": fin.get("currency") or "usd",
+        "unknown_fields": unknown,
+        "instructions_for_missing_data": (
+            "Fields that are null were never entered — they are not zero. "
+            "If cash_entered is false, tell the CEO to add a cash balance on Financials "
+            "to get an accurate runway picture. Never say they are out of runway, have "
+            "zero cash, or are technically out of money when cash was not entered. "
+            "Urgent out-of-runway language is allowed only when cash_entered is true and "
+            "runway_months is a real number (including 0). If mrr_known or burn_known is "
+            "false, say those figures are not in Helm yet."
+        ),
     }
 
 
@@ -2201,9 +2251,27 @@ async def briefing(principal=Depends(get_principal)):
     is_pro = workspace_is_pro(c)
     fin = await compute_financials(c["workspace_id"])
     metrics = [
-        {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"], "tone": "positive"},
-        {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—", "delta": 0, "tone": "neutral"},
-        {"label": "Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"]},
+        {
+            "label": "MRR",
+            "value": fin["mrr"] if fin.get("mrr_known") else "Add data",
+            "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
+            "tone": "positive" if fin.get("mrr_known") else "neutral",
+            "missing": not fin.get("mrr_known"),
+        },
+        {
+            "label": "Runway",
+            "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "Add data",
+            "delta": 0,
+            "tone": "neutral",
+            "missing": fin["runway_months"] is None,
+        },
+        {
+            "label": "Burn",
+            "value": fin["burn"] if fin.get("burn_known") else "Add data",
+            "delta": 0,
+            "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
+            "missing": not fin.get("burn_known"),
+        },
     ]
     nrr = b.get("nrr")
     if nrr:
@@ -2340,9 +2408,10 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         "name": c.get("name"),
         "stage": c.get("stage"),
         "employees": c.get("employees"),
-        "mrr": fin.get("mrr"),
+        "mrr": fin.get("mrr") if fin.get("mrr_known") else None,
         "runway_months": fin.get("runway_months"),
-        "burn": fin.get("burn"),
+        "burn": fin.get("burn") if fin.get("burn_known") else None,
+        "cash_entered": fin.get("cash_entered"),
     }
     decision_suggestions = []
     delegate_suggestions = []
@@ -2478,17 +2547,27 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     b = c["briefing"]
-    context = {"company": c["name"], "metrics": b.get("what_to_decide"), "what_changed": b["what_changed"],
-               "decisions": b["what_to_decide"], "financials": await compute_financials(c["workspace_id"])}
+    fin = await compute_financials(c["workspace_id"])
+    context = {
+        "company": c["name"],
+        "metrics": b.get("what_to_decide"),
+        "what_changed": b["what_changed"],
+        "decisions": b["what_to_decide"],
+        "financials": financials_for_synthesis(fin),
+    }
     cal_snap = await _google_calendar_snapshot(c)
     if cal_snap and cal_snap.get("meetings"):
         context["calendar_today"] = [
             {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
             for m in cal_snap["meetings"][:8]
         ]
-    system = ("You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. "
-              "Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, "
-              "and end with a confident recommendation. No fluff, no lists.")
+    system = (
+        "You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. "
+        "Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, "
+        "and end with a recommendation. No fluff, no lists. "
+        "Never treat missing financial figures as zero. Follow financials.instructions_for_missing_data exactly: "
+        "if cash was not entered, say to add a cash balance for an accurate runway picture — do not claim they are out of runway."
+    )
     text = await helm_llm.complete(system, f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite the CEO's morning briefing.")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"briefing.ai_summary": text}})
     return {"ai_summary": text}
@@ -2899,7 +2978,7 @@ async def telemetry(principal=Depends(get_principal)):
             {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"],
              "tone": "positive" if fin["mrr_delta"] >= 0 else "negative", "spark": fin["spark"]},
             {"label": "ARR", "value": fin["arr"], "delta": 0, "tone": "neutral", "spark": fin["spark"]},
-            {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] else "—",
+            {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "—",
              "delta": 0, "tone": "neutral", "spark": []},
             {"label": "Net Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"],
              "spark": [b["burn"] for b in fin["burn_series"]]},
@@ -3235,6 +3314,7 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     currency = normalize_currency(payload.currency) if payload.currency is not None else None
     sets = {
         "financial_settings.cash": round(payload.cash, 2),
+        "financial_settings.cash_entered": True,
         "financial_settings.gross_margin": payload.gross_margin,
     }
     if currency is not None:
@@ -3244,7 +3324,7 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     runway = fin["runway_months"]
     cur = fin.get("currency") or "usd"
     await log_activity(principal, "financials", "settings.update",
-                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f" — runway now {runway}mo" if runway else ""),
+                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f" — runway now {runway}mo" if runway is not None else ""),
                        {"cash": payload.cash, "runway_months": runway, "currency": cur})
     return {"ok": True, "settings": fin.get("settings"), "currency": cur}
 
@@ -3629,10 +3709,10 @@ def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "", currency
 def _report_metric_snapshot(fin, items, ups, headcount) -> dict:
     return {
         "taken_at": datetime.now(timezone.utc).isoformat(),
-        "mrr": int(fin.get("mrr_value") or 0),
-        "arr": int(fin.get("mrr_value") or 0) * 12,
+        "mrr": None if fin.get("mrr_value") is None else int(fin.get("mrr_value") or 0),
+        "arr": None if fin.get("mrr_value") is None else int(fin.get("mrr_value") or 0) * 12,
         "runway_months": fin.get("runway_months"),
-        "burn": int(fin.get("burn_value") or 0),
+        "burn": None if fin.get("burn_value") is None else int(fin.get("burn_value") or 0),
         "headcount": int(headcount or 0),
         "updates_count": len(ups or []),
         "blocked_count": len([u for u in (ups or []) if u.get("blocker")]),
@@ -3679,7 +3759,7 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
 
     if first_week:
         fin_summary = (
-            f"MRR {fin['mrr']} · runway {fin['runway_months'] or '—'}mo · burn {fin['burn']} — "
+            f"MRR {fin['mrr']} · runway {fin['runway_months'] if fin['runway_months'] is not None else '—'}mo · burn {fin['burn']} — "
             f"first week — no trend yet."
         )
         team_summary = (
@@ -3703,7 +3783,7 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
          "summary": fin_summary,
          "metrics": [
              {"label": "MRR", "value": fin["mrr"] if first_week else mrr_trend},
-             {"label": "Runway", "value": (f"{fin['runway_months']}mo" if fin["runway_months"] else "—") if first_week else runway_trend},
+             {"label": "Runway", "value": (f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "—") if first_week else runway_trend},
              {"label": "Burn", "value": fin["burn"] if first_week else burn_trend},
          ],
          "source": "auto"},
@@ -5939,14 +6019,21 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         await doc_rate_limit.record_ask_helm_event(db, c["workspace_id"])
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
-    context = {"company": c["name"], "stage": c["stage"], "employees": c["employees"],
-               "financials": await compute_financials(c["workspace_id"]),
-               "kpis": c["telemetry"]["kpis"], "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"], "risks": c["telemetry"]["risks"]}
+    fin = await compute_financials(c["workspace_id"])
+    context = {
+        "company": c["name"], "stage": c["stage"], "employees": c["employees"],
+        "financials": financials_for_synthesis(fin),
+        "kpis": c["telemetry"]["kpis"],
+        "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"],
+        "risks": c["telemetry"]["risks"],
+    }
     system = (
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} "
         f"(a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: "
         f"direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, "
-        f"signal over noise. Keep answers tight. Current company snapshot:\n{json.dumps(context, indent=2)}"
+        f"signal over noise. Keep answers tight. "
+        f"Never treat missing financial figures as zero — follow financials.instructions_for_missing_data. "
+        f"Current company snapshot:\n{json.dumps(context, indent=2)}"
     )
 
     async def gen():

@@ -18,6 +18,41 @@ CURRENCY_SYMBOLS = {
 DEFAULT_CURRENCY = "usd"
 
 
+def parse_optional_amount(value) -> float | None:
+    """Return a float when a figure was provided; None when the field was never set.
+
+    Does not coerce missing/blank to 0 — callers must treat None as unknown.
+    Explicit 0 and negatives are preserved.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def entered_cash_amount(settings: dict | None) -> float | None:
+    """Cash on hand if the CEO (or finance) actually entered it.
+
+    Legacy empty workspaces stored cash=0 as a default. That is treated as
+    not entered unless cash_entered is True (set when settings are saved).
+    Non-zero legacy cash is treated as a real figure.
+    """
+    settings = settings or {}
+    if settings.get("cash_entered") is False:
+        return None
+    raw = settings.get("cash")
+    amount = parse_optional_amount(raw)
+    if settings.get("cash_entered") is True:
+        return 0.0 if amount is None else amount
+    if amount is None or amount == 0:
+        return None
+    return amount
+
+
 def normalize_currency(code) -> str:
     c = (str(code or DEFAULT_CURRENCY)).strip().lower()
     return c if c in CURRENCY_SYMBOLS else DEFAULT_CURRENCY
