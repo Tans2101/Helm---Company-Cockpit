@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download } from "lucide-react";
+from { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download, Check } from "lucide-react";
 import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
@@ -20,6 +20,7 @@ export default function Reports() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyReport());
   const [editing, setEditing] = useState(null);
+  const [publishingDraftId, setPublishingDraftId] = useState(null);
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
@@ -38,12 +39,19 @@ export default function Reports() {
 
   const manual = data.manual_reports || data.reports?.filter((r) => r.source === "manual") || [];
   const auto = data.auto_reports || data.reports?.filter((r) => r.source === "auto") || [];
+  const drafts = data.draft_reports || [];
   const canWrite = data.can_write;
   const canGeneratePack = (user?.perms || []).includes("reports:pack");
 
-  const openAdd = () => { setEditing(null); setForm(emptyReport()); setShowForm(true); };
+  const openAdd = () => {
+    setEditing(null);
+    setPublishingDraftId(null);
+    setForm(emptyReport());
+    setShowForm(true);
+  };
   const openEdit = (r) => {
     setEditing(r.id);
+    setPublishingDraftId(null);
     setForm({
       title: r.title,
       type: r.type,
@@ -52,6 +60,27 @@ export default function Reports() {
       metrics: (r.metrics?.length ? r.metrics : emptyReport().metrics).slice(0, 3),
     });
     setShowForm(true);
+  };
+  const openPublishDraft = (d) => {
+    setEditing(null);
+    setPublishingDraftId(d.id);
+    setForm({
+      title: d.title || "",
+      type: d.type || "General",
+      period: d.period || "",
+      summary: d.summary || "",
+      metrics: (d.metrics?.length ? d.metrics : emptyReport().metrics).concat(emptyReport().metrics).slice(0, 3),
+    });
+    setShowForm(true);
+  };
+  const dismissDraft = async (d) => {
+    try {
+      await api.post(`/reports/drafts/${d.id}/dismiss`);
+      toast.success("Draft dismissed");
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not dismiss draft");
+    }
   };
 
   const submit = async () => {
@@ -63,9 +92,10 @@ export default function Reports() {
     };
     try {
       if (editing) await api.patch(`/reports/${editing}`, payload);
-      else await api.post("/reports", payload);
-      toast.success(editing ? "Report updated" : "Report added");
+      else await api.post("/reports", publishingDraftId ? { ...payload, from_draft_id: publishingDraftId } : payload);
+      toast.success(editing ? "Report updated" : publishingDraftId ? "Report published" : "Report added");
       setShowForm(false);
+      setPublishingDraftId(null);
       reload();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
     finally { setBusy(false); }
@@ -127,6 +157,11 @@ export default function Reports() {
     }
   };
 
+  const closeForm = () => {
+    setShowForm(false);
+    setPublishingDraftId(null);
+  };
+
   const action = canWrite ? (
     <button data-testid="add-report-btn" onClick={openAdd}
       className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
@@ -150,6 +185,58 @@ export default function Reports() {
           The Weekly CEO Pack synthesizes your manual reports with those trends.
         </p>
       </GlassCard>
+
+      {drafts.length > 0 && (
+        <div className="mb-8" data-testid="department-drafts">
+          <SectionLabel className="mb-3">Suggested from your departments</SectionLabel>
+          <p className="text-sm text-zinc-500 mb-3">
+            Rollups of completed department work this week. Review before they become a report — they are not published until you say so.
+          </p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {drafts.map((d, i) => (
+              <GlassCard key={d.id} className="p-5 fade-up border-gold/20" style={{ animationDelay: `${i * 60}ms` }} data-testid={`draft-${d.id}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-gold" />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{d.type} · {d.period}</span>
+                  <span className="text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto text-gold bg-gold/10">Draft</span>
+                </div>
+                <h3 className="text-white font-medium">{d.title}</h3>
+                <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{d.summary}</p>
+                {d.metrics?.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/5">
+                    {d.metrics.map((m) => (
+                      <div key={m.label}>
+                        <p className="font-mono text-lg text-white">{m.value}</p>
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-wide">{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {canWrite && (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      data-testid={`publish-draft-${d.id}`}
+                      type="button"
+                      onClick={() => openPublishDraft(d)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium px-3 py-2 hover:bg-gold-hover"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Publish
+                    </button>
+                    <button
+                      data-testid={`dismiss-draft-${d.id}`}
+                      type="button"
+                      onClick={() => dismissDraft(d)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"
+                    >
+                      <X className="w-3.5 h-3.5" /> Dismiss
+                    </button>
+                  </div>
+                )}
+              </GlassCard>
+            ))}
+          </div>
+        </div>
+      )}
 
       {manual.length > 0 && (
         <>
@@ -226,11 +313,11 @@ export default function Reports() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
+          <div className="absolute inset-0 bg-black/70" onClick={closeForm} />
           <GlassCard className="relative w-full sm:max-w-lg m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="report-form">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg text-white font-light">{editing ? "Edit report" : "Add a report"}</h3>
-              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h3 className="text-lg text-white font-light">{editing ? "Edit report" : publishingDraftId ? "Review department draft" : "Add a report"}</h3>
+              <button onClick={closeForm} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
               <label className="text-xs text-zinc-500 block">Title
@@ -256,7 +343,7 @@ export default function Reports() {
                 ))}
               </div>
             </div>
-            <button data-testid="submit-report-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save report" : "Add report"}</button>
+            <button data-testid="submit-report-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save report" : publishingDraftId ? "Publish report" : "Add report"}</button>
           </GlassCard>
         </div>
       )}

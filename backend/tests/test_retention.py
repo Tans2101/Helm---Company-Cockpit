@@ -233,7 +233,9 @@ def test_endpoint_runs_with_cron_header():
 
     with patch.object(server, "INTERNAL_CRON_SECRET", "cron-secret-test"), patch.object(
         server, "SETUP_SECRET", "setup-secret-test"
-    ), patch.object(server.helm_retention, "run_retention_checks", new=fake_run):
+    ), patch.object(server.helm_retention, "run_retention_checks", new=fake_run), patch.object(
+        server.helm_dept_drafts, "run_department_drafts", new=AsyncMock(return_value={"drafts_upserted": 0})
+    ):
         client = TestClient(server.app)
         r = client.post(
             "/api/internal/run-retention-checks",

@@ -45,6 +45,7 @@ import plan_usage
 import retention as helm_retention
 import product_analytics as helm_analytics
 import referrals as helm_referrals
+import department_report_drafts as helm_dept_drafts
 import departments_catalog as dept_catalog
 import department_access as dept_access
 import department_migrate as dept_migrate
@@ -3917,15 +3918,17 @@ async def reports(principal=Depends(get_principal)):
     day = datetime.now(timezone.utc).date().isoformat()
     ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
     headcount = c.get("employees") or len(c["people"]["people"])
-    manual = list(c.get("manual_reports") or [])
+    manual = [r for r in (c.get("manual_reports") or []) if r.get("source") != helm_dept_drafts.SOURCE]
     current = _report_metric_snapshot(fin, items, ups, headcount)
     prior = await _apply_report_snapshot(c["workspace_id"], current)
     auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     can_write = await can_section_write(principal, "reports", "reports:write")
+    drafts = await helm_dept_drafts.list_open_drafts(db, c["workspace_id"])
     return {
         "reports": manual + auto,
         "manual_reports": manual,
         "auto_reports": auto,
+        "draft_reports": drafts,
         "can_write": can_write,
         "is_pro": workspace_is_pro(c),
     }
@@ -3937,6 +3940,7 @@ class ReportInput(BaseModel):
     period: str = ""
     summary: str = ""
     metrics: list = []
+    from_draft_id: Optional[str] = None
 
 
 @api_router.post("/reports")
@@ -3944,6 +3948,18 @@ async def create_report(payload: ReportInput, principal=Depends(require_section(
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
+    draft_id = (payload.from_draft_id or "").strip()
+    if draft_id:
+        draft = await db.department_report_drafts.find_one(
+            {
+                "id": draft_id,
+                "workspace_id": c["workspace_id"],
+                "status": helm_dept_drafts.STATUS_DRAFT,
+            },
+            {"_id": 1},
+        )
+        if not draft:
+            raise HTTPException(status_code=404, detail="Draft not found or already closed")
     manual = list(c.get("manual_reports") or [])
     report = {
         "id": f"rep_{uuid.uuid4().hex[:10]}",
@@ -3958,6 +3974,8 @@ async def create_report(payload: ReportInput, principal=Depends(require_section(
     }
     manual.append(report)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    if draft_id:
+        await helm_dept_drafts.mark_published(db, c["workspace_id"], draft_id)
     await log_activity(principal, "reports", "report.create", f"Added report: {report['title']}")
     return {"ok": True, "report": report}
 
@@ -3995,9 +4013,17 @@ async def delete_report(report_id: str, principal=Depends(require_section("repor
     return {"ok": True}
 
 
+@api_router.post("/reports/drafts/{draft_id}/dismiss")
+async def dismiss_report_draft(draft_id: str, principal=Depends(require_section("reports", "reports:write"))):
+    ok = await helm_dept_drafts.dismiss_draft(db, principal["workspace_id"], draft_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return {"ok": True}
+
+
 def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dict:
-    """Assemble LLM context: manual reports + week-over-week trend cards."""
-    manual = list(c.get("manual_reports") or [])
+    """Assemble LLM context: published manual reports + week-over-week trend cards."""
+    manual = [r for r in (c.get("manual_reports") or []) if r.get("source") != helm_dept_drafts.SOURCE]
     auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     return {
         "company": c["name"],
@@ -4841,6 +4867,8 @@ async def create_production_stage(payload: ProductionStageCreate, principal=Depe
         "created_at": now,
         "updated_at": now,
     }
+    if status == "done":
+        stage["completed_at"] = now
     await db.production_stages.insert_one(stage)
     return {"ok": True, "stage": await _enrich_stage_assignees({k: v for k, v in stage.items() if k != "_id"})}
 
@@ -4902,6 +4930,7 @@ async def patch_production_stage(
         if status not in PRODUCTION_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         upd["status"] = status
+    helm_dept_drafts.apply_status_completion(stage, upd, done_status="done")
     if payload.assigned_user_ids is not None:
         upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
     if payload.notes is not None:
@@ -5168,6 +5197,7 @@ async def patch_procurement_request(
                 # ordered / delivered / back to requested — members may advance open work
                 upd["status"] = new_status
 
+    helm_dept_drafts.apply_status_completion(req, upd, done_status="delivered")
     if not upd:
         return {"ok": True, "request": await _enrich_procurement_request(req)}
 
@@ -5364,6 +5394,8 @@ async def create_legal_matter(payload: LegalMatterCreate, principal=Depends(get_
         "created_at": now,
         "updated_at": now,
     }
+    if matter["status"] == "filed":
+        matter["completed_at"] = now
     await db.legal_matters.insert_one(dict(matter))
     return {"ok": True, "matter": await _enrich_legal_matter(matter)}
 
@@ -5426,6 +5458,7 @@ async def patch_legal_matter(
                 raise HTTPException(status_code=403, detail="Invalid status for your role")
             upd["status"] = new_status
 
+    helm_dept_drafts.apply_status_completion(matter, upd, done_status="filed")
     if not upd:
         return {"ok": True, "matter": await _enrich_legal_matter(matter)}
 
@@ -5771,6 +5804,7 @@ async def patch_maintenance_ticket(
         if st not in MAINTENANCE_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         upd["status"] = st
+    helm_dept_drafts.apply_status_completion(ticket, upd, done_status="resolved")
 
     if payload.assigned_technician is not None:
         new_tech = (payload.assigned_technician or "").strip() or None
@@ -6107,6 +6141,9 @@ async def patch_hr_onboarding(
     overall = _derive_overall_status(steps)
     now = datetime.now(timezone.utc).isoformat()
     set_fields = {"steps": steps, "overall_status": overall, "updated_at": now, **upd_top}
+    helm_dept_drafts.apply_status_completion(
+        inst, set_fields, done_status="active", status_key="overall_status", now_iso=now,
+    )
     await db.hr_onboarding_instances.update_one(
         {"id": instance_id, "department_id": dept["department_id"]},
         {"$set": set_fields},
@@ -7149,13 +7186,20 @@ async def cleanup_orphaned_documents_admin(request: Request):
 async def internal_run_retention_checks(request: Request):
     """Daily Render cron: trial-ending reminder + inactivity nudge. Shared-secret header required."""
     _require_internal_cron(request)
-    return await helm_retention.run_retention_checks(
+    result = await helm_retention.run_retention_checks(
         db,
         trial_days=TRIAL_DAYS,
         app_base_url=_app_base_url(),
         send_email=send_notification_email,
         recipient_emails=_alert_recipient_emails,
     )
+    try:
+        drafts = await helm_dept_drafts.run_department_drafts(db)
+        result = {**result, "department_drafts": drafts}
+    except Exception:
+        logger.exception("department report drafts cron failed")
+        result = {**result, "department_drafts": {"error": True}}
+    return result
 
 
 @api_router.get("/internal/analytics-summary")
@@ -7266,6 +7310,9 @@ async def _ensure_indexes():
         (db.hr_onboarding_instances, [("id", 1)], {"unique": True}),
         (db.hr_onboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
         (db.hr_onboarding_instances, [("workspace_id", 1)], {}),
+        (db.department_report_drafts, [("id", 1)], {"unique": True}),
+        (db.department_report_drafts, [("workspace_id", 1), ("status", 1)], {}),
+        (db.department_report_drafts, [("workspace_id", 1), ("department_type", 1), ("week_start", 1)], {"unique": True}),
         (db.product_events, [("event_type", 1), ("created_at", -1)], {}),
         (db.product_events, [("workspace_id", 1), ("event_type", 1)], {}),
         (db.product_events, [("event_type", 1), ("metadata.once_key", 1)], {}),
