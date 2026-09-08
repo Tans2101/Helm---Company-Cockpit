@@ -37,25 +37,28 @@ PLANS: dict[str, dict[str, Any]] = {
         "id": PLAN_FREE,
         "label": "Free",
         "price": 0,
-        "for": "Solo founders trying it out",
-        "seats": 1,
+        "for": "Small teams trying Helm",
+        "seats": 3,
         "ai_extracts_mo": 0,
+        "ai_extracts_lifetime": 5,
+        "ask_helm_mo": 10,
         "trial_days": 0,
         "paddle_price_env": None,
         "features": {
-            FEATURE_AI_EXTRACT: False,
-            FEATURE_ASK_HELM: False,
-            FEATURE_AI_BRIEFING: False,
+            FEATURE_AI_EXTRACT: True,
+            FEATURE_ASK_HELM: True,
+            FEATURE_AI_BRIEFING: True,
             FEATURE_INTEGRATIONS: False,
             FEATURE_ADVANCED_REPORTS: False,
-            FEATURE_TEAM: False,
+            FEATURE_TEAM: True,
             FEATURE_PRIORITY_SUPPORT: False,
         },
         "includes": [
-            "1 team member",
-            "Manual financial entries only",
-            "Dashboard & briefing",
-            "No AI document upload",
+            "Up to 3 team members",
+            "5 free AI extracts to try it, then upgrade",
+            "Ask Helm (10 messages/month)",
+            "AI morning briefing",
+            "Dashboard & decisions",
             "No QuickBooks sync",
         ],
     },
@@ -117,7 +120,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "label": "Business",
         "price": 99,
         "for": "Larger companies",
-        "seats": 25,
+        "seats": 50,
         "ai_extracts_mo": 500,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_BUSINESS",
@@ -131,7 +134,7 @@ PLANS: dict[str, dict[str, Any]] = {
             FEATURE_PRIORITY_SUPPORT: True,
         },
         "includes": [
-            "Up to 25 team members",
+            "Up to 50 team members",
             "AI document upload (500/billing period)",
             "Priority support",
             "Everything in Growth",
@@ -205,7 +208,18 @@ def seats_limit(plan: str | None) -> Optional[int]:
 
 
 def ai_extracts_limit(plan: str | None) -> int:
-    return int(plan_def(plan)["ai_extracts_mo"] or 0)
+    """Monthly renewing extract quota. Free uses ai_extracts_lifetime instead."""
+    return int(plan_def(plan).get("ai_extracts_mo") or 0)
+
+
+def ai_extracts_lifetime_limit(plan: str | None) -> int:
+    """One-time extract allowance (Free). 0 means not used — fall back to monthly."""
+    return int(plan_def(plan).get("ai_extracts_lifetime") or 0)
+
+
+def ask_helm_monthly_limit(plan: str | None) -> int:
+    """0 = no extra monthly cap beyond the feature flag (paid plans)."""
+    return int(plan_def(plan).get("ask_helm_mo") or 0)
 
 
 def paddle_price_id_for(plan: str | None) -> str:
@@ -243,6 +257,8 @@ def public_plan_list() -> list[dict[str, Any]]:
             "for": p["for"],
             "seats": p["seats"],
             "ai_extracts_mo": p["ai_extracts_mo"],
+            "ai_extracts_lifetime": int(p.get("ai_extracts_lifetime") or 0),
+            "ask_helm_mo": int(p.get("ask_helm_mo") or 0),
             "trial_days": p["trial_days"],
             "includes": list(p["includes"]),
             "features": dict(p["features"]),

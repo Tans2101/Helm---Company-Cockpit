@@ -54,9 +54,9 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free is for a single operator — manual entries and the dashboard/briefing. Paid plans add AI upload, team seats, Ask Helm, and integrations." },
+  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract quotas, more seats, and QuickBooks." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Helm?", a: "Yes on paid plans. Starter supports up to 3 members, Growth up to 10, Business up to 25 — with role-based access packs." },
+  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 3, Growth up to 10, and Business up to 50 — with role-based access packs." },
   { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment — use the trial to evaluate." },
 ];
@@ -88,15 +88,16 @@ export const PLANS = [
     id: "free",
     label: "Free",
     price: 0,
-    for: "Solo operators trying it out",
-    seats: 1,
+    for: "Small teams trying Helm",
+    seats: 3,
     trialDays: 0,
     highlighted: false,
     includes: [
-      "1 user",
-      "Manual financial entries",
-      "Dashboard & briefing",
-      "No AI document upload",
+      "Up to 3 team members",
+      "5 free AI extracts to try it, then upgrade",
+      "Ask Helm (10 messages/month)",
+      "AI morning briefing",
+      "Dashboard & decisions",
       "No QuickBooks sync",
     ],
   },
@@ -138,11 +139,11 @@ export const PLANS = [
     label: "Business",
     price: 99,
     for: "Larger companies",
-    seats: 25,
+    seats: 50,
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Up to 25 team members",
+      "Up to 50 team members",
       "AI document upload (500/billing period)",
       "Priority support",
       "Everything in Growth",

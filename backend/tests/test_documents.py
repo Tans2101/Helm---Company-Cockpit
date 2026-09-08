@@ -71,6 +71,8 @@ def client():
         }
     ), patch.object(server, "BILLING_ENFORCED", False), patch.object(
         server.plan_usage, "increment_period_extract", new_callable=AsyncMock, return_value=None
+    ), patch.object(
+        server.plan_usage, "increment_lifetime_extract", new_callable=AsyncMock, return_value=None
     ):
         yield TestClient(server.app)
     server.app.dependency_overrides.clear()
@@ -368,3 +370,28 @@ def test_cleanup_skips_committed_documents():
     assert stored == [committed]
     delete_mock.assert_not_called()
     mock_coll.delete_one.assert_not_awaited()
+
+
+def test_free_lifetime_extract_quota_asks_to_upgrade(client):
+    doc_id = "doc_free_quota"
+    server.db.documents.find_one = AsyncMock(return_value={
+        "id": doc_id,
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "storage_key": "ws_doc_test/key.pdf",
+        "filename": "invoice.pdf",
+        "content_type": "application/pdf",
+        "status": "uploaded",
+    })
+    free_ws = {
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "plan": "free",
+        "ai_extracts_lifetime_used": 5,
+    }
+    with patch.object(server, "BILLING_ENFORCED", True), patch.object(
+        server, "get_ws", new_callable=AsyncMock, return_value=free_ws
+    ), patch.object(server.helm_llm, "anthropic_configured", return_value=True):
+        r = client.post(f"/api/documents/{doc_id}/extract")
+    assert r.status_code == 403
+    detail = r.json()["detail"].lower()
+    assert "upgrade to continue" in detail
+    assert "5 free" in detail

@@ -128,3 +128,24 @@ async def increment_monthly_extract(db, workspace_id: str, month: str | None = N
     period = current_usage_period(ws)
     key = month or period["key"]
     return await increment_period_extract(db, workspace_id, key)
+
+
+def get_lifetime_extract_count(ws: dict | None) -> int:
+    return int((ws or {}).get("ai_extracts_lifetime_used") or 0)
+
+
+async def increment_lifetime_extract(db, workspace_id: str) -> int:
+    """Increment workspace.ai_extracts_lifetime_used. Returns the new count."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.workspaces.update_one(
+        {"workspace_id": workspace_id},
+        {
+            "$inc": {"ai_extracts_lifetime_used": 1},
+            "$set": {"ai_extracts_lifetime_updated_at": now},
+        },
+    )
+    ws = await db.workspaces.find_one(
+        {"workspace_id": workspace_id},
+        {"_id": 0, "ai_extracts_lifetime_used": 1},
+    )
+    return get_lifetime_extract_count(ws)

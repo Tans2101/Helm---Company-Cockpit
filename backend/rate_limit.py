@@ -14,6 +14,9 @@ ROLLING_WINDOW_SECONDS = 3600
 INSIGHTS_WINDOW_SECONDS = 86400
 COLLECTION = "document_rate_events"
 INSIGHTS_COLLECTION = "insights_rate_events"
+ASK_HELM_COLLECTION = "ask_helm_rate_events"
+ASK_HELM_WINDOW_SECONDS = 30 * 24 * 3600
+ASK_HELM_FREE_MONTHLY_LIMIT = 10
 
 
 async def count_events(db, workspace_id: str, action: str) -> int:
@@ -54,3 +57,23 @@ async def insights_over_limit(db, workspace_id: str, limit: int = INSIGHTS_DAILY
     if limit <= 0:
         return False
     return await count_insights_events(db, workspace_id) >= limit
+
+
+async def count_ask_helm_events(db, workspace_id: str) -> int:
+    return await db.ask_helm_rate_events.count_documents({"workspace_id": workspace_id})
+
+
+async def record_ask_helm_event(db, workspace_id: str) -> None:
+    await db.ask_helm_rate_events.insert_one({
+        "workspace_id": workspace_id,
+        "action": "ask",
+        "created_at": datetime.now(timezone.utc),
+    })
+
+
+async def ask_helm_over_limit(
+    db, workspace_id: str, limit: int = ASK_HELM_FREE_MONTHLY_LIMIT,
+) -> bool:
+    if limit <= 0:
+        return False
+    return await count_ask_helm_events(db, workspace_id) >= limit

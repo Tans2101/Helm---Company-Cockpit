@@ -324,11 +324,12 @@ def _get_owner_ws(owner):
 
 def test_free_plan_gates(owner):
     owner.post(f"{BASE_URL}/api/demo/reset-plan")
-    for path in ["/api/briefing/generate", "/api/reports/weekly-pack"]:
-        r = owner.post(f"{BASE_URL}{path}")
-        assert r.status_code == 403, f"{path} should 403 on free"
+    r = owner.post(f"{BASE_URL}/api/reports/weekly-pack")
+    assert r.status_code == 403, "weekly-pack should 403 on free"
     r = owner.post(f"{BASE_URL}/api/integrations/quickbooks/sync")
     assert r.status_code == 403
+    briefing = owner.post(f"{BASE_URL}/api/briefing/generate")
+    assert briefing.status_code != 403, "AI briefing is included on Free"
 
 
 def test_pro_plan_enables_briefing_and_weekly(owner, mongo):

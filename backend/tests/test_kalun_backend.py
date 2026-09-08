@@ -114,10 +114,10 @@ def _ensure_free(auth):
     assert r.status_code == 200
 
 
-def test_free_plan_gates_briefing_generate(auth):
+def test_free_plan_allows_briefing_generate(auth):
     _ensure_free(auth)
     r = auth.post(f"{BASE_URL}/api/briefing/generate")
-    assert r.status_code == 403
+    assert r.status_code != 403, r.text[:300]
 
 
 def test_free_plan_gates_weekly_pack(auth):
@@ -133,10 +133,10 @@ def test_free_plan_gates_integration_toggle(auth):
 
 
 # ---- Ask Helm (streaming) ----
-def test_ask_helm_requires_pro(auth):
+def test_ask_helm_available_on_free(auth):
     _ensure_free(auth)
     r = auth.post(f"{BASE_URL}/api/ask", json={"message": "One-sentence health check."}, stream=True, timeout=60)
-    assert r.status_code == 403, r.text[:300]
+    assert r.status_code != 403, r.text[:300]
     r.close()
 
 

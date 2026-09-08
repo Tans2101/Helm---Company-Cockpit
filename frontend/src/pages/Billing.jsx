@@ -227,13 +227,17 @@ export default function Billing() {
       <GlassCard className="p-4 mb-8 fade-up" data-testid="usage-indicator">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
-            <SectionLabel>Usage this billing period</SectionLabel>
+            <SectionLabel>
+              {data.ai_extracts_kind === "lifetime" ? "Free AI extracts (one-time)" : "Usage this billing period"}
+            </SectionLabel>
             <p className="text-sm text-zinc-400 mt-1">
-              {extractsLimit > 0
-                ? `${extractsUsed} of ${extractsLimit} document uploads used`
-                : currentPlan === "free"
-                  ? "AI document upload not included on Free"
-                  : "No document upload quota on this plan"}
+              {data.ai_extracts_kind === "lifetime"
+                ? `${extractsUsed} of ${extractsLimit} free AI extracts used — then upgrade to continue`
+                : extractsLimit > 0
+                  ? `${extractsUsed} of ${extractsLimit} document uploads used`
+                  : currentPlan === "free"
+                    ? "5 free AI extracts to try it, then upgrade"
+                    : "No document upload quota on this plan"}
             </p>
           </div>
           <p className="text-xs font-mono text-zinc-600">

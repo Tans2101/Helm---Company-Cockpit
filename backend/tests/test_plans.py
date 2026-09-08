@@ -17,24 +17,33 @@ def test_normalize_legacy_pro_to_starter():
 
 
 def test_member_caps_per_plan():
-    assert plans.seats_limit("free") == 1
+    assert plans.seats_limit("free") == 3
     assert plans.seats_limit("starter") == 3
     assert plans.seats_limit("growth") == 10
-    assert plans.seats_limit("business") == 25
+    assert plans.seats_limit("business") == 50
 
 
 def test_document_caps_per_plan():
     assert plans.ai_extracts_limit("free") == 0
+    assert plans.ai_extracts_lifetime_limit("free") == 5
+    assert plans.ai_extracts_lifetime_limit("starter") == 0
+    assert plans.ask_helm_monthly_limit("free") == 10
+    assert plans.ask_helm_monthly_limit("starter") == 0
     assert plans.ai_extracts_limit("starter") == 30
     assert plans.ai_extracts_limit("growth") == 150
     assert plans.ai_extracts_limit("business") == 500
 
 
-def test_free_blocks_paid_features():
-    assert plans.plan_allows("free", plans.FEATURE_AI_EXTRACT, billing_enforced=True) is False
-    assert plans.plan_allows("free", plans.FEATURE_ASK_HELM, billing_enforced=True) is False
+def test_free_includes_trial_ai_features():
+    assert plans.plan_allows("free", plans.FEATURE_AI_EXTRACT, billing_enforced=True) is True
+    assert plans.plan_allows("free", plans.FEATURE_ASK_HELM, billing_enforced=True) is True
+    assert plans.plan_allows("free", plans.FEATURE_AI_BRIEFING, billing_enforced=True) is True
+    assert plans.plan_allows("free", plans.FEATURE_TEAM, billing_enforced=True) is True
     assert plans.plan_allows("free", plans.FEATURE_INTEGRATIONS, billing_enforced=True) is False
     assert plans.plan_allows("free", plans.FEATURE_ADVANCED_REPORTS, billing_enforced=True) is False
+    includes = " ".join(plans.PLANS["free"]["includes"])
+    assert "5 free AI extracts" in includes
+    assert "No AI document upload" not in includes
 
 
 def test_starter_allows_core_paid_features():
@@ -109,6 +118,13 @@ def test_public_plan_list_shape():
     assert {r["id"] for r in rows} == {"free", "starter", "growth", "business"}
     free = next(r for r in rows if r["id"] == "free")
     assert free["checkout_available"] is False
+    assert free["seats"] == 3
+    assert free["ai_extracts_lifetime"] == 5
+    assert free["ask_helm_mo"] == 10
+    assert any("5 free AI extracts" in line for line in free["includes"])
     biz = next(r for r in rows if r["id"] == "business")
-    assert biz["seats"] == 25
-    assert biz["ai_extracts_mo"] == 500
+
+
+def test_lifetime_extract_count_reads_workspace_field():
+    assert plan_usage.get_lifetime_extract_count(None) == 0
+    assert plan_usage.get_lifetime_extract_count({"ai_extracts_lifetime_used": 5}) == 5

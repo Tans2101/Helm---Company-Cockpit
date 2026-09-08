@@ -1136,9 +1136,21 @@ async def _enforce_ai_extract_quota(principal) -> None:
     if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
         raise HTTPException(
             status_code=403,
-            detail="AI document upload is not available on the Free plan — upgrade to Starter or higher.",
+            detail="AI document upload is not available on this plan — upgrade to Starter or higher.",
         )
     if not BILLING_ENFORCED:
+        return
+    lifetime_limit = helm_plans.ai_extracts_lifetime_limit(c.get("plan"))
+    if lifetime_limit > 0:
+        used = plan_usage.get_lifetime_extract_count(c)
+        if used >= lifetime_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"You've used your {lifetime_limit} free AI extracts — "
+                    "upgrade to continue."
+                ),
+            )
         return
     limit = helm_plans.ai_extracts_limit(c.get("plan"))
     if limit <= 0:
@@ -3044,8 +3056,12 @@ async def extract_financial_document_route(
             {"$set": {"status": status, "extracted_data": extracted}},
         )
         if status == "extracted":
-            period = plan_usage.current_usage_period(await get_ws(principal["workspace_id"]))
-            await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
+            ws = await get_ws(principal["workspace_id"])
+            if helm_plans.ai_extracts_lifetime_limit(ws.get("plan")) > 0:
+                await plan_usage.increment_lifetime_extract(db, principal["workspace_id"])
+            else:
+                period = plan_usage.current_usage_period(ws)
+                await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
             await log_activity(
                 principal, "financials", "document.extract",
                 f"Extracted bill data · {doc['filename']}",
@@ -5871,6 +5887,17 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     c = await get_ws(principal["workspace_id"])
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
+    ask_limit = helm_plans.ask_helm_monthly_limit(c.get("plan"))
+    if BILLING_ENFORCED and ask_limit > 0:
+        if await doc_rate_limit.ask_helm_over_limit(db, c["workspace_id"], ask_limit):
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"You've used your {ask_limit} Ask Helm messages this month — "
+                    "upgrade to continue."
+                ),
+            )
+        await doc_rate_limit.record_ask_helm_event(db, c["workspace_id"])
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     context = {"company": c["name"], "stage": c["stage"], "employees": c["employees"],
@@ -6212,8 +6239,15 @@ async def get_billing_status(workspace_id: str, pack: str):
     sub_status = c.get("subscription_status") or c.get("billing_status")
     has_customer = bool(c.get("paddle_customer_id"))
     period = plan_usage.current_usage_period(c)
-    extracts_used = await plan_usage.get_period_extract_count(db, workspace_id, period["key"])
-    extracts_limit = helm_plans.ai_extracts_limit(plan)
+    lifetime_limit = helm_plans.ai_extracts_lifetime_limit(plan)
+    if lifetime_limit > 0:
+        extracts_used = plan_usage.get_lifetime_extract_count(c)
+        extracts_limit = lifetime_limit
+        extracts_kind = "lifetime"
+    else:
+        extracts_used = await plan_usage.get_period_extract_count(db, workspace_id, period["key"])
+        extracts_limit = helm_plans.ai_extracts_limit(plan)
+        extracts_kind = "period"
     seats_used = await _seat_count(workspace_id)
     seats_limit = helm_plans.seats_limit(plan)
     plans = helm_plans.public_plan_list()
@@ -6239,6 +6273,8 @@ async def get_billing_status(workspace_id: str, pack: str):
         "seats_limit": seats_limit,
         "ai_extracts_used": extracts_used,
         "ai_extracts_limit": extracts_limit,
+        "ai_extracts_kind": extracts_kind,
+        "ask_helm_mo": helm_plans.ask_helm_monthly_limit(plan),
         "usage_period_key": period["key"],
         "usage_period_start": period["start"].isoformat(),
         "usage_period_end": period["end"].isoformat(),
@@ -6850,6 +6886,8 @@ async def _ensure_indexes():
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
         (db.insights_rate_events, [("workspace_id", 1)], {}),
+        (db.ask_helm_rate_events, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.ASK_HELM_WINDOW_SECONDS}),
+        (db.ask_helm_rate_events, [("workspace_id", 1)], {}),
         (db.activities, [("workspace_id", 1)], {}),
         (db.updates, [("workspace_id", 1)], {}),
         (db.chat_messages, [("workspace_id", 1)], {}),

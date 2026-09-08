@@ -48,6 +48,29 @@ export default function AskHelm() {
         navigate("/app/billing");
         return;
       }
+      if (res.status === 429) {
+        let detail = "You've used your Ask Helm messages this month — upgrade to continue.";
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : detail;
+        } catch {
+          /* keep default */
+        }
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: `${detail} Open Billing to upgrade.` };
+          return copy;
+        });
+        return;
+      }
+      if (!res.ok) {
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: "I couldn't reach my reasoning engine. Please try again." };
+          return copy;
+        });
+        return;
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
