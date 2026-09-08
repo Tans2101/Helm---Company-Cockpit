@@ -4,8 +4,9 @@ export function GlassCard({ className, children, glow, ...props }) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-white/[0.06] bg-[#121214]/80 backdrop-blur-xl",
-        glow && "shadow-[0_0_40px_-12px_rgba(201,169,98,0.25)]",
+        "rounded-xl border border-white/[0.08] bg-[#121214]/90",
+        // glow kept for callers; intentionally subtle — no gold bloom
+        glow && "border-white/[0.12]",
         className
       )}
       {...props}
@@ -29,7 +30,7 @@ export function PageHeader({ title, subtitle, action }) {
 
 export function SectionLabel({ children, className }) {
   return (
-    <h4 className={cn("text-[11px] font-mono font-medium uppercase tracking-[0.2em] text-gold", className)}>
+    <h4 className={cn("text-xs font-medium tracking-tight text-zinc-400", className)}>
       {children}
     </h4>
   );

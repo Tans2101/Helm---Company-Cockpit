@@ -123,7 +123,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
           </div>
           <div>
             <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Helm</p>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mt-1">CEO Operating System</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 mt-1">Company cockpit</p>
           </div>
         </div>
       </div>
@@ -247,7 +247,7 @@ export default function AppLayout() {
   const needsCompanySetup = company?.role === "owner" && company?.company_setup_done === false;
 
   if (companyLoading && !company) {
-    return <LoadingScreen label="Loading cockpit" />;
+    return <LoadingScreen label="Loading Helm" />;
   }
 
   if (needsCompanySetup) {
@@ -255,7 +255,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="app-shell min-h-screen grain">
+    <div className="app-shell min-h-screen">
       {pastDue && (
         <div className="lg:pl-[260px] bg-amber-500/10 border-b border-amber-500/30 px-5 py-2.5 text-center text-sm text-amber-200" data-testid="global-past-due-banner">
           Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Helm access.

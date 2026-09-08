@@ -2332,6 +2332,9 @@ async def briefing(principal=Depends(get_principal)):
         except Exception:
             logger.exception("lazy insights generation failed for %s", c.get("workspace_id"))
     b = dict(c["briefing"])
+    # Soften legacy vibecode default copy stored on older workspaces
+    if (b.get("headline") or "").startswith("Your cockpit is ready"):
+        b["headline"] = "Start by logging your financials and adding your team."
     is_pro = workspace_is_pro(c)
     fin = await compute_financials(c["workspace_id"])
     metrics = [
@@ -2646,13 +2649,19 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
             for m in cal_snap["meetings"][:8]
         ]
     system = (
-        "You are Helm, an executive chief-of-staff AI for a startup CEO. Write a crisp morning briefing in 3-4 sentences. "
-        "Synthesis over raw data, signal over noise. Lead with what matters most, name the single most important decision, "
-        "and end with a recommendation. No fluff, no lists. "
+        "You are a clear, practical chief of staff writing a short daily note for a founder. "
+        "Write 3–4 sentences in plain English. Sound like a thoughtful human, not an AI analysis. "
+        "Lead with what matters most today, name the one decision that needs a call if there is one, "
+        "and end with a concrete next step. No lists, no bold, no confidence language. "
+        "Never say 'synthesis', 'signal', 'blind spot', 'monetization', 'execution velocity', "
+        "'worth confirming', or similar consultant/AI phrasing. "
         "Never treat missing financial figures as zero. Follow financials.instructions_for_missing_data exactly: "
         "if cash was not entered, say to add a cash balance for an accurate runway picture — do not claim they are out of runway."
     )
-    text = await helm_llm.complete(system, f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite the CEO's morning briefing.")
+    text = await helm_llm.complete(
+        system,
+        f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite today's short briefing note.",
+    )
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"briefing.ai_summary": text}})
     return {"ai_summary": text}
 

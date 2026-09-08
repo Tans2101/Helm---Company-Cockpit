@@ -41,9 +41,7 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         background-color: #09090b;
-        background-image:
-            radial-gradient(circle at 15% -10%, rgba(201, 169, 98, 0.06), transparent 45%),
-            radial-gradient(circle at 90% 110%, rgba(201, 169, 98, 0.04), transparent 40%);
+        background-image: none;
         background-attachment: fixed;
     }
     ::selection {
@@ -251,6 +249,11 @@ html[data-theme="light"] .app-shell textarea::placeholder {
 
 html[data-theme="light"] .app-shell .glass {
   background: rgba(255, 255, 255, 0.9);
+}
+
+html[data-theme="light"] ::selection {
+  background: rgba(115, 91, 31, 0.22);
+  color: #18211c;
 }
 
 @keyframes fadeUp {

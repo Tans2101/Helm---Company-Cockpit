@@ -149,7 +149,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
 
     if empty:
         telemetry = {"kpis": [], "revenue_trend": [], "funnel": [], "risks": []}
-        briefing = {"date": "Today", "greeting": "Good morning", "headline": "Your cockpit is ready. Start by logging your financials and adding your team.",
+        briefing = {"date": "Today", "greeting": "Good morning", "headline": "Start by logging your financials and adding your team.",
                     "ai_summary": None, "nrr": None, "what_changed": [], "what_to_decide": [], "what_to_delegate": []}
         decisions = []
         tasks = {"columns": [{"id": "backlog", "name": "To-Do"}, {"id": "in_progress", "name": "In Progress"}, {"id": "review", "name": "Review"}, {"id": "done", "name": "Done"}], "items": []}
