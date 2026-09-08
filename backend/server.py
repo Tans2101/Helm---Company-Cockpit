@@ -351,6 +351,46 @@ def perms_for(pack: str):
     return PACK_PERMS.get(pack, PACK_PERMS["member"])
 
 
+def _unique_ids(values) -> list:
+    """Stable unique non-empty ids for $in queries."""
+    out = []
+    seen = set()
+    for v in values or []:
+        if not v or v in seen:
+            continue
+        seen.add(v)
+        out.append(v)
+    return out
+
+
+async def _docs_by_key(coll, key: str, ids, projection: dict | None = None) -> dict:
+    """One find + $in → {key: doc}. Missing ids are absent (same as find_one → None)."""
+    uniq = _unique_ids(ids)
+    if not uniq:
+        return {}
+    proj = dict(projection) if projection is not None else {"_id": 0}
+    # Inclusion projections need the lookup key so we can build the map.
+    if proj and any(v in (1, True) for v in proj.values()):
+        proj.setdefault(key, 1)
+    rows = await coll.find({key: {"$in": uniq}}, proj).to_list(len(uniq))
+    return {r[key]: r for r in rows if r.get(key)}
+
+
+async def _users_by_ids(user_ids, projection: dict | None = None) -> dict:
+    """Batch-load users. Missing user_id → omitted (callers use .get → None)."""
+    proj = projection or {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1}
+    return await _docs_by_key(db.users, "user_id", user_ids, proj)
+
+
+def _user_card(uid, u: dict | None) -> dict:
+    return {
+        "user_id": uid,
+        "name": (u or {}).get("name"),
+        "email": (u or {}).get("email"),
+        "picture": (u or {}).get("picture"),
+    }
+
+
 async def _membership_for(principal: dict) -> dict:
     return await db.memberships.find_one(
         {"user_id": principal["user_id"], "workspace_id": principal["workspace_id"], "status": "active"},
@@ -413,7 +453,12 @@ def _find_linked_person(roster: list, membership: dict):
     return None
 
 
-async def ensure_person_for_membership(workspace_id: str, membership: dict, name: str | None = None) -> dict:
+async def ensure_person_for_membership(
+    workspace_id: str,
+    membership: dict,
+    name: str | None = None,
+    users_by_id: dict | None = None,
+) -> dict:
     """Upsert a People roster row for a Team & Access membership. Members always appear in People."""
     ws = await get_ws(workspace_id)
     people = dict(ws.get("people") or {"people": [], "avg_trust": 0})
@@ -424,7 +469,10 @@ async def ensure_person_for_membership(workspace_id: str, membership: dict, name
     user_id = membership.get("user_id")
     display_name = (name or "").strip() or None
     if not display_name and user_id:
-        u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "name": 1})
+        if users_by_id is not None:
+            u = users_by_id.get(user_id)
+        else:
+            u = await db.users.find_one({"user_id": user_id}, {"_id": 0, "name": 1})
         display_name = ((u or {}).get("name") or "").strip() or None
     if not display_name:
         display_name = _display_name_from_email(email)
@@ -475,8 +523,12 @@ async def sync_members_into_people(workspace_id: str) -> dict:
         {"workspace_id": workspace_id, "status": {"$in": ["active", "invited"]}},
         {"_id": 0},
     ).to_list(200)
+    users_by_id = await _users_by_ids(
+        [m.get("user_id") for m in mems],
+        {"_id": 0, "user_id": 1, "name": 1},
+    )
     for m in mems:
-        await ensure_person_for_membership(workspace_id, m)
+        await ensure_person_for_membership(workspace_id, m, users_by_id=users_by_id)
     return await get_ws(workspace_id)
 
 
@@ -771,12 +823,20 @@ async def _alert_recipient_emails(workspace_id: str) -> list[str]:
     ).to_list(200)
     emails = []
     seen = set()
+    missing_email_uids = [
+        m.get("user_id")
+        for m in mems
+        if (pack_of(m) in ALERT_RECIPIENT_PACKS or m.get("role") == "owner")
+        and not (m.get("email") or "").strip()
+        and m.get("user_id")
+    ]
+    users_by_id = await _users_by_ids(missing_email_uids, {"_id": 0, "user_id": 1, "email": 1})
     for m in mems:
         if pack_of(m) not in ALERT_RECIPIENT_PACKS and m.get("role") != "owner":
             continue
         email = (m.get("email") or "").strip().lower()
-        if not email:
-            u = await db.users.find_one({"user_id": m["user_id"]}, {"_id": 0, "email": 1})
+        if not email and m.get("user_id"):
+            u = users_by_id.get(m["user_id"])
             email = ((u or {}).get("email") or "").strip().lower()
         if email and email not in seen:
             seen.add(email)
@@ -1643,8 +1703,14 @@ async def logout(request: Request, response: Response):
 async def list_workspaces(principal=Depends(get_principal)):
     mems = await db.memberships.find({"user_id": principal["user_id"], "status": "active"}, {"_id": 0}).to_list(50)
     out = []
+    by_ws = await _docs_by_key(
+        db.workspaces,
+        "workspace_id",
+        [m["workspace_id"] for m in mems],
+        {"_id": 0, "name": 1, "workspace_id": 1, "plan": 1},
+    )
     for m in mems:
-        ws = await db.workspaces.find_one({"workspace_id": m["workspace_id"]}, {"_id": 0, "name": 1, "workspace_id": 1, "plan": 1})
+        ws = by_ws.get(m["workspace_id"])
         if ws:
             out.append({"workspace_id": ws["workspace_id"], "name": ws["name"], "plan": ws["plan"],
                         "role": m["role"], "active": ws["workspace_id"] == principal["workspace_id"]})
@@ -1750,9 +1816,13 @@ async def get_join_code(principal=Depends(require_pro_perm("members:invite"))):
 @api_router.get("/members")
 async def list_members(principal=Depends(get_principal)):
     mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(100)
+    users_by_id = await _users_by_ids(
+        [m.get("user_id") for m in mems],
+        {"_id": 0, "user_id": 1, "name": 1, "picture": 1},
+    )
     out = []
     for m in mems:
-        u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
+        u = users_by_id.get(m.get("user_id")) if m.get("user_id") else None
         pack = pack_of(m)
         out.append({
             "membership_id": m["membership_id"], "email": m["email"], "role": m["role"],
@@ -1862,12 +1932,16 @@ async def get_section_access(principal=Depends(get_principal)):
     section_access = sec_access.normalize_section_access(ws.get("section_access"))
     depts = await workspace_departments(principal["workspace_id"], ws)
     mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(200)
+    users_by_id = await _users_by_ids(
+        [m.get("user_id") for m in mems if pack_of(m) != "owner"],
+        {"_id": 0, "user_id": 1, "name": 1, "picture": 1},
+    )
     members_out = []
     for m in mems:
         pack = pack_of(m)
         if pack == "owner":
             continue  # Owners/CEOs always have full access — not managed here
-        u = await db.users.find_one({"user_id": m.get("user_id")}, {"_id": 0, "name": 1, "picture": 1}) if m.get("user_id") else None
+        u = users_by_id.get(m.get("user_id")) if m.get("user_id") else None
         grants = sec_access.normalize_section_grants(m.get("section_grants"))
         from_pack = sec_access.sections_for_perms(perms_for(pack))
         # Legacy free-text label still drives old section_access department grants.
@@ -1920,11 +1994,20 @@ async def update_member_grants(payload: MemberGrantsInput, principal=Depends(req
         raise HTTPException(status_code=400, detail="grants must be an object")
     ws_id = principal["workspace_id"]
     updated = 0
+    mids = [str(mid).strip() for mid, _ in payload.grants.items() if str(mid).strip()]
+    by_mid = await _docs_by_key(
+        db.memberships,
+        "membership_id",
+        mids,
+        {"_id": 0},
+    )
+    # Only keep rows in this workspace (same filter as the old find_one).
+    by_mid = {mid: m for mid, m in by_mid.items() if m.get("workspace_id") == ws_id}
     for membership_id, raw_grants in payload.grants.items():
         mid = str(membership_id).strip()
         if not mid:
             continue
-        m = await db.memberships.find_one({"membership_id": mid, "workspace_id": ws_id}, {"_id": 0})
+        m = by_mid.get(mid)
         if not m:
             continue
         if pack_of(m) == "owner":
@@ -4246,9 +4329,13 @@ async def list_department_members(department_id: str, principal=Depends(get_prin
     if not await dept_access.can_access_department(db, principal, doc):
         raise HTTPException(status_code=403, detail="You do not have access to this department")
     rows = await db.department_members.find({"department_id": department_id}, {"_id": 0}).to_list(200)
+    users_by_id = await _users_by_ids(
+        [m.get("user_id") for m in rows],
+        {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1},
+    )
     out = []
     for m in rows:
-        u = await db.users.find_one({"user_id": m["user_id"]}, {"_id": 0, "name": 1, "email": 1, "picture": 1})
+        u = users_by_id.get(m["user_id"])
         out.append({
             "user_id": m["user_id"],
             "role": m.get("role") or "member",
@@ -4385,20 +4472,21 @@ def _can_lead_production(principal: dict, department_id: str, membership: dict |
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_stage_assignees(stage: dict) -> dict:
+async def _enrich_stage_assignees(stage: dict, users: dict | None = None) -> dict:
     ids = list(stage.get("assigned_user_ids") or [])
-    assignees = []
-    for uid in ids:
-        u = await db.users.find_one({"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1})
-        assignees.append({
-            "user_id": uid,
-            "name": (u or {}).get("name"),
-            "email": (u or {}).get("email"),
-            "picture": (u or {}).get("picture"),
-        })
+    lookup = users if users is not None else await _users_by_ids(ids)
+    assignees = [_user_card(uid, lookup.get(uid)) for uid in ids]
     out = dict(stage)
     out["assignees"] = assignees
     return out
+
+
+async def _enrich_stages(rows: list) -> list:
+    ids = []
+    for r in rows:
+        ids.extend(r.get("assigned_user_ids") or [])
+    users = await _users_by_ids(ids)
+    return [await _enrich_stage_assignees(r, users) for r in rows]
 
 
 class ProductionStageCreate(BaseModel):
@@ -4426,7 +4514,7 @@ async def list_production_stages(principal=Depends(get_principal)):
         {"department_id": dept["department_id"]},
         {"_id": 0},
     ).sort("order", 1).to_list(500)
-    stages = [await _enrich_stage_assignees(r) for r in rows]
+    stages = await _enrich_stages(rows)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
@@ -4611,23 +4699,26 @@ def _can_lead_procurement(principal: dict, membership: dict | None) -> bool:
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_procurement_request(req: dict) -> dict:
+async def _enrich_procurement_request(req: dict, users: dict | None = None) -> dict:
     out = {k: v for k, v in req.items() if k != "_id"}
+    uids = [out.get("requested_by"), out.get("approved_by")]
+    lookup = users if users is not None else await _users_by_ids(uids)
     for field, label in (("requested_by", "requester"), ("approved_by", "approver")):
         uid = out.get(field)
         info = None
         if uid:
-            u = await db.users.find_one(
-                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
-            )
-            info = {
-                "user_id": uid,
-                "name": (u or {}).get("name"),
-                "email": (u or {}).get("email"),
-                "picture": (u or {}).get("picture"),
-            }
+            info = _user_card(uid, lookup.get(uid))
         out[label] = info
     return out
+
+
+async def _enrich_procurement_requests(rows: list) -> list:
+    ids = []
+    for r in rows:
+        ids.append(r.get("requested_by"))
+        ids.append(r.get("approved_by"))
+    users = await _users_by_ids(ids)
+    return [await _enrich_procurement_request(r, users) for r in rows]
 
 
 class ProcurementRequestCreate(BaseModel):
@@ -4664,7 +4755,7 @@ async def list_procurement_requests(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_procurement(principal, membership)
-    items = [await _enrich_procurement_request(r) for r in rows]
+    items = await _enrich_procurement_requests(rows)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Procurement",
@@ -4872,21 +4963,15 @@ def _can_lead_legal(principal: dict, membership: dict | None) -> bool:
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_legal_matter(matter: dict) -> dict:
+async def _enrich_legal_matter(matter: dict, users: dict | None = None) -> dict:
     out = {k: v for k, v in matter.items() if k != "_id"}
+    uids = [out.get("assigned_to"), out.get("created_by")]
+    lookup = users if users is not None else await _users_by_ids(uids)
     for field, label in (("assigned_to", "assignee"), ("created_by", "creator")):
         uid = out.get(field)
         info = None
         if uid:
-            u = await db.users.find_one(
-                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
-            )
-            info = {
-                "user_id": uid,
-                "name": (u or {}).get("name"),
-                "email": (u or {}).get("email"),
-                "picture": (u or {}).get("picture"),
-            }
+            info = _user_card(uid, lookup.get(uid))
         out[label] = info
     doc_ref = out.get("document_ref")
     if isinstance(doc_ref, dict) and doc_ref.get("storage_key"):
@@ -4901,6 +4986,15 @@ async def _enrich_legal_matter(matter: dict) -> dict:
         out["has_document"] = False
         out["document"] = None
     return out
+
+
+async def _enrich_legal_matters(rows: list) -> list:
+    ids = []
+    for r in rows:
+        ids.append(r.get("assigned_to"))
+        ids.append(r.get("created_by"))
+    users = await _users_by_ids(ids)
+    return [await _enrich_legal_matter(r, users) for r in rows]
 
 
 class LegalMatterCreate(BaseModel):
@@ -4944,7 +5038,7 @@ async def list_legal_matters(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_legal(principal, membership)
-    items = [await _enrich_legal_matter(r) for r in rows]
+    items = await _enrich_legal_matters(rows)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Legal",
@@ -5228,23 +5322,26 @@ def _can_lead_maintenance(principal: dict, membership: dict | None) -> bool:
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_maintenance_ticket(ticket: dict) -> dict:
+async def _enrich_maintenance_ticket(ticket: dict, users: dict | None = None) -> dict:
     out = {k: v for k, v in ticket.items() if k != "_id"}
+    uids = [out.get("reported_by"), out.get("assigned_technician")]
+    lookup = users if users is not None else await _users_by_ids(uids)
     for field, label in (("reported_by", "reporter"), ("assigned_technician", "technician")):
         uid = out.get(field)
         info = None
         if uid:
-            u = await db.users.find_one(
-                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
-            )
-            info = {
-                "user_id": uid,
-                "name": (u or {}).get("name"),
-                "email": (u or {}).get("email"),
-                "picture": (u or {}).get("picture"),
-            }
+            info = _user_card(uid, lookup.get(uid))
         out[label] = info
     return out
+
+
+async def _enrich_maintenance_tickets(rows: list) -> list:
+    ids = []
+    for r in rows:
+        ids.append(r.get("reported_by"))
+        ids.append(r.get("assigned_technician"))
+    users = await _users_by_ids(ids)
+    return [await _enrich_maintenance_ticket(r, users) for r in rows]
 
 
 def _sort_maintenance_tickets(rows: list) -> list:
@@ -5299,7 +5396,7 @@ async def list_maintenance_tickets(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_maintenance(principal, membership)
-    items = [await _enrich_maintenance_ticket(r) for r in rows]
+    items = await _enrich_maintenance_tickets(rows)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Engineering & Maintenance",
@@ -5501,29 +5598,32 @@ def _derive_overall_status(steps: list) -> str:
     return "in_progress"
 
 
-async def _enrich_hr_instance(inst: dict) -> dict:
+async def _enrich_hr_instance(inst: dict, users: dict | None = None) -> dict:
     out = {k: v for k, v in inst.items() if k != "_id"}
+    step_uids = [(s or {}).get("assigned_to") for s in (out.get("steps") or [])]
+    lookup = users if users is not None else await _users_by_ids(step_uids)
     steps = []
     for step in out.get("steps") or []:
         s = dict(step)
         uid = s.get("assigned_to")
         assignee = None
         if uid:
-            u = await db.users.find_one(
-                {"user_id": uid}, {"_id": 0, "name": 1, "email": 1, "picture": 1},
-            )
-            assignee = {
-                "user_id": uid,
-                "name": (u or {}).get("name"),
-                "email": (u or {}).get("email"),
-                "picture": (u or {}).get("picture"),
-            }
+            assignee = _user_card(uid, lookup.get(uid))
         s["assignee"] = assignee
         steps.append(s)
     out["steps"] = steps
     done = sum(1 for s in steps if s.get("status") == "done")
     out["progress"] = {"done": done, "total": len(steps)}
     return out
+
+
+async def _enrich_hr_instances(rows: list) -> list:
+    ids = []
+    for inst in rows:
+        for step in inst.get("steps") or []:
+            ids.append((step or {}).get("assigned_to"))
+    users = await _users_by_ids(ids)
+    return [await _enrich_hr_instance(r, users) for r in rows]
 
 
 def _sort_hr_instances(rows: list) -> list:
@@ -5618,7 +5718,7 @@ async def list_hr_onboarding(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_hr(principal, membership)
-    items = [await _enrich_hr_instance(r) for r in rows]
+    items = await _enrich_hr_instances(rows)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
@@ -6016,12 +6116,19 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
         now_iso = datetime.now(timezone.utc).isoformat()
         finance_dept_id = await dept_migrate.finance_department_id(db, ws_id)
 
+        qb_ids = _unique_ids(t.get("qb_txn_id") for t in txns)
+        existing_by_qb = {}
+        if qb_ids:
+            existing_rows = await db.financial_entries.find(
+                {"workspace_id": ws_id, "qb_txn_id": {"$in": qb_ids}},
+                {"_id": 0, "id": 1, "qb_txn_id": 1},
+            ).to_list(len(qb_ids))
+            existing_by_qb = {e["qb_txn_id"]: e for e in existing_rows if e.get("qb_txn_id")}
+
         for txn in txns:
             txn.pop("_qb_raw_type", None)
             qb_txn_id = txn.pop("qb_txn_id")
-            existing = await db.financial_entries.find_one(
-                {"workspace_id": ws_id, "qb_txn_id": qb_txn_id}, {"_id": 0, "id": 1},
-            )
+            existing = existing_by_qb.get(qb_txn_id)
             fields = {
                 "type": txn["type"],
                 "category": txn["category"],
@@ -6465,9 +6572,10 @@ async def export_account(user=Depends(get_user)):
         if m.get("status") == "active" and (m.get("role") == "owner" or pack_of(m) == "owner")
     ]
     if admin_ws:
+        by_ws = await _docs_by_key(db.workspaces, "workspace_id", admin_ws, {"_id": 0})
         workspaces = []
         for ws_id in admin_ws:
-            ws = await db.workspaces.find_one({"workspace_id": ws_id}, {"_id": 0})
+            ws = by_ws.get(ws_id)
             if ws:
                 workspaces.append(_strip_sensitive(ws))
         payload["workspaces"] = workspaces

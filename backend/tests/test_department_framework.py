@@ -13,10 +13,13 @@ os.environ.setdefault("DB_NAME", "test_departments_framework")
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import server  # noqa: E402
 import departments_catalog as catalog  # noqa: E402
 import department_access as access  # noqa: E402
+from mongo_mocks import attach_users_in_find  # noqa: E402
 
 CEO = {
     "user_id": "u_ceo",
@@ -136,6 +139,7 @@ def dept_api():
         "user_id": "u_member", "workspace_id": "ws_test", "status": "active",
     })
     mock_db.users.find_one = AsyncMock(return_value={"name": "Alex", "email": "alex@acme.com"})
+    attach_users_in_find(mock_db.users)
     # production_stages for dependent-data guard
     mock_db.production_stages = MagicMock()
     mock_db.production_stages.find_one = AsyncMock(return_value=None)

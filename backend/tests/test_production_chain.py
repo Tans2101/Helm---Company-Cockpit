@@ -13,8 +13,11 @@ os.environ.setdefault("DB_NAME", "test_production_chain")
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import server  # noqa: E402
+from mongo_mocks import attach_users_in_find  # noqa: E402
 
 CEO = {
     "user_id": "u_ceo",
@@ -122,6 +125,7 @@ def prod_api():
     mock_db.department_members.find_one = AsyncMock(side_effect=mem_find_one)
     mock_db.production_stages = stages
     mock_db.users.find_one = AsyncMock(return_value={"name": "Mem", "email": "mem@acme.com", "picture": None})
+    attach_users_in_find(mock_db.users)
 
     async def as_ceo():
         return CEO

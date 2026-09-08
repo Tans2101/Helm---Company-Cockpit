@@ -13,9 +13,12 @@ os.environ.setdefault("DB_NAME", "test_maintenance_tickets")
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import server  # noqa: E402
 import departments_catalog as catalog  # noqa: E402
+from mongo_mocks import attach_users_in_find  # noqa: E402
 
 CEO = {
     "user_id": "u_ceo",
@@ -126,6 +129,7 @@ def maint_api():
     members.find_one = AsyncMock(side_effect=member_find_one)
     users = MagicMock()
     users.find_one = AsyncMock(return_value={"name": "Mem", "email": "mem@acme.com"})
+    attach_users_in_find(users)
 
     mock_db = MagicMock()
     mock_db.departments = depts

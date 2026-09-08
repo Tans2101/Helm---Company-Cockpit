@@ -13,8 +13,11 @@ os.environ.setdefault("DB_NAME", "test_people_members_sync")
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import server  # noqa: E402
+from mongo_mocks import attach_users_in_find  # noqa: E402
 
 MOCK_PRINCIPAL = {
     "user_id": "u_owner",
@@ -152,6 +155,7 @@ def api_client():
     mock_db.memberships.delete_one = AsyncMock()
     mock_db.memberships.update_one = AsyncMock()
     mock_db.users.find_one = AsyncMock(return_value=None)
+    attach_users_in_find(mock_db.users)
     mock_db.workspaces.update_one = AsyncMock(side_effect=update_ws)
     mock_db.workspaces.find_one = AsyncMock(return_value=ws)
     mock_db.departments.find = MagicMock(return_value=empty_cursor)
@@ -342,3 +346,67 @@ def test_edit_person_does_not_write_legacy_department(api_client):
     assert stored["role"] == "Senior Engineer"
     assert stored.get("department") == "Engineering"
     assert mock_db.memberships.update_one.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_users_by_ids_one_query_omits_missing():
+    cursor = MagicMock()
+    cursor.to_list = AsyncMock(return_value=[{"user_id": "u1", "name": "A"}])
+    mock_db = MagicMock()
+    mock_db.users.find = MagicMock(return_value=cursor)
+    with patch.object(server, "db", mock_db):
+        out = await server._users_by_ids(["u1", "u_missing"], {"_id": 0, "user_id": 1, "name": 1})
+    assert out == {"u1": {"user_id": "u1", "name": "A"}}
+    mock_db.users.find.assert_called_once()
+    query = mock_db.users.find.call_args[0][0]
+    assert query["user_id"]["$in"] == ["u1", "u_missing"]
+
+
+def test_list_members_batches_user_lookups_and_missing_user(api_client):
+    client, ws, _, mock_db = api_client
+    mock_db.memberships.find.items = [
+        {
+            "membership_id": "m1", "email": "a@x.com", "role": "member", "pack": "member",
+            "status": "active", "user_id": "u1", "section_grants": [],
+        },
+        {
+            "membership_id": "m2", "email": "b@x.com", "role": "member", "pack": "member",
+            "status": "active", "user_id": "u2", "section_grants": [],
+        },
+        {
+            "membership_id": "m3", "email": "invited@x.com", "role": "member", "pack": "member",
+            "status": "invited", "user_id": None, "section_grants": [],
+        },
+        {
+            "membership_id": "m4", "email": "ghost@x.com", "role": "member", "pack": "member",
+            "status": "active", "user_id": "u_ghost", "section_grants": [],
+        },
+    ]
+
+    async def user_one(query, projection=None):
+        uid = query.get("user_id")
+        if uid == "u1":
+            return {"name": "Ada", "picture": None}
+        if uid == "u2":
+            return {"name": "Bob", "picture": "pic.png"}
+        return None
+
+    mock_db.users.find_one = AsyncMock(side_effect=user_one)
+    find_calls = {"n": 0}
+    inner = attach_users_in_find(mock_db.users).find
+
+    def counting_find(query, projection=None):
+        find_calls["n"] += 1
+        return inner(query, projection)
+
+    mock_db.users.find = counting_find
+
+    r = client.get("/api/members")
+    assert r.status_code == 200, r.text
+    assert find_calls["n"] == 1
+    by_id = {m["membership_id"]: m for m in r.json()["members"]}
+    assert by_id["m1"]["name"] == "Ada"
+    assert by_id["m2"]["name"] == "Bob"
+    assert by_id["m2"]["picture"] == "pic.png"
+    assert by_id["m3"]["name"] is None
+    assert by_id["m4"]["name"] is None
