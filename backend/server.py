@@ -1388,6 +1388,8 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         "cash_value": cash_val,
         "mrr_value": round(float(mrr_val or 0)) if mrr_known else None,
         "burn_value": round(float(burn_val or 0)) if burn_known else None,
+        "months": months,
+        "latest_month": latest,
     }
 
 
@@ -3923,13 +3925,27 @@ async def reports(principal=Depends(get_principal)):
     prior = await _apply_report_snapshot(c["workspace_id"], current)
     auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     can_write = await can_section_write(principal, "reports", "reports:write")
+    can_export_financials = await can_section_write(principal, "financials", "finance:write")
     drafts = await helm_dept_drafts.list_open_drafts(db, c["workspace_id"])
+    financial_months = list(fin.get("months") or [])
+    financial_latest_month = fin.get("latest_month")
+    if can_export_financials:
+        dept_ids = await dept_access.accessible_department_ids(
+            db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
+        )
+        if dept_ids is not None:
+            scoped = await compute_financials(c["workspace_id"], department_ids=dept_ids)
+            financial_months = list(scoped.get("months") or [])
+            financial_latest_month = scoped.get("latest_month")
     return {
         "reports": manual + auto,
         "manual_reports": manual,
         "auto_reports": auto,
         "draft_reports": drafts,
         "can_write": can_write,
+        "can_export_financials": can_export_financials,
+        "financial_months": financial_months,
+        "financial_latest_month": financial_latest_month,
         "is_pro": workspace_is_pro(c),
     }
 
@@ -4079,6 +4095,73 @@ async def weekly_pack_export_pdf(payload: WeeklyPackExportInput, principal=Depen
     return Response(
         content=pdf,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+class FinancialExportInput(BaseModel):
+    period: Optional[str] = None
+
+
+async def _assemble_financial_export_for(principal, period: Optional[str]):
+    import financial_export as fin_exp
+
+    dept_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
+    )
+    entry_filt = dept_access.apply_department_filter(
+        {"workspace_id": principal["workspace_id"]}, dept_ids,
+    )
+    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).to_list(5000)
+    ws = await get_ws(principal["workspace_id"])
+    settings = dict((ws or {}).get("financial_settings") or {})
+    try:
+        bundle = fin_exp.assemble_financial_export(entries, settings, period)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return bundle, ws
+
+
+@api_router.post("/reports/financial-export/pdf")
+async def financial_export_pdf(
+    payload: FinancialExportInput,
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    import financial_export as fin_exp
+
+    bundle, ws = await _assemble_financial_export_for(principal, payload.period)
+    try:
+        pdf = fin_exp.render_financial_pdf(bundle, workspace_name=ws.get("name") or "Company")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("financial export PDF failed")
+        raise HTTPException(status_code=500, detail="Could not build PDF")
+    filename = fin_exp.financial_pdf_filename(ws.get("name") or "Company", bundle["period"])
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.post("/reports/financial-export/xlsx")
+async def financial_export_xlsx(
+    payload: FinancialExportInput,
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    import financial_export as fin_exp
+
+    bundle, ws = await _assemble_financial_export_for(principal, payload.period)
+    try:
+        xlsx = fin_exp.render_financial_xlsx(bundle, workspace_name=ws.get("name") or "Company")
+    except Exception:
+        logger.exception("financial export Excel failed")
+        raise HTTPException(status_code=500, detail="Could not build spreadsheet")
+    filename = fin_exp.financial_xlsx_filename(ws.get("name") or "Company", bundle["period"])
+    return Response(
+        content=xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-from { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download, Check } from "lucide-react";
+import { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download } from "lucide-react";
 import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
@@ -21,10 +21,19 @@ export default function Reports() {
   const [form, setForm] = useState(emptyReport());
   const [editing, setEditing] = useState(null);
   const [publishingDraftId, setPublishingDraftId] = useState(null);
+  const [finPeriod, setFinPeriod] = useState("");
+  const [finExporting, setFinExporting] = useState(null);
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const months = data.financial_months || [];
+    const next = data.financial_latest_month || months[months.length - 1] || new Date().toISOString().slice(0, 7);
+    setFinPeriod((prev) => prev || next);
+  }, [data]);
 
   if (loading) return <LoadingScreen label="Loading reports" />;
   if (error || !data) {
@@ -42,6 +51,7 @@ export default function Reports() {
   const drafts = data.draft_reports || [];
   const canWrite = data.can_write;
   const canGeneratePack = (user?.perms || []).includes("reports:pack");
+  const canExportFinancials = Boolean(data.can_export_financials);
 
   const openAdd = () => {
     setEditing(null);
@@ -130,6 +140,37 @@ export default function Reports() {
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Could not copy — select the text instead");
+    }
+  };
+
+  const downloadFinancialExport = async (kind) => {
+    if (!finPeriod) return;
+    setFinExporting(kind);
+    try {
+      const res = await api.post(
+        `/reports/financial-export/${kind}`,
+        { period: finPeriod },
+        { responseType: "blob" },
+      );
+      const mime = kind === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const blob = new Blob([res.data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = res.headers["content-disposition"] || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.download = match?.[1] || `Helm-Financial-Export.${kind}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(kind === "pdf" ? "PDF downloaded" : "Excel downloaded");
+    } catch (e) {
+      toast.error(await blobErrorDetail(e, "Could not download export"));
+    } finally {
+      setFinExporting(null);
     }
   };
 
@@ -264,6 +305,53 @@ export default function Reports() {
             ))}
           </div>
         </>
+      )}
+
+      {canExportFinancials && (
+        <GlassCard className="p-6 fade-up border-gold/20 mb-6" data-testid="financial-export-card">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <SectionLabel>Financial Export</SectionLabel>
+              <p className="text-sm text-zinc-400 max-w-xl mt-1">
+                Income Statement and Cash Summary for a selected month — the same figures as Financials, ready for your accountant. Not a balance sheet.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
+              <label className="text-xs text-zinc-500">
+                Period
+                <input
+                  data-testid="financial-export-period"
+                  type="month"
+                  value={finPeriod}
+                  onChange={(e) => setFinPeriod(e.target.value)}
+                  className="mt-1 block rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  data-testid="financial-export-pdf-btn"
+                  type="button"
+                  onClick={() => downloadFinancialExport("pdf")}
+                  disabled={Boolean(finExporting)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {finExporting === "pdf" ? "Building PDF…" : "Download PDF"}
+                </button>
+                <button
+                  data-testid="financial-export-xlsx-btn"
+                  type="button"
+                  onClick={() => downloadFinancialExport("xlsx")}
+                  disabled={Boolean(finExporting)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {finExporting === "xlsx" ? "Building Excel…" : "Download Excel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
       )}
 
       <GlassCard glow className="p-6 fade-up border-gold/20">

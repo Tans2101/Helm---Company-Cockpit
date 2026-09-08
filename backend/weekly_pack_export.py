@@ -164,20 +164,29 @@ def markdown_to_flowables(markdown: str, styles: dict) -> list:
     return story
 
 
-def render_weekly_pack_pdf(
+_PACK_FOOTER = "Generated with Helm — share with your leadership team, investors, or accountant."
+
+
+def render_document_pdf(
     content: str,
     *,
     workspace_name: str,
+    kicker: str,
     generated_at: datetime | None = None,
+    pdf_title: str | None = None,
+    footer: str | None = None,
+    empty_message: str = "Document content is empty",
 ) -> bytes:
+    """Shared ReportLab pipeline used by Weekly Pack and financial exports."""
     body = (content or "").strip()
     if not body:
-        raise ValueError("Pack content is empty")
+        raise ValueError(empty_message)
     if len(body) > _MAX_CHARS:
         body = body[:_MAX_CHARS]
 
     when = generated_at or datetime.now(timezone.utc)
     date_label = when.strftime("%B %d, %Y").replace(" 0", " ")
+    company = workspace_name or "Company"
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -187,19 +196,35 @@ def render_weekly_pack_pdf(
         rightMargin=0.85 * inch,
         topMargin=0.75 * inch,
         bottomMargin=0.75 * inch,
-        title=f"Weekly CEO Pack — {workspace_name}",
+        title=pdf_title or f"{kicker} — {company}",
         author="Helm",
     )
     styles = _styles()
     story = [
-        Paragraph("Weekly CEO Pack", styles["kicker"]),
-        Paragraph(_inline_xml(workspace_name or "Company"), styles["title"]),
+        Paragraph(_inline_xml(kicker or "Helm"), styles["kicker"]),
+        Paragraph(_inline_xml(company), styles["title"]),
         Paragraph(_inline_xml(date_label), styles["meta"]),
         HRFlowable(width="100%", thickness=0.6, color=_GOLD, spaceAfter=12),
     ]
     story.extend(markdown_to_flowables(body, styles))
     story.append(Spacer(1, 18))
     story.append(HRFlowable(width="100%", thickness=0.4, color=HexColor("#d4d4d8"), spaceBefore=8, spaceAfter=8))
-    story.append(Paragraph("Generated with Helm — share with your leadership team, investors, or accountant.", styles["footer"]))
+    story.append(Paragraph(_inline_xml(footer or _PACK_FOOTER), styles["footer"]))
     doc.build(story)
     return buf.getvalue()
+
+
+def render_weekly_pack_pdf(
+    content: str,
+    *,
+    workspace_name: str,
+    generated_at: datetime | None = None,
+) -> bytes:
+    return render_document_pdf(
+        content,
+        workspace_name=workspace_name,
+        kicker="Weekly CEO Pack",
+        generated_at=generated_at,
+        pdf_title=f"Weekly CEO Pack — {workspace_name}",
+        empty_message="Pack content is empty",
+    )
