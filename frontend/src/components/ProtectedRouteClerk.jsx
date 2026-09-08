@@ -7,7 +7,7 @@ import WorkspaceGate from "@/pages/WorkspaceGate";
 import { LoadingScreen } from "@/components/kit";
 import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
-import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
+import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 /** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
 export default function ProtectedRouteClerk() {
@@ -23,18 +23,18 @@ export default function ProtectedRouteClerk() {
   const { clerkReady, clerkTimedOut } = useClerkReady();
   const [connectTimedOut, setConnectTimedOut] = useState(false);
 
-  const clerkActive = clerkSessionActive({
+  const clerkComplete = clerkSessionComplete({
     isSignedIn, userId, sessionId, session, sessionStatus,
   });
 
   useEffect(() => {
-    if (user || !clerkActive || sessionError) {
+    if (user || !clerkComplete || sessionError) {
       setConnectTimedOut(false);
       return undefined;
     }
     const t = setTimeout(() => setConnectTimedOut(true), 25000);
     return () => clearTimeout(t);
-  }, [user, clerkActive, sessionError]);
+  }, [user, clerkComplete, sessionError]);
 
   if (clerkTimedOut) {
     return <ClerkLoadError />;
@@ -49,7 +49,11 @@ export default function ProtectedRouteClerk() {
     return <AppLayout />;
   }
 
-  if (clerkActive) {
+  if (sessionStatus === "pending" && !user) {
+    return <Navigate to="/sign-up" replace />;
+  }
+
+  if (clerkComplete) {
     if (sessionError || connectTimedOut) {
       const message = sessionError || "Connecting your account is taking too long. Try again.";
       return (

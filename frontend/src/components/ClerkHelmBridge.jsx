@@ -5,7 +5,7 @@ import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { useAuth } from "@/context/AuthContext";
 import { api, setClerkTokenGetter } from "@/lib/api";
 import { resolveClerkToken } from "@/lib/clerkToken";
-import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
+import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,20 +40,20 @@ export default function ClerkHelmBridge() {
   const syncing = useRef(false);
 
   const clerkReady = isLoaded && sessionLoaded;
-  const clerkActive = clerkSessionActive({
+  const clerkComplete = clerkSessionComplete({
     isSignedIn, userId, sessionId, session, sessionStatus,
   });
 
   useEffect(() => {
     setClerkTokenGetter(async () => {
-      if (!clerkActive) return null;
+      if (!clerkComplete) return null;
       return resolveClerkToken(getToken, session);
     });
     return () => setClerkTokenGetter(null);
-  }, [clerkActive, getToken, session]);
+  }, [clerkComplete, getToken, session]);
 
   useEffect(() => {
-    if (!clerkReady || !clerkActive || user || syncing.current) return;
+    if (!clerkReady || !clerkComplete || user || syncing.current) return;
 
     let cancelled = false;
     syncing.current = true;
@@ -120,7 +120,7 @@ export default function ClerkHelmBridge() {
 
     return () => { cancelled = true; };
   }, [
-    clerkReady, clerkActive, user, session?.id, sessionId, userId, sessionStatus,
+    clerkReady, clerkComplete, user, session?.id, sessionId, userId, sessionStatus,
     getToken, session, setUser, setSessionError, clearSessionError, navigate,
     clerkMultiDomain, clerkPrimaryOrigin, helmCanonicalOrigin,
   ]);

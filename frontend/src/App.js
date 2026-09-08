@@ -13,10 +13,10 @@ import { clerkPostAuthUrl } from "@/lib/helmUrls";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
 import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import SignUpPage from "@/pages/SignUp";
 import { LoadingScreen } from "@/components/kit";
 
-const Login = lazy(() => import("@/pages/Login"));
-const SignUpPage = lazy(() => import("@/pages/SignUp"));
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
 const Privacy = lazy(() => import("@/pages/Privacy"));

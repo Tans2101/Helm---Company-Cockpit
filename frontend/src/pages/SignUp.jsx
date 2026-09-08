@@ -8,7 +8,7 @@ import { clerkAppearance } from "@/lib/clerkTheme";
 import { LoadingScreen } from "@/components/kit";
 import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
-import { clerkSessionActive, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
+import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY } from "@/lib/marketingCopy";
 import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
@@ -38,7 +38,7 @@ function SignUpClerk() {
   const navigate = useNavigate();
   const { clerkReady, clerkTimedOut } = useClerkReady();
 
-  const clerkActive = clerkSessionActive({ isSignedIn, userId, sessionId, session, sessionStatus });
+  const clerkComplete = clerkSessionComplete({ isSignedIn, userId, sessionId, session, sessionStatus });
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
@@ -46,8 +46,8 @@ function SignUpClerk() {
 
   useEffect(() => {
     if (!clerkReady || user) return;
-    if (clerkActive) navigate("/app", { replace: true });
-  }, [clerkReady, clerkActive, user, navigate]);
+    if (clerkComplete) navigate("/app", { replace: true });
+  }, [clerkReady, clerkComplete, user, navigate]);
 
   if (clerkTimedOut) {
     return <ClerkLoadError />;
@@ -57,7 +57,7 @@ function SignUpClerk() {
     return <LoadingScreen label="Loading sign-up" />;
   }
 
-  if (clerkActive && !user) {
+  if (clerkComplete && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8">
         <LoadingScreen label={sessionError ? "Sign-up problem" : "Finishing sign-up"} />

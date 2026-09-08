@@ -25,5 +25,20 @@ export function clerkSessionReadyForExchange({
   return Boolean(isSignedIn || userId || sessionId || session);
 }
 
+/**
+ * Fully signed-in Clerk session — not waiting on email/phone verification.
+ * Pending sessions must keep the SignUp/SignIn widgets mounted.
+ */
+export function clerkSessionComplete({
+  isSignedIn,
+  userId,
+  sessionId,
+  session,
+  sessionStatus,
+}) {
+  if (sessionStatus === "pending") return false;
+  return clerkSessionReadyForExchange({ isSignedIn, userId, sessionId, session });
+}
+
 /** Clerk useAuth options — pending sessions must count as signed in for Helm exchange. */
 export const CLERK_AUTH_OPTS = { treatPendingAsSignedOut: false };
