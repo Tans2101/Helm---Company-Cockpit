@@ -21,7 +21,7 @@ export default function DepartmentsShowcase({ compact = false }) {
           <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight max-w-2xl leading-tight">{title}</h2>
           <p className="mt-4 text-zinc-400 max-w-2xl leading-relaxed">{intro}</p>
         </motion.div>
-        <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="mt-12 grid sm:grid-cols-2 border-l border-t border-white/[0.08]">
           {items.map((dept, i) => {
             const Icon = departmentIcon(dept.icon);
             return (
@@ -32,10 +32,10 @@ export default function DepartmentsShowcase({ compact = false }) {
                 initial="hidden"
                 whileInView="show"
                 viewport={{ once: true, margin: "-60px" }}
-                className="group rounded-2xl border border-white/[0.06] bg-[#121214]/60 p-6 transition-colors hover:border-gold/25"
+                className="group border-b border-r border-white/[0.08] bg-white p-6 transition-colors hover:bg-[#f3f1ea]"
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-lg bg-gold/10 border border-gold/25 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 border border-gold/25 flex items-center justify-center shrink-0">
                     <Icon className="w-5 h-5 text-gold" aria-hidden />
                   </div>
                   <div>

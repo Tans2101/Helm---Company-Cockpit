@@ -27,7 +27,7 @@ export default function About() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white grain overflow-x-hidden">
+    <div className="marketing-light min-h-screen bg-[#f7f6f2] overflow-x-hidden">
       <MarketingNav authed={authed} onEnter={enter} active="/about" />
 
       <section className="px-6 pt-36 md:pt-44 pb-16">

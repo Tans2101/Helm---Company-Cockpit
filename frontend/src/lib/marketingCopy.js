@@ -10,7 +10,7 @@ export const FOUNDER_NOTE =
   "Helm is built and run by Tansher Dhawan, CEO & Founder — a CEO making the cockpit he wished existed for running a company of this size."
 
 export const HERO_SUB =
-  "Helm is the command center for CEOs. It pulls your company's real status in, synthesizes the signal, and tells you the one thing to decide — and who to hand the rest to.";
+  "Helm gives owners one clear view of money, people, work, and decisions. Open it in the morning, see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
   "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear daily decisions — so you run the business instead of chasing it.";
@@ -165,10 +165,10 @@ export const PRO_FEATURES = PLANS.find((p) => p.id === "starter").includes;
 export const HELM_FEATURES = PRO_FEATURES;
 
 export const PRODUCT_FACTS = [
-  { v: "3 min", l: "to your morning briefing" },
-  { v: "7", l: "departments you can turn on" },
-  { v: "AI", l: "grounded in your company data" },
-  { v: "1", l: "decision to focus on each day" },
+  { v: "3 seats", l: "included on the free plan" },
+  { v: "7", l: "department workflows included" },
+  { v: "1", l: "weekly leadership update" },
+  { v: "PDF + Excel", l: "financial exports for your accountant" },
 ];
 
 export const PROBLEMS = [
@@ -187,9 +187,9 @@ export const PROBLEMS = [
 ];
 
 export const HOW_IT_WORKS = [
-  { n: "01", title: "Pulls it in", body: "Helm connects to Google, QuickBooks, Paddle and GitHub — your team keeps their tools, you get the signal." },
-  { n: "02", title: "Synthesizes", body: "Every morning it distills finance, sales, people and risk into a three-line briefing. Signal over noise." },
-  { n: "03", title: "You decide & delegate", body: "Approve, follow up, or hand off in a click — then Helm tracks whether the outcome actually landed." },
+  { n: "01", title: "Your team updates the work", body: "Finance, sales, operations, and other departments use their own simple queues. Connect QuickBooks and Google where useful." },
+  { n: "02", title: "Helm prepares your morning view", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
+  { n: "03", title: "You decide and hand off", body: "Approve, follow up, or assign the next step. Helm keeps the owner and outcome visible so decisions do not disappear." },
 ];
 
 export const FEATURE_HIGHLIGHTS = [
@@ -278,13 +278,13 @@ export const FEATURE_MODULES = [
   {
     title: "Weekly CEO Pack",
     ceoValue: "Weekly synthesis in one click.",
-    body: "AI-generated weekly summary of financials, team pulse, and execution — ready to share with your leadership team.",
+    body: "A plain-English update covering what happened, what needs attention, and what to do next — ready for your leadership team.",
     example: "Financial snapshot, team updates, and open decisions — formatted to forward, not rebuilt in slides.",
   },
   {
     title: "Integrations",
     ceoValue: "Your team keeps their tools. You get the picture.",
-    body: "Google Calendar, Gmail, QuickBooks, GitHub, and more — signal flows into Helm automatically.",
+    body: "Connect Google Calendar and QuickBooks where they fit. Manual entry stays available when a system is not connected.",
     example: "Finance logs in QuickBooks. Sales lives in the pipeline. You see it all in the briefing.",
   },
   {
@@ -332,7 +332,7 @@ export const HOW_TO_USE_RHYTHMS = [
     icon: "calendar",
     steps: [
       { title: "Generate CEO Pack", body: "Reports → Weekly CEO Pack. One click produces a summary of financials, team pulse, and open decisions — ready to share with your leadership team." },
-      { title: "Connect integrations", body: "Integrations pulls signal from Google Calendar, Gmail, QuickBooks, and GitHub — your team keeps their tools." },
+      { title: "Connect integrations", body: "Connect Google Calendar and QuickBooks where useful. Your team can keep manual workflows for everything else." },
       { title: "Invite your leadership team", body: "Team & Access lets CFO, VP Sales, and ops contribute data while you keep the synthesized view." },
     ],
   },

@@ -21,7 +21,7 @@ export default function Features() {
   const modulesByTitle = Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m]));
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white grain overflow-x-hidden">
+    <div className="marketing-light min-h-screen bg-[#f7f6f2] overflow-x-hidden">
       <MarketingNav authed={authed} onEnter={enter} active="/features" />
 
       <section className="px-6 pt-36 md:pt-44 pb-12">

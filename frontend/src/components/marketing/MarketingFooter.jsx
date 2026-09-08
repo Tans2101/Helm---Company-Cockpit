@@ -16,25 +16,25 @@ const FOOTER_LINKS = [
 
 export default function MarketingFooter() {
   return (
-    <footer className="px-6 py-12 border-t border-white/[0.05]">
+    <footer className="px-6 py-12 border-t border-[#deddd6] bg-[#efede6]">
       <div className="mx-auto max-w-6xl flex flex-col gap-8">
-        <p className="text-center text-sm text-zinc-400 italic max-w-md mx-auto leading-relaxed">{TAGLINE}</p>
+        <p className="text-center text-sm text-[#566159] italic max-w-md mx-auto leading-relaxed">{TAGLINE}</p>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-8">
           <div className="flex flex-col gap-2">
             <MarketingLogo size="sm" showTagline />
-            <p className="text-xs text-zinc-400 max-w-xs leading-relaxed mt-1">
+            <p className="text-xs text-[#566159] max-w-xs leading-relaxed mt-1">
               The {CATEGORY.toLowerCase()} for CEOs running companies of up to 50 people — funded or not. One cockpit. Clear decisions. Quiet control.
             </p>
           </div>
-          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-zinc-400" aria-label="Footer">
+          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-[#566159]" aria-label="Footer">
             {FOOTER_LINKS.map((l) => (
-              <Link key={l.to + l.label} to={l.to} className="hover:text-white transition-colors">
+              <Link key={l.to + l.label} to={l.to} className="hover:text-[#18211c] transition-colors">
                 {l.label}
               </Link>
             ))}
           </nav>
         </div>
-        <p className="text-center text-[11px] text-zinc-400">
+        <p className="text-center text-[11px] text-[#68736b]">
           © {new Date().getFullYear()} Helm · {FOUNDER_CREDIT}
         </p>
       </div>

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function Terms() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-white grain">
+    <div className="marketing-light min-h-screen bg-[#f7f6f2]">
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors mb-10">
           <span className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center">

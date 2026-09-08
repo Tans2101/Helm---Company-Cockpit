@@ -19,12 +19,12 @@ function isActive(path, active) {
 export default function MarketingNav({ authed, onEnter, active }) {
   const [open, setOpen] = useState(false);
   const linkClass = (path) =>
-    `text-sm transition-colors ${isActive(path, active) ? "text-white" : "text-zinc-400 hover:text-white"}`;
+    `text-sm transition-colors ${isActive(path, active) ? "text-[#18211c] font-medium" : "text-[#68736b] hover:text-[#18211c]"}`;
 
   return (
-    <header className="fixed top-0 inset-x-0 z-50">
+    <header className="fixed top-0 inset-x-0 z-50 border-b border-[#deddd6] bg-[#f7f6f2]/95 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mt-4 flex items-center justify-between rounded-full border border-white/[0.06] bg-[#0d0d0f]/70 backdrop-blur-xl px-5 py-2.5">
+        <div className="flex h-16 items-center justify-between">
           <MarketingLogo size="sm" />
 
           <nav className="hidden md:flex items-center gap-6" aria-label="Main">
@@ -37,7 +37,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
 
           <div className="flex items-center gap-2">
             {!authed && (
-              <Link to="/login" className="hidden sm:inline text-sm text-zinc-400 hover:text-white transition-colors mr-1">
+              <Link to="/login" className="hidden sm:inline text-sm text-[#68736b] hover:text-[#18211c] transition-colors mr-1">
                 Sign in
               </Link>
             )}
@@ -45,14 +45,14 @@ export default function MarketingNav({ authed, onEnter, active }) {
               data-testid="nav-signin-btn"
               type="button"
               onClick={onEnter}
-              className="group hidden sm:flex items-center gap-1.5 rounded-full bg-white text-black text-sm font-medium px-4 py-1.5 transition-colors hover:bg-gold"
+              className="marketing-dark-button group hidden sm:flex items-center gap-1.5 rounded-lg bg-[#18211c] text-white text-sm font-medium px-4 py-2 transition-colors hover:bg-[#2b362f]"
             >
               {authed ? "Open cockpit" : "Get started"}
               <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
             </button>
             <button
               type="button"
-              className="md:hidden text-zinc-400 hover:text-white p-1"
+              className="md:hidden text-[#566159] hover:text-[#18211c] p-1"
               aria-label={open ? "Close menu" : "Open menu"}
               onClick={() => setOpen((o) => !o)}
             >
@@ -62,27 +62,27 @@ export default function MarketingNav({ authed, onEnter, active }) {
         </div>
 
         {open && (
-          <nav className="md:hidden mt-2 rounded-2xl border border-white/[0.08] bg-[#0d0d0f]/95 backdrop-blur-xl p-4 space-y-1" aria-label="Mobile">
+          <nav className="md:hidden mt-2 border border-[#deddd6] bg-white p-4 space-y-1 shadow-lg" aria-label="Mobile">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className={`block rounded-lg px-3 py-2.5 text-sm ${isActive(l.to, active) ? "bg-white/5 text-white" : "text-zinc-400 hover:text-white"}`}
+                className={`block rounded-lg px-3 py-2.5 text-sm ${isActive(l.to, active) ? "bg-[#f1efe8] text-[#18211c]" : "text-[#68736b] hover:text-[#18211c]"}`}
               >
                 {l.label}
               </Link>
             ))}
-            <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
+            <div className="pt-2 border-t border-[#deddd6] flex flex-col gap-2">
               {!authed && (
-                <Link to="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-zinc-400 hover:text-white">
+                <Link to="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[#68736b] hover:text-[#18211c]">
                   Sign in
                 </Link>
               )}
               <button
                 type="button"
                 onClick={() => { setOpen(false); onEnter?.(); }}
-                className="w-full rounded-lg bg-gold text-black text-sm font-medium px-3 py-2.5"
+                className="marketing-dark-button w-full rounded-lg bg-[#18211c] text-white text-sm font-medium px-3 py-2.5"
               >
                 {authed ? "Open cockpit" : "Get started"}
               </button>
