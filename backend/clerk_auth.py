@@ -86,20 +86,37 @@ def clerk_primary_origin() -> str | None:
     return None
 
 
+def _origin_registrable_host(origin: str) -> str:
+    host = (urlparse(origin or "").hostname or "").lower()
+    if host.startswith("www."):
+        return host[4:]
+    return host
+
+
 def clerk_post_auth_url() -> str | None:
-    """URL Clerk must redirect to after sign-in/sign-up (primary domain /app)."""
-    primary = clerk_primary_origin()
-    if primary:
-        return f"{primary.rstrip('/')}/app"
-    canon = primary_frontend_origin() or HELM_CANONICAL_ORIGIN
-    return f"{canon.rstrip('/')}/app" if canon else None
+    """Public Helm /app after Clerk auth.
+
+    JWKS host clerk.example.com implies https://example.com, but the live site
+    may be https://www.example.com. Use the public Helm origin when they are
+    the same registrable domain so forceRedirectUrl matches Clerk's allow list.
+    """
+    clerk_prim = clerk_primary_origin()
+    helm = primary_frontend_origin() or HELM_CANONICAL_ORIGIN
+    if clerk_prim and helm:
+        if _origin_registrable_host(clerk_prim) == _origin_registrable_host(helm):
+            return f"{helm.rstrip('/')}/app"
+        return f"{clerk_prim.rstrip('/')}/app"
+    target = helm or clerk_prim
+    return f"{target.rstrip('/')}/app" if target else None
 
 
 def clerk_multi_domain_auth() -> bool:
-    """True when Clerk primary domain differs from the public Helm site."""
+    """True when Clerk's app domain is a different site than public Helm (satellite)."""
     clerk_prim = (clerk_primary_origin() or "").rstrip("/")
     helm_prim = (primary_frontend_origin() or HELM_CANONICAL_ORIGIN or "").rstrip("/")
-    return bool(clerk_prim and helm_prim and clerk_prim != helm_prim)
+    if not clerk_prim or not helm_prim:
+        return False
+    return _origin_registrable_host(clerk_prim) != _origin_registrable_host(helm_prim)
 
 
 def derive_publishable_key_from_jwks(jwks_url: str, *, mode: str = "live") -> str | None:
@@ -896,6 +913,140 @@ async def sync_clerk_domain_proxy(primary: str) -> dict[str, Any]:
         return result
 
 
+def _clerk_redirect_url_list() -> list[str]:
+    origins = []
+    for origin in helm_frontend_origins():
+        if origin.startswith("http://localhost"):
+            origins.append(origin)
+            continue
+        if origin.startswith("https://"):
+            origins.append(origin)
+    paths = (
+        "/app",
+        "/login",
+        "/login/sso-callback",
+        "/sign-up",
+        "/sign-up/sso-callback",
+        "/sign-up/verify-email-address",
+        "/sign-up/continue",
+    )
+    urls: list[str] = []
+    seen: set[str] = set()
+    for origin in origins:
+        base = origin.rstrip("/")
+        for path in paths:
+            url = f"{base}{path}"
+            if url not in seen:
+                seen.add(url)
+                urls.append(url)
+    post = clerk_post_auth_url()
+    if post and post not in seen:
+        urls.append(post)
+    return urls
+
+
+def _redirect_url_values(payload: Any) -> set[str]:
+    rows: list[Any]
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict) and isinstance(payload.get("data"), list):
+        rows = payload["data"]
+    else:
+        rows = []
+    out: set[str] = set()
+    for row in rows:
+        if isinstance(row, dict):
+            url = str(row.get("url") or "").strip()
+            if url:
+                out.add(url)
+        elif isinstance(row, str) and row.strip():
+            out.add(row.strip())
+    return out
+
+
+async def sync_clerk_redirect_urls() -> dict[str, Any]:
+    """Register Helm paths Clerk may redirect to after sign-up / OAuth."""
+    result: dict[str, Any] = {"attempted": True, "ok": False, "added": [], "existing": []}
+    if not clerk_configured():
+        result["reason"] = "not_configured"
+        return result
+    wanted = _clerk_redirect_url_list()
+    result["wanted"] = wanted
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            headers = _bapi_headers()
+            get_r = await client.get(f"{CLERK_BAPI}/redirect_urls", headers=headers)
+            if get_r.status_code >= 400:
+                result["reason"] = f"get_{get_r.status_code}"
+                result["error"] = get_r.text[:300]
+                return result
+            have = _redirect_url_values(get_r.json() if get_r.content else {})
+            result["existing"] = sorted(have)
+            added: list[str] = []
+            errors: list[str] = []
+            for url in wanted:
+                if url in have:
+                    continue
+                post_r = await client.post(
+                    f"{CLERK_BAPI}/redirect_urls",
+                    headers=headers,
+                    json={"url": url},
+                )
+                if post_r.status_code >= 400:
+                    errors.append(f"{url}:{post_r.status_code}")
+                    continue
+                added.append(url)
+                have.add(url)
+            result["added"] = added
+            result["errors"] = errors
+            result["ok"] = not errors
+            result["reason"] = "ok" if not errors else "partial"
+            if added:
+                logger.info("Clerk redirect URLs added: %s", ", ".join(added))
+            return result
+    except Exception:
+        logger.exception("Clerk redirect URL sync failed")
+        result["reason"] = "exception"
+        return result
+
+
+_signup_policy_cache: dict[str, Any] | None = None
+_signup_policy_cache_at: float = 0.0
+
+
+async def clerk_signup_policy() -> dict[str, Any]:
+    """Password / CAPTCHA rules from Clerk FAPI (public environment)."""
+    global _signup_policy_cache, _signup_policy_cache_at
+    import time
+
+    now = time.time()
+    if _signup_policy_cache is not None and now - _signup_policy_cache_at < 600:
+        return _signup_policy_cache
+    empty = {"password_min_length": None, "captcha_enabled": None}
+    host = clerk_jwks_host()
+    if not host:
+        return empty
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(f"https://{host}/v1/environment")
+            if r.status_code != 200:
+                return empty
+            data = r.json() if r.content else {}
+            us = data.get("user_settings") or {}
+            pw = us.get("password_settings") or {}
+            sign_up = us.get("sign_up") or {}
+            out = {
+                "password_min_length": pw.get("min_length"),
+                "captcha_enabled": bool(sign_up.get("captcha_enabled")),
+            }
+            _signup_policy_cache = out
+            _signup_policy_cache_at = now
+            return out
+    except Exception:
+        logger.warning("Clerk FAPI environment fetch failed", exc_info=True)
+        return empty
+
+
 async def sync_clerk_account_portal(primary: str, app_url: str | None = None) -> dict[str, Any]:
     """Point Clerk Account Portal post-auth redirects back to Helm (not accounts.dev)."""
     target = (app_url or f"{primary.rstrip('/')}/app").rstrip("/")
@@ -1075,6 +1226,8 @@ async def sync_clerk_instance() -> dict[str, Any]:
             status["account_portal"] = portal
             status["clerk_primary_origin"] = clerk_primary_origin()
             status["clerk_post_auth_url"] = portal_url
+            redirects = await sync_clerk_redirect_urls()
+            status["redirect_urls"] = redirects
             satellite = await sync_clerk_satellite_domain(primary)
             status["satellite_domain"] = satellite
             domain_proxy = await sync_clerk_domain_proxy(primary)
@@ -1084,6 +1237,13 @@ async def sync_clerk_instance() -> dict[str, Any]:
                 status["warnings"].append(
                     "Could not auto-update Clerk redirect URLs — in Clerk Dashboard set every "
                     f"after sign-in / sign-up fallback to {redirect_hint} in Clerk Dashboard."
+                )
+            if redirects.get("reason") not in ("ok", "partial") or (
+                redirects.get("reason") == "partial" and redirects.get("errors")
+            ):
+                status["warnings"].append(
+                    "Could not register Clerk allowed redirect URLs — add "
+                    f"{portal_url} in Clerk Dashboard → Paths → Redirect URLs."
                 )
             if not satellite.get("ok"):
                 status["warnings"].append(

@@ -1765,6 +1765,7 @@ async def auth_config():
         else None
     )
     ssl_ok = await clerk_auth.clerk_custom_domain_ssl_ok() if clerk_on else None
+    signup_policy = await clerk_auth.clerk_signup_policy() if clerk_on else {}
     return {
         "demo_login": ALLOW_DEMO_LOGIN,
         "clerk_enabled": clerk_on,
@@ -1782,6 +1783,8 @@ async def auth_config():
         "clerk_custom_domain_ssl_ok": ssl_ok,
         "clerk_proxy_url": clerk_auth.clerk_proxy_url() if clerk_on else None,
         "clerk_use_proxy": (not ssl_ok) if clerk_on else None,
+        "clerk_password_min_length": signup_policy.get("password_min_length") if clerk_on else None,
+        "clerk_captcha_enabled": signup_policy.get("captcha_enabled") if clerk_on else None,
         "google_oauth": google_on,
         "provider": provider,
         "ai_ready": helm_llm.anthropic_configured(),

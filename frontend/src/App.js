@@ -10,7 +10,7 @@ import AppearanceSync from "@/components/AppearanceSync";
 import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
-import { clerkPostAuthUrl } from "@/lib/helmUrls";
+import { clerkAfterAuthRedirect } from "@/lib/clerkRedirect";
 import { persistReferralFromSearch } from "@/lib/referral";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
@@ -53,8 +53,8 @@ const Maintenance = lazy(() => import("@/pages/Maintenance"));
 const HR = lazy(() => import("@/pages/HR"));
 
 function ClerkOAuthCallback() {
-  const { postAuthUrl } = useClerkMode();
-  const redirectUrl = clerkPostAuthUrl(postAuthUrl);
+  const { postAuthUrl, clerkMultiDomain } = useClerkMode();
+  const redirectUrl = clerkAfterAuthRedirect({ clerkMultiDomain, postAuthUrl });
   return (
     <AuthenticateWithRedirectCallback
       signInForceRedirectUrl={redirectUrl}

@@ -9,7 +9,8 @@ import { LoadingScreen } from "@/components/kit";
 import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
-import { clerkPostAuthUrl, helmSignUpUrl } from "@/lib/helmUrls";
+import { clerkAfterAuthRedirect } from "@/lib/clerkRedirect";
+import { helmSignUpUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY, HERO_SUB } from "@/lib/marketingCopy";
 import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
 
@@ -29,8 +30,8 @@ export default function Login() {
 }
 
 function LoginClerk() {
-  const { postAuthUrl, helmCanonicalOrigin } = useClerkMode();
-  const redirectUrl = clerkPostAuthUrl(postAuthUrl);
+  const { postAuthUrl, helmCanonicalOrigin, clerkMultiDomain, passwordMinLength } = useClerkMode();
+  const redirectUrl = clerkAfterAuthRedirect({ clerkMultiDomain, postAuthUrl });
   const signUpPath = helmSignUpUrl(helmCanonicalOrigin);
   const [searchParams] = useSearchParams();
   const urlError = searchParams.get("error");
@@ -134,6 +135,12 @@ function LoginClerk() {
             <span className="mx-2 text-helm-muted">·</span>
             <Link to="/sign-up" className="hover:text-helm-gold transition-colors">Create account</Link>
           </p>
+
+          {passwordMinLength > 8 && (
+            <p className="mt-3 text-center text-xs text-helm-slate">
+              Email passwords must be at least {passwordMinLength} characters (Clerk setting).
+            </p>
+          )}
 
           <p className="mt-3 text-center text-xs text-helm-slate">
             Password rules are set in Clerk (not Helm). Use Google for fastest sign-in.

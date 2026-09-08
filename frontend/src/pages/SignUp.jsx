@@ -9,7 +9,8 @@ import { LoadingScreen } from "@/components/kit";
 import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
-import { clerkPostAuthUrl, helmSignInUrl } from "@/lib/helmUrls";
+import { clerkAfterAuthRedirect } from "@/lib/clerkRedirect";
+import { helmSignInUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY } from "@/lib/marketingCopy";
 import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
 
@@ -29,8 +30,8 @@ export default function SignUpPage() {
 }
 
 function SignUpClerk() {
-  const { postAuthUrl, helmCanonicalOrigin } = useClerkMode();
-  const redirectUrl = clerkPostAuthUrl(postAuthUrl);
+  const { postAuthUrl, helmCanonicalOrigin, clerkMultiDomain, passwordMinLength, captchaEnabled } = useClerkMode();
+  const redirectUrl = clerkAfterAuthRedirect({ clerkMultiDomain, postAuthUrl });
   const signInPath = helmSignInUrl(helmCanonicalOrigin);
   const { user, loading, sessionError, clearSessionError } = useAuth();
   const { isSignedIn, userId, sessionId, sessionStatus } = useClerkAuth(CLERK_AUTH_OPTS);
@@ -105,6 +106,12 @@ function SignUpClerk() {
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Create your account</h2>
           <p className="text-helm-slate text-sm mt-2">Google or email — activate Helm after sign-up.</p>
+          {passwordMinLength > 8 && (
+            <p className="mt-3 text-sm text-helm-gold/90">
+              Email sign-up needs a password of at least {passwordMinLength} characters
+              {captchaEnabled ? " (Clerk also shows a CAPTCHA)" : ""}. Google skips the password.
+            </p>
+          )}
 
           <div className="mt-6" data-testid="clerk-sign-up">
             <SignUp
@@ -115,6 +122,8 @@ function SignUpClerk() {
               oauthFlow="auto"
               forceRedirectUrl={redirectUrl}
               fallbackRedirectUrl={redirectUrl}
+              signInForceRedirectUrl={redirectUrl}
+              signInFallbackRedirectUrl={redirectUrl}
             />
           </div>
 

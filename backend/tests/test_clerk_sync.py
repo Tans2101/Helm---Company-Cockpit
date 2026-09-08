@@ -48,12 +48,18 @@ def test_clerk_primary_origin_from_jwks():
     assert clerk_auth.clerk_primary_origin() == "https://helmcontrol.online"
 
 
-def test_clerk_post_auth_url_uses_primary_domain():
-    assert clerk_auth.clerk_post_auth_url() == "https://helmcontrol.online/app"
+def test_clerk_post_auth_url_uses_public_www():
+    assert clerk_auth.clerk_post_auth_url() == "https://www.helmcontrol.online/app"
 
 
-def test_clerk_multi_domain_when_helm_differs():
+def test_clerk_apex_and_www_are_not_multi_domain():
+    assert clerk_auth.clerk_multi_domain_auth() is False
+
+
+def test_clerk_multi_domain_when_sites_differ(monkeypatch):
+    monkeypatch.setattr(clerk_auth, "clerk_primary_origin", lambda: "https://apexcoach.tech")
     assert clerk_auth.clerk_multi_domain_auth() is True
+    assert clerk_auth.clerk_post_auth_url() == "https://apexcoach.tech/app"
 
 
 def test_resolve_publishable_key_prefers_env(monkeypatch):
@@ -121,6 +127,8 @@ def test_sync_clerk_instance_patches_dev_origin():
         Resp(instance_before),
         Resp(instance_after),
         portal_resp,
+        Resp({"data": []}),  # redirect_urls
+        domains_resp,
         domains_resp,
     ])
     mock_client.patch = AsyncMock(return_value=Resp({}, 204))
@@ -140,6 +148,13 @@ def test_sync_clerk_instance_patches_dev_origin():
     assert body["development_origin"] == "https://www.helmcontrol.online"
     assert "https://helmcontrol.online" in body["allowed_origins"]
     assert body["url_based_session_syncing"] is True
+
+
+def test_clerk_redirect_url_list_includes_www_app():
+    urls = clerk_auth._clerk_redirect_url_list()
+    assert "https://www.helmcontrol.online/app" in urls
+    assert "https://www.helmcontrol.online/sign-up/sso-callback" in urls
+    assert "https://helmcontrol.online/app" in urls
 
 
 def test_sync_skipped_when_not_configured(monkeypatch):

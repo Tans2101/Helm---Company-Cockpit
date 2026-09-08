@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { fetchAuthConfig } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
-import { clerkPostAuthUrl, helmAppUrl, helmSignInUrl, helmSignUpUrl } from "@/lib/helmUrls";
+import { clerkAfterAuthRedirect } from "@/lib/clerkRedirect";
+import { helmAppUrl, helmSignInUrl, helmSignUpUrl } from "@/lib/helmUrls";
 
 function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
@@ -22,6 +23,8 @@ const ClerkModeContext = createContext({
   helmCanonicalOrigin: null,
   clerkPrimaryOrigin: null,
   clerkMultiDomain: false,
+  passwordMinLength: 0,
+  captchaEnabled: false,
 });
 
 /** Whether Clerk auth is active (from /api/auth/config, not build-time env). */
@@ -60,6 +63,8 @@ export default function ClerkProviderBootstrap({ children }) {
     clerkPrimaryOrigin: null,
     clerkMultiDomain: false,
     clerkUseProxy: false,
+    passwordMinLength: 0,
+    captchaEnabled: false,
   });
 
   useEffect(() => {
@@ -71,6 +76,8 @@ export default function ClerkProviderBootstrap({ children }) {
         if (cancelled) return;
 
         const postAuthUrl = (cfg?.clerk_post_auth_url || "").trim() || null;
+        const passwordMinLength = Number(cfg?.clerk_password_min_length) || 0;
+        const captchaEnabled = Boolean(cfg?.clerk_captcha_enabled);
 
         if (cfg?.clerk_enabled && cfg?.clerk_keys_aligned === false) {
           setState({
@@ -84,6 +91,8 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
             clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
             clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
+            passwordMinLength,
+            captchaEnabled,
           });
           return;
         }
@@ -101,6 +110,8 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
             clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
             clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
+            passwordMinLength,
+            captchaEnabled,
           });
           return;
         }
@@ -125,6 +136,8 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
             clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
             clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
+            passwordMinLength,
+            captchaEnabled,
           });
           return;
         }
@@ -139,6 +152,8 @@ export default function ClerkProviderBootstrap({ children }) {
           clerkPrimaryOrigin: cfg?.clerk_primary_origin || null,
           clerkMultiDomain: Boolean(cfg?.clerk_multi_domain),
           clerkUseProxy: Boolean(cfg?.clerk_use_proxy),
+          passwordMinLength,
+          captchaEnabled,
         });
       } catch {
         if (cancelled) return;
@@ -153,6 +168,8 @@ export default function ClerkProviderBootstrap({ children }) {
             clerkPrimaryOrigin: null,
             clerkMultiDomain: false,
             clerkUseProxy: false,
+            passwordMinLength: 0,
+            captchaEnabled: false,
           });
           return;
         }
@@ -166,6 +183,8 @@ export default function ClerkProviderBootstrap({ children }) {
           clerkPrimaryOrigin: null,
           clerkMultiDomain: false,
           clerkUseProxy: false,
+          passwordMinLength: 0,
+          captchaEnabled: false,
         });
       }
     })();
@@ -181,13 +200,18 @@ export default function ClerkProviderBootstrap({ children }) {
     helmCanonicalOrigin: state.helmCanonicalOrigin,
     clerkPrimaryOrigin: state.clerkPrimaryOrigin,
     clerkMultiDomain: state.clerkMultiDomain,
+    passwordMinLength: state.passwordMinLength || 0,
+    captchaEnabled: Boolean(state.captchaEnabled),
   };
 
   if (state.configError) {
     return <ConfigErrorScreen message={state.configError} />;
   }
 
-  const redirectUrl = clerkPostAuthUrl(state.postAuthUrl);
+  const redirectUrl = clerkAfterAuthRedirect({
+    clerkMultiDomain: state.clerkMultiDomain,
+    postAuthUrl: state.postAuthUrl,
+  });
 
   if (!state.clerkEnabled || !state.publishableKey) {
     return (
