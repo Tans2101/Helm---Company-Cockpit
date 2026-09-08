@@ -3812,6 +3812,23 @@ def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "", currency
     return f"{sign}{delta:.1f} vs last week{suffix}"
 
 
+def _plain_weekly_change(curr, prev, *, money: bool = False, unit: str = "", currency: str = "usd") -> str:
+    """Describe a weekly change in words instead of dashboard shorthand."""
+    if prev is None or curr is None:
+        return "No comparison yet"
+    try:
+        delta = float(curr) - float(prev)
+    except (TypeError, ValueError):
+        return "No comparison yet"
+    if abs(delta) < 0.05:
+        return "No change from last week"
+    amount = fmt_money(abs(delta), currency) if money else (
+        str(int(abs(delta))) if float(delta).is_integer() else f"{abs(delta):.1f}"
+    )
+    direction = "up" if delta > 0 else "down"
+    return f"{direction.capitalize()} {amount}{unit} from last week"
+
+
 def _report_metric_snapshot(fin, items, ups, headcount) -> dict:
     return {
         "taken_at": datetime.now(timezone.utc).isoformat(),
@@ -3829,86 +3846,88 @@ def _report_metric_snapshot(fin, items, ups, headcount) -> dict:
 
 
 async def _apply_report_snapshot(workspace_id: str, current: dict) -> Optional[dict]:
-    """Lazy weekly snapshot: return prior baseline for diffs; rotate when ≥7 days old or missing."""
+    """Keep current and previous weekly baselines so cards and the pack compare the same dates."""
     c = await get_ws(workspace_id)
     prior = c.get("report_snapshot")
+    previous = c.get("report_previous_snapshot")
     now = datetime.now(timezone.utc)
     taken = _parse_iso_dt((prior or {}).get("taken_at")) if prior else None
     rotate = prior is None or taken is None or (now - taken) >= timedelta(days=7)
     if rotate:
+        update = {"report_snapshot": current}
+        if prior and taken is not None:
+            update["report_previous_snapshot"] = prior
         await db.workspaces.update_one(
             {"workspace_id": workspace_id},
-            {"$set": {"report_snapshot": current}},
+            {"$set": update},
         )
-        # First store has no prior trend; subsequent weekly rotations diff against the old snap.
         return prior if (prior and taken is not None) else None
-    return prior
+    # A freshly-created first baseline has nothing honest to compare with yet.
+    return previous
 
 
 def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
     curr = _report_metric_snapshot(fin, items, ups, headcount)
     first_week = prior is None
-    period = "First week" if first_week else "Vs last week"
+    baseline_at = (prior or {}).get("taken_at")
+    baseline_dt = _parse_iso_dt(baseline_at) if baseline_at else None
+    baseline_label = baseline_dt.strftime("%b %d").replace(" 0", " ") if baseline_dt else None
+    period = "First weekly check-in" if first_week else f"Compared with {baseline_label or 'last check-in'}"
     currency = fin.get("currency") or "usd"
 
-    mrr_trend = _signed_delta(curr["mrr"], None if first_week else prior.get("mrr"), money=True, currency=currency)
-    runway_trend = _signed_delta(
-        curr["runway_months"],
-        None if first_week else prior.get("runway_months"),
-        suffix=" mo",
-    )
-    burn_trend = _signed_delta(curr["burn"], None if first_week else prior.get("burn"), money=True, currency=currency)
-    hc_trend = _signed_delta(curr["headcount"], None if first_week else prior.get("headcount"))
-    updates_trend = _signed_delta(curr["updates_count"], None if first_week else prior.get("updates_count"))
-    blocked_trend = _signed_delta(curr["blocked_count"], None if first_week else prior.get("blocked_count"))
-    shipped_trend = _signed_delta(curr["shipped_week"], None if first_week else prior.get("shipped_week"))
+    previous = prior or {}
+    mrr_change = _plain_weekly_change(curr["mrr"], previous.get("mrr"), money=True, currency=currency)
+    runway_change = _plain_weekly_change(curr["runway_months"], previous.get("runway_months"), unit=" months")
+    burn_change = _plain_weekly_change(curr["burn"], previous.get("burn"), money=True, currency=currency)
+    hc_change = _plain_weekly_change(curr["headcount"], previous.get("headcount"), unit=" people")
+    updates_change = _plain_weekly_change(curr["updates_count"], previous.get("updates_count"), unit=" updates")
+    blocked_change = _plain_weekly_change(curr["blocked_count"], previous.get("blocked_count"), unit=" blockers")
+    shipped_change = _plain_weekly_change(curr["shipped_week"], previous.get("shipped_week"), unit=" items")
 
     if first_week:
+        fin_summary = "This is your first weekly baseline. Next week Helm will explain what changed."
+        team_summary = "This is your first weekly baseline for team size, updates, and blockers."
+        exec_summary = "This is your first weekly baseline for completed and open work."
+    else:
         fin_summary = (
-            f"MRR {fin['mrr']} · runway {fin['runway_months'] if fin['runway_months'] is not None else '—'}mo · burn {fin['burn']} — "
-            f"first week — no trend yet."
+            f"Monthly recurring revenue: {mrr_change.lower()}. "
+            f"Cash runway: {runway_change.lower()}. Net burn: {burn_change.lower()}."
         )
         team_summary = (
-            f"{curr['headcount']} people · {curr['updates_count']} update(s) today · "
-            f"{curr['blocked_count']} blocked — first week — no trend yet."
+            f"Team size: {hc_change.lower()}. Updates today: {updates_change.lower()}. "
+            f"Blocked items: {blocked_change.lower()}."
         )
         exec_summary = (
-            f"{curr['shipped_week']} shipped this week · {curr['in_progress']} in progress · "
-            f"{curr['open_tasks']} open — first week — no trend yet."
-        )
-    else:
-        fin_summary = f"MRR {mrr_trend} · runway {runway_trend} · burn {burn_trend}."
-        team_summary = f"Headcount {hc_trend} · updates {updates_trend} · blocked {blocked_trend}."
-        exec_summary = (
-            f"Shipped this week {curr['shipped_week']} ({shipped_trend}) · "
-            f"{curr['in_progress']} in progress · {curr['open_tasks']} open."
+            f"Your team completed {curr['shipped_week']} items in the last seven days "
+            f"({shipped_change.lower()}). {curr['in_progress']} are in progress and "
+            f"{curr['open_tasks']} remain open."
         )
 
     return [
-        {"id": "auto_fin", "title": "Financial Snapshot", "type": "Finance", "period": period,
+        {"id": "auto_fin", "title": "Money check-in", "type": "Updated weekly", "period": period,
          "summary": fin_summary,
          "metrics": [
-             {"label": "MRR", "value": fin["mrr"] if first_week else mrr_trend},
-             {"label": "Runway", "value": (f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "—") if first_week else runway_trend},
-             {"label": "Burn", "value": fin["burn"] if first_week else burn_trend},
+             {"label": "Monthly recurring revenue", "value": fin["mrr"], "change": mrr_change},
+             {"label": "Cash runway", "value": f"{fin['runway_months']} months" if fin["runway_months"] is not None else "Not available", "change": runway_change},
+             {"label": "Net burn this month", "value": fin["burn"], "change": burn_change},
          ],
-         "source": "auto"},
-        {"id": "auto_team", "title": "Team Pulse", "type": "People", "period": period,
+         "baseline_at": baseline_at, "source": "auto"},
+        {"id": "auto_team", "title": "Team check-in", "type": "Updated weekly", "period": period,
          "summary": team_summary,
          "metrics": [
-             {"label": "Headcount", "value": str(curr["headcount"]) if first_week else hc_trend},
-             {"label": "Updates", "value": str(curr["updates_count"]) if first_week else updates_trend},
-             {"label": "Blocked", "value": str(curr["blocked_count"]) if first_week else blocked_trend},
+             {"label": "People", "value": str(curr["headcount"]), "change": hc_change},
+             {"label": "Updates today", "value": str(curr["updates_count"]), "change": updates_change},
+             {"label": "Blocked items", "value": str(curr["blocked_count"]), "change": blocked_change},
          ],
-         "source": "auto"},
-        {"id": "auto_exec", "title": "Execution", "type": "Delivery", "period": period,
+         "baseline_at": baseline_at, "source": "auto"},
+        {"id": "auto_exec", "title": "Work completed", "type": "Updated weekly", "period": period,
          "summary": exec_summary,
          "metrics": [
-             {"label": "Shipped", "value": str(curr["shipped_week"]) if first_week else f"{curr['shipped_week']} ({shipped_trend})"},
-             {"label": "In progress", "value": str(curr["in_progress"])},
-             {"label": "Open", "value": str(curr["open_tasks"])},
+             {"label": "Completed (7 days)", "value": str(curr["shipped_week"]), "change": shipped_change},
+             {"label": "In progress", "value": str(curr["in_progress"]), "change": "Current total"},
+             {"label": "Still open", "value": str(curr["open_tasks"]), "change": "Current total"},
          ],
-         "source": "auto"},
+         "baseline_at": baseline_at, "source": "auto"},
     ]
 
 
@@ -4038,15 +4057,26 @@ async def dismiss_report_draft(draft_id: str, principal=Depends(require_section(
 
 
 def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dict:
-    """Assemble LLM context: published manual reports + week-over-week trend cards."""
+    """Assemble a small, null-safe context with one unambiguous weekly baseline."""
     manual = [r for r in (c.get("manual_reports") or []) if r.get("source") != helm_dept_drafts.SOURCE]
     auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     return {
         "company": c["name"],
-        "financials": fin,
+        "financials": financials_for_synthesis(fin),
+        "financial_period": fin.get("latest_month"),
         "kpis": (c.get("telemetry") or {}).get("kpis") or [],
         "reports": [{"title": r["title"], "summary": r["summary"]} for r in manual],
-        "trends": [{"title": r["title"], "summary": r["summary"], "metrics": r.get("metrics")} for r in auto],
+        "weekly_comparison": {
+            "baseline_at": (prior or {}).get("taken_at"),
+            "note": (
+                "Financial values are current monthly figures. Their change only means the monthly figure "
+                "changed since the weekly baseline; it is not weekly revenue or weekly spend."
+            ),
+            "cards": [
+                {"title": r["title"], "summary": r["summary"], "metrics": r.get("metrics")}
+                for r in auto
+            ],
+        },
     }
 
 
@@ -4060,15 +4090,47 @@ async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     day = datetime.now(timezone.utc).date().isoformat()
     ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
     headcount = c.get("employees") or len(c["people"]["people"])
-    prior = c.get("report_snapshot")
-    taken = _parse_iso_dt((prior or {}).get("taken_at")) if prior else None
-    baseline = prior if taken else None
+    current = _report_metric_snapshot(fin, items, ups, headcount)
+    baseline = await _apply_report_snapshot(c["workspace_id"], current)
     context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
-    system = ("You are Helm, writing the Weekly CEO Pack. Produce a weekly summary in markdown that a CEO can share "
-              "with their leadership team, investors, or accountant. Use sections: "
-              "Headline, Growth, Financial Health, Risks, and This Week's Focus. Be concise, executive, and specific. "
-              "Use both manual reports and the week-over-week trend cards.")
-    text = await helm_llm.complete(system, f"Data:\n{json.dumps(context, indent=2)}\n\nWrite the Weekly CEO Pack.")
+    system = """You are a clear, practical chief of staff writing a founder's weekly update.
+
+Write in plain English for a busy owner who is not a finance or operations specialist. It must sound like a thoughtful
+human wrote it, not an AI analysis. Use only facts in the supplied data.
+
+Output this exact markdown structure:
+# Weekly update — [company name]
+One unbolded sentence stating the week in plain language.
+
+## What happened
+3–5 short bullets covering only meaningful changes.
+
+## What needs attention
+Up to 3 short bullets. State the fact, why it matters, and what is missing. If nothing needs attention, say so.
+
+## Next week
+Up to 3 specific actions, each with a clear verb.
+
+Rules:
+- Maximum 350 words. Prefer sentences under 20 words.
+- Explain financial terms on first use: write "monthly recurring revenue (MRR)" and "cash runway".
+- Never say "monetization signal", "execution velocity", "financial blind spot", "tracked period",
+  "worth confirming", "possible bottleneck", "core open question", or similar consultant/AI language.
+- Never speculate about causes, investor reactions, unpaid labor, solvency, or missing records.
+- Do not turn every fact into a warning. Report zeroes and missing data neutrally.
+- Do not repeat a fact in more than one section.
+- Do not bold whole bullets or write numbered risk rankings.
+- Do not include horizontal rules, confidence language, generic advice, or an explanation of your process.
+- Use "we" and "our" where natural. Do not call the business "the company".
+- Manual reports are founder-provided context; prioritize them when they contain specific facts.
+- Week-over-week cards are supporting data, not text to copy verbatim.
+- Financial figures are monthly. Never describe monthly burn or revenue as money earned or spent "this week".
+- Follow instructions_for_missing_data exactly. Missing cash is a data-entry gap, not evidence of financial distress.
+"""
+    text = await helm_llm.complete(
+        system,
+        f"Company data:\n{json.dumps(context, indent=2)}\n\nWrite the weekly update now.",
+    )
     return {"content": text}
 
 

@@ -2,7 +2,7 @@
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pymongo
@@ -60,8 +60,10 @@ def test_build_weekly_pack_context_includes_manual_reports_not_legacy():
     }
     ctx = _build_weekly_pack_context(c, fin, [], [], 3, prior=None)
     assert ctx["reports"] == [{"title": "Sales Recap", "summary": "Closed 3 deals this week."}]
-    assert len(ctx["trends"]) == 3
-    assert {t["title"] for t in ctx["trends"]} == {"Financial Snapshot", "Team Pulse", "Execution"}
+    assert len(ctx["weekly_comparison"]["cards"]) == 3
+    assert {t["title"] for t in ctx["weekly_comparison"]["cards"]} == {
+        "Money check-in", "Team check-in", "Work completed",
+    }
 
 
 def test_signed_delta_and_first_vs_prior_cards():
@@ -83,13 +85,52 @@ def test_signed_delta_and_first_vs_prior_cards():
     fin = {"mrr": "$10K", "arr": "$120K", "runway_months": 12, "burn": "$5K",
            "mrr_value": 10000, "burn_value": 5000}
     cards = _computed_report_cards({}, fin, items, [], 5, prior=None)
-    assert all("first week" in c["summary"] for c in cards)
+    assert all("first weekly baseline" in c["summary"] for c in cards)
+    assert cards[0]["metrics"][0] == {
+        "label": "Monthly recurring revenue",
+        "value": "$10K",
+        "change": "No comparison yet",
+    }
 
     prior = {"mrr": 9000, "runway_months": 11, "burn": 4000, "headcount": 4,
              "updates_count": 1, "blocked_count": 0, "shipped_week": 0}
     cards2 = _computed_report_cards({}, fin, items, [{"blocker": True}], 5, prior=prior)
-    assert cards2[0]["period"] == "Vs last week"
-    assert "vs last week" in cards2[0]["summary"]
+    assert cards2[0]["period"] == "Compared with last check-in"
+    assert cards2[0]["metrics"][0]["value"] == "$10K"
+    assert cards2[0]["metrics"][0]["change"] == "Up $1K from last week"
+    assert "monthly recurring revenue" in cards2[0]["summary"].lower()
+
+
+@pytest.mark.asyncio
+async def test_snapshot_rotation_keeps_previous_baseline_for_pack_and_cards():
+    from server import _apply_report_snapshot
+
+    old = {
+        "taken_at": (datetime.now(timezone.utc) - timedelta(days=8)).isoformat(),
+        "mrr": 100,
+    }
+    current = {"taken_at": datetime.now(timezone.utc).isoformat(), "mrr": 120}
+    mock_db = MagicMock()
+    mock_db.workspaces.update_one = AsyncMock()
+
+    with patch("server.get_ws", new=AsyncMock(return_value={"report_snapshot": old})), \
+         patch("server.db", mock_db):
+        rotated_baseline = await _apply_report_snapshot("ws_1", current)
+
+    update = mock_db.workspaces.update_one.await_args.args[1]["$set"]
+    assert rotated_baseline == old
+    assert update["report_snapshot"] == current
+    assert update["report_previous_snapshot"] == old
+
+    with patch(
+        "server.get_ws",
+        new=AsyncMock(return_value={
+            "report_snapshot": current,
+            "report_previous_snapshot": old,
+        }),
+    ):
+        pack_baseline = await _apply_report_snapshot("ws_1", current)
+    assert pack_baseline == old
 
 
 @pytest.mark.asyncio
@@ -128,14 +169,22 @@ async def test_weekly_pack_llm_user_prompt_contains_manual_report(mongo):
     assert result["content"] == "# ok"
     assert title in captured["user"]
     assert summary in captured["user"]
-    assert '"trends"' in captured["user"]
+    assert '"weekly_comparison"' in captured["user"]
+    assert "instructions_for_missing_data" in captured["user"]
+    assert "revenue_series" not in captured["user"]
     assert "board-ready" not in captured["system"].lower()
     assert "board" not in captured["system"].lower()
+    assert "plain English" in captured["system"]
+    assert "Maximum 350 words" in captured["system"]
+    assert "monetization signal" in captured["system"]
 
 
 class TestReportSnapshotsHTTP:
     def test_first_run_stores_snapshot_and_shows_first_week(self, owner, mongo, ws_id):
-        mongo.workspaces.update_one({"workspace_id": ws_id}, {"$unset": {"report_snapshot": ""}})
+        mongo.workspaces.update_one(
+            {"workspace_id": ws_id},
+            {"$unset": {"report_snapshot": "", "report_previous_snapshot": ""}},
+        )
         r = owner.get(f"{BASE_URL}/api/reports")
         assert r.status_code == 200
         j = r.json()
@@ -164,9 +213,13 @@ class TestReportSnapshotsHTTP:
         assert r.status_code == 200
         j = r.json()
         for card in j["auto_reports"]:
-            assert card["period"] == "Vs last week"
+            assert card["period"].startswith("Compared with ")
             assert "first week" not in card["summary"].lower()
         snap = mongo.workspaces.find_one({"workspace_id": ws_id}, {"report_snapshot": 1})["report_snapshot"]
         assert snap["taken_at"] != old["taken_at"]
         taken = datetime.fromisoformat(snap["taken_at"].replace("Z", "+00:00"))
         assert (datetime.now(timezone.utc) - taken).total_seconds() < 120
+        previous = mongo.workspaces.find_one(
+            {"workspace_id": ws_id}, {"report_previous_snapshot": 1},
+        )["report_previous_snapshot"]
+        assert previous["taken_at"] == old["taken_at"]

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { FileText, Sparkles, Plus, PenLine, Trash2, X, Copy, Download } from "lucide-react";
+import { FileText, Plus, PenLine, Trash2, X, Copy, Download, Info } from "lucide-react";
 import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
@@ -122,7 +122,7 @@ export default function Reports() {
     try {
       const { data: res } = await api.post("/reports/weekly-pack");
       setPack(res.content);
-      toast.success("Weekly CEO Pack ready");
+      toast.success("Weekly update draft ready");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not generate Weekly CEO Pack");
     } finally {
@@ -214,16 +214,15 @@ export default function Reports() {
     <div>
       <PageHeader
         title="Reports"
-        subtitle="Your manual write-ups plus week-over-week trends from financials, people, and tasks."
+        subtitle="Understand the week, add context, and create an update you can share."
         action={action}
       />
 
       <GlassCard className="p-4 mb-6 fade-up border-white/5">
         <p className="text-sm text-zinc-400 leading-relaxed">
-          <span className="text-white">How Reports works:</span> Add your own reports (sales recap, ops uptime, procurement, etc.).
-          Helm also shows <span className="text-zinc-300">week-over-week trend cards</span> — what changed since last week,
-          not a restatement of numbers you already see on Financials, Team, and Tasks.
-          The Weekly CEO Pack synthesizes your manual reports with those trends.
+          <span className="text-white">What happens here:</span> Helm checks money, team, and completed work once a week.
+          Add a short note when the numbers need context. Then generate the Weekly CEO Pack to turn it all into a
+          plain-English update for you and your leadership team.
         </p>
       </GlassCard>
 
@@ -298,10 +297,17 @@ export default function Reports() {
 
       {auto.length > 0 && (
         <>
-          <SectionLabel className="mb-3">Week-over-week trends</SectionLabel>
+          <SectionLabel className="mb-2">Your weekly check-in</SectionLabel>
+          <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+            <p className="text-sm leading-relaxed text-zinc-400">
+              Helm saves a snapshot once a week, then shows today&apos;s numbers and what changed.
+              These cards are source material for your Weekly CEO Pack—not reports you need to write or send.
+            </p>
+          </div>
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             {auto.map((r, i) => (
-              <ReportCard key={r.id} report={r} index={i} badge="Auto" />
+              <ReportCard key={r.id} report={r} index={i} badge="Updated automatically" />
             ))}
           </div>
         </>
@@ -358,12 +364,15 @@ export default function Reports() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <SectionLabel>Weekly CEO Pack</SectionLabel>
-            <p className="text-sm text-zinc-400 max-w-xl mt-1">A weekly summary ready to share with your leadership team, investors, or accountant.</p>
+            <p className="text-sm text-zinc-400 max-w-xl mt-1">
+              A one-page Friday update: what happened, what needs your attention, and what to do next.
+              Helm drafts it from the check-in above and any reports your team added.
+            </p>
           </div>
           {canGeneratePack ? (
             <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
               className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60 shrink-0">
-              <Sparkles className="w-4 h-4" />{busy ? "Generating…" : "Generate Pack"}
+              <FileText className="w-4 h-4" />{busy ? "Drafting…" : "Draft weekly update"}
             </button>
           ) : (
             <p className="text-xs text-zinc-600 shrink-0">Owner or executive access required to generate.</p>
@@ -394,7 +403,7 @@ export default function Reports() {
                 </button>
               )}
             </div>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-200 leading-relaxed">{pack}</pre>
+            <PackPreview content={pack} />
           </div>
         )}
       </GlassCard>
@@ -451,20 +460,69 @@ function ReportCard({ report: r, index, canWrite, onEdit, onDelete, badge }) {
       <div className="flex items-center gap-2 mb-3">
         <FileText className="w-4 h-4 text-gold" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{r.type} · {r.period}</span>
-        {badge && <span className={cn("text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto", badge === "Auto" ? "text-sky-400 bg-sky-400/10" : "text-gold bg-gold/10")}>{badge}</span>}
+        {badge && <span className={cn("text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto", badge === "Updated automatically" ? "text-sky-400 bg-sky-400/10" : "text-gold bg-gold/10")}>{badge}</span>}
       </div>
       <h3 className="text-white font-medium pr-8">{r.title}</h3>
       <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{r.summary}</p>
       {r.metrics?.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/5">
+        <div className="space-y-3 mt-4 pt-4 border-t border-white/5">
           {r.metrics.map((m) => (
-            <div key={m.label}>
-              <p className="font-mono text-lg text-white">{m.value}</p>
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wide">{m.label}</p>
+            <div key={m.label} className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-zinc-500">{m.label}</p>
+                {m.change && <p className="mt-0.5 text-[11px] leading-snug text-zinc-600">{m.change}</p>}
+              </div>
+              <p className="shrink-0 font-mono text-base text-white">{m.value}</p>
             </div>
           ))}
         </div>
       )}
     </GlassCard>
+  );
+}
+
+function InlineText({ children }) {
+  const parts = String(children || "").split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => (
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index} className="font-medium text-white">{part.slice(2, -2)}</strong>
+      : <span key={index}>{part}</span>
+  ));
+}
+
+function PackPreview({ content }) {
+  const lines = String(content || "").split("\n");
+  return (
+    <div className="max-w-3xl text-sm leading-relaxed text-zinc-300" data-testid="formatted-pack-content">
+      {lines.map((raw, index) => {
+        const line = raw.trim();
+        if (!line) return <div key={index} className="h-2" />;
+        if (line.startsWith("# ")) {
+          return <h2 key={index} className="mb-2 text-xl font-medium tracking-tight text-white"><InlineText>{line.slice(2)}</InlineText></h2>;
+        }
+        if (line.startsWith("## ")) {
+          return <h3 key={index} className="mb-2 mt-5 text-sm font-medium uppercase tracking-wider text-gold"><InlineText>{line.slice(3)}</InlineText></h3>;
+        }
+        if (/^[-*]\s+/.test(line)) {
+          return (
+            <div key={index} className="mb-2 flex items-start gap-2.5">
+              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+              <p><InlineText>{line.replace(/^[-*]\s+/, "")}</InlineText></p>
+            </div>
+          );
+        }
+        const numbered = line.match(/^\d+\.\s+(.*)$/);
+        if (numbered) {
+          return (
+            <div key={index} className="mb-2 flex items-start gap-2.5">
+              <span className="min-w-4 font-mono text-xs text-gold">{line.match(/^\d+/)?.[0]}.</span>
+              <p><InlineText>{numbered[1]}</InlineText></p>
+            </div>
+          );
+        }
+        if (line === "---") return <div key={index} className="my-4 border-t border-white/5" />;
+        return <p key={index} className="mb-2"><InlineText>{line}</InlineText></p>;
+      })}
+    </div>
   );
 }

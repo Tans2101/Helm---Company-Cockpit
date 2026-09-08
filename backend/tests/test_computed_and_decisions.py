@@ -180,12 +180,12 @@ class TestReportsComputed:
         j = r.json()
         assert isinstance(j["reports"], list) and len(j["reports"]) >= 3
         auto_titles = [x["title"] for x in j["auto_reports"]]
-        assert auto_titles == ["Financial Snapshot", "Team Pulse", "Execution"]
+        assert auto_titles == ["Money check-in", "Team check-in", "Work completed"]
         for card in j["auto_reports"]:
             assert card.get("source") == "auto"
             assert "summary" in card and card["summary"]
             assert "metrics" in card and len(card["metrics"]) >= 3
-            assert card.get("period") in ("First week", "Vs last week", "Live", "Today")
+            assert card.get("period") == "First weekly check-in" or card.get("period", "").startswith("Compared with ")
         assert j["can_write"] is True
 
     def test_weekly_pack_is_pro_gated_403_when_free(self, owner):
