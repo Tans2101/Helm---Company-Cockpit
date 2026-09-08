@@ -44,6 +44,7 @@ import plans as helm_plans
 import plan_usage
 import retention as helm_retention
 import product_analytics as helm_analytics
+import referrals as helm_referrals
 import departments_catalog as dept_catalog
 import department_access as dept_access
 import department_migrate as dept_migrate
@@ -1849,6 +1850,7 @@ async def switch_workspace(payload: SwitchInput, principal=Depends(get_principal
 
 class CreateWsInput(BaseModel):
     name: str
+    referral_code: Optional[str] = None
 
 
 @api_router.post("/workspaces")
@@ -1866,7 +1868,54 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     await ensure_person_for_membership(ws_id, membership, name=user.get("name"))
     await dept_migrate.migrate_workspace_sales_finance(db, ws_id)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"active_workspace_id": ws_id}})
+    try:
+        await helm_referrals.attribute_signup(
+            db,
+            referral_code=payload.referral_code,
+            new_user=user,
+            new_workspace={"workspace_id": ws_id},
+        )
+    except Exception:
+        logger.exception("referral attribution failed for workspace %s", ws_id)
     return {"ok": True, "workspace_id": ws_id}
+
+
+class ReferralInviteInput(BaseModel):
+    email: Optional[EmailStr] = None
+
+
+def _require_workspace_owner(principal: dict):
+    if principal.get("role") != "owner" and principal.get("pack") != "owner":
+        raise HTTPException(status_code=403, detail="Only the workspace owner can manage referrals")
+    return principal
+
+
+async def _referral_payload(principal: dict) -> dict:
+    code = await helm_referrals.ensure_referral_code(db, principal["user_id"])
+    return {
+        "referral_code": code,
+        "share_url": helm_referrals.share_url(_app_base_url(), code),
+        "referrals": await helm_referrals.list_referrals_for_user(db, principal["user_id"]),
+    }
+
+
+@api_router.get("/referrals")
+async def get_referrals(principal=Depends(get_principal)):
+    _require_workspace_owner(principal)
+    return await _referral_payload(principal)
+
+
+@api_router.post("/referrals")
+async def create_or_fetch_referral(payload: ReferralInviteInput | None = None, principal=Depends(get_principal)):
+    _require_workspace_owner(principal)
+    if payload and payload.email:
+        await helm_referrals.record_sent_invite(
+            db,
+            referrer_user_id=principal["user_id"],
+            referrer_workspace_id=principal["workspace_id"],
+            referred_email=str(payload.email),
+        )
+    return await _referral_payload(principal)
 
 
 class JoinInput(BaseModel):
@@ -6618,6 +6667,24 @@ def _paddle_trial_fields(data: dict, status: str, existing: dict | None = None) 
     return out
 
 
+async def _maybe_mark_referral_converted(workspace_id: str | None, subscription_status: str | None):
+    """Flip referral status to converted when a referred company starts paying."""
+    if not workspace_id:
+        return
+    ws = await db.workspaces.find_one(
+        {"workspace_id": workspace_id},
+        {"_id": 0, "workspace_id": 1, "plan": 1, "referred_by": 1, "referral_id": 1, "subscription_status": 1},
+    )
+    if not ws:
+        return
+    if not helm_referrals.should_mark_converted(subscription_status or ws.get("subscription_status"), ws.get("plan")):
+        return
+    try:
+        await helm_referrals.mark_referral_converted(db, ws)
+    except Exception:
+        logger.exception("referral conversion update failed for %s", workspace_id)
+
+
 async def _paddle_provision(event, status: str = "active"):
     data = event.get("data") or {}
     custom = data.get("custom_data") or {}
@@ -6653,6 +6720,7 @@ async def _paddle_provision(event, status: str = "active"):
                 db, prev.get("workspace_id"), user_id,
                 prev.get("subscription_status"), status, prev.get("plan"),
             )
+            await _maybe_mark_referral_converted(prev.get("workspace_id"), status)
         return
 
     intent = await db.paddle_intents.find_one({"_id": nonce})
@@ -6688,6 +6756,7 @@ async def _paddle_provision(event, status: str = "active"):
         status,
         plan,
     )
+    await _maybe_mark_referral_converted(workspace_id, status)
 
 
 async def _paddle_downgrade(event, status: str):
@@ -7163,6 +7232,11 @@ async def _ensure_indexes():
         (db.product_events, [("event_type", 1), ("created_at", -1)], {}),
         (db.product_events, [("workspace_id", 1), ("event_type", 1)], {}),
         (db.product_events, [("event_type", 1), ("metadata.once_key", 1)], {}),
+        (db.users, [("referral_code", 1)], {"unique": True, "sparse": True}),
+        (db.referrals, [("referrer_user_id", 1), ("created_at", -1)], {}),
+        (db.referrals, [("referral_id", 1)], {"unique": True, "sparse": True}),
+        (db.referrals, [("referred_workspace_id", 1)], {"sparse": True}),
+        (db.workspaces, [("referred_by", 1)], {"sparse": True}),
     ]
     for collection, keys, opts in specs:
         try:

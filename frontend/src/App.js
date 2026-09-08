@@ -1,5 +1,5 @@
 import "@/App.css";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
@@ -10,6 +10,7 @@ import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProvider
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
 import { clerkPostAuthUrl } from "@/lib/helmUrls";
+import { persistReferralFromSearch } from "@/lib/referral";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CookieNotice from "@/components/CookieNotice";
 import Landing from "@/pages/Landing";
@@ -70,6 +71,9 @@ function ClerkOAuthCallbackGuard() {
 
 function AppRouter() {
   const location = useLocation();
+  useEffect(() => {
+    persistReferralFromSearch(location.search);
+  }, [location.search]);
   const { clerkEnabled, configLoading } = useClerkMode();
   const Protected = configLoading
     ? () => <LoadingScreen label="Loading cockpit" />

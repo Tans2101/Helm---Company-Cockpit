@@ -8,10 +8,12 @@ import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from 
 import { PACKS, packMeta, hasPerm } from "@/lib/access";
 import { formatDepartmentNames } from "@/lib/departments";
 import { cn } from "@/lib/utils";
+import InviteCeoCard from "@/components/InviteCeoCard";
 
 export default function Members() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch("/members");
+  const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canInvite = hasPerm(user, "members:invite");
   const canManageOwners = hasPerm(user, "members:manage");
   const { data: codeData } = useFetch(canInvite ? "/workspaces/join-code" : null);
@@ -261,6 +263,8 @@ export default function Members() {
               <p className="text-xs text-zinc-500 mt-2.5" data-testid="pack-desc">{packMeta(pack).label} — {packMeta(pack).desc}</p>
             </GlassCard>
           )}
+
+          {isOwner && <InviteCeoCard />}
 
           {canInvite && codeData?.join_code && (
             <GlassCard className="p-4 mb-6 fade-up flex items-center gap-3" data-testid="join-code-card">

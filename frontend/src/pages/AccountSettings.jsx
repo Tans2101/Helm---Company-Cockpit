@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
 import { PageHeader, GlassCard } from "@/components/kit";
 import DepartmentsSettings from "@/components/DepartmentsSettings";
+import InviteCeoCard from "@/components/InviteCeoCard";
 
 export default function AccountSettings() {
   const { user, logout } = useAuth();
@@ -120,9 +121,10 @@ export default function AccountSettings() {
     <div className="max-w-2xl">
       <PageHeader
         title="Account settings"
-        subtitle="Departments, data export, and account controls."
+        subtitle="Departments, referrals, data export, and account controls."
       />
 
+      {isOwner && <InviteCeoCard />}
       {isOwner && <DepartmentsSettings />}
 
       <GlassCard className="p-5 mb-4 fade-up">
