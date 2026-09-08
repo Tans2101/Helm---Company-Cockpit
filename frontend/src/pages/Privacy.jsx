@@ -27,7 +27,8 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Who we are</h2>
             <p>
-              This Privacy Policy explains how <span className="text-white">Helm Control</span> (“we”, “us”)
+              This Privacy Policy explains how <span className="text-white">Helm Control</span> (“we”, “us”),
+              operated by <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>,
               collects and uses information when you use <span className="text-white">Helm</span>, our company cockpit product.
               Contact:{" "}
               <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>.

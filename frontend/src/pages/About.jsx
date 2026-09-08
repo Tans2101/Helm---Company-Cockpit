@@ -6,7 +6,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
-  ABOUT_STORY, AUDIENCE, CATEGORY, MISSION, TAGLINE, VALUES, VISION, WHO_HELM_IS_FOR,
+  ABOUT_STORY, AUDIENCE, CATEGORY, FOUNDER_CREDIT, FOUNDER_NOTE, MISSION, TAGLINE, VALUES, VISION, WHO_HELM_IS_FOR,
 } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -53,6 +53,10 @@ export default function About() {
               <h2 className="text-2xl font-light tracking-tight">Why we built Helm</h2>
             </div>
             <p className="text-zinc-400 leading-relaxed">{ABOUT_STORY}</p>
+            <p className="mt-6 text-zinc-300 leading-relaxed" data-testid="founder-credit">
+              {FOUNDER_NOTE}
+            </p>
+            <p className="mt-3 font-mono text-xs uppercase tracking-[0.2em] text-gold">{FOUNDER_CREDIT}</p>
           </motion.div>
         </div>
       </section>

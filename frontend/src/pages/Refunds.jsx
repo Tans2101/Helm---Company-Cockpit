@@ -20,7 +20,8 @@ export default function Refunds() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Who this covers</h2>
             <p>
               This policy applies to paid Helm subscriptions sold by{" "}
-              <span className="text-white">Helm Control</span> through{" "}
+              <span className="text-white">Helm Control</span> (operated by{" "}
+              <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>) through{" "}
               <span className="text-white">Paddle</span> (merchant of record).
               Contact:{" "}
               <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>

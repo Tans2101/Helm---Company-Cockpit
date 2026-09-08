@@ -3,6 +3,11 @@
 export const TAGLINE = "Run the business. Don't chase it.";
 export const CATEGORY = "CEO Operating System";
 export const AUDIENCE = "Built for CEOs running companies of up to 50 people — funded or not.";
+export const FOUNDER_NAME = "Tansher Dhawan";
+export const FOUNDER_ROLE = "CEO & Founder";
+export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
+export const FOUNDER_NOTE =
+  "Helm is built and run by Tansher Dhawan, CEO & Founder — a CEO making the cockpit he wished existed for running a company of this size."
 
 export const HERO_SUB =
   "Helm is the command center for CEOs. It pulls your company's real status in, synthesizes the signal, and tells you the one thing to decide — and who to hand the rest to.";

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
-import { CATEGORY, TAGLINE } from "@/lib/marketingCopy";
+import { CATEGORY, FOUNDER_CREDIT, TAGLINE } from "@/lib/marketingCopy";
 
 const FOOTER_LINKS = [
   { to: "/", label: "Home" },
@@ -34,7 +34,9 @@ export default function MarketingFooter() {
             ))}
           </nav>
         </div>
-        <p className="text-center text-[11px] text-zinc-400">© {new Date().getFullYear()} Helm</p>
+        <p className="text-center text-[11px] text-zinc-400">
+          © {new Date().getFullYear()} Helm · {FOUNDER_CREDIT}
+        </p>
       </div>
     </footer>
   );

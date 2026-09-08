@@ -20,7 +20,8 @@ export default function Terms() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Agreement</h2>
             <p>
               By accessing or using <span className="text-white">Helm</span>, you agree to these Terms of Service with{" "}
-              <span className="text-white">Helm Control</span> (“we”, “us”). If you use Helm on behalf of a company,
+              <span className="text-white">Helm Control</span> (“we”, “us”), operated by{" "}
+              <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>. If you use Helm on behalf of a company,
               you represent that you have authority to bind that company.
               Contact:{" "}
               <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
