@@ -33,7 +33,7 @@ export default function Onboarding() {
           </div>
           <h3 className="mt-5 text-xl text-white tracking-tight">Explore with sample data</h3>
           <p className="mt-2 text-sm text-zinc-500 leading-relaxed flex-1">
-            Load "Northwind Robotics" — a realistic Series A company with financials, decisions, tasks and a team. See exactly how Helm works in 10 seconds.
+            Load "Northwind Robotics" — a realistic company with financials, decisions, tasks and a team. See exactly how Helm works in 10 seconds.
           </p>
           <ul className="mt-4 space-y-1.5">
             {["6 months of financials", "Live briefing & decisions", "Full team & telemetry"].map((f) => (

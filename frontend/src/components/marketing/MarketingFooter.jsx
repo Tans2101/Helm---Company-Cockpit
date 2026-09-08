@@ -23,7 +23,7 @@ export default function MarketingFooter() {
           <div className="flex flex-col gap-2">
             <MarketingLogo size="sm" showTagline />
             <p className="text-xs text-zinc-400 max-w-xs leading-relaxed mt-1">
-              The {CATEGORY.toLowerCase()} for seed & Series A CEOs. One cockpit. Clear decisions. Quiet control.
+              The {CATEGORY.toLowerCase()} for companies of up to 50 people. One cockpit. Clear decisions. Quiet control.
             </p>
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-zinc-400" aria-label="Footer">

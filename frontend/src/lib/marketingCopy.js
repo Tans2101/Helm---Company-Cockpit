@@ -2,7 +2,7 @@
 
 export const TAGLINE = "Run the business. Don't chase it.";
 export const CATEGORY = "CEO Operating System";
-export const AUDIENCE = "Built for seed & Series A CEOs running teams of 8–40.";
+export const AUDIENCE = "Built for all companies of up to 50 people.";
 
 export const HERO_SUB =
   "Helm is the command center for CEOs. It pulls your company's real status in, synthesizes the signal, and tells you the one thing to decide — and who to hand the rest to.";
@@ -14,7 +14,7 @@ export const VISION =
   "A world where running a company doesn't mean drowning in dashboards — leaders see what matters, decide fast, and delegate with confidence.";
 
 export const ABOUT_STORY =
-  "Helm started from a simple frustration: CEOs at seed and Series A stage spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, Jira, email — and still walk into standup without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
+  "Helm started from a simple frustration: CEOs of companies up to 50 people spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, Jira, email — and still walk into standup without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
 
 export const VALUES = [
   {
@@ -33,7 +33,7 @@ export const VALUES = [
 
 export const WHO_HELM_IS_FOR = [
   {
-    title: "Seed & Series A CEOs",
+    title: "CEOs of companies up to 50",
     body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you board-ready visibility without hiring a chief of staff.",
   },
   {
@@ -41,8 +41,8 @@ export const WHO_HELM_IS_FOR = [
     body: "You wear every hat. Helm separates what only you can decide from what your team should run — and tracks whether it landed.",
   },
   {
-    title: "Leadership teams of 8–40",
-    body: "Finance, sales, ops, and engineering each keep their tools. You get one synthesized view every morning.",
+    title: "Leadership teams of every size",
+    body: "From a handful of people to fifty — finance, sales, ops, and engineering keep their tools. You get one synthesized view every morning.",
   },
 ];
 
