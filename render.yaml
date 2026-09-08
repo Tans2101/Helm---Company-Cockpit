@@ -123,6 +123,8 @@ services:
         sync: false
       - key: INTERNAL_CRON_SECRET
         sync: false
+      - key: ANALYTICS_ADMIN_EMAIL
+        value: tansherdhawan@gmail.com
 
   - type: cron
     name: helm-retention-checks

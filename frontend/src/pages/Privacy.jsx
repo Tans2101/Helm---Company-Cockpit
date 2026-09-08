@@ -137,7 +137,10 @@ export default function Privacy() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Analytics &amp; tracking</h2>
             <p>
               Helm uses Vercel Web Analytics to count visitors and page views. It is cookieless and does not
-              identify you personally. We do not use Google Analytics, session-recording, or advertising trackers.
+              identify you personally. We also record first-party product usage events (for example which
+              departments you enable) in our own MongoDB so we can improve Helm. That usage data stays in
+              Helm&apos;s database and is not sent to Google Analytics or other advertising or analytics vendors.
+              We do not use Google Analytics, session-recording, or advertising trackers.
             </p>
           </section>
 

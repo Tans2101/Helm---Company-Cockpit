@@ -43,6 +43,7 @@ import access_sections as sec_access
 import plans as helm_plans
 import plan_usage
 import retention as helm_retention
+import product_analytics as helm_analytics
 import departments_catalog as dept_catalog
 import department_access as dept_access
 import department_migrate as dept_migrate
@@ -205,6 +206,8 @@ PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" el
 CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
 SETUP_SECRET = os.environ.get("SETUP_SECRET", "").strip()
 INTERNAL_CRON_SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or "").strip() or SETUP_SECRET
+# First-party analytics summary — only this email (comma-separated), not workspace admins.
+ANALYTICS_ADMIN_EMAIL = (os.environ.get("ANALYTICS_ADMIN_EMAIL") or "tansherdhawan@gmail.com").strip()
 
 _INSECURE_SESSION_SECRETS = frozenset({
     "change-me-in-production",
@@ -1061,6 +1064,26 @@ async def get_principal(request: Request):
         "picture": user.get("picture"), "workspace_id": membership["workspace_id"],
         "role": membership["role"], "pack": pack_of(membership),
     }
+
+
+def _is_analytics_admin(principal: dict | None) -> bool:
+    allowed = {
+        _normalize_email(part)
+        for part in ANALYTICS_ADMIN_EMAIL.split(",")
+        if part.strip()
+    }
+    return bool(allowed) and _normalize_email((principal or {}).get("email") or "") in allowed
+
+
+async def require_analytics_admin(principal=Depends(get_principal)):
+    """Helm operator only — not a workspace owner/admin permission."""
+    if not _is_analytics_admin(principal):
+        raise HTTPException(status_code=403, detail="Not available")
+    return principal
+
+
+async def _product_event(workspace_id, user_id, event_type: str, metadata: dict | None = None) -> None:
+    await helm_analytics.log_event(db, workspace_id, user_id, event_type, metadata)
 
 
 def require(action: str):
@@ -2818,6 +2841,14 @@ async def onboarding_checklist(principal=Depends(get_principal)):
         {"id": "invite", "label": "Invite a teammate", "done": members_n > 1, "route": "/app/members"},
         {"id": "update", "label": "Post your first daily update", "done": has_update, "route": "/app/me"},
     ]
+    for step in steps:
+        if step["done"]:
+            await helm_analytics.log_event_once(
+                db, ws, principal["user_id"],
+                helm_analytics.EVENT_ONBOARDING_STEP,
+                {"step": step["id"]},
+                once_key=step["id"],
+            )
     return {"steps": steps, "complete": all(s["done"] for s in steps)}
 
 
@@ -2888,6 +2919,10 @@ async def list_deals(
     metrics = await _deal_metrics_for_workspace(ws, department_ids=dept_ids)
     cursor = next_cursor(deals, "updated_at", page_limit, id_field="id")
     currency = await _workspace_currency(ws)
+    await _product_event(
+        ws, principal["user_id"], helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
+        {"department": dept_catalog.TYPE_SALES},
+    )
     return {
         "items": deals,
         "deals": deals,
@@ -3068,6 +3103,11 @@ async def financials(principal=Depends(get_principal)):
         {"workspace_id": principal["workspace_id"]}, dept_ids,
     )
     entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
+    await _product_event(
+        principal["workspace_id"], principal["user_id"],
+        helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
+        {"department": dept_catalog.TYPE_ACCOUNTING_FINANCE},
+    )
     return {**fin, "entries": entries,
             "can_write": await can_section_write(principal, "financials", "finance:write"),
             "can_manage": "integrations:manage" in perms_for(principal["pack"])}
@@ -3183,6 +3223,11 @@ async def extract_financial_document_route(
             await log_activity(
                 principal, "financials", "document.extract",
                 f"Extracted bill data · {doc['filename']}",
+            )
+            await _product_event(
+                principal["workspace_id"], principal["user_id"],
+                helm_analytics.EVENT_AI_EXTRACT,
+                {"document_id": document_id},
             )
         return extracted
     except ValueError as exc:
@@ -4430,6 +4475,11 @@ async def enable_department(payload: EnableDepartmentInput, principal=Depends(ge
         await _ensure_hr_onboarding_template(
             principal["workspace_id"], department_id,
         )
+    await _product_event(
+        principal["workspace_id"], principal["user_id"],
+        helm_analytics.EVENT_DEPARTMENT_ENABLED,
+        {"department": dtype, "department_id": department_id},
+    )
     return {
         "ok": True,
         "department": {
@@ -4565,6 +4615,11 @@ async def get_department_by_type(dept_type: str, principal=Depends(get_principal
     if not await dept_access.can_access_department(db, principal, doc):
         raise HTTPException(status_code=403, detail="You do not have access to this department")
     membership = await dept_access.get_department_membership(db, doc["department_id"], principal["user_id"])
+    await _product_event(
+        principal["workspace_id"], principal["user_id"],
+        helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
+        {"department": dtype},
+    )
     return {
         "department_id": doc["department_id"],
         "type": doc["type"],
@@ -6017,6 +6072,9 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
                 ),
             )
         await doc_rate_limit.record_ask_helm_event(db, c["workspace_id"])
+    await _product_event(
+        c["workspace_id"], principal["user_id"], helm_analytics.EVENT_ASK_HELM, {},
+    )
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     fin = await compute_financials(c["workspace_id"])
@@ -6574,6 +6632,10 @@ async def _paddle_provision(event, status: str = "active"):
     if not (nonce and workspace_id and user_id):
         if not sub_id or status not in ("active", "trialing"):
             return
+        prev = await db.workspaces.find_one(
+            {"paddle_subscription_id": sub_id},
+            {"_id": 0, "workspace_id": 1, "subscription_status": 1, "plan": 1},
+        )
         recovery = {
             "subscription_status": status,
             "billing_status": status,
@@ -6586,6 +6648,11 @@ async def _paddle_provision(event, status: str = "active"):
             {"paddle_subscription_id": sub_id},
             {"$set": recovery, "$unset": {"canceled_at": ""}},
         )
+        if prev:
+            await helm_analytics.emit_billing_funnel(
+                db, prev.get("workspace_id"), user_id,
+                prev.get("subscription_status"), status, prev.get("plan"),
+            )
         return
 
     intent = await db.paddle_intents.find_one({"_id": nonce})
@@ -6606,7 +6673,7 @@ async def _paddle_provision(event, status: str = "active"):
     # Anchor usage periods on first provision only
     existing = await db.workspaces.find_one(
         {"workspace_id": workspace_id},
-        {"_id": 0, "billing_period_start": 1, "trial_ends_at": 1},
+        {"_id": 0, "billing_period_start": 1, "trial_ends_at": 1, "subscription_status": 1},
     )
     if not (existing or {}).get("billing_period_start"):
         set_fields["billing_period_start"] = now_iso
@@ -6615,6 +6682,12 @@ async def _paddle_provision(event, status: str = "active"):
         "canceled_at": "", "pending_plan": "", "pending_plan_effective_at": "",
     }})
     await db.paddle_intents.update_one({"_id": nonce}, {"$set": {"used": True}})
+    await helm_analytics.emit_billing_funnel(
+        db, workspace_id, user_id,
+        (existing or {}).get("subscription_status"),
+        status,
+        plan,
+    )
 
 
 async def _paddle_downgrade(event, status: str):
@@ -6624,6 +6697,9 @@ async def _paddle_downgrade(event, status: str):
     if not filt:
         return
     now = event.get("occurred_at") or datetime.now(timezone.utc).isoformat()
+    prev = await db.workspaces.find_one(
+        filt, {"_id": 0, "workspace_id": 1, "subscription_status": 1, "plan": 1},
+    )
     if status in ("canceled", "cancelled"):
         await db.workspaces.update_one(filt, {
             "$set": {
@@ -6636,6 +6712,11 @@ async def _paddle_downgrade(event, status: str):
         await db.workspaces.update_one(filt, {
             "$set": {"subscription_status": status, "billing_status": status, "paddle_last_event_at": now},
         })
+    if prev:
+        await helm_analytics.emit_billing_funnel(
+            db, prev.get("workspace_id"), None,
+            prev.get("subscription_status"), status, prev.get("plan"),
+        )
 
 
 @api_router.post("/payments/paddle/portal")
@@ -6971,6 +7052,12 @@ async def internal_run_retention_checks(request: Request):
     )
 
 
+@api_router.get("/internal/analytics-summary")
+async def internal_analytics_summary(principal=Depends(require_analytics_admin)):
+    """Operator-only first-party usage aggregates. Not a customer feature."""
+    return await helm_analytics.analytics_summary(db)
+
+
 @api_router.get("/health")
 async def health():
     """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
@@ -7073,6 +7160,9 @@ async def _ensure_indexes():
         (db.hr_onboarding_instances, [("id", 1)], {"unique": True}),
         (db.hr_onboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
         (db.hr_onboarding_instances, [("workspace_id", 1)], {}),
+        (db.product_events, [("event_type", 1), ("created_at", -1)], {}),
+        (db.product_events, [("workspace_id", 1), ("event_type", 1)], {}),
+        (db.product_events, [("event_type", 1), ("metadata.once_key", 1)], {}),
     ]
     for collection, keys, opts in specs:
         try:
