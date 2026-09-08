@@ -136,8 +136,8 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Analytics &amp; tracking</h2>
             <p>
-              Helm does not currently integrate Google Analytics or any other web analytics or tracking tool.
-              We do not run session-recording or advertising trackers in the product today.
+              Helm uses Vercel Web Analytics to count visitors and page views. It is cookieless and does not
+              identify you personally. We do not use Google Analytics, session-recording, or advertising trackers.
             </p>
           </section>
 
@@ -150,6 +150,7 @@ export default function Privacy() {
               <li><span className="text-white">Anthropic</span> — processes uploaded documents and Ask Helm messages</li>
               <li><span className="text-white">Paddle</span> — payment processing</li>
               <li><span className="text-white">Resend</span> — transactional email</li>
+              <li><span className="text-white">Vercel</span> — hosting and cookieless web analytics (page views)</li>
               <li><span className="text-white">QuickBooks (Intuit)</span> — only for users who connect it</li>
             </ul>
           </section>

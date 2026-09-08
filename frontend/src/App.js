@@ -1,5 +1,6 @@
 import "@/App.css";
 import { lazy, Suspense } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
@@ -167,6 +168,7 @@ function App() {
       <ClerkProviderBootstrap>
         <AuthShell />
       </ClerkProviderBootstrap>
+      <Analytics />
     </div>
   );
 }
