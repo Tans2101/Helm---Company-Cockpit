@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   Sun, Zap, Calendar, Check, ChevronRight, LayoutDashboard,
   GitBranch, MessageSquareText, DollarSign, Briefcase, Plug,
-  BookOpen,
+  BookOpen, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {

@@ -6,6 +6,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
+import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 
 const ease = [0.16, 1, 0.3, 1];
 const fade = {
@@ -33,7 +34,8 @@ export default function Features() {
           </motion.h1>
           <motion.p variants={fade} initial="hidden" animate="show" custom={2}
             className="mt-6 text-lg text-zinc-400 leading-relaxed">
-            Twelve modules. One CEO view. Each designed to answer a specific leadership question —
+            Briefing, decisions, departments, and the rest of the cockpit —
+            each designed to answer a specific leadership question:
             what changed, what to decide, what to delegate, and whether it landed.
           </motion.p>
         </div>
@@ -81,6 +83,8 @@ export default function Features() {
           </div>
         </section>
       ))}
+
+      <DepartmentsShowcase compact />
 
       <section className="px-6 py-20 border-t border-white/[0.05]">
         <div className="mx-auto max-w-3xl text-center">

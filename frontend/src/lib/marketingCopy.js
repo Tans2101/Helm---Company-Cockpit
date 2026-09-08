@@ -2,7 +2,7 @@
 
 export const TAGLINE = "Run the business. Don't chase it.";
 export const CATEGORY = "CEO Operating System";
-export const AUDIENCE = "Built for all companies of up to 50 people.";
+export const AUDIENCE = "Built for CEOs running companies of up to 50 people — funded or not.";
 
 export const HERO_SUB =
   "Helm is the command center for CEOs. It pulls your company's real status in, synthesizes the signal, and tells you the one thing to decide — and who to hand the rest to.";
@@ -14,7 +14,7 @@ export const VISION =
   "A world where running a company doesn't mean drowning in dashboards — leaders see what matters, decide fast, and delegate with confidence.";
 
 export const ABOUT_STORY =
-  "Helm started from a simple frustration: CEOs of companies up to 50 people spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, Jira, email — and still walk into standup without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
+  "Helm started from a simple frustration: CEOs running companies of up to 50 people spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, the shop floor, email — and still walk into the morning meeting without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
 
 export const VALUES = [
   {
@@ -27,22 +27,22 @@ export const VALUES = [
   },
   {
     title: "Honest synthesis",
-    body: "AI recommendations cite your real numbers — runway, pipeline, team load — not generic advice. When data is missing, Helm says so.",
+    body: "AI recommendations cite your real numbers — cash, pipeline, team load — not generic advice. When data is missing, Helm says so.",
   },
 ];
 
 export const WHO_HELM_IS_FOR = [
   {
     title: "CEOs of companies up to 50",
-    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you board-ready visibility without hiring a chief of staff.",
+    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you a clear view to share with your leadership team — without hiring a chief of staff.",
   },
   {
-    title: "Founder-operators",
-    body: "You wear every hat. Helm separates what only you can decide from what your team should run — and tracks whether it landed.",
+    title: "Owner-operators & traditional businesses",
+    body: "Manufacturing, services, agencies, family companies — funded or not. Helm is a cockpit for running the operation, not a tool only venture-backed startups use.",
   },
   {
-    title: "Leadership teams of every size",
-    body: "From a handful of people to fifty — finance, sales, ops, and engineering keep their tools. You get one synthesized view every morning.",
+    title: "Leadership teams",
+    body: "From a handful of people to fifty — finance, sales, ops, and production keep their lanes. You get one synthesized view every morning.",
   },
 ];
 
@@ -50,11 +50,11 @@ export const CEO_DAY = [
   { time: "7:30 AM", title: "Morning Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data." },
   { time: "9:00 AM", title: "Decision Center", body: "Six pending approvals ranked by impact. Helm recommends which to tackle first and why." },
   { time: "12:00 PM", title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
-  { time: "Friday", title: "Weekly CEO Pack", body: "Board-ready summary of growth, burn, team pulse, and open decisions — generated in one click." },
+  { time: "Friday", title: "Weekly CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free is for solo founders — manual entries and the dashboard/briefing. Paid plans add AI upload, team seats, Ask Helm, and integrations." },
+  { q: "Is there a free plan?", a: "Yes. Free is for a single operator — manual entries and the dashboard/briefing. Paid plans add AI upload, team seats, Ask Helm, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
   { q: "Can my leadership team use Helm?", a: "Yes on paid plans. Starter supports up to 3 members, Growth up to 10, Business up to 25 — with role-based access packs." },
   { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
@@ -71,13 +71,13 @@ export const FEATURE_CATEGORIES = [
   {
     id: "finance",
     label: "Finance & growth",
-    intro: "Runway, revenue, and pipeline — always current for your next board question.",
+    intro: "Revenue, cash, and pipeline — always current when someone asks.",
     modules: ["Pipeline & Financials", "Telemetry"],
   },
   {
     id: "people",
     label: "People & operations",
-    intro: "Team access and integrations — everyone contributes, you stay in control.",
+    intro: "Team access, department lanes, and integrations — everyone contributes, you stay in control.",
     modules: ["Integrations", "Team & Access"],
   },
 ];
@@ -88,7 +88,7 @@ export const PLANS = [
     id: "free",
     label: "Free",
     price: 0,
-    for: "Solo founders trying it out",
+    for: "Solo operators trying it out",
     seats: 1,
     trialDays: 0,
     highlighted: false,
@@ -160,7 +160,7 @@ export const HELM_FEATURES = PRO_FEATURES;
 
 export const PRODUCT_FACTS = [
   { v: "3 min", l: "to your morning briefing" },
-  { v: "12", l: "modules in one cockpit" },
+  { v: "7", l: "departments you can turn on" },
   { v: "AI", l: "grounded in your company data" },
   { v: "1", l: "decision to focus on each day" },
 ];
@@ -168,11 +168,11 @@ export const PRODUCT_FACTS = [
 export const PROBLEMS = [
   {
     title: "The answer is scattered",
-    body: "What needs your attention lives across Slack, Jira, Salesforce, the finance sheet and six dashboards. Nobody has the whole picture — least of all you.",
+    body: "What needs your attention lives across Slack, the CRM, the finance sheet, the floor, and six dashboards. Nobody has the whole picture — least of all you.",
   },
   {
     title: "You react instead of lead",
-    body: "By the time a problem reaches you, it's already a fire. Runway, churn and overload creep up silently between board meetings.",
+    body: "By the time a problem reaches you, it's already a fire. Cash, delivery, and overload creep up silently between check-ins.",
   },
   {
     title: "Dashboards ≠ decisions",
@@ -189,9 +189,54 @@ export const HOW_IT_WORKS = [
 export const FEATURE_HIGHLIGHTS = [
   { title: "Morning Briefing", body: "What changed, what to decide, what to delegate — before your first meeting." },
   { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus outcome checks." },
-  { title: "Runway & Burn", body: "Revenue, burn and scenario planning — always know how long you have to win." },
+  { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking — always know where the money stands." },
   { title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },
 ];
+
+/** Department lanes — enable only what the company actually uses. */
+export const DEPARTMENTS_SECTION = {
+  label: "Departments",
+  title: "Turn on only the departments your company actually needs.",
+  intro:
+    "Give each team its own lane — Procurement, Production, Accounting & Finance, Sales, Legal, HR, Engineering & Maintenance — while you see everything from the top. Disable what you don't use.",
+  items: [
+    {
+      name: "Procurement",
+      icon: "package",
+      body: "A purchase request queue: requested, approved, ordered, delivered — each request moves on its own.",
+    },
+    {
+      name: "Production",
+      icon: "factory",
+      body: "An ordered production chain. Custom stages with status and owners; leads reorder the line as work flows.",
+    },
+    {
+      name: "Accounting & Finance",
+      icon: "landmark",
+      body: "Your finance team logs revenue and expenses. Helm turns that into live cash, revenue, and spend across the cockpit.",
+    },
+    {
+      name: "Sales",
+      icon: "briefcase",
+      body: "Deal pipeline by stage — open value and wins roll straight into the morning briefing.",
+    },
+    {
+      name: "Legal",
+      icon: "scale",
+      body: "A matter queue for contracts and reviews, from draft through signed and filed, with documents attached.",
+    },
+    {
+      name: "HR",
+      icon: "users",
+      body: "Per-hire onboarding from a reusable template — each new hire gets their own checklist with assignees.",
+    },
+    {
+      name: "Engineering & Maintenance",
+      icon: "wrench",
+      body: "A ticket queue for equipment: reported, diagnosed, in repair, resolved — assign a technician and track it.",
+    },
+  ],
+};
 
 export const FEATURE_MODULES = [
   {
@@ -208,9 +253,9 @@ export const FEATURE_MODULES = [
   },
   {
     title: "Pipeline & Financials",
-    ceoValue: "Runway and revenue at a glance for your next board question.",
-    body: "MRR, burn, runway, and deal stages — live, not buried in a spreadsheet you update monthly.",
-    example: "17 months runway at current burn. Two deals in negotiation worth $180K ARR.",
+    ceoValue: "Cash and revenue at a glance when leadership asks.",
+    body: "Revenue, expenses, and deal stages — live, not buried in a spreadsheet you update monthly.",
+    example: "Two deals in negotiation. Expenses logged this month. Cash position visible without opening the finance sheet.",
   },
   {
     title: "Telemetry",
@@ -226,9 +271,9 @@ export const FEATURE_MODULES = [
   },
   {
     title: "Weekly CEO Pack",
-    ceoValue: "Board-ready synthesis in one click.",
-    body: "AI-generated weekly summary of financials, team pulse, and execution — ready to share.",
-    example: "Financial snapshot, team updates, and open decisions — formatted for your board prep.",
+    ceoValue: "Weekly synthesis in one click.",
+    body: "AI-generated weekly summary of financials, team pulse, and execution — ready to share with your leadership team.",
+    example: "Financial snapshot, team updates, and open decisions — formatted to forward, not rebuilt in slides.",
   },
   {
     title: "Integrations",
@@ -238,9 +283,9 @@ export const FEATURE_MODULES = [
   },
   {
     title: "Team & Access",
-    ceoValue: "Invite your leadership team with the right visibility.",
-    body: "Role-based packs for finance, sales, ops, and HR — everyone contributes, you stay in control.",
-    example: "Your CFO updates financials. Your VP Sales owns pipeline. You see the synthesis.",
+    ceoValue: "Invite your team with the right lane.",
+    body: "Role-based packs plus per-department access. Turn on only the departments you need — each team works in its own lane; you see everything from the top.",
+    example: "Your plant lead owns Production. Purchasing runs the request queue. You still see the synthesis in the briefing.",
   },
 ];
 
@@ -260,7 +305,7 @@ export const HOW_TO_USE_RHYTHMS = [
     steps: [
       { title: "Open Briefing", body: "Start on the Briefing tab. Three columns tell you what changed overnight, what needs your decision, and what to hand off." },
       { title: "Scan Decisions", body: "Head to Decision Center. Approvals are ranked by impact — Helm recommends which to tackle first and why." },
-      { title: "Check My Day", body: "My Day pulls your calendar and top tasks into one view so you walk into standup already oriented." },
+      { title: "Check My Day", body: "My Day pulls your calendar and top tasks into one view so you walk into the morning already oriented." },
     ],
   },
   {
@@ -269,9 +314,9 @@ export const HOW_TO_USE_RHYTHMS = [
     time: "As needed",
     icon: "zap",
     steps: [
-      { title: "Ask Helm", body: "Need a fast read? Ask \"What's our runway at current burn?\" or \"What's stuck in the pipeline?\" — answers come from your live data." },
+      { title: "Ask Helm", body: "Need a fast read? Ask \"What's stuck in procurement?\" or \"What's open in the pipeline?\" — answers come from your live data." },
       { title: "Delegate from Decisions", body: "Approve, follow up, or assign. Helm tracks whether outcomes actually landed — no more decisions that vanish." },
-      { title: "Glance Telemetry", body: "MRR, burn, headcount, open tasks — one screen when a board member Slacks you a number question." },
+      { title: "Glance Telemetry", body: "Headcount, open tasks, revenue, and cash — one screen when someone asks you for a number." },
     ],
   },
   {
@@ -280,7 +325,7 @@ export const HOW_TO_USE_RHYTHMS = [
     time: "Friday · ~10 minutes",
     icon: "calendar",
     steps: [
-      { title: "Generate CEO Pack", body: "Reports → Weekly CEO Pack. One click produces a board-ready summary of financials, team pulse, and open decisions." },
+      { title: "Generate CEO Pack", body: "Reports → Weekly CEO Pack. One click produces a summary of financials, team pulse, and open decisions — ready to share with your leadership team." },
       { title: "Connect integrations", body: "Integrations pulls signal from Google Calendar, Gmail, QuickBooks, and GitHub — your team keeps their tools." },
       { title: "Invite your leadership team", body: "Team & Access lets CFO, VP Sales, and ops contribute data while you keep the synthesized view." },
     ],
@@ -291,8 +336,9 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Briefing", path: "/app", tip: "Your daily starting point — always open this first." },
   { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up." },
   { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A grounded in your company, not the internet." },
-  { nav: "Financials", path: "/app/financials", tip: "Runway, burn, and scenarios for board prep." },
+  { nav: "Financials", path: "/app/financials", tip: "Revenue, expenses, and cash position for leadership updates." },
   { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline at a glance." },
+  { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more — each team its own lane." },
   { nav: "Integrations", path: "/app/integrations", tip: "Connect tools once; signal flows in automatically." },
 ];
 

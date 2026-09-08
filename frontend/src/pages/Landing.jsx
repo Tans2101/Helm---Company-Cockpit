@@ -13,6 +13,7 @@ import {
   PLANS, PRODUCT_FACTS, PROBLEMS, HOW_IT_WORKS, FEATURE_HIGHLIGHTS,
   WHO_HELM_IS_FOR, CEO_DAY, PRICING_FAQ,
 } from "@/lib/marketingCopy";
+import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 
 const ease = [0.16, 1, 0.3, 1];
 const fade = {
@@ -137,7 +138,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="text-center">
             <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">A day with Helm</p>
-            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">From morning briefing to board prep.</h2>
+            <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight">From morning briefing to weekly synthesis.</h2>
           </motion.div>
           <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {CEO_DAY.map((step, i) => (
@@ -232,6 +233,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <DepartmentsShowcase />
 
       {/* Pricing */}
       <section id="pricing" className="px-6 py-24 border-t border-white/[0.05]">
