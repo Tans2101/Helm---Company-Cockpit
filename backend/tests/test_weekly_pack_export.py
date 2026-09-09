@@ -169,3 +169,7 @@ async def test_weekly_pack_system_prompt_has_no_board():
     assert "board" not in captured["system"].lower()
     assert "plain english" in captured["system"].lower()
     assert "thoughtful" in captured["system"].lower()
+    assert "350 words" in captured["system"].lower()
+    assert "structure follows" in captured["system"].lower() or "structure follow" in captured["system"].lower()
+    assert "em dash" in captured["system"].lower() or "em dashes" in captured["system"].lower()
+    assert "exact markdown structure" not in captured["system"].lower()

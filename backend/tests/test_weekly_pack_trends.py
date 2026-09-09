@@ -175,8 +175,13 @@ async def test_weekly_pack_llm_user_prompt_contains_manual_report(mongo):
     assert "board-ready" not in captured["system"].lower()
     assert "board" not in captured["system"].lower()
     assert "plain English" in captured["system"]
-    assert "Maximum 350 words" in captured["system"]
+    assert "350 words" in captured["system"]
     assert "monetization signal" in captured["system"]
+    assert "Structure follows" in captured["system"] or "structure follow" in captured["system"].lower()
+    assert "**Label:**" in captured["system"] or "bold-label" in captured["system"].lower()
+    assert "em dash" in captured["system"].lower() or "em dashes" in captured["system"].lower()
+    assert "Output this exact markdown structure" not in captured["system"]
+    assert "## What happened" not in captured["system"] or "Never default" in captured["system"] or "always-on" in captured["system"].lower()
 
 
 class TestReportSnapshotsHTTP:
