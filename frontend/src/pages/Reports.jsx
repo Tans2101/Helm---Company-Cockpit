@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { FileText, Plus, PenLine, Trash2, X, Copy, Download, Info } from "lucide-react";
+import { FileText, Plus, PenLine, Trash2, X, Copy, Download, Check } from "lucide-react";
 import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
@@ -198,6 +198,26 @@ export default function Reports() {
     }
   };
 
+  const openFromTrend = (r) => {
+    setEditing(null);
+    setPublishingDraftId(null);
+    const metrics = (r.metrics || [])
+      .map((m) => ({ label: m.label || "", value: m.value?.toString?.() ?? String(m.value ?? "") }))
+      .filter((m) => m.label.trim() && m.value.toString().trim());
+    const changeNotes = (r.metrics || [])
+      .filter((m) => m.change && m.change !== "Current total" && m.change !== "No comparison yet")
+      .map((m) => `${m.label}: ${m.change}`)
+      .join(". ");
+    setForm({
+      title: r.title || "",
+      type: "General",
+      period: r.period || "",
+      summary: changeNotes || r.summary || "",
+      metrics: metrics.concat(emptyReport().metrics).slice(0, 3),
+    });
+    setShowForm(true);
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setPublishingDraftId(null);
@@ -220,9 +240,9 @@ export default function Reports() {
 
       <GlassCard className="p-4 mb-6 fade-up border-white/5">
         <p className="text-sm text-zinc-400 leading-relaxed">
-          <span className="text-white">What happens here:</span> Helm checks money, team, and completed work once a week.
-          Add a short note when the numbers need context. Then generate the Weekly CEO Pack to turn it all into a
-          plain-English update for you and your leadership team.
+          <span className="text-white">What happens here:</span> Helm tracks money, team, and completed work week over week.
+          Turn a trend card into a report when you want context on the record. Then draft the Weekly CEO Pack for a
+          plain-English update you can share.
         </p>
       </GlassCard>
 
@@ -296,21 +316,25 @@ export default function Reports() {
       )}
 
       {auto.length > 0 && (
-        <>
-          <SectionLabel className="mb-2">Your weekly check-in</SectionLabel>
-          <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-            <p className="text-sm leading-relaxed text-zinc-400">
-              Helm saves a snapshot once a week, then shows today&apos;s numbers and what changed.
-              These cards are source material for your Weekly CEO Pack—not reports you need to write or send.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-4 mb-6">
+        <div className="mb-8" data-testid="week-over-week-trends">
+          <SectionLabel className="mb-2">Week-over-week trends</SectionLabel>
+          <p className="text-sm text-zinc-500 mb-4 max-w-2xl leading-relaxed">
+            Auto-generated from your data — use these as a starting point for your own report.
+          </p>
+          <div className="grid md:grid-cols-3 gap-4">
             {auto.map((r, i) => (
-              <ReportCard key={r.id} report={r} index={i} badge="Updated automatically" />
+              <ReportCard
+                key={r.id}
+                report={r}
+                index={i}
+                badge="Auto"
+                hideSummary
+                canWrite={canWrite}
+                onAddToReport={() => openFromTrend(r)}
+              />
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {canExportFinancials && (
@@ -366,7 +390,7 @@ export default function Reports() {
             <SectionLabel>Weekly CEO Pack</SectionLabel>
             <p className="text-sm text-zinc-400 max-w-xl mt-1">
               A one-page Friday update: what happened, what needs your attention, and what to do next.
-              Helm drafts it from the check-in above and any reports your team added.
+              Helm drafts it from the week-over-week trends above and any reports your team added.
             </p>
           </div>
           {canGeneratePack ? (
@@ -448,34 +472,56 @@ export default function Reports() {
   );
 }
 
-function ReportCard({ report: r, index, canWrite, onEdit, onDelete, badge }) {
+function ReportCard({ report: r, index, canWrite, onEdit, onDelete, onAddToReport, badge, hideSummary }) {
   return (
-    <GlassCard key={r.id} className="p-5 fade-up group relative" style={{ animationDelay: `${index * 60}ms` }} data-testid={`report-${r.id}`}>
+    <GlassCard className="p-5 fade-up group relative" style={{ animationDelay: `${index * 60}ms` }} data-testid={`report-${r.id}`}>
       {canWrite && onEdit && (
         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={onEdit} className="text-zinc-600 hover:text-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
-          <button onClick={onDelete} className="text-zinc-600 hover:text-rose-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={onEdit} className="text-zinc-600 hover:text-gold p-1" aria-label="Edit report"><PenLine className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={onDelete} className="text-zinc-600 hover:text-rose-400 p-1" aria-label="Delete report"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       )}
       <div className="flex items-center gap-2 mb-3">
-        <FileText className="w-4 h-4 text-gold" />
-        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{r.type} · {r.period}</span>
-        {badge && <span className={cn("text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto", badge === "Updated automatically" ? "text-sky-400 bg-sky-400/10" : "text-gold bg-gold/10")}>{badge}</span>}
+        <FileText className="w-4 h-4 text-gold shrink-0" />
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500">{r.type} · {r.period}</span>
+        {badge && (
+          <span className={cn(
+            "text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 ml-auto",
+            badge === "Auto" || badge === "Updated automatically"
+              ? "text-sky-400 bg-sky-400/10"
+              : "text-gold bg-gold/10",
+          )}
+          >
+            {badge}
+          </span>
+        )}
       </div>
       <h3 className="text-white font-medium pr-8">{r.title}</h3>
-      <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{r.summary}</p>
+      {!hideSummary && r.summary && (
+        <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{r.summary}</p>
+      )}
       {r.metrics?.length > 0 && (
-        <div className="space-y-3 mt-4 pt-4 border-t border-white/5">
+        <div className={cn("grid gap-3 mt-4 pt-4 border-t border-white/5", r.metrics.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
           {r.metrics.map((m) => (
-            <div key={m.label} className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs text-zinc-500">{m.label}</p>
-                {m.change && <p className="mt-0.5 text-[11px] leading-snug text-zinc-600">{m.change}</p>}
-              </div>
-              <p className="shrink-0 font-mono text-base text-white">{m.value}</p>
+            <div key={m.label} className="min-w-0">
+              <p className="font-mono text-xl md:text-2xl tracking-tight text-white tabular-nums leading-none">{m.value}</p>
+              <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">{m.label}</p>
+              {m.change && (
+                <p className="mt-1 text-[10px] leading-snug text-zinc-600">{m.change}</p>
+              )}
             </div>
           ))}
         </div>
+      )}
+      {canWrite && onAddToReport && (
+        <button
+          type="button"
+          data-testid={`add-trend-to-report-${r.id}`}
+          onClick={onAddToReport}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add to report
+        </button>
       )}
     </GlassCard>
   );
