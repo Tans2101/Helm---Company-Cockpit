@@ -36,7 +36,7 @@ export default function NotFound() {
   }
 
   return (
-    <div className="marketing-light min-h-screen bg-[#f7f6f2] overflow-x-hidden flex flex-col" data-testid="not-found">
+    <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden flex flex-col" data-testid="not-found">
       <MarketingNav authed={authed} onEnter={enter} />
       <main className="flex-1 px-6 pt-36 md:pt-44 pb-16">
         <div className="mx-auto max-w-xl">{body}</div>

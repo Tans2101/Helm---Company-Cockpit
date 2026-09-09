@@ -27,7 +27,7 @@ export default function About() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   return (
-    <div className="marketing-light min-h-screen bg-[#f7f6f2] overflow-x-hidden">
+    <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
       <MarketingNav authed={authed} onEnter={enter} active="/about" />
 
       <section className="px-6 pt-36 md:pt-44 pb-16">
@@ -35,7 +35,7 @@ export default function About() {
           <motion.p variants={fade} initial="hidden" animate="show" custom={0}
             className="font-mono text-xs uppercase tracking-[0.3em] text-gold">{CATEGORY}</motion.p>
           <motion.h1 variants={fade} initial="hidden" animate="show" custom={1}
-            className="mt-6 text-4xl md:text-5xl font-light tracking-tight leading-tight">
+            className="font-serif-display mt-6 text-4xl md:text-5xl font-medium tracking-tight leading-tight">
             Built for CEOs who run the company — not chase it.
           </motion.h1>
           <motion.p variants={fade} initial="hidden" animate="show" custom={2}
@@ -127,7 +127,7 @@ export default function About() {
       <section className="px-6 py-20 border-t border-white/[0.05]">
         <div className="mx-auto max-w-3xl text-center">
           <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Ready?</p>
-          <h2 className="mt-4 text-3xl font-light tracking-tight">{TAGLINE}</h2>
+          <h2 className="font-serif-display mt-4 text-3xl font-medium tracking-tight">{TAGLINE}</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button type="button" onClick={enter}
               className="group inline-flex items-center gap-2 rounded-full bg-gold text-black font-medium px-6 py-3 hover:bg-gold-hover transition-colors">

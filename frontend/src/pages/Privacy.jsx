@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 
 export default function Privacy() {
   return (
-    <div className="marketing-light min-h-screen bg-[#f7f6f2]">
+    <div className="min-h-screen bg-[#09090b] text-white">
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors mb-10">
           <span className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center">
@@ -20,7 +20,7 @@ export default function Privacy() {
         </Link>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-4">Legal</p>
-        <h1 className="text-3xl md:text-4xl font-light tracking-tight text-white">Privacy Policy</h1>
+        <h1 className="font-serif-display text-3xl md:text-4xl font-medium tracking-tight text-white">Privacy Policy</h1>
         <p className="text-zinc-500 text-sm mt-3">Last updated: September 3, 2026</p>
 
         <div className="mt-10 space-y-8 text-[15px] text-zinc-300 leading-relaxed">

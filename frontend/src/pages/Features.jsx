@@ -21,7 +21,7 @@ export default function Features() {
   const modulesByTitle = Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m]));
 
   return (
-    <div className="marketing-light min-h-screen bg-[#f7f6f2] overflow-x-hidden">
+    <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
       <MarketingNav authed={authed} onEnter={enter} active="/features" />
 
       <section className="px-6 pt-36 md:pt-44 pb-12">
@@ -29,7 +29,7 @@ export default function Features() {
           <motion.p variants={fade} initial="hidden" animate="show" custom={0}
             className="font-mono text-xs uppercase tracking-[0.3em] text-gold">{CATEGORY}</motion.p>
           <motion.h1 variants={fade} initial="hidden" animate="show" custom={1}
-            className="mt-6 text-4xl md:text-5xl font-light tracking-tight leading-tight">
+            className="font-serif-display mt-6 text-4xl md:text-5xl font-medium tracking-tight leading-tight">
             Everything in the cockpit
           </motion.h1>
           <motion.p variants={fade} initial="hidden" animate="show" custom={2}

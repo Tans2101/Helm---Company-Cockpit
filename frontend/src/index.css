@@ -52,6 +52,11 @@
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
+/* Marketing display headlines only — body/UI stay DM Sans */
+.font-serif-display {
+    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+
 /* Clerk prebuilt SignIn/SignUp — email OTP + password fields must stay readable on dark bg */
 .cl-formFieldInput input,
 .cl-formFieldInput input[type="text"],
@@ -101,87 +106,14 @@ input.cl-otpCodeFieldInput {
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.marketing-light {
-  background: #f7f6f2 !important;
-  color: #18211c;
-}
-
-.marketing-light h1,
-.marketing-light h2 {
-  font-family: 'Source Serif 4', Georgia, serif;
-}
-
-.marketing-light.grain::before {
-  display: none;
-}
-
-.marketing-light .text-white {
-  color: #18211c !important;
-}
-
-.marketing-light .text-zinc-300 {
-  color: #39433d !important;
-}
-
-.marketing-light .text-zinc-400 {
-  color: #566159 !important;
-}
-
-.marketing-light .text-zinc-500 {
-  color: #68736b !important;
-}
-
-.marketing-light .text-zinc-600 {
-  color: #7a837d !important;
-}
-
-.marketing-light .text-gold {
-  color: #735b1f !important;
-}
-
-.marketing-light [class*="border-white"] {
-  border-color: rgba(24, 33, 28, 0.12) !important;
-}
-
-.marketing-light [class*="bg-[#121214]"],
-.marketing-light [class*="bg-[#0d0d0f]"],
-.marketing-light [class*="bg-[#09090b]"] {
-  background-color: #ffffff !important;
-}
-
-.marketing-light [class*="bg-white/"] {
-  background-color: rgba(24, 33, 28, 0.035) !important;
-}
-
-.marketing-light [class*="hover:text-white"]:hover {
-  color: #18211c !important;
-}
-
-.marketing-light [class*="hover:bg-white"]:hover {
-  background-color: rgba(24, 33, 28, 0.06) !important;
-}
-
-.marketing-light .marketing-panel {
-  background: #ffffff;
-  border: 1px solid #dddcd5;
-  box-shadow: 0 18px 50px -36px rgba(24, 33, 28, 0.45);
-}
-
-.marketing-light .marketing-dark-button {
-  color: #ffffff !important;
-}
-
-.marketing-light .marketing-rule {
-  border-color: #dddcd5 !important;
-}
-
+/* Authenticated cockpit — light mode (default). Scoped to .app-shell so marketing stays dark. */
 html[data-theme="light"] body {
-  background-color: #f5f6f3;
+  background-color: #f4f5f2;
   background-image: none;
 }
 
 html[data-theme="light"] .app-shell {
-  background: #f5f6f3;
+  background: #f4f5f2;
   color: #18211c;
 }
 
@@ -193,29 +125,38 @@ html[data-theme="light"] .app-shell .text-white {
   color: #18211c !important;
 }
 
+html[data-theme="light"] .app-shell .text-zinc-200 {
+  color: #2a342e !important;
+}
+
 html[data-theme="light"] .app-shell .text-zinc-300 {
-  color: #3e4841 !important;
+  color: #3a443e !important;
 }
 
 html[data-theme="light"] .app-shell .text-zinc-400 {
-  color: #556159 !important;
+  color: #4d5751 !important;
 }
 
 html[data-theme="light"] .app-shell .text-zinc-500 {
-  color: #68736b !important;
+  color: #5c665f !important;
 }
 
 html[data-theme="light"] .app-shell .text-zinc-600 {
-  color: #7a847d !important;
+  color: #6b746d !important;
+}
+
+/* Gold accent stays readable on cream — slightly deeper */
+html[data-theme="light"] .app-shell .text-gold {
+  color: #8a6d24 !important;
 }
 
 html[data-theme="light"] .app-shell [class*="border-white"] {
-  border-color: rgba(24, 33, 28, 0.12) !important;
+  border-color: rgba(24, 33, 28, 0.14) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="bg-[#09090b]"],
 html[data-theme="light"] .app-shell [class*="bg-[#0d0d0f]"] {
-  background-color: #eef0ec !important;
+  background-color: #e8ebe6 !important;
 }
 
 html[data-theme="light"] .app-shell [class*="bg-[#121214]"],
@@ -224,7 +165,7 @@ html[data-theme="light"] .app-shell [class*="bg-[#141417]"] {
 }
 
 html[data-theme="light"] .app-shell [class*="bg-white/"] {
-  background-color: rgba(24, 33, 28, 0.035) !important;
+  background-color: rgba(24, 33, 28, 0.04) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="hover:text-white"]:hover {
@@ -232,28 +173,58 @@ html[data-theme="light"] .app-shell [class*="hover:text-white"]:hover {
 }
 
 html[data-theme="light"] .app-shell [class*="hover:bg-white"]:hover {
-  background-color: rgba(24, 33, 28, 0.06) !important;
+  background-color: rgba(24, 33, 28, 0.07) !important;
 }
 
 html[data-theme="light"] .app-shell input,
 html[data-theme="light"] .app-shell textarea,
 html[data-theme="light"] .app-shell select {
   color: #18211c;
-  caret-color: #735b1f;
+  caret-color: #8a6d24;
+  background-color: #ffffff;
 }
 
 html[data-theme="light"] .app-shell input::placeholder,
 html[data-theme="light"] .app-shell textarea::placeholder {
-  color: #89918b;
+  color: #7a847d;
 }
 
 html[data-theme="light"] .app-shell .glass {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Dense data: tabular figures and status chips stay crisp on light surfaces */
+html[data-theme="light"] .app-shell .font-mono,
+html[data-theme="light"] .app-shell [class*="tabular-nums"] {
+  color: inherit;
+  letter-spacing: 0.01em;
+}
+
+html[data-theme="light"] .app-shell .text-emerald-400 {
+  color: #15803d !important;
+}
+
+html[data-theme="light"] .app-shell .text-rose-400 {
+  color: #be123c !important;
+}
+
+html[data-theme="light"] .app-shell .text-amber-400,
+html[data-theme="light"] .app-shell .text-amber-300,
+html[data-theme="light"] .app-shell .text-amber-600 {
+  color: #b45309 !important;
 }
 
 html[data-theme="light"] ::selection {
-  background: rgba(115, 91, 31, 0.22);
+  background: rgba(138, 109, 36, 0.22);
   color: #18211c;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(24, 33, 28, 0.18);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 109, 36, 0.45);
 }
 
 @keyframes fadeUp {

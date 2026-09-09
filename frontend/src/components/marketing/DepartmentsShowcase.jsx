@@ -18,7 +18,7 @@ export default function DepartmentsShowcase({ compact = false }) {
       <div className={`mx-auto ${maxWidth}`}>
         <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
           <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">{label}</p>
-          <h2 className="mt-4 text-3xl md:text-4xl font-light tracking-tight max-w-2xl leading-tight">{title}</h2>
+          <h2 className="font-serif-display mt-4 text-3xl md:text-4xl font-medium tracking-tight max-w-2xl leading-tight">{title}</h2>
           <p className="mt-4 text-zinc-400 max-w-2xl leading-relaxed">{intro}</p>
         </motion.div>
         <div className="mt-12 grid sm:grid-cols-2 border-l border-t border-white/[0.08]">
@@ -32,7 +32,7 @@ export default function DepartmentsShowcase({ compact = false }) {
                 initial="hidden"
                 whileInView="show"
                 viewport={{ once: true, margin: "-60px" }}
-                className="group border-b border-r border-white/[0.08] bg-white p-6 transition-colors hover:bg-[#f3f1ea]"
+                className="group border-b border-r border-white/[0.08] bg-[#121214]/40 p-6 transition-colors hover:bg-white/[0.03]"
               >
                 <div className="flex items-start gap-4">
                   <div className="w-9 h-9 border border-gold/25 flex items-center justify-center shrink-0">

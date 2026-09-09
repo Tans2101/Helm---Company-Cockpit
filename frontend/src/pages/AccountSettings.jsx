@@ -16,7 +16,7 @@ const APPEARANCE_OPTIONS = [
 ];
 
 export default function AccountSettings() {
-  const { user, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { data: company } = useFetch("/company");
   const isOwner = user?.role === "owner" || user?.pack === "owner";
@@ -138,7 +138,8 @@ export default function AccountSettings() {
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
         </div>
         <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
-          Choose how the Helm cockpit looks on this device. Your choice is saved for your next visit.
+          Choose how the Helm cockpit looks. Light mode is the default for reading dense data.
+          Your choice is saved to your account and follows you across devices.
         </p>
         <div className="grid sm:grid-cols-3 gap-2" role="group" aria-label="Color theme">
           {APPEARANCE_OPTIONS.map((option) => {
@@ -150,7 +151,10 @@ export default function AccountSettings() {
                 type="button"
                 data-testid={`theme-${option.id}`}
                 aria-pressed={selected}
-                onClick={() => setTheme(option.id)}
+                onClick={() => {
+                  setTheme(option.id);
+                  if (user) setUser({ ...user, appearance: option.id });
+                }}
                 className={`relative rounded-lg border p-3 text-left transition-colors ${
                   selected
                     ? "border-gold/50 bg-gold/10"

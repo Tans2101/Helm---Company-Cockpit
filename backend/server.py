@@ -1478,7 +1478,7 @@ async def _upsert_clerk_user(*, email: str, name: Optional[str], picture: Option
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
             "user_id": user_id, "email": email, "name": name, "picture": picture,
-            "clerk_id": clerk_id, "created_at": now,
+            "clerk_id": clerk_id, "appearance": "light", "created_at": now,
         })
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     await _bootstrap(user)
@@ -1501,7 +1501,7 @@ async def _upsert_google_user(*, email: str, name: Optional[str], picture: Optio
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
             "user_id": user_id, "email": email, "name": name, "picture": picture,
-            "google_sub": google_sub, "created_at": now,
+            "google_sub": google_sub, "appearance": "light", "created_at": now,
         })
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     await _bootstrap(user)
@@ -1727,6 +1727,7 @@ async def _user_session_payload(user: dict) -> dict:
         "email": user["email"],
         "name": user.get("name"),
         "picture": user.get("picture"),
+        "appearance": _normalize_appearance(user.get("appearance")),
     }
     active = user.get("active_workspace_id")
     membership = None
@@ -7139,6 +7140,31 @@ async def export_account(user=Depends(get_user)):
                 workspaces.append(_strip_sensitive(ws))
         payload["workspaces"] = workspaces
     return payload
+
+
+class AppearanceInput(BaseModel):
+    appearance: str
+
+
+APPEARANCE_VALUES = frozenset({"light", "dark", "system"})
+
+
+def _normalize_appearance(value) -> str:
+    raw = str(value or "light").strip().lower()
+    return raw if raw in APPEARANCE_VALUES else "light"
+
+
+@api_router.patch("/account/appearance")
+async def update_appearance(body: AppearanceInput, user=Depends(get_user)):
+    """Persist cockpit light/dark/system preference on the user document."""
+    appearance = str(body.appearance or "").strip().lower()
+    if appearance not in APPEARANCE_VALUES:
+        raise HTTPException(status_code=400, detail="appearance must be light, dark, or system")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"appearance": appearance}},
+    )
+    return {"appearance": appearance}
 
 
 @api_router.delete("/account")

@@ -3,10 +3,10 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#f7f6f2" />
+        <meta name="theme-color" content="#09090b" />
         <script>
           try {
-            var helmTheme = localStorage.getItem("helm_appearance") || "system";
+            var helmTheme = localStorage.getItem("helm_appearance") || "light";
             var resolvedHelmTheme = helmTheme === "system"
               ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
               : helmTheme;

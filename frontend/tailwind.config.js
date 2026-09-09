@@ -14,7 +14,8 @@ module.exports = {
       },
       fontFamily: {
         sans: ['DM Sans', 'sans-serif'],
-        mono: ['DM Mono', 'monospace']
+        mono: ['DM Mono', 'monospace'],
+        'serif-display': ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
       },
       colors: {
         gold: {

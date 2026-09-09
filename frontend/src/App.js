@@ -6,6 +6,7 @@ import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import ClerkHelmBridge from "@/components/ClerkHelmBridge";
+import AppearanceSync from "@/components/AppearanceSync";
 import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
@@ -156,6 +157,7 @@ function ClerkAuthShell() {
     <AuthProvider onLogoutExtra={() => signOut()} deferInitialAuth>
       <ErrorBoundary>
         <BrowserRouter>
+          <AppearanceSync />
           <ClerkHelmBridge />
           <AppRouter />
           <CookieNotice />
@@ -171,6 +173,7 @@ function HelmAppShell() {
     <AuthProvider>
       <ErrorBoundary>
         <BrowserRouter>
+          <AppearanceSync />
           <AppRouter />
           <CookieNotice />
           <HelmToaster />

@@ -1,19 +1,29 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 
 const STORAGE_KEY = "helm_appearance";
 const ThemeContext = createContext(null);
+const VALID = new Set(["light", "dark", "system"]);
 
 function savedTheme() {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return ["light", "dark", "system"].includes(value) ? value : "system";
+    return VALID.has(value) ? value : "light";
   } catch {
-    return "system";
+    return "light";
   }
 }
 
 function systemTheme() {
   return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function writeLocal(value) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, value);
+  } catch {
+    // Theme still applies in this tab when storage is unavailable.
+  }
 }
 
 export function ThemeProvider({ children }) {
@@ -34,19 +44,27 @@ export function ThemeProvider({ children }) {
     document.documentElement.style.colorScheme = resolvedTheme;
   }, [resolvedTheme]);
 
-  const setTheme = (value) => {
-    if (!["light", "dark", "system"].includes(value)) return;
+  const hydrateAppearance = useCallback((value) => {
+    if (!VALID.has(value)) return;
     setThemeState(value);
+    writeLocal(value);
+  }, []);
+
+  const setTheme = useCallback(async (value, { persistRemote = true } = {}) => {
+    if (!VALID.has(value)) return;
+    setThemeState(value);
+    writeLocal(value);
+    if (!persistRemote) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, value);
+      await api.patch("/account/appearance", { appearance: value });
     } catch {
-      // The current tab can still change theme when storage is unavailable.
+      // Local preference still applies; remote sync retries on next change after auth.
     }
-  };
+  }, []);
 
   const value = useMemo(
-    () => ({ theme, resolvedTheme, setTheme }),
-    [theme, resolvedTheme],
+    () => ({ theme, resolvedTheme, setTheme, hydrateAppearance }),
+    [theme, resolvedTheme, setTheme, hydrateAppearance],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
