@@ -82,10 +82,11 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-lg text-white font-normal tracking-tight mb-2">QuickBooks data</h2>
+            <h2 className="text-lg text-white font-normal tracking-tight mb-2">QuickBooks &amp; Xero data</h2>
             <p>
-              QuickBooks (Intuit) data is pulled only if and when you explicitly connect your QuickBooks account via
-              Integrations. Nothing is accessed before that connection.
+              QuickBooks (Intuit) or Xero accounting data is pulled only if and when you explicitly connect that account via
+              Integrations. We sync invoices and bills into your workspace Financials. Nothing is accessed before that
+              connection. Connecting one accounting provider does not disconnect the other if both are configured.
             </p>
           </section>
 

@@ -27,14 +27,34 @@ def test_merge_oauth_connected():
         "workspace_id": "ws1",
         "google_tokens": {"access_token": "x", "scope": scope},
         "quickbooks_tokens": {"access_token": "y"},
+        "xero_tokens": {"access_token": "z", "tenant_id": "tenant-1", "tenant_name": "Demo"},
     }
-    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True, xero_configured=True)
     gcal = next(i for i in ints if i["id"] == "google_calendar")
     gmail = next(i for i in ints if i["id"] == "gmail")
     qb = next(i for i in ints if i["id"] == "quickbooks")
+    xero = next(i for i in ints if i["id"] == "xero")
     assert gcal["status"] == "connected"
     assert gmail["status"] == "connected"
     assert qb["status"] == "connected"
+    assert xero["status"] == "connected"
+    assert xero["tenant_name"] == "Demo"
+
+
+def test_xero_needs_tenant_select():
+    ws = {
+        "workspace_id": "ws1",
+        "xero_tokens": {
+            "access_token": "z",
+            "pending_tenants": [{"tenant_id": "a", "tenant_name": "A"}, {"tenant_id": "b", "tenant_name": "B"}],
+        },
+        "plan": "free",
+    }
+    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True, xero_configured=True)
+    xero = next(i for i in ints if i["id"] == "xero")
+    assert xero["status"] == "not_connected"
+    assert xero.get("needs_tenant_select") is True
+    assert xero["connected"] is False
 
 
 def test_gmail_needs_reconsent_when_calendar_only():

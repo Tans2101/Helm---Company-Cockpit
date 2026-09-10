@@ -176,6 +176,6 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         "briefing": briefing, "decisions": decisions, "telemetry": telemetry,
         "tasks": tasks, "reports": [], "manual_reports": ([] if empty else reports), "team": team, "calendar": calendar,
         "people": people, "integrations": integrations,
-        "google_tokens": None, "quickbooks_tokens": None,
+        "google_tokens": None, "quickbooks_tokens": None, "xero_tokens": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

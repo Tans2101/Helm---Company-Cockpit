@@ -29,6 +29,7 @@ import document_cleanup
 import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
+import xero as xero_sync
 import google_oauth as gcal
 import integrations_catalog as integ_catalog
 import clerk_auth
@@ -201,6 +202,8 @@ GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 QB_CLIENT_ID = os.environ.get('QUICKBOOKS_CLIENT_ID', '')
 QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
+XERO_CLIENT_ID = os.environ.get('XERO_CLIENT_ID', '')
+XERO_CLIENT_SECRET = os.environ.get('XERO_CLIENT_SECRET', '')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
@@ -2294,7 +2297,7 @@ class TemplateInput(BaseModel):
 
 
 _PRESERVE_WS_FIELDS = frozenset({
-    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens",
+    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens",
     "plan", "billing_provider", "paddle_subscription_id", "paddle_customer_id",
     "paddle_last_event_at", "billing_status", "subscription_status", "canceled_at",
     "workspace_id", "owner_user_id", "created_at",
@@ -6482,6 +6485,15 @@ def _provider_config(provider: str):
             "redirect_uri": redirect, "scope": "com.intuit.quickbooks.accounting",
             "extra": {}, "token_field": "quickbooks_tokens",
         }
+    if provider == "xero":
+        return {
+            "configured": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
+            "auth_uri": xero_sync.AUTH_URL,
+            "token_uri": xero_sync.TOKEN_URL,
+            "client_id": XERO_CLIENT_ID, "client_secret": XERO_CLIENT_SECRET,
+            "redirect_uri": redirect, "scope": xero_sync.XERO_SCOPES,
+            "extra": {}, "token_field": "xero_tokens",
+        }
     return None
 
 
@@ -6492,18 +6504,24 @@ async def integrations(principal=Depends(get_principal)):
         c,
         google_configured=bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
         qb_configured=bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
+        xero_configured=bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
         anthropic_configured=helm_llm.anthropic_configured(),
         r2_configured=doc_storage.r2_configured(),
         resend_configured=bool(RESEND_API_KEY),
         paddle_ready=bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
         clerk_configured=clerk_auth.clerk_configured(),
     )
+    xero_pending: list = []
+    xero_tokens = _integration_tokens(c, "xero_tokens")
+    if xero_tokens and not xero_tokens.get("tenant_id"):
+        xero_pending = list(xero_tokens.get("pending_tenants") or [])
     return {
         "integrations": ints,
         "is_pro": workspace_is_pro(c),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
         "slack_webhook_configured": bool((c.get("slack_webhook_url") or "").strip()),
         "slack_webhook_url": (c.get("slack_webhook_url") or "") if "integrations:manage" in perms_for(principal["pack"]) else "",
+        "xero_pending_tenants": xero_pending if "integrations:manage" in perms_for(principal["pack"]) else [],
         "platform": {
             "clerk": clerk_auth.clerk_configured(),
             "anthropic": helm_llm.anthropic_configured(),
@@ -6512,10 +6530,12 @@ async def integrations(principal=Depends(get_principal)):
             "paddle_ready": bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
             "google": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
             "quickbooks": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
+            "xero": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
         },
         "oauth_redirect_uris": {
             "google": _oauth_callback_uri("google"),
             "quickbooks": _oauth_callback_uri("quickbooks"),
+            "xero": _oauth_callback_uri("xero"),
         },
     }
 
@@ -6562,6 +6582,7 @@ async def integration_connect(provider: str, request: Request, principal=Depends
         missing = {
             "google": "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
             "quickbooks": "QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET",
+            "xero": "XERO_CLIENT_ID / XERO_CLIENT_SECRET",
         }.get(provider, "OAuth credentials")
         return {
             "configured": False,
@@ -6586,8 +6607,8 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
     workspace_id = verified[1]
     try:
         async with httpx.AsyncClient(timeout=30.0) as hc:
-            if provider == "quickbooks":
-                # Intuit requires HTTP Basic auth for token exchange
+            if provider in ("quickbooks", "xero"):
+                # Intuit and Xero require HTTP Basic auth for token exchange
                 tr = await hc.post(
                     cfg["token_uri"],
                     data={
@@ -6620,6 +6641,25 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
         if realmId:
             tokens["realmId"] = realmId
         tokens["obtained_at"] = datetime.now(timezone.utc).isoformat()
+        if provider == "xero":
+            try:
+                tenants = await xero_sync.fetch_xero_connections(tokens.get("access_token") or "")
+            except Exception:
+                logger.exception("xero connections lookup failed")
+                return RedirectResponse(f"{integrations_path}?error=token")
+            if not tenants:
+                return RedirectResponse(f"{integrations_path}?error=xero_org")
+            if len(tenants) == 1:
+                tokens["tenant_id"] = tenants[0]["tenant_id"]
+                tokens["tenant_name"] = tenants[0]["tenant_name"]
+                tokens.pop("pending_tenants", None)
+                await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
+                return RedirectResponse(f"{integrations_path}?connected=xero")
+            tokens["pending_tenants"] = tenants
+            tokens.pop("tenant_id", None)
+            tokens.pop("tenant_name", None)
+            await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
+            return RedirectResponse(f"{integrations_path}?xero_select=1")
         await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
     except Exception:
         logger.exception("oauth token exchange failed")
@@ -6629,12 +6669,115 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
 
 @api_router.post("/integrations/{provider}/disconnect")
 async def integration_disconnect(provider: str, principal=Depends(require_pro_perm("integrations:manage"))):
-    field = "google_tokens" if provider == "google" else "quickbooks_tokens" if provider == "quickbooks" else None
+    field = {
+        "google": "google_tokens",
+        "quickbooks": "quickbooks_tokens",
+        "xero": "xero_tokens",
+    }.get(provider)
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
-    unset = {"qb_last_synced_at": ""} if provider == "quickbooks" else None
+    unset = None
+    if provider == "quickbooks":
+        unset = {"qb_last_synced_at": ""}
+    elif provider == "xero":
+        unset = {"xero_last_synced_at": ""}
     await _store_integration_tokens(principal["workspace_id"], field, None, extra_unset=unset)
     return {"ok": True}
+
+
+class XeroTenantInput(BaseModel):
+    tenant_id: str
+
+
+@api_router.post("/integrations/xero/select-tenant")
+async def xero_select_tenant(payload: XeroTenantInput, principal=Depends(require_pro_perm("integrations:manage"))):
+    """Pick which Xero organisation to sync when the user has access to more than one."""
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    tokens = _integration_tokens(c, "xero_tokens")
+    if not tokens:
+        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
+    tenant_id = (payload.tenant_id or "").strip()
+    pending = list(tokens.get("pending_tenants") or [])
+    match = next((t for t in pending if t.get("tenant_id") == tenant_id), None)
+    if not match and tokens.get("tenant_id") == tenant_id:
+        match = {"tenant_id": tenant_id, "tenant_name": tokens.get("tenant_name") or "Xero organisation"}
+    if not match and pending:
+        raise HTTPException(status_code=400, detail="Choose an organisation from the list returned after Connect.")
+    if not match:
+        try:
+            tokens = await xero_sync.refresh_xero_token(tokens)
+            pending = await xero_sync.fetch_xero_connections(tokens.get("access_token") or "")
+        except xero_sync.XeroAuthError as exc:
+            await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
+            raise HTTPException(status_code=401, detail="Xero connection expired — please reconnect.") from exc
+        match = next((t for t in pending if t.get("tenant_id") == tenant_id), None)
+        if not match:
+            raise HTTPException(status_code=400, detail="Unknown Xero organisation for this connection.")
+    tokens["tenant_id"] = match["tenant_id"]
+    tokens["tenant_name"] = match.get("tenant_name") or "Xero organisation"
+    tokens.pop("pending_tenants", None)
+    await _store_integration_tokens(ws_id, "xero_tokens", tokens)
+    await log_activity(
+        principal, "integrations", "xero.tenant",
+        f"Selected Xero organisation {tokens['tenant_name']}",
+        {"tenant_id": tokens["tenant_id"]},
+    )
+    return {"ok": True, "tenant_id": tokens["tenant_id"], "tenant_name": tokens["tenant_name"]}
+
+
+async def _upsert_accounting_sync_entries(
+    *,
+    ws_id: str,
+    principal: dict,
+    txns: list,
+    source: str,
+) -> int:
+    """Shared QuickBooks/Xero upsert into financial_entries (identical downstream shape)."""
+    synced_count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    finance_dept_id = await dept_migrate.finance_department_id(db, ws_id)
+    txn_ids = _unique_ids(t.get("qb_txn_id") for t in txns)
+    existing_by_id = {}
+    if txn_ids:
+        existing_rows = await db.financial_entries.find(
+            {"workspace_id": ws_id, "qb_txn_id": {"$in": txn_ids}},
+            {"_id": 0, "id": 1, "qb_txn_id": 1},
+        ).to_list(len(txn_ids))
+        existing_by_id = {e["qb_txn_id"]: e for e in existing_rows if e.get("qb_txn_id")}
+
+    for txn in txns:
+        txn.pop("_qb_raw_type", None)
+        txn.pop("_xero_raw_type", None)
+        qb_txn_id = txn.pop("qb_txn_id")
+        existing = existing_by_id.get(qb_txn_id)
+        fields = {
+            "type": txn["type"],
+            "category": txn["category"],
+            "amount": txn["amount"],
+            "month": txn["month"],
+            "note": txn.get("note", ""),
+            "recurring": txn.get("recurring", False),
+            "source": source,
+        }
+        if existing:
+            await db.financial_entries.update_one(
+                {"workspace_id": ws_id, "qb_txn_id": qb_txn_id},
+                {"$set": fields},
+            )
+        else:
+            entry = {
+                "id": f"fe_{uuid.uuid4().hex[:10]}",
+                "workspace_id": ws_id,
+                "department_id": finance_dept_id,
+                "qb_txn_id": qb_txn_id,
+                "created_by": principal["user_id"],
+                "created_at": now_iso,
+                **fields,
+            }
+            await db.financial_entries.insert_one(entry)
+        synced_count += 1
+    return synced_count
 
 
 # Manual QuickBooks sync — periodic auto-sync (APScheduler / Render cron) is a natural next step.
@@ -6655,51 +6798,10 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 
         since = c.get("qb_last_synced_at")
         txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
-        synced_count = 0
-        now_iso = datetime.now(timezone.utc).isoformat()
-        finance_dept_id = await dept_migrate.finance_department_id(db, ws_id)
-
-        qb_ids = _unique_ids(t.get("qb_txn_id") for t in txns)
-        existing_by_qb = {}
-        if qb_ids:
-            existing_rows = await db.financial_entries.find(
-                {"workspace_id": ws_id, "qb_txn_id": {"$in": qb_ids}},
-                {"_id": 0, "id": 1, "qb_txn_id": 1},
-            ).to_list(len(qb_ids))
-            existing_by_qb = {e["qb_txn_id"]: e for e in existing_rows if e.get("qb_txn_id")}
-
-        for txn in txns:
-            txn.pop("_qb_raw_type", None)
-            qb_txn_id = txn.pop("qb_txn_id")
-            existing = existing_by_qb.get(qb_txn_id)
-            fields = {
-                "type": txn["type"],
-                "category": txn["category"],
-                "amount": txn["amount"],
-                "month": txn["month"],
-                "note": txn.get("note", ""),
-                "recurring": txn.get("recurring", False),
-                "source": "quickbooks_sync",
-            }
-            if existing:
-                await db.financial_entries.update_one(
-                    {"workspace_id": ws_id, "qb_txn_id": qb_txn_id},
-                    {"$set": fields},
-                )
-            else:
-                entry = {
-                    "id": f"fe_{uuid.uuid4().hex[:10]}",
-                    "workspace_id": ws_id,
-                    "department_id": finance_dept_id,
-                    "qb_txn_id": qb_txn_id,
-                    "created_by": principal["user_id"],
-                    "created_at": now_iso,
-                    **fields,
-                }
-                await db.financial_entries.insert_one(entry)
-            synced_count += 1
-
-        last_synced_at = now_iso
+        synced_count = await _upsert_accounting_sync_entries(
+            ws_id=ws_id, principal=principal, txns=txns, source="quickbooks_sync",
+        )
+        last_synced_at = datetime.now(timezone.utc).isoformat()
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
         await log_activity(
             principal, "integrations", "quickbooks.sync",
@@ -6718,6 +6820,47 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
     except Exception as exc:
         logger.exception("QuickBooks sync failed for %s", ws_id)
         raise HTTPException(status_code=502, detail="QuickBooks sync failed — try again shortly.") from exc
+
+
+@api_router.post("/integrations/xero/sync")
+async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    tokens = _integration_tokens(c, "xero_tokens")
+    if not tokens:
+        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
+    tenant_id = tokens.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Choose a Xero organisation before syncing.")
+
+    try:
+        tokens = await xero_sync.refresh_xero_token(tokens)
+        await _store_integration_tokens(ws_id, "xero_tokens", tokens)
+
+        since = c.get("xero_last_synced_at")
+        txns = await xero_sync.fetch_xero_transactions(tokens, tenant_id, since)
+        synced_count = await _upsert_accounting_sync_entries(
+            ws_id=ws_id, principal=principal, txns=txns, source="xero_sync",
+        )
+        last_synced_at = datetime.now(timezone.utc).isoformat()
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"xero_last_synced_at": last_synced_at}})
+        await log_activity(
+            principal, "integrations", "xero.sync",
+            f"Synced {synced_count} transaction{'s' if synced_count != 1 else ''} from Xero",
+            {"synced_count": synced_count},
+        )
+        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
+
+    except xero_sync.XeroAuthError as exc:
+        logger.warning("Xero auth failed for %s: %s", ws_id, exc)
+        await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
+        raise HTTPException(
+            status_code=401,
+            detail="Xero connection expired — please reconnect in Integrations.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Xero sync failed for %s", ws_id)
+        raise HTTPException(status_code=502, detail="Xero sync failed — try again shortly.") from exc
 
 
 @api_router.get("/integrations/google/calendar-events")
@@ -7140,7 +7283,7 @@ def _strip_sensitive(doc: dict) -> dict:
         return doc
     out = {k: v for k, v in doc.items() if k not in (
         "password", "password_hash", "oauth_session_token_enc",
-        "google_tokens", "quickbooks_tokens",
+        "google_tokens", "quickbooks_tokens", "xero_tokens",
     )}
     return out
 
@@ -7317,6 +7460,7 @@ async def setup_status():
     oauth_redirects = {
         "google": _oauth_callback_uri("google"),
         "quickbooks": _oauth_callback_uri("quickbooks"),
+        "xero": _oauth_callback_uri("xero"),
     }
     return {
         "frontend_url": FRONTEND_URL or None,
@@ -7358,6 +7502,11 @@ async def setup_status():
                 "env": ["QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_ENV"],
                 "redirect_uri": oauth_redirects["quickbooks"],
                 "env_value": QB_ENV,
+            },
+            "xero": {
+                "configured": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
+                "env": ["XERO_CLIENT_ID", "XERO_CLIENT_SECRET"],
+                "redirect_uri": oauth_redirects["xero"],
             },
             "anthropic": {
                 "configured": helm_llm.anthropic_configured(),

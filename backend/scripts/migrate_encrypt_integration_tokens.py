@@ -28,7 +28,7 @@ from pymongo import MongoClient
 
 import credential_crypto as crypto
 
-TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens")
+TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens", "xero_tokens")
 
 
 def main() -> int:

@@ -14,6 +14,7 @@ const ICONS = {
   google_calendar: Calendar,
   gmail: Mail,
   quickbooks: Building2,
+  xero: Building2,
   github: Github,
   slack: MessageSquare,
   salesforce: Cloud,
@@ -50,13 +51,14 @@ function StatusBadge({ status }) {
   );
 }
 
-function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNavigate, qbSyncing }) {
+function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNavigate, syncingProvider }) {
   const Icon = ICONS[it.id] || Cloud;
   const status = it.status || (it.connected ? "connected" : "not_connected");
-  const lastSynced = it.provider === "quickbooks" ? formatLastSynced(it.last_synced_at) : null;
+  const lastSynced = it.sync_action ? formatLastSynced(it.last_synced_at) : null;
   const isComingSoon = it.coming_soon || status === "coming_soon";
   const isUnavailable = status === "unavailable";
   const isOAuth = it.kind === "oauth" && it.oauth;
+  const syncBusy = syncingProvider === it.provider;
 
   const handleConnect = () => {
     if (isComingSoon || isUnavailable) return;
@@ -84,32 +86,40 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         <p className="text-xs text-zinc-400 mt-3 leading-relaxed border-l-2 border-gold/30 pl-2">{it.value}</p>
       )}
 
+      {it.connected && it.tenant_name && (
+        <p className="text-xs text-zinc-500 mt-2" data-testid={`${it.id}-tenant-name`}>
+          Organisation: <span className="text-zinc-300">{it.tenant_name}</span>
+        </p>
+      )}
+
       {isUnavailable && (
         <p className="text-xs text-zinc-600 mt-3 leading-relaxed" data-testid={`${it.id}-unavailable-hint`}>
           {it.provider === "google"
             ? "Waiting on GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the server. Once set, refresh and Connect works."
             : it.provider === "quickbooks"
               ? "Waiting on QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET on the server. Once set, refresh and Connect works."
-              : "This connection isn’t enabled on the server yet. After the API keys are set, refresh this page."}
+              : it.provider === "xero"
+                ? "Waiting on XERO_CLIENT_ID / XERO_CLIENT_SECRET on the server. Once set, refresh and Connect works."
+                : "This connection isn’t enabled on the server yet. After the API keys are set, refresh this page."}
         </p>
       )}
 
-      {it.provider === "quickbooks" && it.connected && lastSynced && (
-        <p className="text-xs text-zinc-600 mt-3 flex items-center gap-1" data-testid="qb-last-synced">
+      {it.sync_action && it.connected && lastSynced && (
+        <p className="text-xs text-zinc-600 mt-3 flex items-center gap-1" data-testid={`${it.id}-last-synced`}>
           <Clock className="w-3 h-3" /> Last synced {lastSynced}
         </p>
       )}
 
-      {it.provider === "quickbooks" && it.connected && canManage && (
+      {it.sync_action && it.connected && canManage && (
         <button
           type="button"
-          data-testid="sync-quickbooks-btn"
-          onClick={onSync}
-          disabled={qbSyncing}
+          data-testid={`sync-${it.id}-btn`}
+          onClick={() => onSync(it.provider)}
+          disabled={syncBusy}
           className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15 disabled:opacity-60"
         >
-          <RefreshCw className={cn("w-3.5 h-3.5", qbSyncing && "animate-spin")} />
-          {qbSyncing ? "Syncing…" : "Sync to Financials"}
+          <RefreshCw className={cn("w-3.5 h-3.5", syncBusy && "animate-spin")} />
+          {syncBusy ? "Syncing…" : "Sync to Financials"}
         </button>
       )}
 
@@ -153,9 +163,10 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
 export default function Integrations() {
   const { data, loading, error, reload } = useFetch("/integrations");
   const [params, setParams] = useSearchParams();
-  const [qbSyncing, setQbSyncing] = useState(false);
+  const [syncingProvider, setSyncingProvider] = useState(null);
   const [slackUrl, setSlackUrl] = useState("");
   const [slackBusy, setSlackBusy] = useState(false);
+  const [xeroTenantBusy, setXeroTenantBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -165,12 +176,23 @@ export default function Integrations() {
         ? "Google (Calendar & Gmail)"
         : connected === "quickbooks"
           ? "QuickBooks"
-          : connected;
+          : connected === "xero"
+            ? "Xero"
+            : connected;
       toast.success(`${name} connected — your data will flow into Helm`);
       setParams({});
       reload();
+    } else if (params.get("xero_select")) {
+      toast.message("Choose which Xero organisation to sync");
+      setParams({});
+      reload();
     } else if (params.get("error")) {
-      toast.error("Could not complete the connection. Try again or use a different account.");
+      const err = params.get("error");
+      toast.error(
+        err === "xero_org"
+          ? "No Xero organisations were available on that account."
+          : "Could not complete the connection. Try again or use a different account.",
+      );
       setParams({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,18 +246,33 @@ export default function Integrations() {
     }
   };
 
-  const syncQuickBooks = async () => {
+  const syncAccounting = async (provider) => {
     if (!gate()) return;
-    setQbSyncing(true);
+    setSyncingProvider(provider);
     try {
-      const { data: res } = await api.post("/integrations/quickbooks/sync", {}, { timeout: 120000 });
-      toast.success(`Synced ${res.synced_count} transaction${res.synced_count === 1 ? "" : "s"} to Financials`);
+      const { data: res } = await api.post(`/integrations/${provider}/sync`, {}, { timeout: 120000 });
+      const label = provider === "xero" ? "Xero" : "QuickBooks";
+      toast.success(`Synced ${res.synced_count} transaction${res.synced_count === 1 ? "" : "s"} from ${label}`);
       reload();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "QuickBooks sync failed");
+      toast.error(e?.response?.data?.detail || `${provider} sync failed`);
       if (e?.response?.status === 401) reload();
     } finally {
-      setQbSyncing(false);
+      setSyncingProvider(null);
+    }
+  };
+
+  const selectXeroTenant = async (tenantId) => {
+    if (!gate()) return;
+    setXeroTenantBusy(true);
+    try {
+      const { data: res } = await api.post("/integrations/xero/select-tenant", { tenant_id: tenantId });
+      toast.success(`Xero organisation selected: ${res.tenant_name || "done"}`);
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not select organisation");
+    } finally {
+      setXeroTenantBusy(false);
     }
   };
 
@@ -283,6 +320,7 @@ export default function Integrations() {
             {[
               ["Google Calendar OAuth", platform.google],
               ["QuickBooks OAuth", platform.quickbooks],
+              ["Xero OAuth", platform.xero],
               ["Anthropic AI", platform.anthropic],
               ["Document storage (R2)", platform.r2],
               ["Invite email (Resend)", platform.resend],
@@ -294,13 +332,37 @@ export default function Integrations() {
               </div>
             ))}
           </div>
-          {!platform.google || !platform.quickbooks ? (
+          {!platform.google || !platform.quickbooks || !platform.xero ? (
             <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
               Add missing keys on Render, redeploy, then refresh. Redirect URIs must be{" "}
               <span className="font-mono text-zinc-500">https://www.helmcontrol.online/api/oauth/…/callback</span>
               {" "}(see INTEGRATIONS.md).
             </p>
           ) : null}
+        </GlassCard>
+      )}
+
+      {data.can_manage && (data.xero_pending_tenants || []).length > 0 && (
+        <GlassCard className="p-5 mb-8 fade-up border-gold/20" data-testid="xero-tenant-picker">
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">Choose Xero organisation</p>
+          <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+            Your Xero login can access more than one organisation. Pick which one Helm should sync into Financials.
+          </p>
+          <div className="space-y-2">
+            {data.xero_pending_tenants.map((t) => (
+              <button
+                key={t.tenant_id}
+                type="button"
+                data-testid={`xero-tenant-${t.tenant_id}`}
+                disabled={xeroTenantBusy}
+                onClick={() => selectXeroTenant(t.tenant_id)}
+                className="w-full text-left rounded-md border border-white/10 bg-white/[0.02] px-4 py-3 hover:border-gold/40 hover:bg-white/[0.04] disabled:opacity-60"
+              >
+                <span className="text-sm text-white">{t.tenant_name}</span>
+                <span className="block text-[10px] font-mono text-zinc-600 mt-0.5">{t.tenant_id}</span>
+              </button>
+            ))}
+          </div>
         </GlassCard>
       )}
 
@@ -352,9 +414,9 @@ export default function Integrations() {
             canManage={data.can_manage}
             onConnect={oauthConnect}
             onDisconnect={oauthDisconnect}
-            onSync={syncQuickBooks}
+            onSync={syncAccounting}
             onNavigate={(route) => navigate(route)}
-            qbSyncing={qbSyncing}
+            syncingProvider={syncingProvider}
           />
         ))}
       </div>
@@ -362,7 +424,7 @@ export default function Integrations() {
       {roadmap.length > 0 && (
         <>
           <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Coming soon</h2>
-          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — email, engineering, and CRM.</p>
+          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — engineering and CRM.</p>
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((it) => (
               <IntegrationCard
@@ -371,9 +433,9 @@ export default function Integrations() {
                 canManage={data.can_manage}
                 onConnect={oauthConnect}
                 onDisconnect={oauthDisconnect}
-                onSync={syncQuickBooks}
+                onSync={syncAccounting}
                 onNavigate={(route) => navigate(route)}
-                qbSyncing={qbSyncing}
+                syncingProvider={syncingProvider}
               />
             ))}
           </div>

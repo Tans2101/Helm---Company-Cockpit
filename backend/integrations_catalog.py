@@ -47,11 +47,26 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Pull purchases and invoices from your QuickBooks company into Financials.",
+        "description": "Pull purchases and invoices from your QuickBooks company into Financials. Use QuickBooks or Xero — you typically connect one accounting system.",
         "value": "Real burn, runway, and expense categories — synced from the books you already use.",
         "cta_route": "/app/financials",
         "cta_label": "View financials",
         "connect_label": "Connect QuickBooks",
+        "sync_action": True,
+    },
+    {
+        "id": "xero",
+        "name": "Xero",
+        "category": "Finance",
+        "provider": "xero",
+        "kind": "oauth",
+        "oauth": True,
+        "pro": True,
+        "description": "Pull invoices and bills from Xero into Financials — the global alternative to QuickBooks (UK, AU, NZ, and beyond).",
+        "value": "Same Financials, Decision Engine, and reports pipeline as QuickBooks — pick the ledger you already run.",
+        "cta_route": "/app/financials",
+        "cta_label": "View financials",
+        "connect_label": "Connect Xero",
         "sync_action": True,
     },
     {
@@ -91,12 +106,22 @@ def merge_integrations(
     *,
     google_configured: bool,
     qb_configured: bool,
+    xero_configured: bool = False,
     **_kwargs,
 ) -> list[dict]:
     """Build user integration cards with live connection status."""
     google_connected = cred_crypto.credentials_present(workspace.get("google_tokens"))
     qb_connected = cred_crypto.credentials_present(workspace.get("quickbooks_tokens"))
     qb_last_synced = workspace.get("qb_last_synced_at")
+    xero_tokens = None
+    if cred_crypto.credentials_present(workspace.get("xero_tokens")):
+        try:
+            xero_tokens = cred_crypto.unseal_credentials(workspace.get("xero_tokens"))
+        except cred_crypto.CredentialCryptoError:
+            xero_tokens = None
+    xero_connected = bool(xero_tokens and xero_tokens.get("tenant_id"))
+    xero_pending = bool(xero_tokens and not xero_tokens.get("tenant_id") and xero_tokens.get("pending_tenants"))
+    xero_last_synced = workspace.get("xero_last_synced_at")
     google_tokens = None
     if google_connected:
         try:
@@ -110,6 +135,7 @@ def merge_integrations(
     oauth_configured = {
         "google": google_configured,
         "quickbooks": qb_configured,
+        "xero": xero_configured,
     }
 
     out: list[dict] = []
@@ -131,6 +157,12 @@ def merge_integrations(
             elif provider == "quickbooks":
                 item["connected"] = qb_connected
                 item["last_synced_at"] = qb_last_synced
+            elif provider == "xero":
+                item["connected"] = xero_connected
+                item["last_synced_at"] = xero_last_synced
+                item["needs_tenant_select"] = xero_pending
+                if xero_tokens and xero_tokens.get("tenant_name"):
+                    item["tenant_name"] = xero_tokens.get("tenant_name")
         elif kind == "coming_soon":
             item["configured"] = False
             item["connected"] = False
@@ -142,6 +174,8 @@ def merge_integrations(
         elif item.get("oauth"):
             if item.get("connected"):
                 item["status"] = "connected"
+            elif item.get("needs_tenant_select"):
+                item["status"] = "not_connected"
             elif not item.get("configured"):
                 item["status"] = "unavailable"
             else:
