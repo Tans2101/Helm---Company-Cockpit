@@ -3169,6 +3169,10 @@ async def telemetry(principal=Depends(get_principal)):
     qb = c.get("quickbooks_tokens")
     if cred_crypto.credentials_present(qb):
         sources.append({"label": "QuickBooks", "detail": "Accounting sync when connected", "freshness": "hourly"})
+    if cred_crypto.credentials_present(c.get("xero_tokens")):
+        sources.append({"label": "Xero", "detail": "Accounting sync when connected", "freshness": "hourly"})
+    if cred_crypto.credentials_present(c.get("hubspot_tokens")):
+        sources.append({"label": "HubSpot", "detail": "CRM deals synced into Pipeline", "freshness": "live"})
     if cred_crypto.credentials_present(c.get("google_tokens")):
         sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
     can_write = await can_section_write(principal, "telemetry", "telemetry:write")
