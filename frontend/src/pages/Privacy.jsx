@@ -1,13 +1,5 @@
 import { Link } from "react-router-dom";
 
-/*
-  NOTE (pre-publish): Google OAuth previously considered requesting gmail.readonly
-  for future email-forward intake. The live scope list in backend/server.py
-  (GOOGLE_SCOPES) currently requests calendar.readonly only — gmail is omitted.
-  If Gmail is re-added before a real feature ships, update this Privacy Policy
-  to describe the unused scope honestly before treating the policy as final.
-*/
-
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
@@ -21,7 +13,7 @@ export default function Privacy() {
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-4">Legal</p>
         <h1 className="font-serif-display text-3xl md:text-4xl font-medium tracking-tight text-white">Privacy Policy</h1>
-        <p className="text-zinc-500 text-sm mt-3">Last updated: September 3, 2026</p>
+        <p className="text-zinc-500 text-sm mt-3">Last updated: September 10, 2026</p>
 
         <div className="mt-10 space-y-8 text-[15px] text-zinc-300 leading-relaxed">
           <section>
@@ -80,8 +72,12 @@ export default function Privacy() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Google data</h2>
             <p>
               If you connect Google from Integrations, Helm requests read-only access to your{" "}
-              <span className="text-white">Google Calendar</span> events so we can show meetings in your cockpit.
-              We do not request Gmail access today. Nothing from Google is accessed until you explicitly connect the integration.
+              <span className="text-white">Google Calendar</span> events and{" "}
+              <span className="text-white">Gmail</span> metadata so we can show meetings and a small set of
+              relevant email threads in your cockpit briefing. For Gmail we read message metadata and short
+              snippets (sender, subject, preview text, and thread links) — not full email bodies — and we do
+              not store that email content in your workspace beyond what is needed to render the current briefing.
+              Nothing from Google is accessed until you explicitly connect the integration.
             </p>
           </section>
 

@@ -22,12 +22,37 @@ def test_merge_oauth_unavailable_when_not_configured():
 
 
 def test_merge_oauth_connected():
-    ws = {"workspace_id": "ws1", "google_tokens": {"access_token": "x"}, "quickbooks_tokens": {"access_token": "y"}}
+    scope = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly"
+    ws = {
+        "workspace_id": "ws1",
+        "google_tokens": {"access_token": "x", "scope": scope},
+        "quickbooks_tokens": {"access_token": "y"},
+    }
     ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
     gcal = next(i for i in ints if i["id"] == "google_calendar")
+    gmail = next(i for i in ints if i["id"] == "gmail")
     qb = next(i for i in ints if i["id"] == "quickbooks")
     assert gcal["status"] == "connected"
+    assert gmail["status"] == "connected"
     assert qb["status"] == "connected"
+
+
+def test_gmail_needs_reconsent_when_calendar_only():
+    ws = {
+        "workspace_id": "ws1",
+        "google_tokens": {
+            "access_token": "x",
+            "scope": "https://www.googleapis.com/auth/calendar.readonly",
+        },
+        "plan": "free",
+    }
+    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    gcal = next(i for i in ints if i["id"] == "google_calendar")
+    gmail = next(i for i in ints if i["id"] == "gmail")
+    assert gcal["status"] == "connected"
+    assert gmail["status"] == "not_connected"
+    assert gmail.get("needs_reconsent") is True
+    assert gmail["connect_label"] == "Enable Gmail"
 
 
 def test_merge_oauth_connected_when_sealed():
@@ -46,4 +71,8 @@ def test_coming_soon_integrations():
     github = next(i for i in ints if i["id"] == "github")
     assert github["coming_soon"] is True
     assert github["status"] == "coming_soon"
+    gmail = next(i for i in ints if i["id"] == "gmail")
+    assert gmail.get("coming_soon") is not True
+    assert gmail["kind"] == "oauth"
+    assert gmail["provider"] == "google"
     assert not any(i["id"] == "slack" for i in ints)

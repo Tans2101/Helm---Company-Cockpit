@@ -2383,7 +2383,43 @@ async def briefing(principal=Depends(get_principal)):
     b["what_to_decide"] = _briefing_what_to_decide(c)
     b["what_to_delegate"] = _briefing_what_to_delegate(c)
     b["insights_generated_at"] = c.get("insights_generated_at")
+    # Live Gmail threads for the briefing — metadata/snippets only, not persisted.
+    email_threads, gmail_meta = await _briefing_email_threads(c)
+    b["email_threads"] = email_threads
+    b["gmail_connected"] = gmail_meta["connected"]
+    b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
+
+
+async def _briefing_email_threads(workspace: dict) -> tuple[list, dict]:
+    """Fetch a few relevant Gmail threads for the briefing; never writes email content to Mongo."""
+    meta = {"connected": False, "needs_reconnect": False}
+    tokens = _integration_tokens(workspace, "google_tokens")
+    if not tokens:
+        return [], meta
+    if not gcal.has_gmail_scope(tokens):
+        meta["needs_reconnect"] = True
+        return [], meta
+    meta["connected"] = True
+    try:
+        threads, refreshed = await gcal.fetch_important_threads(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, limit=5,
+        )
+        if refreshed is not tokens:
+            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
+        return threads, meta
+    except gcal.GoogleAuthError as exc:
+        logger.warning("Gmail auth failed for %s: %s", workspace.get("workspace_id"), exc)
+        if "not granted" in str(exc).lower():
+            meta["connected"] = False
+            meta["needs_reconnect"] = True
+        else:
+            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", None)
+            meta["connected"] = False
+        return [], meta
+    except Exception:
+        logger.exception("Gmail fetch failed for %s", workspace.get("workspace_id"))
+        return [], meta
 
 
 INSIGHTS_STALE_HOURS = 24
@@ -6403,8 +6439,7 @@ api_router.add_api_route("/ai/ask-kalun", ask_helm, methods=["POST"])
 GOOGLE_SCOPES = [
     "openid", "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/calendar.readonly",
-    # gmail.readonly omitted — re-add only when email-forward document intake ships
-    # (bills forwarded to a workspace address, parsed like uploaded documents).
+    "https://www.googleapis.com/auth/gmail.readonly",
 ]
 
 

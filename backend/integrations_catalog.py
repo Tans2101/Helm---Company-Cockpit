@@ -19,11 +19,25 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Sync your real meetings into Helm Calendar and your daily briefing.",
+        "description": "Sync your real meetings into Helm Calendar and your daily briefing. Connecting Google also enables Gmail for the briefing.",
         "value": "See today's schedule, prep time, and deadlines in one place — no tab switching.",
         "cta_route": "/app/calendar",
         "cta_label": "Open calendar",
-        "connect_label": "Connect Google Calendar",
+        "connect_label": "Connect Google",
+    },
+    {
+        "id": "gmail",
+        "name": "Gmail",
+        "category": "Email",
+        "provider": "google",
+        "kind": "oauth",
+        "oauth": True,
+        "pro": True,
+        "description": "Surface important threads and external follow-ups in your morning briefing.",
+        "value": "Stay on top of customer and investor email without living in your inbox.",
+        "cta_route": "/app",
+        "cta_label": "Open briefing",
+        "connect_label": "Connect Gmail",
     },
     {
         "id": "quickbooks",
@@ -39,18 +53,6 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "cta_label": "View financials",
         "connect_label": "Connect QuickBooks",
         "sync_action": True,
-    },
-    {
-        "id": "gmail",
-        "name": "Gmail",
-        "category": "Email",
-        "provider": "google",
-        "kind": "coming_soon",
-        "oauth": False,
-        "pro": True,
-        "description": "Surface important threads, follow-ups, and executive email signals in Helm.",
-        "value": "Stay on top of customer and investor email without living in your inbox.",
-        "coming_soon": True,
     },
     {
         "id": "github",
@@ -95,6 +97,15 @@ def merge_integrations(
     google_connected = cred_crypto.credentials_present(workspace.get("google_tokens"))
     qb_connected = cred_crypto.credentials_present(workspace.get("quickbooks_tokens"))
     qb_last_synced = workspace.get("qb_last_synced_at")
+    google_tokens = None
+    if google_connected:
+        try:
+            google_tokens = cred_crypto.unseal_credentials(workspace.get("google_tokens"))
+        except cred_crypto.CredentialCryptoError:
+            google_tokens = None
+    gmail_connected = bool(
+        google_tokens and "gmail.readonly" in (google_tokens.get("scope") or "")
+    )
 
     oauth_configured = {
         "google": google_configured,
@@ -110,7 +121,12 @@ def merge_integrations(
         if kind == "oauth":
             provider = item.get("provider")
             item["configured"] = oauth_configured.get(provider, False)
-            if provider == "google":
+            if item.get("id") == "gmail":
+                item["connected"] = gmail_connected
+                if google_connected and not gmail_connected:
+                    item["connect_label"] = "Enable Gmail"
+                    item["needs_reconsent"] = True
+            elif provider == "google":
                 item["connected"] = google_connected
             elif provider == "quickbooks":
                 item["connected"] = qb_connected

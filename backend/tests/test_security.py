@@ -76,8 +76,8 @@ def test_production_requires_integration_encryption_key(monkeypatch):
     assert "INTEGRATION_ENCRYPTION_KEY" in str(exc.value)
 
 
-def test_google_scopes_exclude_gmail():
+def test_google_scopes_include_gmail():
     import server
 
-    assert "https://www.googleapis.com/auth/gmail.readonly" not in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/gmail.readonly" in server.GOOGLE_SCOPES
     assert "https://www.googleapis.com/auth/calendar.readonly" in server.GOOGLE_SCOPES

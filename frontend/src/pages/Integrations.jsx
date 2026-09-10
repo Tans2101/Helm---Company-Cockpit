@@ -123,7 +123,7 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         </button>
       )}
 
-      {!isComingSoon && (
+      {!isComingSoon && !(it.id === "gmail" && it.connected) && (
         <button
           data-testid={`action-${it.id}`}
           onClick={handleConnect}
@@ -160,7 +160,12 @@ export default function Integrations() {
 
   useEffect(() => {
     if (params.get("connected")) {
-      const name = params.get("connected") === "google" ? "Google Calendar" : params.get("connected") === "quickbooks" ? "QuickBooks" : params.get("connected");
+      const connected = params.get("connected");
+      const name = connected === "google"
+        ? "Google (Calendar & Gmail)"
+        : connected === "quickbooks"
+          ? "QuickBooks"
+          : connected;
       toast.success(`${name} connected — your data will flow into Helm`);
       setParams({});
       reload();

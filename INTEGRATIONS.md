@@ -26,7 +26,8 @@ Because Vercel proxies `/api` → Render, register the **www** URLs:
 https://www.helmcontrol.online/api/oauth/google/callback
 ```
 
-Also enable **Google Calendar API** for the project.
+Also enable **Google Calendar API** and **Gmail API** for the project.
+Scopes requested: `calendar.readonly` and `gmail.readonly` (one Google connect grants both).
 
 **Intuit Developer → your app → Keys → Redirect URI**
 
@@ -48,19 +49,21 @@ Look under `integrations` / `oauth_redirect_uris` — `configured: true` means t
 
 1. Redeploy the Render API (or wait for auto-deploy).
 2. Sign in as a workspace **owner**.
-3. Open **Integrations** → Connect Google Calendar / QuickBooks.
-4. QuickBooks: after Connect, click **Sync to Financials**.
-5. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
+3. Open **Integrations** → Connect Google (Calendar + Gmail) / QuickBooks.
+4. If Google was connected before Gmail shipped, click **Enable Gmail** once to re-consent.
+5. QuickBooks: after Connect, click **Sync to Financials**.
+6. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
 
 ## Coming soon
 
-Gmail, GitHub, Slack, and Salesforce stay “Coming soon” in the UI until those OAuth apps are built.
+GitHub and Salesforce stay “Coming soon” in the UI until those OAuth apps are built.
+Slack alerts use an Incoming Webhook on the Integrations page (not a full Slack OAuth app yet).
 
 ## Quick tester flow
 
 1. Sign in with Clerk.
 2. Set `ANTHROPIC_API_KEY` (+ R2) → generate a briefing and upload a bill.
-3. Connect Google Calendar → open Calendar.
+3. Connect Google → open Calendar and check Email on the Briefing.
 4. Connect QuickBooks → Sync to Financials.
 5. Invite a teammate (Resend sends email when `RESEND_API_KEY` is set).
 

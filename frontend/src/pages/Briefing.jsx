@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle } from "lucide-react";
+import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { GlassCard, LoadingScreen, ErrorScreen, Delta } from "@/components/kit";
@@ -191,6 +191,64 @@ export default function Briefing() {
           </div>
         )}
       </section>
+
+      {(data.email_threads?.length > 0 || data.gmail_connected || data.gmail_needs_reconnect) && (
+        <GlassCard className="p-5 mb-6 fade-up" data-testid="briefing-email">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="w-4 h-4 text-zinc-500" />
+            <BriefLabel>Email</BriefLabel>
+            {data.email_threads?.length > 0 && (
+              <span className="text-xs tabular-nums text-zinc-500 ml-auto">{data.email_threads.length}</span>
+            )}
+          </div>
+          {data.gmail_needs_reconnect && (
+            <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3">
+              <p className="text-sm text-zinc-300 leading-relaxed">
+                Google is connected for Calendar. Reconnect once to enable Gmail in your briefing.
+              </p>
+              <button
+                type="button"
+                data-testid="enable-gmail-btn"
+                onClick={() => navigate("/app/integrations")}
+                className="mt-2 text-xs text-gold hover:text-gold-hover"
+              >
+                Enable Gmail →
+              </button>
+            </div>
+          )}
+          {data.email_threads?.length > 0 ? (
+            <div className="space-y-3">
+              {data.email_threads.map((t, i) => (
+                <a
+                  key={t.id || i}
+                  href={t.thread_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={`email-thread-${i}`}
+                  className="block rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-white/15 hover:bg-white/[0.04] group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-white leading-snug truncate">{t.subject}</p>
+                      <p className="text-xs text-zinc-500 mt-1 truncate">
+                        {t.sender}{t.sender_email ? ` · ${t.sender_email}` : ""}
+                      </p>
+                    </div>
+                    <ArrowUpRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+                  </div>
+                  {t.snippet && (
+                    <p className="text-xs text-zinc-400 mt-2 leading-relaxed line-clamp-2">{t.snippet}</p>
+                  )}
+                </a>
+              ))}
+            </div>
+          ) : data.gmail_connected ? (
+            <p className="text-sm text-zinc-500 leading-relaxed">
+              No important threads in the last two weeks. Starred or Gmail-important mail will show here.
+            </p>
+          ) : null}
+        </GlassCard>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <GlassCard className="p-5 fade-up">
