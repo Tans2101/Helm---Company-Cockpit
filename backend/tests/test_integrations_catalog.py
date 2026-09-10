@@ -95,4 +95,24 @@ def test_coming_soon_integrations():
     assert gmail.get("coming_soon") is not True
     assert gmail["kind"] == "oauth"
     assert gmail["provider"] == "google"
+    hubspot = next(i for i in ints if i["id"] == "hubspot")
+    assert hubspot["kind"] == "oauth"
+    assert hubspot["provider"] == "hubspot"
+    assert hubspot.get("sync_action") is True
+    assert not any(i["id"] == "salesforce" for i in ints)
     assert not any(i["id"] == "slack" for i in ints)
+
+
+def test_hubspot_connected_when_tokens_present():
+    ws = {
+        "workspace_id": "ws1",
+        "hubspot_tokens": {"access_token": "hs", "refresh_token": "r"},
+        "hubspot_last_synced_at": "2026-09-01T00:00:00+00:00",
+        "plan": "free",
+    }
+    ints = cat.merge_integrations(
+        ws, google_configured=True, qb_configured=True, hubspot_configured=True,
+    )
+    hubspot = next(i for i in ints if i["id"] == "hubspot")
+    assert hubspot["status"] == "connected"
+    assert hubspot["last_synced_at"] == "2026-09-01T00:00:00+00:00"

@@ -82,6 +82,15 @@ export default function Privacy() {
           </section>
 
           <section>
+            <h2 className="text-lg text-white font-normal tracking-tight mb-2">CRM data (HubSpot)</h2>
+            <p>
+              HubSpot CRM data is pulled only if and when you explicitly connect HubSpot via Integrations.
+              We sync deal metadata (name, company, value, stage, close date) into your workspace Pipeline.
+              Nothing is accessed before that connection.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">QuickBooks &amp; Xero data</h2>
             <p>
               QuickBooks (Intuit) or Xero accounting data is pulled only if and when you explicitly connect that account via

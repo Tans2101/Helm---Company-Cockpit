@@ -288,15 +288,29 @@ def test_workspace_list_and_create_and_switch(owner):
 def test_integrations_oauth_present(owner):
     d = owner.get(f"{BASE_URL}/api/integrations").json()
     ints = {i["id"]: i for i in d["integrations"]}
-    for iid in ["google_calendar", "quickbooks", "gmail", "github", "xero"]:
+    for iid in ["google_calendar", "quickbooks", "gmail", "github", "xero", "hubspot"]:
         assert iid in ints, f"integration {iid} missing"
     assert ints["google_calendar"].get("oauth") is True
     assert ints["xero"].get("oauth") is True
     assert ints["xero"].get("kind") == "oauth"
+    assert ints["hubspot"].get("oauth") is True
+    assert ints["hubspot"].get("kind") == "oauth"
+    assert "salesforce" not in ints
     assert "configured" in ints["google_calendar"]
     assert "status" in ints["google_calendar"]
     assert "platform" in d
     assert "helm_ai" not in ints
+
+
+def test_hubspot_connect_returns_expected_shape(owner):
+    r = owner.get(f"{BASE_URL}/api/integrations/hubspot/connect")
+    assert r.status_code == 200
+    d = r.json()
+    if d.get("configured"):
+        assert d.get("authorization_url", "").startswith("https://app.hubspot.com")
+    else:
+        assert "message" in d
+        assert "HUBSPOT_CLIENT" in d["message"]
 
 
 def test_xero_connect_returns_expected_shape(owner):

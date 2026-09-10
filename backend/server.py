@@ -30,6 +30,7 @@ import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
 import xero as xero_sync
+import hubspot as hubspot_sync
 import google_oauth as gcal
 import integrations_catalog as integ_catalog
 import clerk_auth
@@ -204,6 +205,8 @@ QB_CLIENT_SECRET = os.environ.get('QUICKBOOKS_CLIENT_SECRET', '')
 QB_ENV = os.environ.get('QUICKBOOKS_ENV', 'sandbox')
 XERO_CLIENT_ID = os.environ.get('XERO_CLIENT_ID', '')
 XERO_CLIENT_SECRET = os.environ.get('XERO_CLIENT_SECRET', '')
+HUBSPOT_CLIENT_ID = os.environ.get('HUBSPOT_CLIENT_ID', '')
+HUBSPOT_CLIENT_SECRET = os.environ.get('HUBSPOT_CLIENT_SECRET', '')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', '')
@@ -2297,7 +2300,7 @@ class TemplateInput(BaseModel):
 
 
 _PRESERVE_WS_FIELDS = frozenset({
-    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens",
+    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens",
     "plan", "billing_provider", "paddle_subscription_id", "paddle_customer_id",
     "paddle_last_event_at", "billing_status", "subscription_status", "canceled_at",
     "workspace_id", "owner_user_id", "created_at",
@@ -6494,6 +6497,15 @@ def _provider_config(provider: str):
             "redirect_uri": redirect, "scope": xero_sync.XERO_SCOPES,
             "extra": {}, "token_field": "xero_tokens",
         }
+    if provider == "hubspot":
+        return {
+            "configured": bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
+            "auth_uri": hubspot_sync.AUTH_URL,
+            "token_uri": hubspot_sync.TOKEN_URL,
+            "client_id": HUBSPOT_CLIENT_ID, "client_secret": HUBSPOT_CLIENT_SECRET,
+            "redirect_uri": redirect, "scope": hubspot_sync.HUBSPOT_SCOPES,
+            "extra": {}, "token_field": "hubspot_tokens",
+        }
     return None
 
 
@@ -6505,6 +6517,7 @@ async def integrations(principal=Depends(get_principal)):
         google_configured=bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
         qb_configured=bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
         xero_configured=bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
+        hubspot_configured=bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
         anthropic_configured=helm_llm.anthropic_configured(),
         r2_configured=doc_storage.r2_configured(),
         resend_configured=bool(RESEND_API_KEY),
@@ -6531,11 +6544,13 @@ async def integrations(principal=Depends(get_principal)):
             "google": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
             "quickbooks": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
             "xero": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
+            "hubspot": bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
         },
         "oauth_redirect_uris": {
             "google": _oauth_callback_uri("google"),
             "quickbooks": _oauth_callback_uri("quickbooks"),
             "xero": _oauth_callback_uri("xero"),
+            "hubspot": _oauth_callback_uri("hubspot"),
         },
     }
 
@@ -6583,6 +6598,7 @@ async def integration_connect(provider: str, request: Request, principal=Depends
             "google": "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
             "quickbooks": "QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET",
             "xero": "XERO_CLIENT_ID / XERO_CLIENT_SECRET",
+            "hubspot": "HUBSPOT_CLIENT_ID / HUBSPOT_CLIENT_SECRET",
         }.get(provider, "OAuth credentials")
         return {
             "configured": False,
@@ -6618,6 +6634,18 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
                     },
                     auth=(cfg["client_id"], cfg["client_secret"]),
                     headers={"Accept": "application/json"},
+                )
+            elif provider == "hubspot":
+                tr = await hc.post(
+                    cfg["token_uri"],
+                    data={
+                        "grant_type": "authorization_code",
+                        "client_id": cfg["client_id"],
+                        "client_secret": cfg["client_secret"],
+                        "redirect_uri": cfg["redirect_uri"],
+                        "code": code,
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
             else:
                 tr = await hc.post(
@@ -6673,6 +6701,7 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
         "google": "google_tokens",
         "quickbooks": "quickbooks_tokens",
         "xero": "xero_tokens",
+        "hubspot": "hubspot_tokens",
     }.get(provider)
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
@@ -6681,6 +6710,8 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
         unset = {"qb_last_synced_at": ""}
     elif provider == "xero":
         unset = {"xero_last_synced_at": ""}
+    elif provider == "hubspot":
+        unset = {"hubspot_last_synced_at": ""}
     await _store_integration_tokens(principal["workspace_id"], field, None, extra_unset=unset)
     return {"ok": True}
 
@@ -6861,6 +6892,94 @@ async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:ma
     except Exception as exc:
         logger.exception("Xero sync failed for %s", ws_id)
         raise HTTPException(status_code=502, detail="Xero sync failed — try again shortly.") from exc
+
+
+@api_router.post("/integrations/hubspot/sync")
+async def hubspot_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    tokens = _integration_tokens(c, "hubspot_tokens")
+    if not tokens:
+        raise HTTPException(status_code=400, detail="HubSpot is not connected — connect it in Integrations first.")
+
+    try:
+        tokens = await hubspot_sync.refresh_hubspot_token(tokens)
+        await _store_integration_tokens(ws_id, "hubspot_tokens", tokens)
+
+        since = c.get("hubspot_last_synced_at")
+        deals = await hubspot_sync.fetch_deals(tokens, since)
+        synced_count = await _upsert_hubspot_deals(ws_id=ws_id, principal=principal, deals=deals)
+        last_synced_at = datetime.now(timezone.utc).isoformat()
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"hubspot_last_synced_at": last_synced_at}})
+        await log_activity(
+            principal, "integrations", "hubspot.sync",
+            f"Synced {synced_count} deal{'s' if synced_count != 1 else ''} from HubSpot",
+            {"synced_count": synced_count},
+        )
+        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
+
+    except hubspot_sync.HubSpotAuthError as exc:
+        logger.warning("HubSpot auth failed for %s: %s", ws_id, exc)
+        await _store_integration_tokens(ws_id, "hubspot_tokens", None, extra_unset={"hubspot_last_synced_at": ""})
+        raise HTTPException(
+            status_code=401,
+            detail="HubSpot connection expired — please reconnect in Integrations.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("HubSpot sync failed for %s", ws_id)
+        raise HTTPException(status_code=502, detail="HubSpot sync failed — try again shortly.") from exc
+
+
+async def _upsert_hubspot_deals(*, ws_id: str, principal: dict, deals: list) -> int:
+    """Upsert HubSpot deals into the deals collection (Pipeline-compatible shape)."""
+    synced_count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    sales_dept_id = await dept_migrate.sales_department_id(db, ws_id)
+    creator_name = (principal.get("name") or principal.get("email") or "HubSpot").strip()
+    hs_ids = _unique_ids(d.get("hubspot_deal_id") for d in deals)
+    existing_by_hs = {}
+    if hs_ids:
+        existing_rows = await db.deals.find(
+            {"workspace_id": ws_id, "hubspot_deal_id": {"$in": hs_ids}},
+            {"_id": 0, "id": 1, "hubspot_deal_id": 1},
+        ).to_list(len(hs_ids))
+        existing_by_hs = {e["hubspot_deal_id"]: e for e in existing_rows if e.get("hubspot_deal_id")}
+
+    for raw in deals:
+        hs_id = raw.get("hubspot_deal_id")
+        if not hs_id:
+            continue
+        stage = raw.get("stage") if raw.get("stage") in DEAL_STAGES else "lead"
+        fields = {
+            "name": raw.get("name") or f"HubSpot deal {hs_id}",
+            "company": raw.get("company") or "",
+            "value": round(float(raw.get("value") or 0), 2),
+            "stage": stage,
+            "owner_name": (raw.get("owner_name") or "").strip() or creator_name,
+            "close_date": raw.get("close_date") or "",
+            "source": "hubspot_sync",
+            "hubspot_deal_id": hs_id,
+            "updated_at": now_iso,
+            "department_id": sales_dept_id,
+        }
+        existing = existing_by_hs.get(hs_id)
+        if existing:
+            await db.deals.update_one(
+                {"workspace_id": ws_id, "hubspot_deal_id": hs_id},
+                {"$set": fields},
+            )
+        else:
+            entry = {
+                "id": f"deal_{uuid.uuid4().hex[:8]}",
+                "workspace_id": ws_id,
+                "created_by_user_id": principal["user_id"],
+                "created_by_name": creator_name,
+                "created_at": now_iso,
+                **fields,
+            }
+            await db.deals.insert_one(entry)
+        synced_count += 1
+    return synced_count
 
 
 @api_router.get("/integrations/google/calendar-events")
@@ -7283,7 +7402,7 @@ def _strip_sensitive(doc: dict) -> dict:
         return doc
     out = {k: v for k, v in doc.items() if k not in (
         "password", "password_hash", "oauth_session_token_enc",
-        "google_tokens", "quickbooks_tokens", "xero_tokens",
+        "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens",
     )}
     return out
 
@@ -7461,6 +7580,7 @@ async def setup_status():
         "google": _oauth_callback_uri("google"),
         "quickbooks": _oauth_callback_uri("quickbooks"),
         "xero": _oauth_callback_uri("xero"),
+        "hubspot": _oauth_callback_uri("hubspot"),
     }
     return {
         "frontend_url": FRONTEND_URL or None,
@@ -7507,6 +7627,11 @@ async def setup_status():
                 "configured": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
                 "env": ["XERO_CLIENT_ID", "XERO_CLIENT_SECRET"],
                 "redirect_uri": oauth_redirects["xero"],
+            },
+            "hubspot": {
+                "configured": bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
+                "env": ["HUBSPOT_CLIENT_ID", "HUBSPOT_CLIENT_SECRET"],
+                "redirect_uri": oauth_redirects["hubspot"],
             },
             "anthropic": {
                 "configured": helm_llm.anthropic_configured(),
@@ -7646,6 +7771,7 @@ async def _ensure_indexes():
         (db.paddle_intents, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.deals, [("workspace_id", 1)], {}),
         (db.deals, [("workspace_id", 1), ("department_id", 1)], {}),
+        (db.deals, [("workspace_id", 1), ("hubspot_deal_id", 1)], {"unique": True, "sparse": True}),
         (db.financial_entries, [("workspace_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),

@@ -15,9 +15,9 @@ const ICONS = {
   gmail: Mail,
   quickbooks: Building2,
   xero: Building2,
+  hubspot: Cloud,
   github: Github,
   slack: MessageSquare,
-  salesforce: Cloud,
 };
 
 const STATUS_LABELS = {
@@ -100,6 +100,8 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
               ? "Waiting on QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET on the server. Once set, refresh and Connect works."
               : it.provider === "xero"
                 ? "Waiting on XERO_CLIENT_ID / XERO_CLIENT_SECRET on the server. Once set, refresh and Connect works."
+                : it.provider === "hubspot"
+                  ? "Waiting on HUBSPOT_CLIENT_ID / HUBSPOT_CLIENT_SECRET on the server. Once set, refresh and Connect works."
                 : "This connection isn’t enabled on the server yet. After the API keys are set, refresh this page."}
         </p>
       )}
@@ -119,7 +121,11 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
           className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15 disabled:opacity-60"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", syncBusy && "animate-spin")} />
-          {syncBusy ? "Syncing…" : "Sync to Financials"}
+          {syncBusy
+            ? "Syncing…"
+            : it.provider === "hubspot"
+              ? "Sync to Pipeline"
+              : "Sync to Financials"}
         </button>
       )}
 
@@ -178,6 +184,8 @@ export default function Integrations() {
           ? "QuickBooks"
           : connected === "xero"
             ? "Xero"
+            : connected === "hubspot"
+              ? "HubSpot"
             : connected;
       toast.success(`${name} connected — your data will flow into Helm`);
       setParams({});
@@ -251,8 +259,9 @@ export default function Integrations() {
     setSyncingProvider(provider);
     try {
       const { data: res } = await api.post(`/integrations/${provider}/sync`, {}, { timeout: 120000 });
-      const label = provider === "xero" ? "Xero" : "QuickBooks";
-      toast.success(`Synced ${res.synced_count} transaction${res.synced_count === 1 ? "" : "s"} from ${label}`);
+      const label = provider === "xero" ? "Xero" : provider === "hubspot" ? "HubSpot" : "QuickBooks";
+      const unit = provider === "hubspot" ? "deal" : "transaction";
+      toast.success(`Synced ${res.synced_count} ${unit}${res.synced_count === 1 ? "" : "s"} from ${label}`);
       reload();
     } catch (e) {
       toast.error(e?.response?.data?.detail || `${provider} sync failed`);
@@ -321,6 +330,7 @@ export default function Integrations() {
               ["Google Calendar OAuth", platform.google],
               ["QuickBooks OAuth", platform.quickbooks],
               ["Xero OAuth", platform.xero],
+              ["HubSpot OAuth", platform.hubspot],
               ["Anthropic AI", platform.anthropic],
               ["Document storage (R2)", platform.r2],
               ["Invite email (Resend)", platform.resend],
@@ -332,7 +342,7 @@ export default function Integrations() {
               </div>
             ))}
           </div>
-          {!platform.google || !platform.quickbooks || !platform.xero ? (
+          {!platform.google || (!platform.quickbooks && !platform.xero) || !platform.hubspot ? (
             <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
               Add missing keys on Render, redeploy, then refresh. Redirect URIs must be{" "}
               <span className="font-mono text-zinc-500">https://www.helmcontrol.online/api/oauth/…/callback</span>
@@ -424,7 +434,7 @@ export default function Integrations() {
       {roadmap.length > 0 && (
         <>
           <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Coming soon</h2>
-          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — engineering and CRM.</p>
+          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — engineering tools next.</p>
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((it) => (
               <IntegrationCard

@@ -84,16 +84,19 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
     # Slack Incoming Webhook alerts are configured on the Integrations page UI
     # (not listed here) — do not re-add a coming_soon Slack OAuth card.
     {
-        "id": "salesforce",
-        "name": "Salesforce",
+        "id": "hubspot",
+        "name": "HubSpot",
         "category": "Sales",
-        "provider": "salesforce",
-        "kind": "coming_soon",
-        "oauth": False,
+        "provider": "hubspot",
+        "kind": "oauth",
+        "oauth": True,
         "pro": True,
-        "description": "Import pipeline, win rate, and forecast into Telemetry and Reports.",
-        "value": "One view of revenue from CRM through to cash in Financials.",
-        "coming_soon": True,
+        "description": "Pull HubSpot CRM deals into Helm Pipeline and Telemetry — built for SMB and mid-market teams.",
+        "value": "Open pipeline, stage, and win/loss land in the same board as deals you create manually.",
+        "cta_route": "/app/sales",
+        "cta_label": "Open pipeline",
+        "connect_label": "Connect HubSpot",
+        "sync_action": True,
     },
 ]
 
@@ -107,6 +110,7 @@ def merge_integrations(
     google_configured: bool,
     qb_configured: bool,
     xero_configured: bool = False,
+    hubspot_configured: bool = False,
     **_kwargs,
 ) -> list[dict]:
     """Build user integration cards with live connection status."""
@@ -122,6 +126,8 @@ def merge_integrations(
     xero_connected = bool(xero_tokens and xero_tokens.get("tenant_id"))
     xero_pending = bool(xero_tokens and not xero_tokens.get("tenant_id") and xero_tokens.get("pending_tenants"))
     xero_last_synced = workspace.get("xero_last_synced_at")
+    hubspot_connected = cred_crypto.credentials_present(workspace.get("hubspot_tokens"))
+    hubspot_last_synced = workspace.get("hubspot_last_synced_at")
     google_tokens = None
     if google_connected:
         try:
@@ -136,6 +142,7 @@ def merge_integrations(
         "google": google_configured,
         "quickbooks": qb_configured,
         "xero": xero_configured,
+        "hubspot": hubspot_configured,
     }
 
     out: list[dict] = []
@@ -163,6 +170,9 @@ def merge_integrations(
                 item["needs_tenant_select"] = xero_pending
                 if xero_tokens and xero_tokens.get("tenant_name"):
                     item["tenant_name"] = xero_tokens.get("tenant_name")
+            elif provider == "hubspot":
+                item["connected"] = hubspot_connected
+                item["last_synced_at"] = hubspot_last_synced
         elif kind == "coming_soon":
             item["configured"] = False
             item["connected"] = False

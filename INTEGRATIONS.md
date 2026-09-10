@@ -11,6 +11,7 @@ Users never create API keys. Once you paste keys on Render, owners click **Conne
 | **Google Calendar / Gmail** | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → OAuth 2.0 Client (Web) |
 | **QuickBooks** | `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, `QUICKBOOKS_ENV` (`production` or `sandbox`) | [Intuit Developer](https://developer.intuit.com/) → app → Keys |
 | **Xero** | `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` | [Xero Developer](https://developer.xero.com/) → My Apps → OAuth 2.0 |
+| **HubSpot** | `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET` | [HubSpot Developer](https://developers.hubspot.com/) → Apps → Auth |
 | **Anthropic** | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | [Anthropic Console](https://console.anthropic.com/settings/keys) |
 | **Cloudflare R2** | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT` | Cloudflare → R2 → Manage API tokens |
 | **Resend** | `RESEND_API_KEY`, `SENDER_EMAIL` | [Resend](https://resend.com/) — optional until invites |
@@ -49,6 +50,15 @@ If the user can access multiple Xero organisations, Helm asks them to pick one a
 
 Workspaces typically connect **either** QuickBooks **or** Xero; both can coexist without interfering.
 
+**HubSpot Developer → your app → Redirect URL**
+
+```
+https://www.helmcontrol.online/api/oauth/hubspot/callback
+```
+
+Scopes needed: `oauth`, `crm.objects.deals.read`, `crm.objects.companies.read`, `crm.schemas.deals.read`.
+After Connect, use **Sync to Pipeline** to pull deals into Helm’s Sales board (same shape as manually created deals).
+
 Verify live config (no secrets exposed):
 
 ```
@@ -61,14 +71,15 @@ Look under `integrations` / `oauth_redirect_uris` — `configured: true` means t
 
 1. Redeploy the Render API (or wait for auto-deploy).
 2. Sign in as a workspace **owner**.
-3. Open **Integrations** → Connect Google (Calendar + Gmail) / QuickBooks or Xero.
+3. Open **Integrations** → Connect Google / QuickBooks or Xero / HubSpot.
 4. If Google was connected before Gmail shipped, click **Enable Gmail** once to re-consent.
-5. QuickBooks or Xero: after Connect (and org pick for Xero if needed), click **Sync to Financials**.
-6. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
+5. Accounting: after Connect (and org pick for Xero if needed), click **Sync to Financials**.
+6. HubSpot: after Connect, click **Sync to Pipeline**.
+7. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
 
 ## Coming soon
 
-GitHub and Salesforce stay “Coming soon” in the UI until those OAuth apps are built.
+GitHub stays “Coming soon” in the UI until that OAuth app is built.
 Slack alerts use an Incoming Webhook on the Integrations page (not a full Slack OAuth app yet).
 
 ## Quick tester flow
@@ -77,6 +88,7 @@ Slack alerts use an Incoming Webhook on the Integrations page (not a full Slack 
 2. Set `ANTHROPIC_API_KEY` (+ R2) → generate a briefing and upload a bill.
 3. Connect Google → open Calendar and check Email on the Briefing.
 4. Connect QuickBooks or Xero → Sync to Financials.
-5. Invite a teammate (Resend sends email when `RESEND_API_KEY` is set).
+5. Connect HubSpot → Sync to Pipeline.
+6. Invite a teammate (Resend sends email when `RESEND_API_KEY` is set).
 
 See also `backend/.env.example` for the full variable list.
