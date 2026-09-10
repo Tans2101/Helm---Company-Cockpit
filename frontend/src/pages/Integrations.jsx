@@ -299,44 +299,47 @@ export default function Integrations() {
         </GlassCard>
       )}
 
-      {data.can_manage && (
-        <GlassCard className="p-5 mb-8 fade-up" data-testid="slack-webhook-card">
-          <div className="flex items-center gap-2 mb-2">
-            <MessageSquare className="w-4 h-4 text-gold" />
-            <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">Slack alerts (optional)</p>
-          </div>
-          <p className="text-sm text-zinc-500 mb-3 leading-relaxed">
-            Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel. Leave blank to disable.
-          </p>
-          <label className="text-xs text-zinc-500 block">
-            Incoming webhook URL
-            <input
-              data-testid="slack-webhook-input"
-              value={slackUrl}
-              onChange={(e) => setSlackUrl(e.target.value)}
-              placeholder="https://hooks.slack.com/services/…"
-              className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
-            />
-          </label>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              data-testid="save-slack-webhook-btn"
-              disabled={slackBusy}
-              onClick={saveSlackWebhook}
-              className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60"
-            >
-              {slackBusy ? "Saving…" : "Save webhook"}
-            </button>
-            {data.slack_webhook_configured && (
-              <span className="text-xs text-emerald-400 font-mono">Configured</span>
-            )}
-          </div>
-        </GlassCard>
-      )}
-
       <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Connect your accounts</h2>
       <div className="grid md:grid-cols-2 gap-4 mb-10">
+        {data.can_manage && (
+          <GlassCard className="p-5 fade-up flex flex-col" data-testid="slack-webhook-card">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-gold" />
+              </div>
+              <StatusBadge status={data.slack_webhook_configured ? "connected" : "not_connected"} />
+            </div>
+            <h3 className="text-white font-medium">Slack</h3>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">Alerts</p>
+            <p className="text-sm text-zinc-500 mt-2 leading-relaxed flex-1 min-h-[40px]">
+              Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel. Leave blank to disable.
+            </p>
+            <label className="text-xs text-zinc-500 block mt-3">
+              Incoming webhook URL
+              <input
+                data-testid="slack-webhook-input"
+                value={slackUrl}
+                onChange={(e) => setSlackUrl(e.target.value)}
+                placeholder="https://hooks.slack.com/services/…"
+                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+              />
+            </label>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="save-slack-webhook-btn"
+                disabled={slackBusy}
+                onClick={saveSlackWebhook}
+                className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60"
+              >
+                {slackBusy ? "Saving…" : "Save webhook"}
+              </button>
+              {data.slack_webhook_configured && (
+                <span className="text-xs text-emerald-400 font-mono">Configured</span>
+              )}
+            </div>
+          </GlassCard>
+        )}
         {connectable.map((it) => (
           <IntegrationCard
             key={it.id}
@@ -354,7 +357,7 @@ export default function Integrations() {
       {roadmap.length > 0 && (
         <>
           <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Coming soon</h2>
-          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — email, engineering, comms, and CRM.</p>
+          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — email, engineering, and CRM.</p>
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((it) => (
               <IntegrationCard

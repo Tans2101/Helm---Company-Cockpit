@@ -46,3 +46,4 @@ def test_coming_soon_integrations():
     github = next(i for i in ints if i["id"] == "github")
     assert github["coming_soon"] is True
     assert github["status"] == "coming_soon"
+    assert not any(i["id"] == "slack" for i in ints)

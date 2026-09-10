@@ -64,18 +64,8 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "value": "Connect your repos to see shipping pace alongside business KPIs.",
         "coming_soon": True,
     },
-    {
-        "id": "slack",
-        "name": "Slack",
-        "category": "Comms",
-        "provider": "slack",
-        "kind": "coming_soon",
-        "oauth": False,
-        "pro": True,
-        "description": "Post daily updates and decision alerts to the channels your team already uses.",
-        "value": "Keep Helm as the source of truth while updates flow where people work.",
-        "coming_soon": True,
-    },
+    # Slack Incoming Webhook alerts are configured on the Integrations page UI
+    # (not listed here) — do not re-add a coming_soon Slack OAuth card.
     {
         "id": "salesforce",
         "name": "Salesforce",
