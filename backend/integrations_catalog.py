@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import credential_crypto as cred_crypto
+
 # kind: oauth | coming_soon
 USER_INTEGRATIONS: list[dict[str, Any]] = [
     {
@@ -100,8 +102,8 @@ def merge_integrations(
     **_kwargs,
 ) -> list[dict]:
     """Build user integration cards with live connection status."""
-    google_connected = bool(workspace.get("google_tokens"))
-    qb_connected = bool(workspace.get("quickbooks_tokens"))
+    google_connected = cred_crypto.credentials_present(workspace.get("google_tokens"))
+    qb_connected = cred_crypto.credentials_present(workspace.get("quickbooks_tokens"))
     qb_last_synced = workspace.get("qb_last_synced_at")
 
     oauth_configured = {

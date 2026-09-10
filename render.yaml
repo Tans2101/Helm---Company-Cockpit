@@ -20,7 +20,7 @@ services:
     branch: main
     autoDeployTrigger: commit
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt && python scripts/check_prod_env.py && python -c "import storage, pagination, document_cleanup, rate_limit, weekly_pack_export, department_report_drafts, financial_export"
+    buildCommand: pip install --upgrade pip && pip install -r requirements-prod.txt && python scripts/check_prod_env.py && python -c "import storage, pagination, document_cleanup, rate_limit, weekly_pack_export, department_report_drafts, financial_export, credential_crypto"
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
@@ -91,6 +91,12 @@ services:
         sync: false
       - key: QUICKBOOKS_ENV
         value: production
+      - key: INTEGRATION_ENCRYPTION_KEY
+        sync: false
+        # Fernet key for OAuth / ERP credentials at rest. Generate with:
+        # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+        # Never commit the real value. After setting, run:
+        # python scripts/migrate_encrypt_integration_tokens.py
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID

@@ -49,11 +49,13 @@ def test_production_config_allows_development():
 
 def test_production_config_refuses_insecure(monkeypatch):
     import server
+    from cryptography.fernet import Fernet
 
     monkeypatch.setattr(server, "ENVIRONMENT", "production")
     monkeypatch.setattr(server, "SESSION_SECRET", "change-me-in-production")
     monkeypatch.setattr(server, "CORS_ORIGINS", [])
     monkeypatch.setattr(server, "ALLOW_DEMO_LOGIN", True)
+    monkeypatch.setenv("INTEGRATION_ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.delenv("OAUTH_STATE_SECRET", raising=False)
     with pytest.raises(RuntimeError) as exc:
         server._enforce_production_config()
@@ -62,6 +64,16 @@ def test_production_config_refuses_insecure(monkeypatch):
     assert "OAUTH_STATE_SECRET" in msg
     assert "CORS_ORIGINS" in msg
     assert "ALLOW_DEMO_LOGIN" in msg
+
+
+def test_production_requires_integration_encryption_key(monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "ENVIRONMENT", "production")
+    monkeypatch.delenv("INTEGRATION_ENCRYPTION_KEY", raising=False)
+    with pytest.raises(RuntimeError) as exc:
+        server._enforce_production_config()
+    assert "INTEGRATION_ENCRYPTION_KEY" in str(exc.value)
 
 
 def test_google_scopes_exclude_gmail():

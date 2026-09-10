@@ -83,6 +83,7 @@ Skip this if Clerk is configured. Clerk handles Google login for you.
 | `MONGO_URL` | Atlas URI from step 1 |
 | `DB_NAME` | `helm` |
 | `SESSION_SECRET` | long random string |
+| `INTEGRATION_ENCRYPTION_KEY` | Fernet key — `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` — **required in production**; never commit |
 | `OAUTH_STATE_SECRET` | long random string |
 | `FRONTEND_URL` | `https://YOUR-VERCEL-DOMAIN` (set after step 5, then update) |
 | `APP_URL` | same as `FRONTEND_URL` |
@@ -117,6 +118,18 @@ If you want legacy Pro customers on Growth or Business instead, update those wor
 6. Deploy → open `https://YOUR-API.onrender.com/api/health`  
 
 **Done when:** health returns `{"status":"ok","mongo":true}`.
+
+### Encrypt existing Google / QuickBooks tokens (one-time)
+
+After `INTEGRATION_ENCRYPTION_KEY` is set on Render (and the API has redeployed), seal any legacy plaintext token blobs:
+
+```bash
+cd backend
+INTEGRATION_ENCRYPTION_KEY=... MONGO_URL=... DB_NAME=helm \
+  python scripts/migrate_encrypt_integration_tokens.py
+```
+
+Safe to re-run. New OAuth connections are encrypted automatically; this only migrates older workspace documents.
 
 ---
 

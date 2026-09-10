@@ -48,6 +48,7 @@ import referrals as helm_referrals
 import department_report_drafts as helm_dept_drafts
 import departments_catalog as dept_catalog
 import department_access as dept_access
+import credential_crypto as cred_crypto
 import department_migrate as dept_migrate
 
 ROOT_DIR = Path(__file__).parent
@@ -147,6 +148,8 @@ DB_NAME = os.environ["DB_NAME"]
 #   CLERK_SECRET_KEY + CLERK_JWKS_URL   OR   GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
 #   ANTHROPIC_API_KEY  AI briefing / Ask Helm
 #   PADDLE_*           Billing (when BILLING_ENFORCED=true)
+#   INTEGRATION_ENCRYPTION_KEY  Fernet key for Google/QuickBooks/SAP credentials at rest
+#                               (python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 #
 # Development: leave ENVIRONMENT unset or set to "development" — placeholders are OK.
 # -----------------------------------------------------------------------------
@@ -227,6 +230,10 @@ def _enforce_production_config() -> None:
         problems.append("SESSION_SECRET must be set to a strong random value (not a placeholder)")
     if not (os.environ.get("OAUTH_STATE_SECRET") or "").strip():
         problems.append("OAUTH_STATE_SECRET must be set explicitly in production")
+    if not (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip():
+        problems.append(
+            "INTEGRATION_ENCRYPTION_KEY must be set (Fernet key for OAuth/ERP credentials at rest)"
+        )
     if not CORS_ORIGINS:
         problems.append("CORS_ORIGINS must list your frontend origin(s)")
     if ALLOW_DEMO_LOGIN:
@@ -3118,9 +3125,9 @@ async def telemetry(principal=Depends(get_principal)):
     elif manual.get("risks"):
         sources.append({"label": "Risks", "detail": "Manually maintained risk radar", "freshness": "live"})
     qb = c.get("quickbooks_tokens")
-    if qb:
+    if cred_crypto.credentials_present(qb):
         sources.append({"label": "QuickBooks", "detail": "Accounting sync when connected", "freshness": "hourly"})
-    if c.get("google_tokens"):
+    if cred_crypto.credentials_present(c.get("google_tokens")):
         sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
     can_write = await can_section_write(principal, "telemetry", "telemetry:write")
     return {
@@ -4245,7 +4252,7 @@ async def financial_export_xlsx(
 
 async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:
     """Fetch Google Calendar events for a week when connected; None if not connected."""
-    tokens = workspace.get("google_tokens")
+    tokens = _integration_tokens(workspace, "google_tokens")
     if not tokens:
         return None
     if week_start is None:
@@ -4255,10 +4262,7 @@ async def _google_calendar_snapshot(workspace: dict, week_start: Optional[dateti
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, week_start,
         )
         if refreshed is not tokens:
-            await db.workspaces.update_one(
-                {"workspace_id": workspace["workspace_id"]},
-                {"$set": {"google_tokens": refreshed}},
-            )
+            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         meetings = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
         focus_hours, meeting_hours = gcal._compute_hours(meetings)
@@ -4273,10 +4277,7 @@ async def _google_calendar_snapshot(workspace: dict, week_start: Optional[dateti
         }
     except gcal.GoogleAuthError as exc:
         logger.warning("Google Calendar auth failed for %s: %s", workspace.get("workspace_id"), exc)
-        await db.workspaces.update_one(
-            {"workspace_id": workspace["workspace_id"]},
-            {"$set": {"google_tokens": None}},
-        )
+        await _store_integration_tokens(workspace["workspace_id"], "google_tokens", None)
         return {"events": [], "meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
     except Exception:
         logger.exception("Google Calendar fetch failed for %s", workspace.get("workspace_id"))
@@ -4355,7 +4356,7 @@ async def calendar(
         data = {**dict(c["calendar"]), **live_cal}
     else:
         data = dict(c["calendar"])
-        data["live"] = bool(c.get("google_tokens"))
+        data["live"] = cred_crypto.credentials_present(c.get("google_tokens"))
         today = datetime.now(timezone.utc).date()
         seed_events = _normalize_seed_events(data.get("meetings") or [], today)
         data["events"] = seed_events
@@ -4413,7 +4414,7 @@ async def calendar(
                     existing_ids.add(ev.get("id"))
         data["events"] = events
     data["can_write"] = True
-    data["google_connected"] = bool(c.get("google_tokens"))
+    data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     return data
 
@@ -6407,6 +6408,24 @@ GOOGLE_SCOPES = [
 ]
 
 
+def _integration_tokens(workspace: dict, field: str) -> Optional[dict]:
+    """Decrypt stored Google/QuickBooks (or future SAP) credentials for use."""
+    try:
+        return cred_crypto.unseal_credentials(workspace.get(field))
+    except cred_crypto.CredentialCryptoError:
+        logger.exception("Failed to decrypt %s for workspace %s", field, workspace.get("workspace_id"))
+        return None
+
+
+async def _store_integration_tokens(workspace_id: str, field: str, tokens: Optional[dict], *, extra_set: Optional[dict] = None, extra_unset: Optional[dict] = None):
+    """Encrypt credentials before writing to the workspace document."""
+    sealed = cred_crypto.seal_credentials(tokens) if tokens else None
+    update: dict = {"$set": {field: sealed, **(extra_set or {})}}
+    if extra_unset:
+        update["$unset"] = extra_unset
+    await db.workspaces.update_one({"workspace_id": workspace_id}, update)
+
+
 def _provider_config(provider: str):
     redirect = _oauth_callback_uri(provider)
     if provider == "google":
@@ -6566,7 +6585,7 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
         if realmId:
             tokens["realmId"] = realmId
         tokens["obtained_at"] = datetime.now(timezone.utc).isoformat()
-        await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": {cfg["token_field"]: tokens}})
+        await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
     except Exception:
         logger.exception("oauth token exchange failed")
         return RedirectResponse(f"{integrations_path}?error=token")
@@ -6578,13 +6597,8 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
     field = "google_tokens" if provider == "google" else "quickbooks_tokens" if provider == "quickbooks" else None
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
-    unset = {}
-    if provider == "quickbooks":
-        unset["qb_last_synced_at"] = ""
-    update: dict = {"$set": {field: None}}
-    if unset:
-        update["$unset"] = unset
-    await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, update)
+    unset = {"qb_last_synced_at": ""} if provider == "quickbooks" else None
+    await _store_integration_tokens(principal["workspace_id"], field, None, extra_unset=unset)
     return {"ok": True}
 
 
@@ -6593,7 +6607,7 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
 async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manage"))):
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = c.get("quickbooks_tokens")
+    tokens = _integration_tokens(c, "quickbooks_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="QuickBooks is not connected — connect it in Integrations first.")
     realm_id = tokens.get("realmId")
@@ -6602,7 +6616,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 
     try:
         tokens = await qb_sync.refresh_qb_token(tokens)
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"quickbooks_tokens": tokens}})
+        await _store_integration_tokens(ws_id, "quickbooks_tokens", tokens)
 
         since = c.get("qb_last_synced_at")
         txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
@@ -6661,10 +6675,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 
     except qb_sync.QuickBooksAuthError as exc:
         logger.warning("QuickBooks auth failed for %s: %s", ws_id, exc)
-        await db.workspaces.update_one(
-            {"workspace_id": ws_id},
-            {"$set": {"quickbooks_tokens": None}, "$unset": {"qb_last_synced_at": ""}},
-        )
+        await _store_integration_tokens(ws_id, "quickbooks_tokens", None, extra_unset={"qb_last_synced_at": ""})
         raise HTTPException(
             status_code=401,
             detail="QuickBooks connection expired — please reconnect in Integrations.",
@@ -6677,7 +6688,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 @api_router.get("/integrations/google/calendar-events")
 async def google_calendar_events(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    tokens = c.get("google_tokens")
+    tokens = _integration_tokens(c, "google_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="Google not connected")
     try:
@@ -6685,16 +6696,10 @@ async def google_calendar_events(principal=Depends(get_principal)):
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, max_results=20,
         )
         if refreshed is not tokens:
-            await db.workspaces.update_one(
-                {"workspace_id": c["workspace_id"]},
-                {"$set": {"google_tokens": refreshed}},
-            )
+            await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
         return {"events": meetings, "live": True}
     except gcal.GoogleAuthError as exc:
-        await db.workspaces.update_one(
-            {"workspace_id": c["workspace_id"]},
-            {"$set": {"google_tokens": None}},
-        )
+        await _store_integration_tokens(c["workspace_id"], "google_tokens", None)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 

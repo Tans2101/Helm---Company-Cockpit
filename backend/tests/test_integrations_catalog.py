@@ -30,6 +30,16 @@ def test_merge_oauth_connected():
     assert qb["status"] == "connected"
 
 
+def test_merge_oauth_connected_when_sealed():
+    sealed = {"_helm_enc": "v1", "payload": "gAAAAABnot-a-real-token-but-present"}
+    ws = {"workspace_id": "ws1", "google_tokens": sealed, "quickbooks_tokens": sealed, "plan": "free"}
+    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    gcal = next(i for i in ints if i["id"] == "google_calendar")
+    qb = next(i for i in ints if i["id"] == "quickbooks")
+    assert gcal["status"] == "connected"
+    assert qb["status"] == "connected"
+
+
 def test_coming_soon_integrations():
     ws = {"workspace_id": "ws1", "plan": "pro"}
     ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
