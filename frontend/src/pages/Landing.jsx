@@ -88,6 +88,11 @@ export default function Landing() {
               </a>
             </motion.div>
             <motion.p variants={fade} initial="hidden" animate="show" custom={4} className="mt-6 text-xs text-zinc-500">{AUDIENCE}</motion.p>
+            <motion.p variants={fade} initial="hidden" animate="show" custom={5} className="mt-3 text-xs text-zinc-600">
+              <Link to="/security" className="text-zinc-500 hover:text-gold transition-colors">
+                How Helm protects company data →
+              </Link>
+            </motion.p>
           </div>
           <motion.div initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.9, ease, delay: 0.25 }}>
             <BriefingPreview />

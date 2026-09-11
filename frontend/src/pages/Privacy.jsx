@@ -184,6 +184,14 @@ export default function Privacy() {
           </section>
 
           <section>
+            <h2 className="text-lg text-white font-normal tracking-tight mb-2">Security practices</h2>
+            <p>
+              How Helm protects workspaces, credentials, and uploaded files is described on our{" "}
+              <Link to="/security" className="text-gold hover:underline">Security</Link> page.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Privacy questions:{" "}

@@ -138,6 +138,10 @@ export default function About() {
               className="inline-flex items-center gap-2 rounded-full border border-white/10 px-6 py-3 text-sm text-zinc-300 hover:bg-white/5 transition-colors">
               See all features
             </Link>
+            <Link to="/security"
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-6 py-3 text-sm text-zinc-300 hover:bg-white/5 transition-colors">
+              How Helm is secured
+            </Link>
           </div>
         </div>
       </section>
