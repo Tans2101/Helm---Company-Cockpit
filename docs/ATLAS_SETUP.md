@@ -81,6 +81,7 @@ You do **not** need `/helm` in the URI — Helm uses `DB_NAME=helm` separately.
 | `DB_NAME` | `helm` |
 
 3. Save and **Redeploy**
+4. In Atlas → **Backup** (or cluster **…** menu): turn on the backups your tier includes. On a free cluster that may only be on-demand snapshots — take one after first real data. Paid Flex/dedicated can enable cloud backup. Do this before inviting anyone; there is no second copy of Helm data unless Atlas has it.
 
 ---
 

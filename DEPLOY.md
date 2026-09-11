@@ -1,5 +1,21 @@
 # What you must do to launch Helm (I cannot do these for you)
 
+## Before first customer (do these; skip the rest of the infra wishlist)
+
+Helm is pre-revenue. Do not add Redis, extra Render workers, Sentry, SOC 2, or a second database. Finish this list:
+
+1. **Atlas is the only database.** Confirm Render `MONGO_URL` is Atlas and `/api/health` returns `"mongo": true`. If a `helm-mongo` private service still exists on Render, delete it so you are not paying for unused disk.
+2. **Atlas backup.** Enable whatever backup the cluster tier offers (see `docs/ATLAS_SETUP.md`). Without it, a bad write is unrecoverable.
+3. **`INTEGRATION_ENCRYPTION_KEY`** on Render (Fernet key, never committed). Then run `python scripts/migrate_encrypt_integration_tokens.py` once against Atlas so existing OAuth tokens are encrypted.
+4. **`CLERK_SECRET_KEY`** on Render **and** as a protected Vercel env var (same `sk_live_`). Do not fetch it from the API.
+5. **`INTERNAL_CRON_SECRET`** — same random value on the web service and `helm-retention-checks` cron. Do not reuse `SETUP_SECRET`.
+6. **R2 bucket stays private** (no public access). Required only if document upload is on.
+
+Then invite people. Workers, Redis, SOC 2, and Vercel Pro wait until you have real load or a paying customer who asked.
+
+---
+
+
 The code on branch `cursor/helm-production-ready-2637` is set up for **your** stack:
 Render (API) + Vercel (frontend/domain) + MongoDB Atlas + Google OAuth + Anthropic + Paddle.
 

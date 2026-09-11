@@ -1,17 +1,9 @@
 # Render Blueprint — Helm API
+# Production database is MongoDB Atlas (MONGO_URL). Do not provision a second Mongo.
+# If a leftover helm-mongo private service still exists on Render, delete it after
+# confirming /api/health shows Atlas.
 # https://render.com/docs/blueprint-spec
 services:
-  - type: pserv
-    name: helm-mongo
-    runtime: image
-    plan: starter
-    image:
-      url: docker.io/library/mongo:7
-    disk:
-      name: mongo-data
-      mountPath: /data/db
-      sizeGB: 10
-
   - type: web
     name: helm-company-cockpit
     runtime: python
@@ -30,16 +22,6 @@ services:
         value: "true"
       - key: MONGO_URL
         sync: false
-      - key: MONGO_HOST
-        fromService:
-          name: helm-mongo
-          type: pserv
-          property: host
-      - key: MONGO_HOSTPORT
-        fromService:
-          name: helm-mongo
-          type: pserv
-          property: hostport
       - key: DB_NAME
         value: helm
       - key: SESSION_SECRET

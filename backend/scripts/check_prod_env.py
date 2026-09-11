@@ -61,7 +61,7 @@ def _auth_configured() -> bool:
 def main() -> int:
     missing = [k for k in ALWAYS_REQUIRED if not (os.environ.get(k) or "").strip()]
     if not _mongo_configured():
-        missing.append("MONGO_URL or MONGO_HOST (or Render blueprint helm-mongo)")
+        missing.append("MONGO_URL (MongoDB Atlas)")
     if not _auth_configured():
         missing.extend(["CLERK_SECRET_KEY+CLERK_JWKS_URL or GOOGLE_CLIENT_ID+GOOGLE_CLIENT_SECRET"])
 
@@ -93,8 +93,7 @@ def main() -> int:
         and os.environ.get("RENDER")
     ):
         weak.append(
-            "MONGO_URL is Atlas but USE_ATLAS_MONGO=false — Render will prefer helm-mongo; "
-            "delete MONGO_URL if you only use the private Mongo service"
+            "MONGO_URL is Atlas but USE_ATLAS_MONGO=false — set USE_ATLAS_MONGO=true"
         )
 
     rec_missing = [k for k in RECOMMENDED if not (os.environ.get(k) or "").strip()]
