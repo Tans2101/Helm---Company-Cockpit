@@ -47,4 +47,11 @@ If you created the web service manually, either:
 | `SESSION_SECRET` | No | Yes |
 | `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` | No | Yes (for login) |
 
-Check: https://helm-company-cockpit.onrender.com/api/setup/status — `mongo_probes` shows which URLs were tried.
+Check with the protected setup endpoint:
+
+```bash
+curl -H "X-Setup-Secret: YOUR_SETUP_SECRET" \
+  https://helm-company-cockpit.onrender.com/api/setup/status
+```
+
+`mongo_probes` shows which URLs were tried.

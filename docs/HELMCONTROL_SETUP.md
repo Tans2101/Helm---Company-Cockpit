@@ -48,8 +48,9 @@ Remove any parking-page records Namecheap adds by default.
 2. **Settings** → **General** → **Root Directory** = `frontend`
 3. **Environment Variables**:
    - `REACT_APP_CLERK_PUBLISHABLE_KEY` = matching `pk_live_...` (same instance as Render `CLERK_SECRET_KEY`)
+   - `CLERK_SECRET_KEY` = matching `sk_live_...`, stored as a protected Vercel secret (never in `vercel.json`)
    - If unset, the app loads the publishable key from `/api/auth/config` after deploy (Render derives it from `CLERK_JWKS_URL`).
-   - `/__clerk` proxy runs on Vercel Edge and forwards to Render (no extra Vercel secrets needed).
+   - `/__clerk` proxies directly from Vercel Edge to Clerk. Render never exposes its Clerk secret.
 4. **Redeploy** production
 
 `frontend/vercel.json` already rewrites `/api/*` to Render.

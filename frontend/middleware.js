@@ -1,49 +1,21 @@
 /**
  * Clerk FAPI edge proxy — Dashboard proxy URL: https://helmcontrol.online/__clerk
  * Proxies directly to frontend-api.clerk.services (Render cannot TLS to FAPI).
- * CLERK_SECRET_KEY: Vercel env, or fetched from Render bootstrap (CLERK_PROXY_BOOTSTRAP).
+ * CLERK_SECRET_KEY must be configured directly as a protected Vercel environment variable.
  */
 const CLERK_FAPI = process.env.CLERK_FAPI_URL || "https://frontend-api.clerk.services";
-const RENDER_API =
-  process.env.RENDER_API_ORIGIN || "https://helm-company-cockpit.onrender.com";
-
-let cachedSecret = process.env.CLERK_SECRET_KEY || null;
-let secretFetchPromise = null;
 
 export const config = {
   matcher: "/__clerk/:path*",
 };
 
-async function resolveClerkSecret() {
-  if (cachedSecret) return cachedSecret;
-  if (process.env.CLERK_SECRET_KEY) {
-    cachedSecret = process.env.CLERK_SECRET_KEY;
-    return cachedSecret;
-  }
-  const bootstrap = process.env.CLERK_PROXY_BOOTSTRAP;
-  if (!bootstrap) return null;
-  if (!secretFetchPromise) {
-    secretFetchPromise = fetch(`${RENDER_API}/api/auth/clerk-edge-secret`, {
-      headers: { "X-Clerk-Bootstrap": bootstrap },
-    })
-      .then(async (r) => {
-        if (!r.ok) return null;
-        const data = await r.json();
-        return (data?.clerk_secret_key || "").trim() || null;
-      })
-      .catch(() => null);
-  }
-  cachedSecret = await secretFetchPromise;
-  return cachedSecret;
-}
-
 export default async function middleware(request) {
-  const secret = await resolveClerkSecret();
+  const secret = (process.env.CLERK_SECRET_KEY || "").trim();
   if (!secret) {
     return new Response(
       JSON.stringify({
         error: "Clerk proxy not configured",
-        hint: "Set CLERK_SECRET_KEY on Vercel or CLERK_PROXY_BOOTSTRAP + Render CLERK_PROXY_BOOTSTRAP",
+        hint: "Set CLERK_SECRET_KEY as a protected Vercel environment variable",
       }),
       { status: 500, headers: { "content-type": "application/json" } },
     );

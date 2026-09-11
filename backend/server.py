@@ -216,9 +216,9 @@ PADDLE_ENV = os.environ.get('PADDLE_ENV', 'sandbox')
 PADDLE_API_BASE = "https://sandbox-api.paddle.com" if PADDLE_ENV == "sandbox" else "https://api.paddle.com"
 CLERK_PUBLISHABLE_KEY = clerk_auth.resolve_clerk_publishable_key()
 SETUP_SECRET = os.environ.get("SETUP_SECRET", "").strip()
-INTERNAL_CRON_SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or "").strip() or SETUP_SECRET
+INTERNAL_CRON_SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or "").strip()
 # First-party analytics summary — only this email (comma-separated), not workspace admins.
-ANALYTICS_ADMIN_EMAIL = (os.environ.get("ANALYTICS_ADMIN_EMAIL") or "tansherdhawan@gmail.com").strip()
+ANALYTICS_ADMIN_EMAIL = (os.environ.get("ANALYTICS_ADMIN_EMAIL") or "").strip()
 
 _INSECURE_SESSION_SECRETS = frozenset({
     "change-me-in-production",
@@ -236,6 +236,8 @@ def _enforce_production_config() -> None:
         problems.append("SESSION_SECRET must be set to a strong random value (not a placeholder)")
     if not (os.environ.get("OAUTH_STATE_SECRET") or "").strip():
         problems.append("OAUTH_STATE_SECRET must be set explicitly in production")
+    if not INTERNAL_CRON_SECRET:
+        problems.append("INTERNAL_CRON_SECRET must be set explicitly in production")
     integration_key = (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip()
     if not integration_key:
         problems.append(
@@ -652,7 +654,7 @@ def _require_internal_cron(request: Request) -> None:
     if not INTERNAL_CRON_SECRET:
         raise HTTPException(
             status_code=503,
-            detail="Retention cron disabled (set INTERNAL_CRON_SECRET or SETUP_SECRET)",
+            detail="Retention cron disabled (set INTERNAL_CRON_SECRET)",
         )
     provided = (
         request.headers.get("X-Helm-Cron-Secret")
@@ -663,30 +665,29 @@ def _require_internal_cron(request: Request) -> None:
         provided = provided[7:].strip()
     if _secret_header_matches(provided, INTERNAL_CRON_SECRET):
         return
-    if SETUP_SECRET and _secret_header_matches(provided, SETUP_SECRET):
-        return
     raise HTTPException(status_code=401, detail="Invalid cron secret")
 
 
-def _sign_state(provider: str, workspace_id: str) -> str:
+def _sign_state(provider: str, workspace_id: str, user_id: str, nonce: str) -> str:
     ts = str(int(datetime.now(timezone.utc).timestamp()))
-    body = f"{provider}:{workspace_id}:{ts}"
-    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    body = f"{provider}:{workspace_id}:{user_id}:{nonce}:{ts}"
+    sig = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
     return f"{body}:{sig}"
 
 
 def _verify_state(state: str, max_age: int = 600):
     try:
-        provider, workspace_id, ts, sig = state.split(":")
-    except (ValueError, AttributeError):
+        provider, workspace_id, user_id, nonce, ts, sig = state.split(":")
+        age = int(datetime.now(timezone.utc).timestamp()) - int(ts)
+    except (ValueError, TypeError, AttributeError):
         return None
-    body = f"{provider}:{workspace_id}:{ts}"
-    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()[:16]
+    body = f"{provider}:{workspace_id}:{user_id}:{nonce}:{ts}"
+    expected = hmac.new(_STATE_SECRET, body.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, sig):
         return None
-    if int(datetime.now(timezone.utc).timestamp()) - int(ts) > max_age:
+    if age < 0 or age > max_age:
         return None
-    return provider, workspace_id
+    return provider, workspace_id, user_id, nonce
 
 
 # ------------------------- Email (Resend) -------------------------
@@ -1544,29 +1545,6 @@ def _auth_redirect_uri(_request: Request) -> str:
 
 def _oauth_callback_uri(provider: str) -> str:
     return f"{public_api_origin()}/api/oauth/{provider}/callback"
-
-
-@api_router.api_route("/clerk-proxy", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
-async def clerk_fapi_proxy_root(request: Request):
-    return await clerk_auth.proxy_clerk_fapi("v1/client", request)
-
-
-@api_router.api_route("/clerk-proxy/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
-async def clerk_fapi_proxy(path: str, request: Request):
-    """Browser Clerk SDK proxy — avoids broken clerk.* custom-domain TLS during provisioning."""
-    return await clerk_auth.proxy_clerk_fapi(path, request)
-
-
-@api_router.get("/auth/clerk-edge-secret")
-async def clerk_edge_secret(request: Request):
-    """Return CLERK_SECRET_KEY to Vercel edge middleware (bootstrap token required)."""
-    token = request.headers.get("X-Clerk-Bootstrap", "").strip()
-    bootstrap = clerk_auth.CLERK_PROXY_BOOTSTRAP
-    if not bootstrap or not token or not hmac.compare_digest(token, bootstrap):
-        raise HTTPException(status_code=401, detail="Invalid bootstrap token")
-    if not clerk_auth.CLERK_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Clerk is not configured on Render")
-    return {"clerk_secret_key": clerk_auth.CLERK_SECRET_KEY}
 
 
 @api_router.get("/auth/config")
@@ -3415,7 +3393,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
     source = "manual"
-    source_document_id = None
+    source_document_id = payload.source_document_id
     if source_document_id:
         # Atomic claim: only transition uploaded/extracted → committing once
         from pymongo import ReturnDocument
@@ -6624,8 +6602,17 @@ async def integration_connect(provider: str, request: Request, principal=Depends
             "message": f"Not configured yet — set {missing} on the API host, then reconnect.",
             "redirect_uri": cfg["redirect_uri"],
         }
+    nonce = secrets.token_urlsafe(24)
+    state = _sign_state(provider, principal["workspace_id"], principal["user_id"], nonce)
+    await db.oauth_states.insert_one({
+        "state_hash": hashlib.sha256(state.encode()).hexdigest(),
+        "provider": provider,
+        "workspace_id": principal["workspace_id"],
+        "user_id": principal["user_id"],
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+    })
     params = {"client_id": cfg["client_id"], "redirect_uri": cfg["redirect_uri"], "response_type": "code",
-              "scope": cfg["scope"], "state": _sign_state(provider, principal["workspace_id"]), **cfg.get("extra", {})}
+              "scope": cfg["scope"], "state": state, **cfg.get("extra", {})}
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
 
 
@@ -6639,7 +6626,22 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
     verified = _verify_state(state)
     if not verified or verified[0] != provider:
         return RedirectResponse(f"{integrations_path}?error=state")
-    workspace_id = verified[1]
+    workspace_id, user_id, _nonce = verified[1:]
+    state_row = await db.oauth_states.find_one_and_delete({
+        "state_hash": hashlib.sha256(state.encode()).hexdigest(),
+        "provider": provider,
+        "workspace_id": workspace_id,
+        "user_id": user_id,
+    })
+    if not state_row or state_row.get("expires_at") < datetime.now(timezone.utc):
+        return RedirectResponse(f"{integrations_path}?error=state")
+    membership = await db.memberships.find_one({
+        "workspace_id": workspace_id,
+        "user_id": user_id,
+        "status": "active",
+    }, {"_id": 0, "role": 1, "pack": 1, "permissions": 1})
+    if not membership or "integrations:manage" not in perms_for(pack_of(membership)):
+        return RedirectResponse(f"{integrations_path}?error=state")
     try:
         async with httpx.AsyncClient(timeout=30.0) as hc:
             if provider in ("quickbooks", "xero"):
@@ -7413,6 +7415,7 @@ _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "documents", "activities", "updates",
     "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
     "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
+    "oauth_states",
     "product_events", "production_stages", "procurement_requests", "legal_matters",
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
     "department_report_drafts",
@@ -7635,8 +7638,9 @@ async def _probe_mongo_candidates() -> list[dict]:
 
 
 @api_router.get("/setup/status")
-async def setup_status():
+async def setup_status(request: Request):
     """Production readiness probe — no secrets."""
+    _require_setup_secret(request)
     mongo_ok = await _mongo_ping()
     probes = await _probe_mongo_candidates()
     clerk_sync = clerk_auth.clerk_sync_status()
@@ -7719,8 +7723,9 @@ async def setup_status():
 
 
 @api_router.get("/setup/google-oauth")
-async def setup_google_oauth():
+async def setup_google_oauth(request: Request):
     """Clerk Google OAuth readiness — verifies redirect URI is registered in Google Cloud."""
+    _require_setup_secret(request)
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=400, detail="Clerk is not configured")
     return await clerk_auth.clerk_google_oauth_status()
@@ -7872,6 +7877,8 @@ async def _ensure_indexes():
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
         (db.insights_rate_events, [("workspace_id", 1)], {}),
         (db.ask_helm_rate_events, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.ASK_HELM_WINDOW_SECONDS}),
+        (db.oauth_states, [("state_hash", 1)], {"unique": True}),
+        (db.oauth_states, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.ask_helm_rate_events, [("workspace_id", 1)], {}),
         (db.activities, [("workspace_id", 1), ("created_at", -1)], {}),
         (db.updates, [("workspace_id", 1), ("day", 1), ("updated_at", -1)], {}),

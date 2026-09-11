@@ -18,7 +18,11 @@ Do these steps in order. After each step, check the “Done when” line.
 The code on branch `cursor/helm-production-ready-2637` is set up for **your** stack:
 Render (API) + Vercel (frontend) + MongoDB Atlas + Clerk + Anthropic + Paddle.
 
-When `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` are set on Render and `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel, Helm uses **Clerk for login** automatically.
+When `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` are set on Render and
+`REACT_APP_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` are set as protected
+Vercel environment variables, Helm uses **Clerk for login** automatically.
+The secret must be configured independently on each host; the API never
+returns it to the frontend deployment.
 
 ---
 
@@ -201,7 +205,8 @@ curl -sf -X POST "https://www.helmcontrol.online/api/internal/run-retention-chec
   -H "X-Helm-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
 ```
 
-`X-Setup-Secret` is also accepted if it matches `SETUP_SECRET`. Set `INTERNAL_CRON_SECRET` on both services to the same string.
+Set `INTERNAL_CRON_SECRET` on both services to the same dedicated random
+value. Do not reuse `SETUP_SECRET`.
 
 - Trial reminder: workspaces with `subscription_status=trialing` whose trial ends within ~2 days, once per trial (`trial_reminder_sent`).
 - Inactivity nudge: no Briefing visit (`last_active_at`) for 5+ days, once per inactivity window (`inactivity_nudge_sent_at`).

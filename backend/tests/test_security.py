@@ -3,10 +3,14 @@ import asyncio
 import io
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import HTTPException, UploadFile
+from fastapi.testclient import TestClient
 from starlette.datastructures import Headers
 
 # Ensure server module can import (needs Mongo env at import time).
@@ -96,6 +100,50 @@ def test_google_scopes_include_gmail():
 
     assert "https://www.googleapis.com/auth/gmail.readonly" in server.GOOGLE_SCOPES
     assert "https://www.googleapis.com/auth/calendar.readonly" in server.GOOGLE_SCOPES
+
+
+def test_integration_oauth_state_is_user_bound_and_single_use():
+    import server
+
+    fake_db = MagicMock()
+    fake_db.oauth_states.insert_one = AsyncMock()
+    config = {
+        "configured": True,
+        "client_id": "client",
+        "redirect_uri": "https://api.example.test/callback",
+        "auth_uri": "https://provider.example.test/authorize",
+        "scope": "read",
+    }
+    principal = {"workspace_id": "ws_1", "user_id": "user_1", "pack": "owner"}
+
+    with patch.object(server, "db", fake_db), patch.object(
+        server, "_provider_config", return_value=config,
+    ):
+        result = asyncio.run(server.integration_connect("google", MagicMock(), principal))
+
+    state = parse_qs(urlparse(result["authorization_url"]).query)["state"][0]
+    assert server._verify_state(state)[:3] == ("google", "ws_1", "user_1")
+    stored = fake_db.oauth_states.insert_one.await_args.args[0]
+    assert stored["workspace_id"] == "ws_1"
+    assert stored["user_id"] == "user_1"
+    assert stored["expires_at"] > datetime.now(timezone.utc)
+    assert state not in str(stored)
+
+
+def test_removed_clerk_secret_and_proxy_endpoints_are_not_exposed():
+    import server
+
+    client = TestClient(server.app)
+    assert client.get("/api/auth/clerk-edge-secret").status_code == 404
+    assert client.get("/api/clerk-proxy/v1/client").status_code == 404
+
+
+def test_setup_status_requires_setup_secret(monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "SETUP_SECRET", "setup-secret")
+    client = TestClient(server.app)
+    assert client.get("/api/setup/status").status_code == 401
 
 
 def _upload(data: bytes, content_type: str) -> UploadFile:

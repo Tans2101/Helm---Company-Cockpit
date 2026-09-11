@@ -59,10 +59,11 @@ https://www.helmcontrol.online/api/oauth/hubspot/callback
 Scopes needed: `oauth`, `crm.objects.deals.read`, `crm.objects.companies.read`, `crm.schemas.deals.read`.
 After Connect, use **Sync to Pipeline** to pull deals into Helm’s Sales board (same shape as manually created deals).
 
-Verify live config (no secrets exposed):
+Verify live config with the Render `SETUP_SECRET`:
 
 ```
-GET https://www.helmcontrol.online/api/setup/status
+curl -H "X-Setup-Secret: YOUR_SETUP_SECRET" \
+  https://www.helmcontrol.online/api/setup/status
 ```
 
 Look under `integrations` / `oauth_redirect_uris` — `configured: true` means the env vars are present.

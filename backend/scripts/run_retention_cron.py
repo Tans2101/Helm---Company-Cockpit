@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 
 URL = (os.environ.get("RETENTION_CRON_URL") or "").strip()
-SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or os.environ.get("SETUP_SECRET") or "").strip()
+SECRET = (os.environ.get("INTERNAL_CRON_SECRET") or "").strip()
 
 
 def main() -> int:
@@ -15,7 +15,7 @@ def main() -> int:
         print("RETENTION_CRON_URL is not set", file=sys.stderr)
         return 1
     if not SECRET:
-        print("INTERNAL_CRON_SECRET (or SETUP_SECRET) is not set", file=sys.stderr)
+        print("INTERNAL_CRON_SECRET is not set", file=sys.stderr)
         return 1
     req = urllib.request.Request(
         URL,

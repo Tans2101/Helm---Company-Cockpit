@@ -372,6 +372,41 @@ def test_cleanup_skips_committed_documents():
     mock_coll.delete_one.assert_not_awaited()
 
 
+def test_financial_entry_commits_its_source_document():
+    import asyncio
+
+    mock_db = MagicMock()
+    mock_db.documents.find_one_and_update = AsyncMock(return_value={
+        "id": "doc_1",
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "status": "committing",
+    })
+    mock_db.documents.update_one = AsyncMock()
+    mock_db.financial_entries.insert_one = AsyncMock()
+    payload = server.FinEntryInput(
+        type="expense",
+        category="Travel",
+        amount=125,
+        month="2026-09",
+        source_document_id="doc_1",
+    )
+
+    with patch.object(server, "db", mock_db), patch.object(
+        server.dept_migrate, "finance_department_id", new=AsyncMock(return_value="dept_fin"),
+    ), patch.object(
+        server, "_workspace_currency", new=AsyncMock(return_value="USD"),
+    ), patch.object(server, "log_activity", new=AsyncMock()):
+        result = asyncio.run(server.add_fin_entry(payload, MOCK_PRINCIPAL))
+
+    assert result["entry"]["source"] == "ai_upload"
+    assert result["entry"]["source_document_id"] == "doc_1"
+    mock_db.documents.find_one_and_update.assert_awaited_once()
+    mock_db.documents.update_one.assert_awaited_once_with(
+        {"id": "doc_1", "workspace_id": MOCK_PRINCIPAL["workspace_id"]},
+        {"$set": {"status": "committed", "linked_entry_id": result["entry"]["id"]}},
+    )
+
+
 def test_free_lifetime_extract_quota_asks_to_upgrade(client):
     doc_id = "doc_free_quota"
     server.db.documents.find_one = AsyncMock(return_value={
