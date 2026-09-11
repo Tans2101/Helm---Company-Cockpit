@@ -137,7 +137,7 @@ def unseal_credentials(data: Any) -> Optional[SecretDict]:
             raise CredentialCryptoError("Decrypted credentials are not a mapping")
         return parsed
     if isinstance(data, dict):
-        # Legacy plaintext — migrate later via scripts/migrate_encrypt_integration_tokens.py
+        # Legacy plaintext — sealed on API startup / migrate_encrypt_integration_tokens.py
         return dict(data)
     raise CredentialCryptoError(f"Unexpected credential storage type: {type(data).__name__}")
 

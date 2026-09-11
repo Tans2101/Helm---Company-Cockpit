@@ -1,17 +1,13 @@
 # What you must do to launch Helm (I cannot do these for you)
 
-## Before first customer (do these; skip the rest of the infra wishlist)
+## Before first customer
 
-Helm is pre-revenue. Do not add Redis, extra Render workers, Sentry, SOC 2, or a second database. Finish this list:
+Production is already on **MongoDB Atlas** (`/api/health` → `"mongo_source": "atlas"`). Clerk’s secret is already on Vercel. OAuth tokens are sealed automatically on API boot when `INTEGRATION_ENCRYPTION_KEY` is set. Do not add Redis, extra workers, Sentry, or SOC 2 yet.
 
-1. **Atlas is the only database.** Confirm Render `MONGO_URL` is Atlas and `/api/health` returns `"mongo": true`. If a `helm-mongo` private service still exists on Render, delete it so you are not paying for unused disk.
-2. **Atlas backup.** Enable whatever backup the cluster tier offers (see `docs/ATLAS_SETUP.md`). Without it, a bad write is unrecoverable.
-3. **`INTEGRATION_ENCRYPTION_KEY`** on Render (Fernet key, never committed). Then run `python scripts/migrate_encrypt_integration_tokens.py` once against Atlas so existing OAuth tokens are encrypted.
-4. **`CLERK_SECRET_KEY`** on Render **and** as a protected Vercel env var (same `sk_live_`). Do not fetch it from the API.
-5. **`INTERNAL_CRON_SECRET`** — same random value on the web service and `helm-retention-checks` cron. Do not reuse `SETUP_SECRET`.
-6. **R2 bucket stays private** (no public access). Required only if document upload is on.
+Only two dashboard clicks I cannot do from here:
 
-Then invite people. Workers, Redis, SOC 2, and Vercel Pro wait until you have real load or a paying customer who asked.
+1. **Render** → if a private service named `helm-mongo` still exists, delete it. The API is not using it.
+2. **MongoDB Atlas** → cluster → Backup: turn on whatever your tier includes (or take a snapshot). There is no Helm-side copy of the database.
 
 ---
 

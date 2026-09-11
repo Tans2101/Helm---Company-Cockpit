@@ -7972,6 +7972,7 @@ async def startup():
     # Do not block Render health checks — indexes / migrations run after listen.
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(_run_sales_finance_migration())
+    asyncio.create_task(_seal_plaintext_integration_tokens())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
     if clerk_auth.clerk_configured():
         asyncio.create_task(clerk_auth.prefetch_jwks())
@@ -7983,6 +7984,43 @@ async def _run_sales_finance_migration() -> None:
         await dept_migrate.migrate_all_workspaces_sales_finance(db)
     except Exception:
         logger.exception("sales/finance department migration failed")
+
+
+_INTEGRATION_TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens")
+
+
+async def _seal_plaintext_integration_tokens() -> None:
+    """Encrypt leftover plaintext OAuth blobs. Idempotent; does not fail boot."""
+    try:
+        cred_crypto.encrypt_credential("startup-seal-probe")
+    except cred_crypto.CredentialCryptoError:
+        logger.warning("skip token seal: INTEGRATION_ENCRYPTION_KEY is not usable")
+        return
+    try:
+        cursor = db.workspaces.find(
+            {"$or": [{field: {"$type": "object"}} for field in _INTEGRATION_TOKEN_FIELDS]},
+            {"_id": 1, "workspace_id": 1, **{field: 1 for field in _INTEGRATION_TOKEN_FIELDS}},
+        )
+        updated = 0
+        async for doc in cursor:
+            patch = {}
+            for field in _INTEGRATION_TOKEN_FIELDS:
+                raw = doc.get(field)
+                if not cred_crypto.needs_reencryption(raw):
+                    continue
+                sealed = cred_crypto.seal_credentials(raw)
+                opened = cred_crypto.unseal_credentials(sealed)
+                if opened != dict(raw):
+                    logger.error("token seal round-trip mismatch for %s %s", doc.get("workspace_id"), field)
+                    continue
+                patch[field] = sealed
+            if patch:
+                await db.workspaces.update_one({"_id": doc["_id"]}, {"$set": patch})
+                updated += 1
+        if updated:
+            logger.info("sealed plaintext integration tokens on %s workspace(s)", updated)
+    except Exception:
+        logger.exception("plaintext integration token seal failed")
 
 
 @app.on_event("shutdown")

@@ -173,3 +173,37 @@ def test_document_upload_stops_at_size_limit():
         asyncio.run(_read_validated_document(oversized))
     assert exc.value.status_code == 400
     assert "15MB" in exc.value.detail
+
+
+def test_startup_seals_plaintext_integration_tokens():
+    import server
+    import credential_crypto as crypto
+
+    plaintext = {"access_token": "ya29.plain", "refresh_token": "1//r"}
+    stored = [{"_id": "oid1", "workspace_id": "ws_1", "google_tokens": plaintext}]
+
+    class TokenCursor:
+        def __init__(self, rows):
+            self.rows = list(rows)
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not self.rows:
+                raise StopAsyncIteration
+            return self.rows.pop(0)
+
+    workspaces = MagicMock()
+    workspaces.find = MagicMock(return_value=TokenCursor(stored))
+    workspaces.update_one = AsyncMock()
+    fake_db = MagicMock()
+    fake_db.workspaces = workspaces
+
+    with patch.object(server, "db", fake_db):
+        asyncio.run(server._seal_plaintext_integration_tokens())
+
+    workspaces.update_one.assert_awaited_once()
+    sealed = workspaces.update_one.await_args.args[1]["$set"]["google_tokens"]
+    assert crypto.is_sealed_credentials(sealed)
+    assert crypto.unseal_credentials(sealed)["access_token"] == "ya29.plain"
