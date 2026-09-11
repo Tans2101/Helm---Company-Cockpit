@@ -98,6 +98,7 @@ export default function Features() {
           <p className="mt-4 text-sm text-zinc-600 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
             <Link to="/#pricing" className="text-zinc-500 hover:text-white transition-colors">View pricing</Link>
             <Link to="/about" className="text-zinc-500 hover:text-white transition-colors">About Helm</Link>
+            <Link to="/security" className="text-zinc-500 hover:text-white transition-colors">Security</Link>
           </p>
         </div>
       </section>

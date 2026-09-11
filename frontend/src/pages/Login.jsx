@@ -125,6 +125,8 @@ function LoginClerk() {
             <span className="mx-2 text-zinc-700">·</span>
             <Link to="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
             <span className="mx-2 text-zinc-700">·</span>
+            <Link to="/security" className="hover:text-zinc-400 transition-colors">Security</Link>
+            <span className="mx-2 text-zinc-700">·</span>
             <Link to="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
             <span className="mx-2 text-zinc-700">·</span>
             <Link to="/refunds" className="hover:text-zinc-400 transition-colors">Refunds</Link>

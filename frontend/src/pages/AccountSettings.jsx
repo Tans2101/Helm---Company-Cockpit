@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, AlertTriangle, ScrollText, Sun, Moon, Monitor, Check } from "lucide-react";
+import { Download, Trash2, AlertTriangle, ScrollText, Sun, Moon, Monitor, Check, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
@@ -131,6 +132,22 @@ export default function AccountSettings() {
         title="Account settings"
         subtitle="Appearance, departments, referrals, data export, and account controls."
       />
+
+      <GlassCard className="p-5 mb-4 fade-up">
+        <div className="flex items-center gap-1.5 mb-2 text-gold">
+          <ShieldCheck className="w-4 h-4" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
+        </div>
+        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+          How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.
+        </p>
+        <Link
+          to="/security"
+          className="inline-flex items-center text-sm text-gold hover:text-gold-hover"
+        >
+          Read how Helm protects company data →
+        </Link>
+      </GlassCard>
 
       <GlassCard className="p-5 mb-4 fade-up" data-testid="appearance-settings">
         <div className="flex items-center gap-1.5 mb-2 text-gold">

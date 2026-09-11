@@ -92,8 +92,11 @@ export default function Refunds() {
             <p>
               See also our{" "}
               <Link to="/terms" className="text-gold hover:underline">Terms of Service</Link>
-              {" "}and{" "}
-              <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>.
+              {", "}
+              <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>
+              {", and "}
+              <Link to="/security" className="text-gold hover:underline">Security</Link>
+              {" "}page.
             </p>
           </section>
 

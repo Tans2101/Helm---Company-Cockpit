@@ -322,6 +322,8 @@ export default function Billing() {
         {" · "}
         <Link to="/privacy" className="text-zinc-500 hover:text-zinc-300 transition-colors">Privacy</Link>
         {" · "}
+        <Link to="/security" className="text-zinc-500 hover:text-zinc-300 transition-colors">Security</Link>
+        {" · "}
         <Link to="/refunds" className="text-zinc-500 hover:text-zinc-300 transition-colors">Refunds</Link>
       </p>
       <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-600 mt-3">

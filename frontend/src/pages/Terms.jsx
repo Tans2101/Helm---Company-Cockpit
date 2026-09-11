@@ -125,6 +125,8 @@ export default function Terms() {
             <p>
               How we handle personal and business data is described in our{" "}
               <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>.
+              Current product security practices are described on the{" "}
+              <Link to="/security" className="text-gold hover:underline">Security</Link> page.
             </p>
           </section>
 
