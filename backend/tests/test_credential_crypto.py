@@ -65,3 +65,10 @@ def test_already_sealed_is_idempotent():
     again = cc.seal_credentials(sealed)
     assert again == sealed
     assert cc.unseal_credentials(again)["access_token"] == "once"
+
+
+def test_production_rejects_non_fernet_key(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("INTEGRATION_ENCRYPTION_KEY", "weak-passphrase")
+    with pytest.raises(cc.CredentialCryptoError):
+        cc.encrypt_credential("secret")

@@ -236,10 +236,16 @@ def _enforce_production_config() -> None:
         problems.append("SESSION_SECRET must be set to a strong random value (not a placeholder)")
     if not (os.environ.get("OAUTH_STATE_SECRET") or "").strip():
         problems.append("OAUTH_STATE_SECRET must be set explicitly in production")
-    if not (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip():
+    integration_key = (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip()
+    if not integration_key:
         problems.append(
             "INTEGRATION_ENCRYPTION_KEY must be set (Fernet key for OAuth/ERP credentials at rest)"
         )
+    else:
+        try:
+            cred_crypto.encrypt_credential("production-config-check")
+        except cred_crypto.CredentialCryptoError:
+            problems.append("INTEGRATION_ENCRYPTION_KEY must be a valid Fernet key")
     if not CORS_ORIGINS:
         problems.append("CORS_ORIGINS must list your frontend origin(s)")
     if ALLOW_DEMO_LOGIN:
@@ -1704,7 +1710,7 @@ async def google_callback(
                 },
             )
             if token_res.status_code >= 400:
-                logger.error("google token error: %s", token_res.text[:400])
+                logger.error("google token exchange failed with status %s", token_res.status_code)
                 return RedirectResponse(fail)
             tokens = token_res.json()
             access = tokens.get("access_token")
@@ -1715,7 +1721,7 @@ async def google_callback(
                 headers={"Authorization": f"Bearer {access}"},
             )
             if info_res.status_code >= 400:
-                logger.error("google userinfo error: %s", info_res.text[:400])
+                logger.error("google userinfo failed with status %s", info_res.status_code)
                 return RedirectResponse(fail)
             info = info_res.json()
         user = await _upsert_google_user(
@@ -3257,6 +3263,23 @@ ALLOWED_DOC_TYPES = frozenset({"application/pdf", "image/png", "image/jpeg"})
 MAX_DOC_BYTES = 15 * 1024 * 1024
 
 
+async def _read_validated_document(file: UploadFile) -> bytes:
+    """Read a bounded upload and verify its bytes match the claimed media type."""
+    data = await file.read(MAX_DOC_BYTES + 1)
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    signatures = {
+        "application/pdf": (b"%PDF-",),
+        "image/png": (b"\x89PNG\r\n\x1a\n",),
+        "image/jpeg": (b"\xff\xd8\xff",),
+    }
+    if not any(data.startswith(sig) for sig in signatures.get(file.content_type, ())):
+        raise HTTPException(status_code=400, detail="File content does not match its declared type.")
+    return data
+
+
 @api_router.post("/documents/upload")
 async def upload_financial_document(
     file: UploadFile = File(...),
@@ -3269,11 +3292,7 @@ async def upload_financial_document(
     )
     if file.content_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
-    data = await file.read()
-    if len(data) > MAX_DOC_BYTES:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
+    data = await _read_validated_document(file)
     if not doc_storage.r2_configured():
         raise HTTPException(status_code=503, detail="Document storage is not configured")
     filename = (file.filename or "document").replace("/", "_").replace("\\", "_")[:200]
@@ -5701,11 +5720,7 @@ async def upload_legal_matter_document(
 
     if file.content_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
-    data = await file.read()
-    if len(data) > MAX_DOC_BYTES:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
+    data = await _read_validated_document(file)
     if not doc_storage.r2_configured():
         raise HTTPException(status_code=503, detail="Document storage is not configured")
 
@@ -6664,11 +6679,11 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
                     headers={"Accept": "application/json"},
                 )
         if tr.status_code >= 400:
-            logger.error("oauth token exchange %s failed: %s", provider, tr.text[:500])
+            logger.error("oauth token exchange %s failed with status %s", provider, tr.status_code)
             return RedirectResponse(f"{integrations_path}?error=token")
         tokens = tr.json()
         if tokens.get("error"):
-            logger.error("oauth token error %s: %s", provider, tokens)
+            logger.error("oauth token response contained an error for %s", provider)
             return RedirectResponse(f"{integrations_path}?error=token")
         if realmId:
             tokens["realmId"] = realmId
@@ -7395,9 +7410,12 @@ async def paddle_webhook(request: Request):
 
 # ------------------------- GDPR / account -------------------------
 _WORKSPACE_COLLECTIONS = (
-    "financial_entries", "deals", "activities", "updates", "chat_messages",
-    "paddle_intents", "payment_transactions", "procurement_requests", "legal_matters",
+    "financial_entries", "deals", "documents", "activities", "updates",
+    "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
+    "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
+    "product_events", "production_stages", "procurement_requests", "legal_matters",
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
+    "department_report_drafts",
 )
 
 
@@ -7506,9 +7524,51 @@ async def delete_account(user=Depends(get_user)):
 
 
 async def _delete_workspace_data(ws_id: str):
+    # Delete private objects before their Mongo references. If object storage is
+    # unavailable, fail visibly so the owner can retry instead of silently
+    # leaving inaccessible customer files behind.
+    document_rows = await db.documents.find(
+        {"workspace_id": ws_id}, {"_id": 0, "storage_key": 1},
+    ).to_list(10000)
+    legal_rows = await db.legal_matters.find(
+        {"workspace_id": ws_id}, {"_id": 0, "document_ref": 1},
+    ).to_list(10000)
+    storage_keys = {
+        row.get("storage_key")
+        for row in document_rows
+        if row.get("storage_key")
+    }
+    for row in legal_rows:
+        ref = row.get("document_ref") or {}
+        if isinstance(ref, dict) and ref.get("storage_key"):
+            storage_keys.add(ref["storage_key"])
+    if storage_keys:
+        if not doc_storage.r2_configured():
+            raise HTTPException(
+                status_code=503,
+                detail="Document storage is unavailable; workspace deletion was not completed. Try again shortly.",
+            )
+        for key in storage_keys:
+            try:
+                await asyncio.to_thread(doc_storage.delete_document, key)
+            except Exception as exc:
+                logger.exception("workspace deletion could not remove private object %s", key)
+                raise HTTPException(
+                    status_code=503,
+                    detail="A private document could not be deleted; workspace deletion was not completed. Try again shortly.",
+                ) from exc
+
+    departments = await db.departments.find(
+        {"workspace_id": ws_id}, {"_id": 0, "department_id": 1},
+    ).to_list(1000)
+    department_ids = [d["department_id"] for d in departments if d.get("department_id")]
+    if department_ids:
+        await db.department_members.delete_many({"department_id": {"$in": department_ids}})
     for coll in _WORKSPACE_COLLECTIONS:
         await db[coll].delete_many({"workspace_id": ws_id})
+    await db.departments.delete_many({"workspace_id": ws_id})
     await db.memberships.delete_many({"workspace_id": ws_id})
+    await db.referrals.delete_many({"referred_workspace_id": ws_id})
     await db.workspaces.delete_one({"workspace_id": ws_id})
 
 
@@ -7740,6 +7800,28 @@ if not _serve_static:
 
 app.include_router(api_router)
 
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Apply conservative browser and cache controls to every response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=()",
+    )
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if ENVIRONMENT == "production":
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+    return response
+
+
 _cors_origins = list(dict.fromkeys(
     CORS_ORIGINS + clerk_auth.helm_frontend_origins()
 )) or (clerk_auth.helm_frontend_origins() or ["http://localhost:3000"])
@@ -7770,26 +7852,33 @@ async def _ensure_indexes():
         (db.workspaces, [("join_code", 1)], {"unique": True, "sparse": True}),
         (db.user_sessions, [("session_token", 1)], {"unique": True}),
         (db.user_sessions, [("expires_at", 1)], {"expireAfterSeconds": 0}),
+        (db.user_sessions, [("user_id", 1)], {}),
         (db.paddle_events, [("_id", 1)], {"unique": True}),
         (db.paddle_intents, [("_id", 1)], {"unique": True}),
         (db.paddle_intents, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.deals, [("workspace_id", 1)], {}),
         (db.deals, [("workspace_id", 1), ("department_id", 1)], {}),
+        (db.deals, [("workspace_id", 1), ("updated_at", -1), ("id", -1)], {}),
         (db.deals, [("workspace_id", 1), ("hubspot_deal_id", 1)], {"unique": True, "sparse": True}),
         (db.financial_entries, [("workspace_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1)], {}),
+        (db.financial_entries, [("workspace_id", 1), ("department_id", 1), ("month", -1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
+        (db.documents, [("status", 1), ("uploaded_at", 1)], {}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
         (db.insights_rate_events, [("workspace_id", 1)], {}),
         (db.ask_helm_rate_events, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.ASK_HELM_WINDOW_SECONDS}),
         (db.ask_helm_rate_events, [("workspace_id", 1)], {}),
-        (db.activities, [("workspace_id", 1)], {}),
-        (db.updates, [("workspace_id", 1)], {}),
-        (db.chat_messages, [("workspace_id", 1)], {}),
+        (db.activities, [("workspace_id", 1), ("created_at", -1)], {}),
+        (db.updates, [("workspace_id", 1), ("day", 1), ("updated_at", -1)], {}),
+        (db.updates, [("user_id", 1)], {}),
+        (db.chat_messages, [("workspace_id", 1), ("user_id", 1), ("created_at", 1)], {}),
+        (db.chat_messages, [("user_id", 1)], {}),
+        (db.private_notes, [("workspace_id", 1), ("user_id", 1), ("created_at", -1)], {}),
         (db.departments, [("workspace_id", 1), ("type", 1)], {"unique": True}),
         (db.departments, [("department_id", 1)], {"unique": True}),
         (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),

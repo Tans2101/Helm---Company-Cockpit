@@ -1,9 +1,13 @@
 """Security helpers and production guardrails."""
+import asyncio
+import io
 import os
 import sys
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException, UploadFile
+from starlette.datastructures import Headers
 
 # Ensure server module can import (needs Mongo env at import time).
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
@@ -13,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server import _allowed_auth_redirect  # noqa: E402
+from server import _allowed_auth_redirect, _read_validated_document  # noqa: E402
 
 
 @pytest.mark.parametrize(
@@ -76,8 +80,48 @@ def test_production_requires_integration_encryption_key(monkeypatch):
     assert "INTEGRATION_ENCRYPTION_KEY" in str(exc.value)
 
 
+def test_production_rejects_invalid_integration_encryption_key(monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "ENVIRONMENT", "production")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("INTEGRATION_ENCRYPTION_KEY", "not-a-fernet-key")
+    with pytest.raises(RuntimeError) as exc:
+        server._enforce_production_config()
+    assert "valid Fernet key" in str(exc.value)
+
+
 def test_google_scopes_include_gmail():
     import server
 
     assert "https://www.googleapis.com/auth/gmail.readonly" in server.GOOGLE_SCOPES
     assert "https://www.googleapis.com/auth/calendar.readonly" in server.GOOGLE_SCOPES
+
+
+def _upload(data: bytes, content_type: str) -> UploadFile:
+    return UploadFile(
+        file=io.BytesIO(data),
+        filename="document",
+        headers=Headers({"content-type": content_type}),
+    )
+
+
+def test_document_upload_validates_magic_bytes():
+    pdf = _upload(b"%PDF-1.7\nsafe", "application/pdf")
+    assert asyncio.run(_read_validated_document(pdf)).startswith(b"%PDF-")
+
+    disguised = _upload(b"<script>alert(1)</script>", "application/pdf")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_read_validated_document(disguised))
+    assert exc.value.status_code == 400
+    assert "declared type" in exc.value.detail
+
+
+def test_document_upload_stops_at_size_limit():
+    import server
+
+    oversized = _upload(b"%PDF-" + b"x" * server.MAX_DOC_BYTES, "application/pdf")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(_read_validated_document(oversized))
+    assert exc.value.status_code == 400
+    assert "15MB" in exc.value.detail

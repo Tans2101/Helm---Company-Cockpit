@@ -133,3 +133,12 @@ def test_upload_document_does_not_touch_pdf_bytes():
 
     assert captured["Body"] == pdf
     assert captured["Body"] is pdf
+    assert captured["CacheControl"] == "private, no-store"
+
+
+def test_presigned_urls_expire_after_fifteen_minutes():
+    fake = MagicMock()
+    fake.generate_presigned_url.return_value = "https://example.test/private"
+    with patch.object(storage, "_client", return_value=fake):
+        assert storage.get_presigned_url("ws_test/invoice.pdf") == "https://example.test/private"
+    assert fake.generate_presigned_url.call_args.kwargs["ExpiresIn"] == 900

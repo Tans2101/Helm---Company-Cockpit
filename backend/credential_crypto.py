@@ -60,7 +60,11 @@ def _fernet_key_bytes() -> bytes:
         key = raw.encode("utf-8")
         Fernet(key)  # validate shape
         return key
-    except Exception:
+    except Exception as exc:
+        if _is_production():
+            raise CredentialCryptoError(
+                "INTEGRATION_ENCRYPTION_KEY must be a valid Fernet key in production"
+            ) from exc
         return base64.urlsafe_b64encode(hashlib.sha256(raw.encode("utf-8")).digest())
 
 

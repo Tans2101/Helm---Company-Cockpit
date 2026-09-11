@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import lru_cache
 from io import BytesIO
 from uuid import uuid4
 
@@ -31,7 +32,9 @@ def r2_configured() -> bool:
     return bool(R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME and R2_ENDPOINT)
 
 
+@lru_cache(maxsize=1)
 def _client():
+    """Reuse one thread-safe boto3 client and its HTTP connection pool."""
     if not r2_configured():
         raise RuntimeError("R2 storage is not configured")
     return boto3.client(
@@ -124,6 +127,7 @@ def upload_document(workspace_id: str, file_bytes: bytes, filename: str, content
         Key=key,
         Body=body,
         ContentType=content_type,
+        CacheControl="private, no-store",
     )
     return key
 
@@ -133,7 +137,7 @@ def get_document_bytes(key: str) -> bytes:
     return resp["Body"].read()
 
 
-def get_presigned_url(key: str, expires_in: int = 3600) -> str:
+def get_presigned_url(key: str, expires_in: int = 900) -> str:
     return _client().generate_presigned_url(
         "get_object",
         Params={"Bucket": R2_BUCKET_NAME, "Key": key},
