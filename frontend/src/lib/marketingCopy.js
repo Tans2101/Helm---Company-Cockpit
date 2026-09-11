@@ -6,6 +6,8 @@ export const AUDIENCE = "Built for CEOs running companies of up to 50 people —
 export const FOUNDER_NAME = "Tansher Dhawan";
 export const FOUNDER_ROLE = "CEO & Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
+export const PUBLIC_CONTACT_EMAIL = "contact@helmcontrol.online";
+export const PUBLIC_CONTACT_MAILTO = `mailto:${PUBLIC_CONTACT_EMAIL}`;
 export const FOUNDER_NOTE =
   "Helm is built and run by Tansher Dhawan, CEO & Founder — a CEO making the cockpit he wished existed for running a company of this size."
 

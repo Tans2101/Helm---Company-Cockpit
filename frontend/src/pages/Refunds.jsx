@@ -24,7 +24,7 @@ export default function Refunds() {
               <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>) through{" "}
               <span className="text-white">Paddle</span> (merchant of record).
               Contact:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}· BGC, Taguig, Philippines.
             </p>
           </section>
@@ -55,7 +55,7 @@ export default function Refunds() {
               This includes the first charge after a trial and any subsequent renewal charges. Please use the free trial
               to evaluate Helm before your card is charged. If you believe a charge was made in error (for example a
               duplicate transaction), contact us at{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}and we will work with Paddle to investigate.
             </p>
           </section>
@@ -104,7 +104,7 @@ export default function Refunds() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Billing questions:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}· Helm Control · BGC, Taguig, Philippines.
             </p>
           </section>

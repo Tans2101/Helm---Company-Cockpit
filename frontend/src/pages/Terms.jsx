@@ -24,7 +24,7 @@ export default function Terms() {
               <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>. If you use Helm on behalf of a company,
               you represent that you have authority to bind that company.
               Contact:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}· BGC, Taguig, Philippines.
             </p>
           </section>
@@ -134,7 +134,7 @@ export default function Terms() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Questions about these Terms:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}· Helm Control · BGC, Taguig, Philippines.
             </p>
           </section>

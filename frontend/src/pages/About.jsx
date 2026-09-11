@@ -6,7 +6,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
-  ABOUT_STORY, AUDIENCE, CATEGORY, FOUNDER_CREDIT, FOUNDER_NOTE, MISSION, TAGLINE, VALUES, VISION, WHO_HELM_IS_FOR,
+  ABOUT_STORY, AUDIENCE, CATEGORY, FOUNDER_CREDIT, FOUNDER_NOTE, MISSION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO, TAGLINE, VALUES, VISION, WHO_HELM_IS_FOR,
 } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -57,6 +57,9 @@ export default function About() {
               {FOUNDER_NOTE}
             </p>
             <p className="mt-3 font-mono text-xs uppercase tracking-[0.2em] text-gold">{FOUNDER_CREDIT}</p>
+            <p className="mt-4 text-sm text-zinc-500">
+              <a href={PUBLIC_CONTACT_MAILTO} className="text-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
+            </p>
           </motion.div>
         </div>
       </section>

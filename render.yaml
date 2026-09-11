@@ -115,6 +115,9 @@ services:
         sync: false
       - key: SENDER_EMAIL
         sync: false
+        # After Resend verifies send.helmcontrol.online, set:
+        # Helm <contact@helmcontrol.online>
+        # Until then, Resend will reject sends from this domain.
       - key: INTERNAL_CRON_SECRET
         sync: false
       - key: ANALYTICS_ADMIN_EMAIL

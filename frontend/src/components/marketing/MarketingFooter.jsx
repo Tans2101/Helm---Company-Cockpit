@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
-import { CATEGORY, FOUNDER_CREDIT, TAGLINE } from "@/lib/marketingCopy";
+import { CATEGORY, FOUNDER_CREDIT, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO, TAGLINE } from "@/lib/marketingCopy";
 
 const FOOTER_LINKS = [
   { to: "/", label: "Home" },
@@ -26,6 +26,9 @@ export default function MarketingFooter() {
             <p className="text-xs text-zinc-500 max-w-xs leading-relaxed mt-1">
               The {CATEGORY.toLowerCase()} for CEOs running companies of up to 50 people — funded or not. One cockpit. Clear decisions. Quiet control.
             </p>
+            <a href={PUBLIC_CONTACT_MAILTO} className="text-xs text-zinc-500 hover:text-white transition-colors mt-2">
+              {PUBLIC_CONTACT_EMAIL}
+            </a>
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-zinc-500" aria-label="Footer">
             {FOOTER_LINKS.map((l) => (

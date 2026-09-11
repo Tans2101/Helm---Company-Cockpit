@@ -13,7 +13,7 @@ export default function Privacy() {
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-4">Legal</p>
         <h1 className="font-serif-display text-3xl md:text-4xl font-medium tracking-tight text-white">Privacy Policy</h1>
-        <p className="text-zinc-500 text-sm mt-3">Last updated: September 10, 2026</p>
+        <p className="text-zinc-500 text-sm mt-3">Last updated: September 11, 2026</p>
 
         <div className="mt-10 space-y-8 text-[15px] text-zinc-300 leading-relaxed">
           <section>
@@ -23,7 +23,7 @@ export default function Privacy() {
               operated by <span className="text-white">Tansher Dhawan, CEO &amp; Founder</span>,
               collects and uses information when you use <span className="text-white">Helm</span>, our company cockpit product.
               Contact:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>.
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>.
               Postal address: BGC, Taguig, Philippines.
             </p>
           </section>
@@ -195,7 +195,7 @@ export default function Privacy() {
             <h2 className="text-lg text-white font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Privacy questions:{" "}
-              <a href="mailto:tansherdhawan@gmail.com" className="text-gold hover:underline">tansherdhawan@gmail.com</a>
+              <a href="mailto:contact@helmcontrol.online" className="text-gold hover:underline">contact@helmcontrol.online</a>
               {" "}· Helm Control · BGC, Taguig, Philippines.
             </p>
           </section>

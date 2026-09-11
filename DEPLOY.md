@@ -4,10 +4,13 @@
 
 Production is already on **MongoDB Atlas** (`/api/health` → `"mongo_source": "atlas"`). Clerk’s secret is already on Vercel. OAuth tokens are sealed automatically on API boot when `INTEGRATION_ENCRYPTION_KEY` is set. Do not add Redis, extra workers, Sentry, or SOC 2 yet.
 
-Only two dashboard clicks I cannot do from here:
+Only dashboard clicks I cannot do from here:
 
 1. **Render** → if a private service named `helm-mongo` still exists, delete it. The API is not using it.
-2. **MongoDB Atlas** → cluster → Backup: turn on whatever your tier includes (or take a snapshot). There is no Helm-side copy of the database.
+2. **MongoDB Atlas** → cluster → Backup: turn on whatever your tier includes (or take a snapshot).
+3. **Public email** `contact@helmcontrol.online` is on the site/legal pages. Still set it in **Clerk** (support email) and **Paddle** (seller/customer email).
+4. **DMARC** (Namecheap TXT, Host `_dmarc`): `v=DMARC1; p=none; rua=mailto:contact@helmcontrol.online`
+5. **Resend**: add domain `send.helmcontrol.online` (not the root — Workspace already owns MX on `@`). Paste Resend’s DNS, then set Render `SENDER_EMAIL` to `Helm <contact@helmcontrol.online>`. Do **not** add a second SPF on `@`.
 
 ---
 

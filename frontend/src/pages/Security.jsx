@@ -313,7 +313,7 @@ export default function Security() {
                 </p>
                 <p className="mt-4 text-sm text-zinc-400">
                   Found a security concern?{" "}
-                  <a className="text-gold hover:underline" href="mailto:tansherdhawan@gmail.com?subject=Helm%20security%20report">
+                  <a className="text-gold hover:underline" href="mailto:contact@helmcontrol.online?subject=Helm%20security%20report">
                     Report it privately
                   </a>
                   .
