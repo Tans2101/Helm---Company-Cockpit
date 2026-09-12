@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { fetchAuthConfig } from "@/lib/api";
 import { getClerkPublishableKey } from "@/lib/clerkConfig";
-import { clerkPostAuthUrl, helmAppUrl } from "@/lib/helmUrls";
+import { clerkPostAuthUrl, helmAppUrl, helmSignInUrl, helmSignUpUrl } from "@/lib/helmUrls";
 
 function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
@@ -202,8 +202,8 @@ export default function ClerkProviderBootstrap({ children }) {
       <ClerkProvider
         publishableKey={state.publishableKey}
         {...(state.clerkUseProxy ? { proxyUrl: clerkProxyUrl() } : {})}
-        signInUrl="/login"
-        signUpUrl="/sign-up"
+        signInUrl={helmSignInUrl(state.helmCanonicalOrigin)}
+        signUpUrl={helmSignUpUrl(state.helmCanonicalOrigin)}
         signInForceRedirectUrl={redirectUrl}
         signUpForceRedirectUrl={redirectUrl}
         signInFallbackRedirectUrl={redirectUrl}

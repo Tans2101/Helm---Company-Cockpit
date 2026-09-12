@@ -21,6 +21,12 @@ if str(ROOT) not in sys.path:
 import clerk_auth  # noqa: E402
 
 
+def test_clerk_google_oauth_redirect_uris_include_account_portal():
+    uris = clerk_auth.clerk_google_oauth_redirect_uris()
+    assert "https://clerk.helmcontrol.online/v1/oauth_callback" in uris
+    assert "https://accounts.helmcontrol.online/v1/oauth_callback" in uris
+
+
 def test_helm_frontend_origins_includes_helmcontrol():
     origins = clerk_auth.helm_frontend_origins()
     assert "https://helmcontrol.online" in origins

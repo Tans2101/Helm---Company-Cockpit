@@ -9,7 +9,7 @@ import { LoadingScreen } from "@/components/kit";
 import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
-import { clerkPostAuthUrl } from "@/lib/helmUrls";
+import { clerkPostAuthUrl, helmSignUpUrl } from "@/lib/helmUrls";
 import { TAGLINE, CATEGORY, HERO_SUB } from "@/lib/marketingCopy";
 import AuthMarketingHeader from "@/components/marketing/AuthMarketingHeader";
 
@@ -29,8 +29,9 @@ export default function Login() {
 }
 
 function LoginClerk() {
-  const { postAuthUrl } = useClerkMode();
+  const { postAuthUrl, helmCanonicalOrigin } = useClerkMode();
   const redirectUrl = clerkPostAuthUrl(postAuthUrl);
+  const signUpPath = helmSignUpUrl(helmCanonicalOrigin);
   const [searchParams] = useSearchParams();
   const urlError = searchParams.get("error");
   const { user, loading, sessionError, clearSessionError } = useAuth();
@@ -113,8 +114,8 @@ function LoginClerk() {
               appearance={clerkAppearance}
               routing="path"
               path="/login"
-              signUpUrl="/sign-up"
-              oauthFlow="redirect"
+              signUpUrl={signUpPath}
+              oauthFlow="auto"
               forceRedirectUrl={redirectUrl}
               fallbackRedirectUrl={redirectUrl}
             />

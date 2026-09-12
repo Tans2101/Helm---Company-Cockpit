@@ -322,12 +322,22 @@ async def _clerk_primary_domain_record() -> dict[str, Any] | None:
     return None
 
 
-def clerk_google_oauth_redirect_uri() -> str | None:
-    """Clerk production Google OAuth callback — must match Google Cloud Console."""
+def clerk_google_oauth_redirect_uris() -> list[str]:
+    """Google Cloud authorized redirect URIs Clerk may send for this instance."""
     host = clerk_jwks_host()
     if not host or host.endswith(".clerk.accounts.dev"):
-        return None
-    return f"https://{host}/v1/oauth_callback"
+        return []
+    uris = [f"https://{host}/v1/oauth_callback"]
+    if host.startswith("clerk."):
+        apex = host[len("clerk.") :]
+        uris.append(f"https://accounts.{apex}/v1/oauth_callback")
+    return uris
+
+
+def clerk_google_oauth_redirect_uri() -> str | None:
+    """Primary Clerk production Google OAuth callback — must match Google Cloud Console."""
+    uris = clerk_google_oauth_redirect_uris()
+    return uris[0] if uris else None
 
 
 async def _clerk_google_client_id() -> str | None:
@@ -387,9 +397,11 @@ async def _clerk_google_client_id() -> str | None:
 async def clerk_google_oauth_status() -> dict[str, Any]:
     """Probe whether Google OAuth redirect URI is registered for Clerk sign-in."""
     redirect_uri = clerk_google_oauth_redirect_uri()
+    redirect_uris = clerk_google_oauth_redirect_uris()
     client_id = await _clerk_google_client_id()
     result: dict[str, Any] = {
         "redirect_uri": redirect_uri,
+        "redirect_uris": redirect_uris,
         "client_id": client_id,
         "redirect_uri_registered": None,
         "ok": False,
@@ -408,25 +420,35 @@ async def clerk_google_oauth_status() -> dict[str, Any]:
         "https://helmcontrol.online",
         "https://www.helmcontrol.online",
         "https://clerk.helmcontrol.online",
+        "https://accounts.helmcontrol.online",
     ]
     try:
         from urllib.parse import urlencode
 
-        params = urlencode(
-            {
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-                "response_type": "code",
-                "scope": "openid email profile",
-            }
-        )
         async with httpx.AsyncClient(timeout=12, follow_redirects=False) as client:
-            r = await client.get(f"https://accounts.google.com/o/oauth2/auth?{params}")
-            loc = r.headers.get("location", "")
-            mismatch = "oauth/error" in loc or "redirect_uri_mismatch" in loc
-            result["redirect_uri_registered"] = not mismatch
-            result["ok"] = not mismatch
-            result["reason"] = "redirect_uri_mismatch" if mismatch else "ok"
+            registered: dict[str, bool] = {}
+            for uri in redirect_uris:
+                params = urlencode(
+                    {
+                        "client_id": client_id,
+                        "redirect_uri": uri,
+                        "response_type": "code",
+                        "scope": "openid email profile",
+                    }
+                )
+                r = await client.get(f"https://accounts.google.com/o/oauth2/auth?{params}")
+                loc = r.headers.get("location", "")
+                registered[uri] = not ("oauth/error" in loc or "redirect_uri_mismatch" in loc)
+            primary_ok = registered.get(redirect_uri, False)
+            result["redirect_uri_checks"] = registered
+            result["redirect_uri_registered"] = primary_ok
+            result["ok"] = primary_ok
+            missing = [u for u, ok in registered.items() if not ok]
+            result["reason"] = "ok" if primary_ok else "redirect_uri_mismatch"
+            if missing:
+                result["missing_redirect_uris"] = missing
+                if primary_ok:
+                    result["reason"] = "ok_add_account_portal_uri"
     except Exception as exc:
         result["reason"] = "probe_failed"
         result["error"] = str(exc)[:200]
@@ -904,11 +926,23 @@ async def sync_clerk_account_portal(primary: str, app_url: str | None = None) ->
                 "after_create_organization_url": target,
                 "after_leave_organization_url": target,
             }
+            origin = primary.rstrip("/")
+            extra_paths = {
+                "sign_in_url": f"{origin}/login",
+                "sign_up_url": f"{origin}/sign-up",
+                "home_url": origin,
+            }
             patch_r = await client.patch(
                 f"{CLERK_BAPI}/account_portal",
                 headers=headers,
-                json=patch_body,
+                json={**patch_body, **extra_paths},
             )
+            if patch_r.status_code == 422:
+                patch_r = await client.patch(
+                    f"{CLERK_BAPI}/account_portal",
+                    headers=headers,
+                    json=patch_body,
+                )
             if patch_r.status_code >= 400:
                 result["reason"] = f"patch_{patch_r.status_code}"
                 result["error"] = patch_r.text[:500]
