@@ -24,6 +24,7 @@ export default function Tasks() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyTask());
   const [busy, setBusy] = useState(false);
+  const [clearingDone, setClearingDone] = useState(false);
 
   useEffect(() => {
     if (!focusTaskId || !data?.items?.length) return;
@@ -71,6 +72,41 @@ export default function Tasks() {
     if (dragId) { move(dragId, col); setDragId(null); }
   };
 
+  const clearDone = async () => {
+    if (clearingDone) return;
+    setClearingDone(true);
+    let snapshot = null;
+    setData((prev) => {
+      if (!prev) return prev;
+      snapshot = prev;
+      return {
+        ...prev,
+        items: prev.items.filter((t) => {
+          if (t.column !== "done") return true;
+          if (prev.can_assign) return false;
+          if (!t.assignee_user_id || t.assignee_user_id === prev.my_user_id) return false;
+          return true;
+        }),
+      };
+    });
+    try {
+      const res = await api.delete("/tasks/done");
+      const n = res?.data?.cleared ?? 0;
+      if (n === 0) {
+        if (snapshot) setData(snapshot);
+        toast.message("No finished tasks to clear");
+      } else {
+        toast.success(n === 1 ? "Cleared 1 finished task" : `Cleared ${n} finished tasks`);
+        reload();
+      }
+    } catch (e) {
+      if (snapshot) setData(snapshot);
+      toast.error(e?.response?.data?.detail || "Could not clear finished tasks");
+    } finally {
+      setClearingDone(false);
+    }
+  };
+
   const submit = async () => {
     if (!form.title.trim()) { toast.error("Add a title"); return; }
     setBusy(true);
@@ -103,9 +139,22 @@ export default function Tasks() {
             onDrop={() => onDrop(col.id)}
             data-testid={`column-${col.id}`}
             className="rounded-xl border border-white/5 bg-white/[0.015] p-3 min-h-[200px]">
-            <div className="flex items-center justify-between px-1 mb-3">
+            <div className="flex items-center justify-between gap-2 px-1 mb-3">
               <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-400">{col.name}</span>
-              <span className="font-mono text-xs text-zinc-600">{items.length}</span>
+              <div className="flex items-center gap-2">
+                {col.id === "done" && items.length > 0 && (
+                  <button
+                    type="button"
+                    data-testid="clear-done-tasks-btn"
+                    onClick={clearDone}
+                    disabled={clearingDone}
+                    className="text-[10px] font-medium text-zinc-500 hover:text-helm-fg transition-colors disabled:opacity-60"
+                  >
+                    {clearingDone ? "Clearing…" : "Clear finished tasks"}
+                  </button>
+                )}
+                <span className="font-mono text-xs text-zinc-600">{items.length}</span>
+              </div>
             </div>
             <div className="space-y-2">
               {items.map((t) => {

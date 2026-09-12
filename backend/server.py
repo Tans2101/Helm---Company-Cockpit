@@ -3729,6 +3729,31 @@ async def patch_task(task_id: str, payload: TaskPatch, principal=Depends(require
     return {"ok": True}
 
 
+@api_router.delete("/tasks/done")
+async def clear_done_tasks(principal=Depends(require_pro_perm("tasks:move"))):
+    """Remove finished (Done) tasks from the board."""
+    c = await get_ws(principal["workspace_id"])
+    t = c["tasks"]
+    can_assign = await can_section_write(principal, "tasks", "tasks:assign")
+    uid = principal["user_id"]
+    kept, cleared = [], 0
+    for item in t.get("items") or []:
+        if item.get("column") != "done":
+            kept.append(item)
+            continue
+        owns = item.get("assignee_user_id") == uid
+        unassigned = not item.get("assignee_user_id")
+        if can_assign or owns or unassigned:
+            cleared += 1
+        else:
+            kept.append(item)
+    if cleared:
+        t["items"] = kept
+        await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+        await log_activity(principal, "tasks", "tasks.clear_done", f"Cleared {cleared} finished task{'s' if cleared != 1 else ''}")
+    return {"ok": True, "cleared": cleared}
+
+
 # ------------------------- Daily updates -------------------------
 class UpdateInput(BaseModel):
     text: str

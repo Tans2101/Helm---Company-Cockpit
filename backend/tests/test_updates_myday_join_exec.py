@@ -178,6 +178,27 @@ def test_member_cannot_assign_to_other(member):
     assert r.status_code == 403
 
 
+def test_clear_done_tasks_removes_finished(member, owner):
+    created = []
+    for title in ("TEST_clear_done_a", "TEST_clear_done_b"):
+        r = member.post(f"{BASE_URL}/api/tasks", json={"title": title})
+        assert r.status_code == 200
+        tid = r.json()["task"]["id"]
+        created.append(tid)
+        assert member.patch(f"{BASE_URL}/api/tasks/{tid}", json={"column": "done"}).status_code == 200
+    open_r = member.post(f"{BASE_URL}/api/tasks", json={"title": "TEST_clear_done_open"})
+    assert open_r.status_code == 200
+    open_id = open_r.json()["task"]["id"]
+    r = member.delete(f"{BASE_URL}/api/tasks/done")
+    assert r.status_code == 200
+    assert r.json()["cleared"] >= 2
+    items = owner.get(f"{BASE_URL}/api/tasks").json()["items"]
+    ids = {t["id"] for t in items}
+    assert open_id in ids
+    for tid in created:
+        assert tid not in ids
+
+
 def test_move_own_task_to_done_sets_progress(member):
     # create a task
     r = member.post(f"{BASE_URL}/api/tasks", json={"title": "TEST_to_done"})
