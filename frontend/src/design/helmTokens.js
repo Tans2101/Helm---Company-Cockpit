@@ -8,7 +8,7 @@
  *   helm-cream — primary light background
  *
  * FLAG — extra keys, not the four-color print palette:
- *   ink / inkCard — dark marketing + in-app dark surfaces (so navy is never a page fill)
+ *   ink / inkCard — original near-black dark surfaces (#09090b / #121214)
  *   goldHover — derived gold for hover
  *   status* — meaning colors for deltas/errors, not brand
  */
