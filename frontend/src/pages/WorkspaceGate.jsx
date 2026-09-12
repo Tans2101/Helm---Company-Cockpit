@@ -79,7 +79,7 @@ export default function WorkspaceGate() {
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40" />
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40" />
             </label>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setMode(null)} className="rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2.5 hover:bg-white/5">Back</button>
@@ -93,7 +93,7 @@ export default function WorkspaceGate() {
             <label className="text-xs text-zinc-500">Company name
               <input data-testid="gate-name-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Inc."
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40" />
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40" />
             </label>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setMode(null)} className="rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2.5 hover:bg-white/5">Back</button>

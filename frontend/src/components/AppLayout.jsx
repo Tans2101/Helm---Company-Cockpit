@@ -76,8 +76,8 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
   return (
     <div className="px-3 pt-3 relative">
       <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 transition-colors hover:border-white/10">
-        <div className="w-6 h-6 rounded bg-gold/15 border border-gold/30 flex items-center justify-center text-[11px] text-gold font-mono shrink-0">
+        className="w-full flex items-center gap-2 rounded-md border border-helm-line bg-helm-card px-3 py-2 transition-colors hover:border-helm-gold/40">
+        <div className="w-6 h-6 rounded bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
           {active.name?.[0]?.toUpperCase() || "K"}
         </div>
         <div className="flex-1 min-w-0 text-left">
@@ -87,7 +87,7 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
         <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute left-3 right-3 mt-1 z-50 rounded-md border border-white/10 bg-[#141417] shadow-xl overflow-hidden">
+        <div className="absolute left-3 right-3 mt-1 z-50 rounded-md border border-helm-line bg-helm-card shadow-xl overflow-hidden">
           {list.map((w) => (
             <button key={w.workspace_id} onClick={() => switchWs(w.workspace_id)}
               data-testid={`ws-option-${w.workspace_id}`}
@@ -116,10 +116,10 @@ function SidebarContent({ onNavigate, billingEnforced }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-6 border-b border-white/5">
+      <div className="px-6 py-6 border-b border-helm-line">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold text-sm font-medium">H</span>
+          <div className="w-8 h-8 rounded-md bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center">
+            <span className="font-mono text-helm-gold text-sm font-medium">H</span>
           </div>
           <div>
             <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Helm</p>
@@ -262,19 +262,19 @@ export default function AppLayout() {
         </div>
       )}
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] flex-col bg-[#09090b] border-r border-white/5 z-40">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] flex-col bg-helm-bg border-r border-helm-line z-40">
         <SidebarContent billingEnforced={billingEnforced} />
       </aside>
 
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-[#09090b]/90 backdrop-blur-md border-b border-white/5">
+      <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-helm-bg/95 backdrop-blur-md border-b border-helm-line">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center">
-            <span className="font-mono text-gold text-xs">H</span>
+          <div className="w-7 h-7 rounded-md bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center">
+            <span className="font-mono text-helm-gold text-xs">H</span>
           </div>
-          <span className="text-white font-semibold text-sm">Helm</span>
+          <span className="text-helm-fg font-semibold text-sm">Helm</span>
         </div>
-        <button data-testid="mobile-menu-btn" onClick={() => setMobileOpen(true)} className="text-white">
+        <button data-testid="mobile-menu-btn" onClick={() => setMobileOpen(true)} className="text-helm-fg">
           <Menu className="w-5 h-5" />
         </button>
       </div>
@@ -282,7 +282,7 @@ export default function AppLayout() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/70" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[280px] bg-[#09090b] border-r border-white/10">
+          <div className="absolute inset-y-0 left-0 w-[280px] bg-helm-bg border-r border-helm-line">
             <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 text-zinc-400 z-10">
               <X className="w-5 h-5" />
             </button>

@@ -398,7 +398,7 @@ export default function Integrations() {
                 value={slackUrl}
                 onChange={(e) => setSlackUrl(e.target.value)}
                 placeholder="https://hooks.slack.com/services/…"
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
               />
             </label>
             <div className="mt-4 flex items-center gap-2">

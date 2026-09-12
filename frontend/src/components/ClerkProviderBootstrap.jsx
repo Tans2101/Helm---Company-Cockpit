@@ -31,7 +31,7 @@ export function useClerkMode() {
 
 function ConfigErrorScreen({ message }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-helm-ink p-8 text-center">
       <p className="text-lg text-white mb-2">Sign-in configuration problem</p>
       <p className="text-sm text-rose-400 max-w-md">{message}</p>
       <button

@@ -1,0 +1,12 @@
+{
+  "navy": "#14213D",
+  "gold": "#C9A24B",
+  "slate": "#6B7280",
+  "cream": "#F5F0E6",
+  "ink": "#0C1224",
+  "inkCard": "#161E35",
+  "goldHover": "#D4B45C",
+  "statusPositive": "#15803D",
+  "statusNegative": "#BE123C",
+  "statusWarning": "#B45309"
+}

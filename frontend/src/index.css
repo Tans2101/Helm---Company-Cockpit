@@ -4,26 +4,60 @@
 
 @layer base {
     :root {
-        --background: 240 10% 3.5%;
-        --foreground: 0 0% 98%;
-        --card: 240 6% 8%;
-        --card-foreground: 0 0% 98%;
-        --popover: 240 6% 7%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 41 47% 59%;
-        --primary-foreground: 40 30% 8%;
-        --secondary: 240 5% 14%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 240 5% 12%;
-        --muted-foreground: 240 5% 60%;
-        --accent: 240 5% 14%;
-        --accent-foreground: 0 0% 98%;
+        --helm-navy: theme("colors.helm.navy");
+        --helm-gold: theme("colors.helm.gold");
+        --helm-slate: theme("colors.helm.slate");
+        --helm-cream: theme("colors.helm.cream");
+        --helm-ink: theme("colors.helm.ink");
+        --helm-ink-card: theme("colors.helm.ink-card");
+
+        /* Dark marketing + default document (marketing stays dark regardless of cockpit theme) */
+        --helm-fg: var(--helm-cream);
+        --helm-bg: var(--helm-ink);
+        --helm-card: var(--helm-ink-card);
+        --helm-muted: var(--helm-slate);
+        --helm-line: color-mix(in srgb, var(--helm-cream) 14%, transparent);
+
+        --background: 226 44% 9%;
+        --foreground: 40 33% 93%;
+        --card: 226 38% 15%;
+        --card-foreground: 40 33% 93%;
+        --popover: 226 38% 15%;
+        --popover-foreground: 40 33% 93%;
+        --primary: 41 55% 54%;
+        --primary-foreground: 221 51% 16%;
+        --secondary: 226 30% 18%;
+        --secondary-foreground: 40 33% 93%;
+        --muted: 226 20% 18%;
+        --muted-foreground: 220 9% 46%;
+        --accent: 226 30% 18%;
+        --accent-foreground: 40 33% 93%;
         --destructive: 0 72% 51%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 240 5% 16%;
-        --input: 240 5% 16%;
-        --ring: 41 47% 59%;
+        --destructive-foreground: 40 33% 93%;
+        --border: 226 20% 22%;
+        --input: 226 20% 22%;
+        --ring: 41 55% 54%;
         --radius: 0.5rem;
+    }
+
+    html[data-theme="light"] {
+        --helm-fg: var(--helm-navy);
+        --helm-bg: var(--helm-cream);
+        --helm-card: color-mix(in srgb, var(--helm-cream) 70%, white);
+        --helm-muted: var(--helm-slate);
+        --helm-line: color-mix(in srgb, var(--helm-navy) 16%, transparent);
+        --background: 40 33% 93%;
+        --foreground: 221 51% 16%;
+        --card: 40 40% 97%;
+        --card-foreground: 221 51% 16%;
+        --popover: 40 40% 97%;
+        --popover-foreground: 221 51% 16%;
+        --primary: 41 55% 54%;
+        --primary-foreground: 221 51% 16%;
+        --muted-foreground: 220 9% 46%;
+        --border: 221 30% 80%;
+        --input: 221 30% 80%;
+        --ring: 41 55% 54%;
     }
 }
 
@@ -40,24 +74,33 @@
         font-family: 'DM Sans', sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        background-color: #09090b;
+        background-color: var(--helm-ink);
         background-image: none;
         background-attachment: fixed;
+        color: var(--helm-cream);
+    }
+    h1, h2 {
+        font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+        font-weight: 500;
+    }
+    button, input, textarea, select, table, .font-sans {
+        font-family: 'DM Sans', sans-serif;
     }
     ::selection {
-        background: rgba(201, 169, 98, 0.3);
-        color: #fff;
+        background: color-mix(in srgb, var(--helm-gold) 32%, transparent);
+        color: var(--helm-cream);
     }
 }
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
-/* Marketing display headlines only — body/UI stay DM Sans */
+/* Headlines/display only — never buttons, tables, or form fields */
+.font-display,
 .font-serif-display {
     font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
 }
 
-/* Clerk prebuilt SignIn/SignUp — email OTP + password fields must stay readable on dark bg */
+/* Clerk prebuilt SignIn/SignUp — readable OTP/password on dark marketing */
 .cl-formFieldInput input,
 .cl-formFieldInput input[type="text"],
 .cl-formFieldInput input[type="email"],
@@ -66,17 +109,17 @@
 .cl-otpCodeFieldInput,
 .cl-otpCodeFieldInput input,
 input.cl-otpCodeFieldInput {
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  background-color: #141417 !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  caret-color: #c9a962 !important;
+  color: theme("colors.helm.cream") !important;
+  -webkit-text-fill-color: theme("colors.helm.cream") !important;
+  background-color: theme("colors.helm.ink-card") !important;
+  border-color: color-mix(in srgb, theme("colors.helm.cream") 20%, transparent) !important;
+  caret-color: theme("colors.helm.gold") !important;
 }
 
 .cl-otpCodeFieldInput:focus-within,
 .cl-formFieldInput input:focus {
-  border-color: #c9a962 !important;
-  box-shadow: 0 0 0 1px rgba(201, 169, 98, 0.45) !important;
+  border-color: theme("colors.helm.gold") !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, theme("colors.helm.gold") 45%, transparent) !important;
   outline: none !important;
 }
 
@@ -84,14 +127,13 @@ input.cl-otpCodeFieldInput {
   gap: 0.5rem;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(201,169,98,0.4); }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--helm-slate) 45%, transparent); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--helm-gold) 45%, transparent); }
 
 .glass {
-    background: rgba(20, 20, 23, 0.6);
+    background: color-mix(in srgb, var(--helm-card) 88%, transparent);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
 }
@@ -106,125 +148,129 @@ input.cl-otpCodeFieldInput {
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Authenticated cockpit — light mode (default). Scoped to .app-shell so marketing stays dark. */
-html[data-theme="light"] body {
-  background-color: #f4f5f2;
-  background-image: none;
+/* In-app cockpit — cream/navy in light (default), ink/cream in dark */
+.app-shell {
+  background: var(--helm-bg);
+  color: var(--helm-fg);
 }
 
-html[data-theme="light"] .app-shell {
-  background: #f4f5f2;
-  color: #18211c;
+html[data-theme="light"] body {
+  background-color: var(--helm-cream);
 }
 
 html[data-theme="light"] .app-shell.grain::before {
   display: none;
 }
 
-html[data-theme="light"] .app-shell .text-white {
-  color: #18211c !important;
-}
-
-html[data-theme="light"] .app-shell .text-zinc-200 {
-  color: #2a342e !important;
-}
-
+html[data-theme="light"] .app-shell .text-white,
+html[data-theme="light"] .app-shell .text-zinc-200,
 html[data-theme="light"] .app-shell .text-zinc-300 {
-  color: #3a443e !important;
+  color: var(--helm-navy) !important;
 }
 
-html[data-theme="light"] .app-shell .text-zinc-400 {
-  color: #4d5751 !important;
-}
-
-html[data-theme="light"] .app-shell .text-zinc-500 {
-  color: #5c665f !important;
-}
-
+html[data-theme="light"] .app-shell .text-zinc-400,
+html[data-theme="light"] .app-shell .text-zinc-500,
 html[data-theme="light"] .app-shell .text-zinc-600 {
-  color: #6b746d !important;
+  color: var(--helm-slate) !important;
 }
 
-/* Gold accent stays readable on cream — slightly deeper */
+/* Gold is accent-only: keep it for icons/active bars, not long body copy */
 html[data-theme="light"] .app-shell .text-gold {
-  color: #8a6d24 !important;
+  color: var(--helm-gold) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="border-white"] {
-  border-color: rgba(24, 33, 28, 0.14) !important;
+  border-color: var(--helm-line) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="bg-[#09090b]"],
-html[data-theme="light"] .app-shell [class*="bg-[#0d0d0f]"] {
-  background-color: #e8ebe6 !important;
+html[data-theme="light"] .app-shell [class*="bg-[#0d0d0f]"],
+html[data-theme="light"] .app-shell [class*="bg-[#0c0c0e]"],
+html[data-theme="light"] .app-shell [class*="bg-[#101012]"],
+html[data-theme="light"] .app-shell [class*="bg-[#111113]"],
+html[data-theme="light"] .app-shell [class*="bg-[#0B1020]"] {
+  background-color: var(--helm-bg) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="bg-[#121214]"],
 html[data-theme="light"] .app-shell [class*="bg-[#141417]"] {
-  background-color: #ffffff !important;
+  background-color: var(--helm-card) !important;
+  color: var(--helm-navy);
 }
 
 html[data-theme="light"] .app-shell [class*="bg-white/"] {
-  background-color: rgba(24, 33, 28, 0.04) !important;
+  background-color: color-mix(in srgb, var(--helm-navy) 5%, transparent) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="hover:text-white"]:hover {
-  color: #18211c !important;
+  color: var(--helm-navy) !important;
 }
 
 html[data-theme="light"] .app-shell [class*="hover:bg-white"]:hover {
-  background-color: rgba(24, 33, 28, 0.07) !important;
+  background-color: color-mix(in srgb, var(--helm-navy) 7%, transparent) !important;
+}
+
+/* Primary gold fills become gold-outline + navy type so gold is not a large fill */
+html[data-theme="light"] .app-shell .bg-gold {
+  background-color: var(--helm-card) !important;
+  color: var(--helm-navy) !important;
+  box-shadow: inset 0 0 0 1px var(--helm-gold);
+}
+html[data-theme="light"] .app-shell .bg-gold:hover,
+html[data-theme="light"] .app-shell .hover\:bg-gold-hover:hover {
+  background-color: color-mix(in srgb, var(--helm-gold) 16%, var(--helm-card)) !important;
+  color: var(--helm-navy) !important;
 }
 
 html[data-theme="light"] .app-shell input,
 html[data-theme="light"] .app-shell textarea,
 html[data-theme="light"] .app-shell select {
-  color: #18211c;
-  caret-color: #8a6d24;
-  background-color: #ffffff;
+  color: var(--helm-navy);
+  caret-color: var(--helm-gold);
+  background-color: var(--helm-card);
 }
 
 html[data-theme="light"] .app-shell input::placeholder,
 html[data-theme="light"] .app-shell textarea::placeholder {
-  color: #7a847d;
+  color: var(--helm-slate);
 }
 
 html[data-theme="light"] .app-shell .glass {
-  background: rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--helm-card) 96%, transparent);
 }
 
-/* Dense data: tabular figures and status chips stay crisp on light surfaces */
 html[data-theme="light"] .app-shell .font-mono,
 html[data-theme="light"] .app-shell [class*="tabular-nums"] {
   color: inherit;
   letter-spacing: 0.01em;
 }
 
+/* FLAG: status colors — not brand palette */
 html[data-theme="light"] .app-shell .text-emerald-400 {
-  color: #15803d !important;
+  color: theme("colors.helm.status-positive") !important;
 }
-
 html[data-theme="light"] .app-shell .text-rose-400 {
-  color: #be123c !important;
+  color: theme("colors.helm.status-negative") !important;
 }
-
 html[data-theme="light"] .app-shell .text-amber-400,
 html[data-theme="light"] .app-shell .text-amber-300,
+html[data-theme="light"] .app-shell .text-amber-200,
+html[data-theme="light"] .app-shell .text-amber-100,
 html[data-theme="light"] .app-shell .text-amber-600 {
-  color: #b45309 !important;
+  color: theme("colors.helm.status-warning") !important;
 }
 
 html[data-theme="light"] ::selection {
-  background: rgba(138, 109, 36, 0.22);
-  color: #18211c;
+  background: color-mix(in srgb, var(--helm-gold) 28%, transparent);
+  color: var(--helm-navy);
 }
 
 html[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(24, 33, 28, 0.18);
+  background: color-mix(in srgb, var(--helm-navy) 18%, transparent);
 }
 
 html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(138, 109, 36, 0.45);
+  background: color-mix(in srgb, var(--helm-gold) 45%, transparent);
 }
 
 @keyframes fadeUp {

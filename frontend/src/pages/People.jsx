@@ -171,10 +171,10 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
         <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">{editing ? "Edit person" : "Add a person"}</h3><button onClick={close} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
         <div className="grid grid-cols-2 gap-3">
           <label className="col-span-2 text-xs text-zinc-500">Name
-            <input data-testid="person-name" value={form.name} onChange={set("name")} placeholder="Jane Doe" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            <input data-testid="person-name" value={form.name} onChange={set("name")} placeholder="Jane Doe" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
           </label>
           <label className="col-span-2 text-xs text-zinc-500">Role
-            <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
           </label>
           <div className="col-span-2 text-xs text-zinc-500">
             <p className="uppercase tracking-wide text-[10px] text-zinc-600 mb-1">Departments</p>
@@ -195,7 +195,7 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
                   data-testid="person-invite-access"
                   checked={form.inviteToAccess}
                   onChange={(e) => setForm((f) => ({ ...f, inviteToAccess: e.target.checked }))}
-                  className="mt-1 rounded border-white/20 bg-[#141417]"
+                  className="mt-1 rounded border-white/20 bg-helm-card"
                 />
                 <span>
                   Also include in Team & Access
@@ -211,7 +211,7 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
                       value={form.email}
                       onChange={set("email")}
                       placeholder="alex@company.com"
-                      className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
                     />
                   </label>
                   <label className="block text-xs text-zinc-500">Access pack
@@ -219,7 +219,7 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
                       data-testid="person-pack"
                       value={form.pack}
                       onChange={set("pack")}
-                      className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
                     >
                       {packOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                     </select>

@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 export default function PaymentCancel() {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#09090b] grain p-6">
+    <div className="min-h-screen flex items-center justify-center bg-helm-ink grain p-6">
       <div className="max-w-md w-full text-center relative z-10">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-600 mb-3">Checkout cancelled</p>
         <h1 className="text-3xl font-light text-white">No worries — nothing was charged.</h1>

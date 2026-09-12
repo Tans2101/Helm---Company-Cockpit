@@ -1,6 +1,6 @@
 export default function ClerkLoadError({ onRetry }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] p-8 text-center">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-helm-ink p-8 text-center">
       <p className="text-lg text-white mb-2">Sign-in service is not responding</p>
       <p className="text-sm text-zinc-400 max-w-lg leading-relaxed">
         DNS is verified, but Clerk SSL may still be deploying. In{" "}

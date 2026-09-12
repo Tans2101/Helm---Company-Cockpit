@@ -15,9 +15,9 @@ export default function AuthMarketingHeader() {
     <header className="absolute top-0 inset-x-0 z-20 px-6 py-6 md:px-10 md:py-8">
       <div className="flex items-center justify-between gap-4 max-w-6xl mx-auto">
         <MarketingLogo size="md" showTagline dark />
-        <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 text-sm text-zinc-500">
+        <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 text-sm text-helm-slate">
           {LINKS.map((l) => (
-            <Link key={l.to} to={l.to} className="hover:text-white transition-colors whitespace-nowrap">
+            <Link key={l.to} to={l.to} className="hover:text-helm-cream transition-colors whitespace-nowrap">
               {l.label}
             </Link>
           ))}

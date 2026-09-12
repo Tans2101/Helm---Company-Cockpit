@@ -1,3 +1,5 @@
+const { HELM_PALETTE, HELM_FLAGGED } = require("./src/design/helmTokens");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ["class"],
@@ -15,13 +17,30 @@ module.exports = {
       fontFamily: {
         sans: ['DM Sans', 'sans-serif'],
         mono: ['DM Mono', 'monospace'],
+        display: ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
         'serif-display': ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
       },
       colors: {
+        helm: {
+          navy: HELM_PALETTE.navy,
+          gold: HELM_PALETTE.gold,
+          slate: HELM_PALETTE.slate,
+          cream: HELM_PALETTE.cream,
+          ink: HELM_FLAGGED.ink,
+          "ink-card": HELM_FLAGGED.inkCard,
+          "status-positive": HELM_FLAGGED.statusPositive,
+          "status-negative": HELM_FLAGGED.statusNegative,
+          "status-warning": HELM_FLAGGED.statusWarning,
+          fg: "var(--helm-fg)",
+          bg: "var(--helm-bg)",
+          card: "var(--helm-card)",
+          muted: "var(--helm-muted)",
+          line: "var(--helm-line)",
+        },
         gold: {
-          DEFAULT: '#c9a962',
-          hover: '#e5c57f',
-          muted: 'rgba(201,169,98,0.15)'
+          DEFAULT: HELM_PALETTE.gold,
+          hover: HELM_FLAGGED.goldHover,
+          muted: "rgba(201,162,75,0.15)"
         },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',

@@ -299,7 +299,7 @@ export default function Production() {
                   value={draft.name}
                   disabled={!canStructure}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 disabled:opacity-60"
+                  className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 disabled:opacity-60"
                 />
               </label>
               <label className="block text-xs text-zinc-500">Status
@@ -307,7 +307,7 @@ export default function Production() {
                   data-testid="stage-status-select"
                   value={draft.status}
                   onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2"
+                  className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
                 >
                   {Object.entries(STATUS_META).map(([id, meta]) => (
                     <option key={id} value={id}>{meta.label}</option>
@@ -341,7 +341,7 @@ export default function Production() {
                   value={draft.notes}
                   onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 resize-y"
+                  className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 resize-y"
                 />
               </label>
             </div>
@@ -386,7 +386,7 @@ export default function Production() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. Cut & prep"
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2"
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
               />
             </label>
             <button

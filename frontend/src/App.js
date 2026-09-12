@@ -19,6 +19,7 @@ import Login from "@/pages/Login";
 import SignUpPage from "@/pages/SignUp";
 import { LoadingScreen } from "@/components/kit";
 import { useTheme } from "@/context/ThemeContext";
+import palette from "@/design/palette.json";
 
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
@@ -73,9 +74,9 @@ function HelmToaster() {
       position="top-right"
       toastOptions={{
         style: {
-          background: light ? "#ffffff" : "#141417",
-          border: `1px solid ${light ? "#d8ddd7" : "rgba(255,255,255,0.08)"}`,
-          color: light ? "#18211c" : "#ffffff",
+          background: light ? palette.cream : palette.inkCard,
+          border: `1px solid ${light ? palette.navy : palette.cream}29`,
+          color: light ? palette.navy : palette.cream,
         },
       }}
     />

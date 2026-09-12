@@ -9,9 +9,10 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import palette from "@/design/palette.json";
 
-const GOLD = "#c9a962";
-const PIE = ["#c9a962", "#8b7a4a", "#6b6b74", "#3f3f46", "#27272a", "#52525b"];
+const GOLD = palette.gold;
+const PIE = [palette.gold, palette.navy, palette.slate, palette.inkCard, palette.ink, palette.cream];
 const REV_CATS = ["Subscriptions", "Enterprise", "Services", "Other"];
 const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", "Other"];
 const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg"];
@@ -31,7 +32,7 @@ const fmt = (n, sym = "$") => `${sym}${Number(n || 0).toLocaleString()}`;
 function ChartTooltip({ active, payload, label, symbol = "$" }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-white/10 bg-[#141417] px-3 py-2 text-xs">
+    <div className="rounded-md border border-white/10 bg-helm-card px-3 py-2 text-xs">
       {label && <p className="text-zinc-400 mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
         <p key={i} className="text-white font-mono">
@@ -473,11 +474,11 @@ export default function Financials() {
                 <AreaChart data={data.revenue_series} margin={{ left: -8, right: 8, top: 8 }}>
                   <defs><linearGradient id="rev" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={GOLD} stopOpacity={0.35} /><stop offset="100%" stopColor={GOLD} stopOpacity={0} /></linearGradient></defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
+                  <XAxis dataKey="month" stroke={palette.slate} fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke={palette.slate} fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
                   <Tooltip content={<ChartTooltip symbol={sym} />} />
                   <Area type="monotone" dataKey="revenue" name="Revenue" stroke={GOLD} strokeWidth={2} fill="url(#rev)" />
-                  <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#71717a" strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
+                  <Area type="monotone" dataKey="expenses" name="Expenses" stroke={palette.slate} strokeWidth={1.5} fill="none" strokeDasharray="4 4" />
                 </AreaChart>
               </ResponsiveContainer>
             </GlassCard>
@@ -509,8 +510,8 @@ export default function Financials() {
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={data.burn_series} margin={{ left: -8, right: 8 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="month" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
+                    <XAxis dataKey="month" stroke={palette.slate} fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke={palette.slate} fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${sym}${v / 1000}k`} />
                     <Tooltip content={<ChartTooltip symbol={sym} />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                     <Bar dataKey="burn" name="Net burn" fill={GOLD} radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -620,15 +621,15 @@ export default function Financials() {
                 ))}
               </div>
               <label className="col-span-2 text-xs text-zinc-500">Category
-                <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                   {(form.type === "revenue" ? REV_CATS : EXP_CATS).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
               <label className="text-xs text-zinc-500">Amount ({(data.currency || "usd").toUpperCase()})
-                <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500">Month
-                <input data-testid="entry-month" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="entry-month" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               {form.type === "revenue" && (
                 <label className="col-span-2 flex items-center gap-2 text-sm text-zinc-300 mt-1">
@@ -659,7 +660,7 @@ export default function Financials() {
                         data-testid="entry-recurrence"
                         value={form.recurrence || "monthly"}
                         onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))}
-                        className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                        className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
                       >
                         <option value="monthly">Monthly</option>
                         <option value="annual">Annual</option>
@@ -674,7 +675,7 @@ export default function Financials() {
                 </div>
               )}
               <label className="col-span-2 text-xs text-zinc-500">Note (optional)
-                <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
             </div>
             <button data-testid="submit-entry-btn" onClick={submitEntry} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save entry"}</button>
@@ -688,17 +689,17 @@ export default function Financials() {
           <GlassCard className="relative w-full max-w-sm m-4 rounded-2xl p-6" data-testid="settings-form">
             <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Cash & margin</h3><button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
             <label className="text-xs text-zinc-500 block">Cash in bank
-              <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
             </label>
             <label className="text-xs text-zinc-500 block mt-3">Gross margin % (optional)
-              <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
             </label>
             <label className="text-xs text-zinc-500 block mt-3">Currency
               <select
                 data-testid="settings-currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
               >
                 {CURRENCY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.code}>{c.label}</option>

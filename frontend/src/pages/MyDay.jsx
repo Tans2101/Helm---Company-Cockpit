@@ -181,7 +181,7 @@ export default function MyDay() {
                 onChange={(e) => setNoteText(e.target.value)}
                 rows={3}
                 placeholder="Jot a thought, reminder, or idea…"
-                className="w-full rounded-lg border border-white/10 bg-[#141417] text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none"
+                className="w-full rounded-lg border border-white/10 bg-helm-card text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none"
               />
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 {Object.keys(NOTE_STYLES).map((c) => (
@@ -234,7 +234,7 @@ export default function MyDay() {
               <div className="mt-3 pt-3 border-t border-white/5" data-testid="team-update-form">
                 <textarea value={teamText} onChange={(e) => setTeamText(e.target.value)} rows={3}
                   placeholder="What did you move forward? Any blocker or ask?"
-                  className="w-full rounded-lg border border-white/10 bg-[#141417] text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none" />
+                  className="w-full rounded-lg border border-white/10 bg-helm-card text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none" />
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <div className="flex items-center gap-1.5">
                     {MOODS.map((m) => (
@@ -291,9 +291,9 @@ export default function MyDay() {
             <div className="flex gap-2">
               <input data-testid="myday-task-input" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="What do you need to get done?"
-                className="flex-1 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                className="flex-1 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               <input data-testid="myday-task-due" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)}
-                className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-2 focus:outline-none focus:border-gold/40" />
+                className="rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-2 focus:outline-none focus:border-gold/40" />
               <button data-testid="myday-task-save" onClick={addTask} disabled={taskBusy}
                 className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60">{taskBusy ? "…" : "Add"}</button>
             </div>

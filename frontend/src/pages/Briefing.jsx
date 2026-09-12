@@ -98,7 +98,7 @@ export default function Briefing() {
       </header>
 
       {checklist && !checklist.complete && (
-        <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-[#121214]/80 p-5" data-testid="onboarding-checklist">
+        <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-helm-card/80 p-5" data-testid="onboarding-checklist">
           <div className="flex items-center gap-3 mb-4">
             <BriefLabel>Finish setting up</BriefLabel>
             <span className="ml-auto text-xs text-zinc-500 tabular-nums">{doneCount}/{stepCount}</span>
@@ -139,7 +139,7 @@ export default function Briefing() {
         {data.metrics.map((m, i) => (
           <div
             key={m.label}
-            className="rounded-xl border border-white/[0.08] bg-[#121214]/80 p-4 fade-up"
+            className="rounded-xl border border-white/[0.08] bg-helm-card/80 p-4 fade-up"
             style={{ animationDelay: `${i * 60}ms` }}
             data-testid={`briefing-metric-${i}`}
           >
@@ -157,7 +157,7 @@ export default function Briefing() {
         ))}
       </div>
 
-      <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-[#121214]/80 p-5 md:p-6">
+      <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-helm-card/80 p-5 md:p-6">
         <div className="flex items-center justify-between gap-3 mb-3">
           <BriefLabel>Today&apos;s summary</BriefLabel>
           {data.ai_summary && (

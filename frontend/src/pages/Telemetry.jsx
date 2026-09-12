@@ -9,13 +9,14 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, Delta, ErrorScreen, EmptyState } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import palette from "@/design/palette.json";
 
-const GOLD = "#c9a962";
+const GOLD = palette.gold;
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-white/10 bg-[#141417] px-3 py-2 text-xs">
+    <div className="rounded-md border border-white/10 bg-helm-card px-3 py-2 text-xs">
       {label && <p className="text-zinc-400 mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
         <p key={i} className="text-white font-mono">
@@ -201,24 +202,24 @@ export default function Telemetry() {
             <h3 className="text-lg text-white font-light mb-4">Edit telemetry risks</h3>
             <label className="text-xs text-zinc-500 block mb-4">Notes
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Context for your risk radar…"
-                className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 resize-none focus:outline-none focus:border-gold/40" />
+                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 resize-none focus:outline-none focus:border-gold/40" />
             </label>
             <div className="space-y-3">
               {risks.map((r, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-start">
                   <input value={r.name} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                    placeholder="Risk name" className="col-span-6 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-1.5 focus:outline-none focus:border-gold/40" />
+                    placeholder="Risk name" className="col-span-6 rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-1.5 focus:outline-none focus:border-gold/40" />
                   <input value={r.category} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, category: e.target.value } : x))}
-                    placeholder="Category" className="col-span-3 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-1.5 focus:outline-none focus:border-gold/40" />
+                    placeholder="Category" className="col-span-3 rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-1.5 focus:outline-none focus:border-gold/40" />
                   <button type="button" onClick={() => setRisks((prev) => prev.filter((_, j) => j !== i))} className="col-span-1 text-zinc-600 hover:text-rose-400 p-1"><Trash2 className="w-4 h-4" /></button>
                   <div className="col-span-6 flex gap-2">
                     <label className="text-[10px] text-zinc-600 flex-1">Likelihood
                       <input type="number" min={1} max={5} value={r.likelihood} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, likelihood: parseInt(e.target.value, 10) || 1 } : x))}
-                        className="mt-0.5 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-1 focus:outline-none focus:border-gold/40" />
+                        className="mt-0.5 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-1 focus:outline-none focus:border-gold/40" />
                     </label>
                     <label className="text-[10px] text-zinc-600 flex-1">Impact
                       <input type="number" min={1} max={5} value={r.impact} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, impact: parseInt(e.target.value, 10) || 1 } : x))}
-                        className="mt-0.5 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-2 py-1 focus:outline-none focus:border-gold/40" />
+                        className="mt-0.5 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-1 focus:outline-none focus:border-gold/40" />
                     </label>
                   </div>
                 </div>

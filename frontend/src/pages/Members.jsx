@@ -245,14 +245,14 @@ export default function Members() {
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Invite a teammate</span>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex items-center gap-2 flex-1 rounded-md border border-white/10 bg-[#141417] px-3 focus-within:border-gold/40">
+                <div className="flex items-center gap-2 flex-1 rounded-md border border-white/10 bg-helm-card px-3 focus-within:border-gold/40">
                   <Mail className="w-4 h-4 text-zinc-600" />
                   <input data-testid="invite-email-input" value={email} onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && invite()} placeholder="teammate@company.com"
                     className="flex-1 bg-transparent text-white text-sm placeholder:text-zinc-600 focus:outline-none py-2.5" />
                 </div>
                 <select data-testid="invite-pack-select" value={pack} onChange={(e) => setPack(e.target.value)}
-                  className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40">
+                  className="rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40">
                   {packOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 <button data-testid="invite-submit-btn" onClick={invite} disabled={busy}
@@ -309,7 +309,7 @@ export default function Members() {
                       <div className="flex items-center gap-1 flex-wrap">
                         <select value={m.pack || m.role} onChange={(e) => changePack(m, e.target.value)}
                           data-testid={`pack-select-${m.email}`}
-                          className="text-[11px] text-zinc-300 bg-[#141417] border border-white/10 rounded px-2 py-1 focus:outline-none focus:border-gold/40">
+                          className="text-[11px] text-zinc-300 bg-helm-card border border-white/10 rounded px-2 py-1 focus:outline-none focus:border-gold/40">
                           {PACKS.filter((p) => p.id !== "owner" || canManageOwners).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                         </select>
                         {canManageOwners && (

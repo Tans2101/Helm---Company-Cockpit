@@ -180,7 +180,7 @@ export default function CompanySetup({ company }) {
                       value={form.name}
                       onChange={(e) => set("name", e.target.value)}
                       placeholder="Acme Inc."
-                      className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 focus:outline-none focus:border-gold/40"
                     />
                   </label>
                   <div>
@@ -270,7 +270,7 @@ export default function CompanySetup({ company }) {
                       value={form.founded}
                       onChange={(e) => set("founded", e.target.value.replace(/\D/g, "").slice(0, 4))}
                       placeholder="2022"
-                      className="mt-1 w-32 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-32 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40"
                     />
                   </label>
                   <label className="block text-xs text-zinc-500">
@@ -281,7 +281,7 @@ export default function CompanySetup({ company }) {
                       onChange={(e) => set("mission", e.target.value)}
                       placeholder="What does your company do in one line?"
                       rows={2}
-                      className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2.5 resize-none focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 resize-none focus:outline-none focus:border-gold/40"
                     />
                   </label>
                 </div>

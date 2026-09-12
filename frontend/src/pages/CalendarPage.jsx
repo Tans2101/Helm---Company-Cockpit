@@ -585,7 +585,7 @@ export default function CalendarPage() {
       </div>
 
       <div
-        className="flex rounded-xl border border-white/[0.08] bg-[#09090b] overflow-hidden min-h-[560px] lg:min-h-[calc(100vh-12rem)]"
+        className="flex rounded-xl border border-white/[0.08] bg-helm-ink overflow-hidden min-h-[560px] lg:min-h-[calc(100vh-12rem)]"
         data-testid="calendar-week-layout"
       >
         <aside className="hidden md:flex w-[260px] lg:w-[280px] shrink-0 flex-col border-r border-white/10 bg-[#070708]">
@@ -636,14 +636,14 @@ export default function CalendarPage() {
             </div>
             <div className="space-y-3">
               <label className="text-xs text-zinc-500 block">Title
-                <input data-testid="event-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="event-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs text-zinc-500">Date
-                  <input type="date" data-testid="event-date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                  <input type="date" data-testid="event-date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Type
-                  <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                  <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                     {["Internal", "Sales", "1:1", "Board"].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
@@ -655,10 +655,10 @@ export default function CalendarPage() {
               {!form.all_day && (
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-xs text-zinc-500">Start time
-                    <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                    <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
                   </label>
                   <label className="text-xs text-zinc-500">Duration (min)
-                    <input type="number" min={15} step={15} value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: parseInt(e.target.value, 10) || 30 }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                    <input type="number" min={15} step={15} value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: parseInt(e.target.value, 10) || 30 }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
                   </label>
                 </div>
               )}

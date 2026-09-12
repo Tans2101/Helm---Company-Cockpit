@@ -71,7 +71,7 @@ export default function InviteCeoCard() {
           data-testid="referral-link-input"
           readOnly
           value={linkValue}
-          className="flex-1 rounded-md border border-white/10 bg-[#141417] px-3 py-2.5 text-sm text-white font-mono truncate"
+          className="flex-1 rounded-md border border-white/10 bg-helm-card px-3 py-2.5 text-sm text-white font-mono truncate"
         />
         <button
           data-testid="copy-referral-link"
@@ -91,7 +91,7 @@ export default function InviteCeoCard() {
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && trackEmail()}
           placeholder="Optional: their email to track this invite"
-          className="flex-1 rounded-md border border-white/10 bg-[#141417] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+          className="flex-1 rounded-md border border-white/10 bg-helm-card px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
         />
         <button
           data-testid="referral-track-btn"

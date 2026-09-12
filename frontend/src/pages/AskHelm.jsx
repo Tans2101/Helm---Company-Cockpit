@@ -124,7 +124,7 @@ export default function AskHelm() {
               {m.role === "user" ? <User className="w-3.5 h-3.5 text-zinc-400" /> : <span className="font-mono text-gold text-xs">H</span>}
             </div>
             <div className={cn("max-w-[80%] rounded-xl px-4 py-3 text-[15px] leading-relaxed",
-              m.role === "user" ? "bg-gold/10 border border-gold/20 text-white" : "bg-[#141417] border border-white/5 text-zinc-200")}>
+              m.role === "user" ? "bg-gold/10 border border-gold/20 text-white" : "bg-helm-card border border-white/5 text-zinc-200")}>
               {m.content ? <p className="whitespace-pre-wrap">{m.content}</p> : <Spinner className="w-4 h-4" />}
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function AskHelm() {
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/5">
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#141417] px-3 py-2 focus-within:border-gold/40 transition-colors">
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-helm-card px-3 py-2 focus-within:border-gold/40 transition-colors">
           <input
             data-testid="ask-input"
             value={input}

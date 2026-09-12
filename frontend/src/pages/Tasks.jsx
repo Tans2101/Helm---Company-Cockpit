@@ -116,7 +116,7 @@ export default function Tasks() {
                   onDragStart={() => setDragId(t.id)}
                   data-testid={`task-${t.id}`}
                   className={cn(
-                    "group rounded-lg border border-white/5 bg-[#141417] p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-gold/30",
+                    "group rounded-lg border border-white/5 bg-helm-card p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-gold/30",
                     mine && "border-l-2 border-l-gold/60",
                     focusTaskId === t.id && "ring-1 ring-gold/50 border-gold/40",
                   )}>
@@ -164,23 +164,23 @@ export default function Tasks() {
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="task-form">
             <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">New task</h3><button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
             <label className="text-xs text-zinc-500 block">Title
-              <input data-testid="task-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="What needs doing?" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <input data-testid="task-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="What needs doing?" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
             </label>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="text-xs text-zinc-500">Priority
-                <select data-testid="task-priority" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                <select data-testid="task-priority" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                   {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
               <label className="text-xs text-zinc-500">Due date
-                <input data-testid="task-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="task-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500 col-span-2">Tag
-                <input data-testid="task-tag" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} placeholder="Growth" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="task-tag" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} placeholder="Growth" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               {canAssign && (
                 <label className="text-xs text-zinc-500 col-span-2">Assign to
-                  <select data-testid="task-assignee" value={form.assignee_user_id} onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                  <select data-testid="task-assignee" value={form.assignee_user_id} onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                     <option value="">Myself</option>
                     {assignableMembers.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.email}</option>)}
                   </select>

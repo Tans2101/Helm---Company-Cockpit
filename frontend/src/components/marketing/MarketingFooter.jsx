@@ -17,28 +17,28 @@ const FOOTER_LINKS = [
 
 export default function MarketingFooter() {
   return (
-    <footer className="px-6 py-12 border-t border-white/5 bg-[#09090b]">
+    <footer className="px-6 py-12 border-t border-helm-cream/10 bg-helm-ink">
       <div className="mx-auto max-w-6xl flex flex-col gap-8">
-        <p className="text-center text-sm text-zinc-500 max-w-md mx-auto leading-relaxed">{TAGLINE}</p>
+        <p className="text-center text-sm text-helm-slate max-w-md mx-auto leading-relaxed">{TAGLINE}</p>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-8">
           <div className="flex flex-col gap-2">
             <MarketingLogo size="sm" showTagline dark />
-            <p className="text-xs text-zinc-500 max-w-xs leading-relaxed mt-1">
+            <p className="text-xs text-helm-slate max-w-xs leading-relaxed mt-1">
               The {CATEGORY.toLowerCase()} for CEOs running companies of up to 50 people — funded or not. One cockpit. Clear decisions. Quiet control.
             </p>
-            <a href={PUBLIC_CONTACT_MAILTO} className="text-xs text-zinc-500 hover:text-white transition-colors mt-2">
+            <a href={PUBLIC_CONTACT_MAILTO} className="text-xs text-helm-slate hover:text-helm-cream transition-colors mt-2">
               {PUBLIC_CONTACT_EMAIL}
             </a>
           </div>
-          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-zinc-500" aria-label="Footer">
+          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-helm-slate" aria-label="Footer">
             {FOOTER_LINKS.map((l) => (
-              <Link key={l.to + l.label} to={l.to} className="hover:text-white transition-colors">
+              <Link key={l.to + l.label} to={l.to} className="hover:text-helm-cream transition-colors">
                 {l.label}
               </Link>
             ))}
           </nav>
         </div>
-        <p className="text-center text-[11px] text-zinc-600">
+        <p className="text-center text-[11px] text-helm-slate">
           © {new Date().getFullYear()} Helm · {FOUNDER_CREDIT}
         </p>
       </div>

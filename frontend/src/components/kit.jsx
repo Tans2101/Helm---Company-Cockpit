@@ -4,9 +4,8 @@ export function GlassCard({ className, children, glow, ...props }) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-white/[0.08] bg-[#121214]/90",
-        // glow kept for callers; intentionally subtle — no gold bloom
-        glow && "border-white/[0.12]",
+        "rounded-xl border border-helm-line bg-helm-card/90",
+        glow && "border-helm-gold/35",
         className
       )}
       {...props}
@@ -20,8 +19,8 @@ export function PageHeader({ title, subtitle, action }) {
   return (
     <div className="flex items-start justify-between mb-8 fade-up">
       <div>
-        <h1 className="text-3xl md:text-4xl font-light tracking-tight text-white">{title}</h1>
-        {subtitle && <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{subtitle}</p>}
+        <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-helm-fg">{title}</h1>
+        {subtitle && <p className="text-helm-muted text-sm mt-2 max-w-2xl font-sans">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -30,9 +29,9 @@ export function PageHeader({ title, subtitle, action }) {
 
 export function SectionLabel({ children, className }) {
   return (
-    <h4 className={cn("text-xs font-medium tracking-tight text-zinc-400", className)}>
+    <h2 className={cn("font-display text-sm font-medium tracking-tight text-helm-fg", className)}>
       {children}
-    </h4>
+    </h2>
   );
 }
 
@@ -98,12 +97,12 @@ export function EmptyState({ icon: Icon, title, body, action }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-24 px-6 fade-up">
       {Icon && (
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-5">
-          <Icon className="w-6 h-6 text-gold" />
+        <div className="w-14 h-14 rounded-2xl bg-helm-navy/5 border border-helm-line flex items-center justify-center mb-5">
+          <Icon className="w-6 h-6 text-helm-gold" />
         </div>
       )}
-      <h3 className="text-xl text-white font-light tracking-tight">{title}</h3>
-      {body && <p className="text-sm text-zinc-500 mt-2 max-w-sm leading-relaxed">{body}</p>}
+      <h3 className="font-display text-xl text-helm-fg font-medium tracking-tight">{title}</h3>
+      {body && <p className="text-sm text-helm-muted mt-2 max-w-sm leading-relaxed font-sans">{body}</p>}
       {action && <div className="mt-6">{action}</div>}
     </div>
   );

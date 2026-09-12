@@ -384,7 +384,7 @@ export default function HR() {
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setAdding(false)} />
-          <div className="relative w-full max-w-md rounded-md border border-white/10 bg-[#141417] p-5 space-y-3" data-testid="hr-create-modal">
+          <div className="relative w-full max-w-md rounded-md border border-white/10 bg-helm-card p-5 space-y-3" data-testid="hr-create-modal">
             <div className="flex items-center justify-between">
               <p className="text-sm text-white font-medium">Start onboarding</p>
               <button type="button" onClick={() => setAdding(false)} className="text-zinc-500 hover:text-white">
@@ -432,7 +432,7 @@ export default function HR() {
       {editingTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setEditingTemplate(false)} />
-          <div className="relative w-full max-w-lg rounded-md border border-white/10 bg-[#141417] p-5 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="hr-template-modal">
+          <div className="relative w-full max-w-lg rounded-md border border-white/10 bg-helm-card p-5 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="hr-template-modal">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white font-medium">Onboarding template</p>

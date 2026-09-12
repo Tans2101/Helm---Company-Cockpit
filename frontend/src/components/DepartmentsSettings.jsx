@@ -207,7 +207,7 @@ export default function DepartmentsSettings() {
                           data-testid={`dept-add-user-${dept.type}`}
                           value={addUserId}
                           onChange={(e) => setAddUserId(e.target.value)}
-                          className="flex-1 rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2"
+                          className="flex-1 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
                         >
                           <option value="">Select teammate…</option>
                           {workspaceMembers.map((m) => (
@@ -220,7 +220,7 @@ export default function DepartmentsSettings() {
                           data-testid={`dept-add-role-${dept.type}`}
                           value={addRole}
                           onChange={(e) => setAddRole(e.target.value)}
-                          className="rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2"
+                          className="rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
                         >
                           <option value="member">Member</option>
                           <option value="lead">Lead</option>

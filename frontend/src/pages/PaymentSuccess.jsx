@@ -30,7 +30,7 @@ export default function PaymentSuccess() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#09090b] grain p-6">
+    <div className="min-h-screen flex items-center justify-center bg-helm-ink grain p-6">
       <div className="max-w-md w-full text-center relative z-10">
         {status === "checking" && (
           <>

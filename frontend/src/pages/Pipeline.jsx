@@ -166,7 +166,7 @@ export default function Pipeline() {
                       <span className="font-mono text-sm text-white shrink-0">{money(d.value, sym)}</span>
                       {canWrite ? (
                         <select value={d.stage} onChange={(e) => changeStage(d, e.target.value)} data-testid={`deal-stage-${d.id}`}
-                          className={cn("text-[11px] font-mono rounded px-2 py-1 border border-white/10 bg-[#141417] focus:outline-none focus:border-gold/40", stageStyle[d.stage])}>
+                          className={cn("text-[11px] font-mono rounded px-2 py-1 border border-white/10 bg-helm-card focus:outline-none focus:border-gold/40", stageStyle[d.stage])}>
                           {meta.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
                         </select>
                       ) : (
@@ -207,25 +207,25 @@ export default function Pipeline() {
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="deal-form">
             <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">{editing ? "Edit deal" : "New deal"}</h3><button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
             <label className="text-xs text-zinc-500 block">Deal name
-              <input data-testid="deal-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Acme Corp — Enterprise" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <input data-testid="deal-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Acme Corp — Enterprise" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
             </label>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="text-xs text-zinc-500">Company
-                <input data-testid="deal-company" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder="Acme" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="deal-company" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder="Acme" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500">Value ({sym})
-                <input data-testid="deal-value" type="number" min="0" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="25000" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="deal-value" type="number" min="0" value={form.value} onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))} placeholder="25000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500">Stage
-                <select data-testid="deal-stage" value={form.stage} onChange={(e) => setForm((f) => ({ ...f, stage: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                <select data-testid="deal-stage" value={form.stage} onChange={(e) => setForm((f) => ({ ...f, stage: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                   {meta.stages.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
                 </select>
               </label>
               <label className="text-xs text-zinc-500">Expected close
-                <input data-testid="deal-close" type="date" value={form.close_date} onChange={(e) => setForm((f) => ({ ...f, close_date: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="deal-close" type="date" value={form.close_date} onChange={(e) => setForm((f) => ({ ...f, close_date: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
               <label className="text-xs text-zinc-500 col-span-2">Owner
-                <input data-testid="deal-owner" value={form.owner_name} onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))} placeholder="Rep name" className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <input data-testid="deal-owner" value={form.owner_name} onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))} placeholder="Rep name" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
               </label>
             </div>
             <button data-testid="save-deal-btn" onClick={save} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save changes" : "Add deal"}</button>
