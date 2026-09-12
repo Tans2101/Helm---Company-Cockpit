@@ -17,8 +17,8 @@ module.exports = {
       fontFamily: {
         sans: ['DM Sans', 'sans-serif'],
         mono: ['DM Mono', 'monospace'],
-        display: ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
-        'serif-display': ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
+        display: ['Hedvig Letters Sans', 'DM Sans', 'system-ui', 'sans-serif'],
+        'serif-display': ['Hedvig Letters Sans', 'DM Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         helm: {

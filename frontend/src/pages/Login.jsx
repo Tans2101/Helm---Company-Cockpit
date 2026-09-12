@@ -89,7 +89,7 @@ function LoginClerk() {
       <div className="relative flex flex-col justify-between p-10 md:p-16 pt-28 lg:pt-16 border-r border-helm-cream/5 z-10">
         <div className="max-w-lg flex-1 flex flex-col justify-center">
           <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-6">{CATEGORY}</p>
-          <h1 className="text-4xl md:text-6xl font-light tracking-tight text-helm-cream leading-[1.05]">
+          <h1 className="font-display text-4xl md:text-6xl font-normal tracking-tight text-helm-cream leading-[1.05]">
             {TAGLINE}
           </h1>
           <p className="text-helm-slate text-base md:text-lg mt-6 leading-relaxed">

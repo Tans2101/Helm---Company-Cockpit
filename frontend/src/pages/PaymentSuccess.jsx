@@ -35,7 +35,7 @@ export default function PaymentSuccess() {
         {status === "checking" && (
           <>
             <Spinner className="w-8 h-8 mx-auto mb-6" />
-            <h1 className="text-2xl font-light text-white">Confirming your payment…</h1>
+            <h1 className="font-display text-2xl font-normal text-white">Confirming your payment…</h1>
             <p className="text-zinc-500 text-sm mt-2">This only takes a moment.</p>
           </>
         )}
@@ -45,7 +45,7 @@ export default function PaymentSuccess() {
               <CheckCircle2 className="w-8 h-8 text-gold" />
             </div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Welcome to Helm</p>
-            <h1 className="text-3xl font-light text-white">You're in command.</h1>
+            <h1 className="font-display text-3xl font-normal text-white">You're in command.</h1>
             <p className="text-zinc-400 mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
             <button data-testid="success-continue-btn" onClick={() => navigate("/app")}
               className="mt-8 inline-flex items-center gap-2 rounded-md bg-gold text-black font-medium px-5 py-2.5 text-sm transition-colors hover:bg-gold-hover">
@@ -58,7 +58,7 @@ export default function PaymentSuccess() {
             <div className="w-16 h-16 rounded-full bg-rose-400/10 border border-rose-400/30 flex items-center justify-center mx-auto mb-6">
               <XCircle className="w-8 h-8 text-rose-400" />
             </div>
-            <h1 className="text-2xl font-light text-white">{status === "timeout" ? "Still processing" : "Payment not completed"}</h1>
+            <h1 className="font-display text-2xl font-normal text-white">{status === "timeout" ? "Still processing" : "Payment not completed"}</h1>
             <p className="text-zinc-500 text-sm mt-2">
               {status === "timeout" ? "Your payment is taking longer than expected. Check billing shortly." : "No charge was made. You can try again anytime."}
             </p>

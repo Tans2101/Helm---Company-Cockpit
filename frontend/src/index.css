@@ -80,8 +80,8 @@
         color: var(--helm-fg);
     }
     h1, h2 {
-        font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-        font-weight: 500;
+        font-family: 'Hedvig Letters Sans', 'DM Sans', system-ui, sans-serif;
+        font-weight: 400;
     }
     button, input, textarea, select, table, .font-sans {
         font-family: 'DM Sans', sans-serif;
@@ -94,10 +94,10 @@
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
-/* Headlines/display only — never buttons, tables, or form fields */
+/* Page headers / display — Hedvig Letters Sans (Google Fonts). Never buttons, tables, or form fields */
 .font-display,
 .font-serif-display {
-    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    font-family: 'Hedvig Letters Sans', 'DM Sans', system-ui, sans-serif;
 }
 
 /* Clerk prebuilt SignIn/SignUp — readable OTP/password on dark marketing */

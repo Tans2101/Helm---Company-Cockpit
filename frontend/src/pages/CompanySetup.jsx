@@ -93,7 +93,7 @@ export default function CompanySetup({ company }) {
           </div>
 
           <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold">Welcome, {firstName}</p>
-          <h1 className="mt-3 text-3xl md:text-4xl font-light tracking-tight text-white">
+          <h1 className="font-display mt-3 text-3xl md:text-4xl font-normal tracking-tight text-white">
             Let's set up your company.
           </h1>
           <p className="mt-3 text-zinc-500 text-sm leading-relaxed max-w-lg">

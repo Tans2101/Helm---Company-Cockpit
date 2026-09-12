@@ -22,7 +22,7 @@ export default function Onboarding() {
     <div className="max-w-4xl mx-auto py-8 fade-up">
       <div className="text-center">
         <p className="font-mono text-xs uppercase tracking-[0.3em] text-gold">Welcome to Helm</p>
-        <h1 className="mt-4 text-3xl md:text-4xl font-light tracking-tight text-white">Let's set up your cockpit.</h1>
+        <h1 className="font-display mt-4 text-3xl md:text-4xl font-normal tracking-tight text-white">Let's set up your cockpit.</h1>
         <p className="mt-3 text-zinc-500 max-w-md mx-auto">Explore with a fully-loaded sample company, or start clean and bring in your own data.</p>
       </div>
 

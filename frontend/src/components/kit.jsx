@@ -19,7 +19,7 @@ export function PageHeader({ title, subtitle, action }) {
   return (
     <div className="flex items-start justify-between mb-8 fade-up">
       <div>
-        <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-helm-fg">{title}</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">{title}</h1>
         {subtitle && <p className="text-helm-muted text-sm mt-2 max-w-2xl font-sans">{subtitle}</p>}
       </div>
       {action}

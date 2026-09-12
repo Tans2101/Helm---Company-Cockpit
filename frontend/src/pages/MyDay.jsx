@@ -151,7 +151,7 @@ export default function MyDay() {
     <div>
       <div className="mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">My Day</p>
-        <h1 className="text-3xl md:text-5xl font-light tracking-tight text-white">Morning, {first}.</h1>
+        <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-white">Morning, {first}.</h1>
         <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
       </div>
 

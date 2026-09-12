@@ -49,7 +49,7 @@ export default function WorkspaceGate() {
         </div>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold">Welcome, {user?.name?.split(" ")[0] || "there"}</p>
-        <h1 className="mt-3 text-3xl md:text-4xl font-light tracking-tight text-white">Join your company on Helm.</h1>
+        <h1 className="font-display mt-3 text-3xl md:text-4xl font-normal tracking-tight text-white">Join your company on Helm.</h1>
         <p className="mt-3 text-zinc-500">If your team already uses Helm, join with an invite code. Starting fresh? Create your company.</p>
 
         {!mode && (

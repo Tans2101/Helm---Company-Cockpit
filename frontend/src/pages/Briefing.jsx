@@ -93,7 +93,7 @@ export default function Briefing() {
         <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-3">
           {data.date} · {briefingLabel}
         </p>
-        <h1 className="text-3xl md:text-4xl font-medium tracking-tight text-white">{greeting}.</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-white">{greeting}.</h1>
         <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">{data.headline}</p>
       </header>
 

@@ -504,7 +504,7 @@ export default function CalendarPage() {
     return (
       <div>
         <div className="mb-8">
-          <h1 className="text-3xl font-light tracking-tight text-white">Calendar</h1>
+          <h1 className="font-display text-3xl font-normal tracking-tight text-white">Calendar</h1>
           <p className="text-zinc-500 text-sm mt-2">Week view with your meetings and Helm deadlines.</p>
         </div>
         <EmptyState
@@ -532,7 +532,7 @@ export default function CalendarPage() {
       {syncBanner}
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-4 px-2 md:px-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-light tracking-tight text-white">Calendar</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-normal tracking-tight text-white">Calendar</h1>
           <p className="text-zinc-500 text-sm mt-1">
             {googleConnected ? "Synced with Google Calendar" : "Helm events and deadlines — connect Google to sync external meetings"}
           </p>

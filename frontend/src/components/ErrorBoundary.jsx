@@ -27,7 +27,7 @@ export default class ErrorBoundary extends Component {
               <span className="font-mono text-gold font-medium">H</span>
             </div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Something went wrong</p>
-            <h1 className="text-2xl font-light text-white tracking-tight">This screen hit an unexpected error.</h1>
+            <h1 className="font-display text-2xl font-normal text-white tracking-tight">This screen hit an unexpected error.</h1>
             <p className="text-sm text-zinc-500 mt-3 leading-relaxed">
               You can try again. If it keeps happening, refresh the page or sign back in.
             </p>

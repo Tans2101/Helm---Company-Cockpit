@@ -217,7 +217,7 @@ export default function Billing() {
 
       <div className="text-center mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Pricing</p>
-        <h1 className="text-3xl md:text-4xl font-light tracking-tight text-white">Choose your Helm plan</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-white">Choose your Helm plan</h1>
         <p className="text-zinc-500 mt-3">
           Paid plans include a <span className="text-zinc-300">7-day free trial</span>. Downgrades take effect next billing cycle.
         </p>
