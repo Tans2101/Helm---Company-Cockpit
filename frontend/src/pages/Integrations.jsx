@@ -94,15 +94,7 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
 
       {isUnavailable && (
         <p className="text-xs text-zinc-600 mt-3 leading-relaxed" data-testid={`${it.id}-unavailable-hint`}>
-          {it.provider === "google"
-            ? "Waiting on GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the server. Once set, refresh and Connect works."
-            : it.provider === "quickbooks"
-              ? "Waiting on QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET on the server. Once set, refresh and Connect works."
-              : it.provider === "xero"
-                ? "Waiting on XERO_CLIENT_ID / XERO_CLIENT_SECRET on the server. Once set, refresh and Connect works."
-                : it.provider === "hubspot"
-                  ? "Waiting on HUBSPOT_CLIENT_ID / HUBSPOT_CLIENT_SECRET on the server. Once set, refresh and Connect works."
-                : "This connection isn’t enabled on the server yet. After the API keys are set, refresh this page."}
+          This connection isn’t available for your workspace yet. Try again later, or use Helm without it.
         </p>
       )}
 
@@ -302,8 +294,6 @@ export default function Integrations() {
   const connectable = data.integrations.filter((i) => i.kind === "oauth" && !i.coming_soon);
   const roadmap = data.integrations.filter((i) => i.coming_soon);
   const connectedCount = connectable.filter((i) => i.connected).length;
-  const platform = data.platform || {};
-  const showPlatform = data.can_manage;
 
   return (
     <div>
@@ -321,36 +311,6 @@ export default function Integrations() {
           )}
         </p>
       </GlassCard>
-
-      {showPlatform && (
-        <GlassCard className="p-4 mb-8 fade-up" data-testid="platform-readiness">
-          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Server readiness</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-            {[
-              ["Google Calendar OAuth", platform.google],
-              ["QuickBooks OAuth", platform.quickbooks],
-              ["Xero OAuth", platform.xero],
-              ["HubSpot OAuth", platform.hubspot],
-              ["Anthropic AI", platform.anthropic],
-              ["Document storage (R2)", platform.r2],
-              ["Invite email (Resend)", platform.resend],
-              ["Paddle billing", platform.paddle_ready],
-            ].map(([label, ok]) => (
-              <div key={label} className="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
-                <span className="text-zinc-400">{label}</span>
-                <span className={ok ? "text-emerald-400 font-mono" : "text-zinc-600 font-mono"}>{ok ? "ready" : "needs key"}</span>
-              </div>
-            ))}
-          </div>
-          {!platform.google || (!platform.quickbooks && !platform.xero) || !platform.hubspot ? (
-            <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
-              Add missing keys on Render, redeploy, then refresh. Redirect URIs must be{" "}
-              <span className="font-mono text-zinc-500">https://www.helmcontrol.online/api/oauth/…/callback</span>
-              {" "}(see INTEGRATIONS.md).
-            </p>
-          ) : null}
-        </GlassCard>
-      )}
 
       {data.can_manage && (data.xero_pending_tenants || []).length > 0 && (
         <GlassCard className="p-5 mb-8 fade-up border-gold/20" data-testid="xero-tenant-picker">

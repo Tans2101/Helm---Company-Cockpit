@@ -6587,23 +6587,6 @@ async def integrations(principal=Depends(get_principal)):
         "slack_webhook_configured": bool((c.get("slack_webhook_url") or "").strip()),
         "slack_webhook_url": (c.get("slack_webhook_url") or "") if "integrations:manage" in perms_for(principal["pack"]) else "",
         "xero_pending_tenants": xero_pending if "integrations:manage" in perms_for(principal["pack"]) else [],
-        "platform": {
-            "clerk": clerk_auth.clerk_configured(),
-            "anthropic": helm_llm.anthropic_configured(),
-            "r2": doc_storage.r2_configured(),
-            "resend": bool(RESEND_API_KEY),
-            "paddle_ready": bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
-            "google": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
-            "quickbooks": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
-            "xero": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
-            "hubspot": bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
-        },
-        "oauth_redirect_uris": {
-            "google": _oauth_callback_uri("google"),
-            "quickbooks": _oauth_callback_uri("quickbooks"),
-            "xero": _oauth_callback_uri("xero"),
-            "hubspot": _oauth_callback_uri("hubspot"),
-        },
     }
 
 
