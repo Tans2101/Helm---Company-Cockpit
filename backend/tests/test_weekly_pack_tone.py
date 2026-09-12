@@ -139,6 +139,7 @@ async def test_weekly_pack_system_prompt_requires_natural_tone():
     mock_db = MagicMock()
     mock_db.updates.find.return_value = updates
     mock_db.workspaces.update_one = AsyncMock()
+    mock_db.financial_entries.find.return_value.sort.return_value.to_list = AsyncMock(return_value=[])
     principal = {"workspace_id": "ws_1", "user_id": "u1", "pack": "owner"}
 
     with patch.object(server, "get_ws", new=AsyncMock(return_value=ws)), \

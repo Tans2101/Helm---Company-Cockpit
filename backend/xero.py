@@ -134,6 +134,16 @@ def _line_category(inv: dict) -> str:
     return ""
 
 
+def _line_description(inv: dict) -> str:
+    for line in inv.get("LineItems") or []:
+        if not isinstance(line, dict):
+            continue
+        desc = line.get("Description")
+        if desc:
+            return str(desc).strip()[:120]
+    return ""
+
+
 def map_xero_invoice(inv: dict) -> Optional[dict]:
     """Map a Xero Invoice (ACCREC/ACCPAY) to financial_entries fields (QB-compatible)."""
     status = (inv.get("Status") or "").upper()
@@ -156,12 +166,17 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
     number = inv.get("InvoiceNumber") or ""
     ref = inv.get("Reference") or ""
 
+    category = _line_category(inv) or "Other"
+    line_desc = _line_description(inv)
+    name = (contact or line_desc or number or category).strip()[:120]
+    extras = [p for p in [number, ref, line_desc] if p and p != name]
+    note = " — ".join(extras)
+
     if inv_type == "ACCPAY":
-        parts = [p for p in [contact, number, ref] if p]
-        note = " — ".join(parts) if parts else "Xero bill"
         return {
             "type": "expense",
-            "category": _line_category(inv) or "Other",
+            "category": category,
+            "name": name,
             "amount": amount,
             "month": month,
             "note": note[:500],
@@ -170,11 +185,10 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
             "_xero_raw_type": "bill",
         }
 
-    parts = [p for p in [contact, number, ref] if p]
-    note = " — ".join(parts) if parts else "Xero invoice"
     return {
         "type": "revenue",
-        "category": _line_category(inv) or "Other",
+        "category": category,
+        "name": name,
         "amount": amount,
         "month": month,
         "note": note[:500],

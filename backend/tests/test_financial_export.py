@@ -27,6 +27,7 @@ ENTRIES = [
         "id": "r1",
         "type": "revenue",
         "category": "Subscriptions",
+        "name": "Subscription MRR",
         "amount": 10000,
         "month": "2026-08",
         "recurring": True,
@@ -35,6 +36,7 @@ ENTRIES = [
         "id": "e1",
         "type": "expense",
         "category": "Payroll",
+        "name": "Team payroll",
         "amount": 4000,
         "month": "2026-08",
         "recurring": True,
@@ -43,6 +45,7 @@ ENTRIES = [
         "id": "e2",
         "type": "expense",
         "category": "Cloud/Infra",
+        "name": "MongoDB Database Subscription",
         "amount": 1000,
         "month": "2026-08",
         "recurring": False,
@@ -78,6 +81,12 @@ def test_august_walks_back_from_dashboard_cash():
     cats = {row["category"]: row["amount"] for row in aug["income"]["expenses_by_category"]}
     assert cats["Payroll"] == pytest.approx(4000)
     assert cats["Cloud/Infra"] == pytest.approx(1000)
+    names = {row["name"]: row for row in aug["line_items"]}
+    assert names["Team payroll"]["category"] == "Payroll"
+    assert names["MongoDB Database Subscription"]["category"] == "Cloud/Infra"
+    md = fin_exp.statement_markdown(aug)
+    assert "MongoDB Database Subscription" in md
+    assert "(Cloud/Infra, expense)" in md
 
 
 def test_missing_cash_is_not_zero():
@@ -99,7 +108,7 @@ def test_no_balance_sheet_language_in_exports():
     from openpyxl import load_workbook
 
     wb = load_workbook(BytesIO(xlsx))
-    assert wb.sheetnames == ["Income Statement", "Cash Summary"]
+    assert wb.sheetnames == ["Income Statement", "Cash Summary", "Line items"]
     assert "Balance" not in "".join(wb.sheetnames)
 
 
@@ -207,7 +216,11 @@ def test_xlsx_endpoint_returns_attachment():
     from openpyxl import load_workbook
 
     wb = load_workbook(BytesIO(r.content))
-    assert set(wb.sheetnames) == {"Income Statement", "Cash Summary"}
+    assert set(wb.sheetnames) == {"Income Statement", "Cash Summary", "Line items"}
+    li = wb["Line items"]
+    names = [cell.value for cell in li["A"] if cell.value]
+    assert "MongoDB Database Subscription" in names
+    assert "Cloud/Infra" in [cell.value for cell in li["B"] if cell.value]
 
 
 def test_export_forbidden_without_finance_write():

@@ -151,6 +151,7 @@ def test_financial_settings_activity_and_briefing(owner):
 def test_financial_entry_add_and_delete_activity(owner):
     r = owner.post(f"{BASE_URL}/api/financials/entries",
                    json={"type": "revenue", "category": "TEST_activity",
+                         "name": "TEST activity item",
                          "amount": 12345, "month": "2025-01", "recurring": True})
     assert r.status_code == 200
     entry_id = r.json()["entry"]["id"]

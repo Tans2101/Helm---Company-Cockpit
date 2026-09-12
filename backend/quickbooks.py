@@ -87,11 +87,14 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
     if txn_type == "purchase":
         vendor = (txn.get("EntityRef") or {}).get("name") or ""
         memo = txn.get("PrivateNote") or ""
-        parts = [p for p in [vendor, memo] if p]
-        note = " — ".join(parts) if parts else "QuickBooks purchase"
+        category = _line_category(txn) or "Other"
+        name = (vendor or memo or category).strip()[:120]
+        extras = [p for p in [memo] if p and p != name]
+        note = " — ".join(extras) if extras else ""
         return {
             "type": "expense",
-            "category": _line_category(txn) or "Other",
+            "category": category,
+            "name": name,
             "amount": amount,
             "month": month,
             "note": note[:500],
@@ -102,11 +105,14 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
     customer = (txn.get("CustomerRef") or {}).get("name") or ""
     doc = txn.get("DocNumber") or ""
     memo = txn.get("PrivateNote") or ""
-    parts = [p for p in [customer, doc, memo] if p]
-    note = " — ".join(parts) if parts else "QuickBooks invoice"
+    category = _line_category(txn) or "Other"
+    name = (customer or doc or category).strip()[:120]
+    extras = [p for p in [doc, memo] if p and p != name]
+    note = " — ".join(extras) if extras else ""
     return {
         "type": "revenue",
-        "category": _line_category(txn) or "Other",
+        "category": category,
+        "name": name,
         "amount": amount,
         "month": month,
         "note": note[:500],

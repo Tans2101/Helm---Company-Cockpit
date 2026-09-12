@@ -2,7 +2,7 @@
 
 Uses the same ledger expansion as the Financials dashboard (`compute_financials`
 via `finance_recurrence`). PDF rendering reuses the Weekly Pack ReportLab
-pipeline. Excel is a real workbook (two sheets), not a CSV dump.
+pipeline. Excel is a real workbook (Income Statement, Cash Summary, Line items).
 
 Deliberately not a balance sheet.
 """
@@ -13,6 +13,7 @@ from io import BytesIO
 from typing import Any, Optional
 
 import finance_recurrence as fin_recur
+from finance_entry import normalize_entry_name
 from money_fmt import currency_symbol, entered_cash_amount, normalize_currency
 
 import weekly_pack_export as pack_pdf
@@ -62,6 +63,44 @@ def _expand_ledger(entries: list[dict[str, Any]], now: Optional[datetime] = None
     return valid, horizon, months, rev_by, exp_by, cat_totals
 
 
+def period_line_items(
+    entries: list[dict[str, Any]],
+    period: str,
+    horizon: str,
+) -> list[dict[str, Any]]:
+    """Ledger rows that contribute to `period`, with name as the primary label."""
+    rows: list[dict[str, Any]] = []
+    for e in entries or []:
+        start = str(e.get("month") or "").strip()
+        if not fin_recur.is_valid_month(start):
+            continue
+        entry_type = (e.get("type") or "").strip().lower()
+        if entry_type not in ("revenue", "expense"):
+            continue
+        category = (e.get("category") or "Other").strip() or "Other"
+        name = normalize_entry_name(e.get("name"), category)
+        if e.get("recurring"):
+            if start > period or period > horizon:
+                continue
+            amount = (
+                fin_recur.expense_monthly_amount(e)
+                if entry_type == "expense"
+                else fin_recur.revenue_monthly_amount(e)
+            )
+        else:
+            if start != period:
+                continue
+            amount = float(e.get("amount") or 0)
+        rows.append({
+            "name": name,
+            "category": category,
+            "type": entry_type,
+            "amount": float(amount),
+        })
+    rows.sort(key=lambda r: (0 if r["type"] == "revenue" else 1, r["name"].lower(), r["category"].lower()))
+    return rows
+
+
 def reconstruct_cash_by_month(
     months: list[str],
     rev_by: dict[str, float],
@@ -103,7 +142,7 @@ def assemble_financial_export(
 ) -> dict[str, Any]:
     settings = dict(settings or {})
     currency = normalize_currency(settings.get("currency"))
-    _valid, _horizon, months, rev_by, exp_by, cat_totals = _expand_ledger(entries, now)
+    _valid, horizon, months, rev_by, exp_by, cat_totals = _expand_ledger(entries, now)
 
     requested = (period or "").strip()
     if requested and not fin_recur.is_valid_month(requested):
@@ -144,6 +183,7 @@ def assemble_financial_export(
             "expenses_total": expenses_total,
             "net_income": net,
         },
+        "line_items": period_line_items(_valid, requested, horizon),
         "cash": {
             "entered": cash is not None,
             "dashboard_cash": cash,
@@ -180,6 +220,21 @@ def statement_markdown(bundle: dict[str, Any]) -> str:
             "",
             f"**Total expenses** — {format_export_amount(income['expenses_total'], currency)}",
             f"**Net income** — {format_export_amount(income['net_income'], currency)}",
+            "",
+            "# Line items",
+        ]
+    )
+    items = bundle.get("line_items") or []
+    if items:
+        for row in items:
+            lines.append(
+                f"- {row['name']} ({row['category']}, {row['type']}) — "
+                f"{format_export_amount(row['amount'], currency)}"
+            )
+    else:
+        lines.append("- None recorded this period")
+    lines.extend(
+        [
             "",
             "# Cash Summary",
         ]
@@ -400,6 +455,36 @@ def render_financial_xlsx(bundle: dict[str, Any], *, workspace_name: str) -> byt
     cs.cell(r, 1).font = Font(name="Calibri", italic=True, size=9, color="52525B")
     autosize(cs, 2)
     cs.freeze_panes = "A6"
+
+    li = wb.create_sheet("Line items")
+    li["A1"] = company
+    li["A1"].font = _xlsx_title_font()
+    li["A2"] = f"Line items — {period}"
+    li["A2"].font = Font(name="Calibri", italic=True, size=11, color="52525B")
+    li["A3"] = f"Currency: {currency.upper()} ({sym})"
+    li["A3"].font = Font(name="Calibri", size=10, color="52525B")
+
+    li["A5"] = "Name"
+    li["B5"] = "Category"
+    li["C5"] = "Type"
+    li["D5"] = "Amount"
+    style_header_row(li, 5, 4)
+    items = bundle.get("line_items") or []
+    r = 6
+    if items:
+        for item in items:
+            li.cell(r, 1, item["name"]).font = _xlsx_label_font(bold=True)
+            li.cell(r, 2, item["category"]).font = _xlsx_label_font()
+            li.cell(r, 3, item["type"]).font = _xlsx_label_font()
+            _write_money(li.cell(r, 4), item["amount"])
+            for col in range(1, 5):
+                li.cell(r, col).border = border
+            r += 1
+    else:
+        li.cell(r, 1, "None recorded this period")
+        li.cell(r, 1).border = border
+    autosize(li, 4)
+    li.freeze_panes = "A6"
 
     buf = BytesIO()
     wb.save(buf)

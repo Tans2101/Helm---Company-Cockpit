@@ -33,7 +33,9 @@ def test_map_purchase_to_expense():
     assert mapped["amount"] == 250.5
     assert mapped["month"] == "2024-03"
     assert mapped["qb_txn_id"] == "99_2024-03-15"
-    assert "AWS" in mapped["note"]
+    assert mapped["name"] == "AWS"
+    assert mapped["category"] == "Cloud/Infra"
+    assert "March cloud bill" in mapped["note"]
 
 
 def test_map_invoice_to_revenue():
@@ -49,6 +51,7 @@ def test_map_invoice_to_revenue():
     assert mapped["amount"] == 1200
     assert mapped["month"] == "2024-06"
     assert mapped["qb_txn_id"] == "42_2024-06-01"
+    assert mapped["name"] == "Acme Corp"
 
 
 def test_refresh_skips_when_token_fresh():

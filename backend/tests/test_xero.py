@@ -38,7 +38,7 @@ def test_map_accrec_invoice_to_revenue():
     assert mapped["amount"] == 1500.25
     assert mapped["month"] == "2026-04"
     assert mapped["qb_txn_id"] == "xero_inv-uuid-1_2026-04-12"
-    assert "Acme Ltd" in mapped["note"]
+    assert mapped["name"] == "Acme Ltd"
     assert mapped["category"] == "200"
 
 
@@ -55,6 +55,7 @@ def test_map_accpay_bill_to_expense():
     mapped = xr.map_xero_invoice(inv)
     assert mapped["type"] == "expense"
     assert mapped["qb_txn_id"].startswith("xero_bill-9_")
+    assert mapped["name"] == "AWS"
     assert mapped["category"] == "Cloud hosting"
 
 

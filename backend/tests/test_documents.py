@@ -143,6 +143,8 @@ def test_validate_currency_formatted_amount():
     assert result["amount"] == 1240.0
     assert result["type"] == "expense"
     assert result["confidence"] == "high"
+    assert result["name"] == "Acme Corp"
+    assert result["vendor"] == "Acme Corp"
 
 
 def test_validate_invalid_type_coerces_to_expense_with_low_confidence():
@@ -158,6 +160,23 @@ def test_validate_invalid_type_coerces_to_expense_with_low_confidence():
     })
     assert result["type"] == "expense"
     assert result["confidence"] == "low"
+
+
+def test_validate_prefers_extracted_name_over_vendor():
+    import llm
+
+    result = llm._validate_extracted_financial({
+        "type": "expense",
+        "amount": 79,
+        "month": "2026-09",
+        "category": "Cloud/Infra",
+        "name": "MongoDB Database Subscription",
+        "vendor": "MongoDB Inc",
+        "confidence": "high",
+    })
+    assert result["name"] == "MongoDB Database Subscription"
+    assert result["category"] == "Cloud/Infra"
+    assert result["vendor"] == "MongoDB Inc"
 
 
 def test_validate_garbage_amount_returns_unparseable_error():
@@ -386,6 +405,7 @@ def test_financial_entry_commits_its_source_document():
     payload = server.FinEntryInput(
         type="expense",
         category="Travel",
+        name="Client offsite flights",
         amount=125,
         month="2026-09",
         source_document_id="doc_1",
@@ -399,6 +419,7 @@ def test_financial_entry_commits_its_source_document():
         result = asyncio.run(server.add_fin_entry(payload, MOCK_PRINCIPAL))
 
     assert result["entry"]["source"] == "ai_upload"
+    assert result["entry"]["name"] == "Client offsite flights"
     assert result["entry"]["source_document_id"] == "doc_1"
     mock_db.documents.find_one_and_update.assert_awaited_once()
     mock_db.documents.update_one.assert_awaited_once_with(
