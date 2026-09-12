@@ -79,7 +79,7 @@ export default function HelmHowToUse({ className }) {
       </div>
 
       {/* Active rhythm steps */}
-      <div className="rounded-xl border border-white/[0.06] bg-helm-card/60 overflow-hidden mb-10">
+      <div className="rounded-xl border border-white/[0.06] bg-helm-card overflow-hidden mb-10">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] bg-white/[0.02]">
           <RhythmIcon className="w-5 h-5 text-gold" />
           <div>
