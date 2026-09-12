@@ -41,6 +41,7 @@ from pagination import clamp_limit, apply_before_filter, next_cursor
 from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
+from finance_entry import normalize_entry_name, require_entry_name
 import access_sections as sec_access
 import plans as helm_plans
 import plan_usage
@@ -3211,6 +3212,8 @@ async def financials(principal=Depends(get_principal)):
         {"workspace_id": principal["workspace_id"]}, dept_ids,
     )
     entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
+    for e in entries:
+        e["name"] = normalize_entry_name(e.get("name"), e.get("category"))
     await _product_event(
         principal["workspace_id"], principal["user_id"],
         helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
@@ -3224,6 +3227,7 @@ async def financials(principal=Depends(get_principal)):
 class FinEntryInput(BaseModel):
     type: str
     category: str
+    name: str
     amount: float
     month: str
     recurring: bool = False
@@ -3392,6 +3396,10 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
+    try:
+        entry_name = require_entry_name(payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     source = "manual"
     source_document_id = payload.source_document_id
     if source_document_id:
@@ -3416,9 +3424,10 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         source = "ai_upload"
         source_document_id = payload.source_document_id
     finance_dept_id = await dept_migrate.finance_department_id(db, principal["workspace_id"])
+    category = payload.category.strip() or "Other"
     entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
              "department_id": finance_dept_id,
-             "type": payload.type, "category": payload.category.strip() or "Other",
+             "type": payload.type, "category": category, "name": entry_name,
              "amount": round(payload.amount, 2), "month": payload.month.strip(), "recurring": payload.recurring,
              "recurrence": _fin_entry_recurrence(payload),
              "note": (payload.note or "").strip(), "source": source, "created_by": principal["user_id"],
@@ -3433,7 +3442,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
             {"$set": {"status": "committed", "linked_entry_id": entry["id"]}},
         )
     await log_activity(principal, "financials", "entry.add",
-                       f"Logged {payload.type} · {entry['category']} {fmt_money(entry['amount'], await _workspace_currency(principal['workspace_id']))} ({payload.month})",
+                       f"Logged {payload.type} · {entry['name']} {fmt_money(entry['amount'], await _workspace_currency(principal['workspace_id']))} ({payload.month})",
                        {"type": payload.type, "amount": entry["amount"], "month": payload.month})
     return {"ok": True, "entry": entry}
 
@@ -3446,16 +3455,21 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
         raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
+    try:
+        entry_name = require_entry_name(payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    category = payload.category.strip() or "Other"
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
-        {"$set": {"type": payload.type, "category": payload.category.strip() or "Other",
+        {"$set": {"type": payload.type, "category": category, "name": entry_name,
                   "amount": round(payload.amount, 2), "month": payload.month.strip(),
                   "recurring": payload.recurring, "recurrence": _fin_entry_recurrence(payload),
                   "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
     await log_activity(principal, "financials", "entry.edit",
-                       f"Updated a {payload.type} entry · {payload.category.strip() or 'Other'} ({payload.month})")
+                       f"Updated a {payload.type} entry · {entry_name} ({payload.month})")
     return {"ok": True}
 
 
@@ -3464,8 +3478,9 @@ async def delete_fin_entry(entry_id: str, principal=Depends(require_section("fin
     doc = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
     if doc:
+        label = normalize_entry_name(doc.get("name"), doc.get("category"))
         await log_activity(principal, "financials", "entry.delete",
-                           f"Removed a {doc.get('type')} entry · {doc.get('category')} ({doc.get('month')})")
+                           f"Removed a {doc.get('type')} entry · {label} ({doc.get('month')})")
     return {"ok": True}
 
 
@@ -3562,12 +3577,14 @@ async def import_financials_csv_confirm(
         month = (raw.get("month") or "").strip()
         if not re.fullmatch(r"\d{4}-\d{2}", month) or not _valid_fin_month(month):
             continue
+        category = (raw.get("category") or "Other").strip() or "Other"
         docs.append({
             "id": f"fe_{uuid.uuid4().hex[:10]}",
             "workspace_id": principal["workspace_id"],
             "department_id": finance_dept_id,
             "type": entry_type,
-            "category": (raw.get("category") or "Other").strip() or "Other",
+            "category": category,
+            "name": normalize_entry_name(raw.get("name"), category),
             "amount": amount,
             "month": month,
             "recurring": bool(raw.get("recurring")),
@@ -4153,6 +4170,19 @@ async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     current = _report_metric_snapshot(fin, items, ups, headcount)
     baseline = await _apply_report_snapshot(c["workspace_id"], current)
     context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
+    recent = await db.financial_entries.find(
+        {"workspace_id": c["workspace_id"], "type": "expense"},
+        {"_id": 0, "name": 1, "category": 1, "amount": 1, "month": 1},
+    ).sort("month", -1).to_list(12)
+    context["recent_expenses"] = [
+        {
+            "name": normalize_entry_name(e.get("name"), e.get("category")),
+            "category": (e.get("category") or "Other"),
+            "amount": e.get("amount"),
+            "month": e.get("month"),
+        }
+        for e in recent
+    ]
     system = """You are a sharp chief of staff briefing the founder in person about this week.
 
 Write the way you would speak in a short hallway update: clear prose, natural sentence rhythm,
@@ -6806,6 +6836,7 @@ async def _upsert_accounting_sync_entries(
         fields = {
             "type": txn["type"],
             "category": txn["category"],
+            "name": normalize_entry_name(txn.get("name"), txn.get("category")),
             "amount": txn["amount"],
             "month": txn["month"],
             "note": txn.get("note", ""),
@@ -7972,6 +8003,7 @@ async def startup():
     # Do not block Render health checks — indexes / migrations run after listen.
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(_run_sales_finance_migration())
+    asyncio.create_task(_backfill_financial_entry_names())
     asyncio.create_task(_seal_plaintext_integration_tokens())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
     if clerk_auth.clerk_configured():
@@ -7984,6 +8016,24 @@ async def _run_sales_finance_migration() -> None:
         await dept_migrate.migrate_all_workspaces_sales_finance(db)
     except Exception:
         logger.exception("sales/finance department migration failed")
+
+
+async def _backfill_financial_entry_names() -> None:
+    """Set name = category on legacy ledger rows that have no item name. Idempotent."""
+    try:
+        cursor = db.financial_entries.find(
+            {"$or": [{"name": {"$exists": False}}, {"name": None}, {"name": ""}]},
+            {"_id": 1, "category": 1},
+        )
+        updated = 0
+        async for doc in cursor:
+            label = normalize_entry_name(None, doc.get("category"))
+            await db.financial_entries.update_one({"_id": doc["_id"]}, {"$set": {"name": label}})
+            updated += 1
+        if updated:
+            logger.info("backfilled name on %s financial entries", updated)
+    except Exception:
+        logger.exception("financial entry name backfill failed")
 
 
 _INTEGRATION_TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens")

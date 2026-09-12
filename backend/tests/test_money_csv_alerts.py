@@ -34,6 +34,7 @@ bad-date,expense,Cloud,100,
     assert parsed["skipped_count"] == 2
     assert parsed["valid"][0]["month"] == "2026-03"
     assert parsed["valid"][0]["type"] == "revenue"
+    assert parsed["valid"][0]["name"] == "Subscriptions"
     assert parsed["valid"][2]["type"] == "revenue"  # income alias
     assert parsed["valid"][2]["amount"] == 2500.50
     reasons = " ".join(s["reason"] for s in parsed["skipped"])
@@ -44,6 +45,19 @@ bad-date,expense,Cloud,100,
 def test_csv_rejects_missing_headers():
     with pytest.raises(ValueError, match="Missing required"):
         finance_csv.parse_financial_csv("foo,bar\n1,2\n")
+
+
+def test_csv_name_column_and_category_fallback():
+    text = """Month,Type,Category,Name,Amount
+2026-09,expense,Cloud/Infra,MongoDB Database Subscription,57
+2026-09,expense,Software,,99
+"""
+    parsed = finance_csv.parse_financial_csv(text)
+    assert parsed["valid_count"] == 2
+    assert parsed["valid"][0]["name"] == "MongoDB Database Subscription"
+    assert parsed["valid"][0]["category"] == "Cloud/Infra"
+    assert parsed["valid"][1]["name"] == "Software"
+    assert parsed["valid"][1]["category"] == "Software"
 
 
 def test_alert_debounce_skips_already_notified():

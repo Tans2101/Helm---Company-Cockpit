@@ -44,7 +44,7 @@ function ChartTooltip({ active, payload, label, symbol = "$" }) {
 }
 
 const emptyForm = () => ({
-  type: "revenue", category: "Subscriptions", amount: "", month: thisMonth(),
+  type: "revenue", category: "Subscriptions", name: "", amount: "", month: thisMonth(),
   recurring: true, recurrence: "monthly", note: "", source_document_id: null, extract_confidence: null,
 });
 
@@ -58,13 +58,10 @@ function mapCategory(type, raw) {
   return partial || "Other";
 }
 
-function buildNote(vendor, note) {
-  const parts = [];
-  if (vendor) parts.push(String(vendor).trim());
-  if (note && String(note).trim() && String(note).trim() !== String(vendor || "").trim()) {
-    parts.push(String(note).trim());
-  }
-  return parts.join(" — ");
+function itemNameFromExtract(extracted) {
+  const name = String(extracted?.name || "").trim();
+  if (name) return name;
+  return String(extracted?.vendor || "").trim();
 }
 
 export default function Financials() {
@@ -116,14 +113,17 @@ export default function Financials() {
         return;
       }
       const entryType = extracted.type === "revenue" ? "revenue" : "expense";
+      const extractedName = itemNameFromExtract(extracted);
+      const extraNote = String(extracted.note || "").trim();
       setForm({
         type: entryType,
         category: mapCategory(entryType, extracted.category),
+        name: extractedName,
         amount: extracted.amount != null ? String(extracted.amount) : "",
         month: extracted.month || thisMonth(),
         recurring: entryType === "revenue",
         recurrence: "monthly",
-        note: buildNote(extracted.vendor, extracted.note),
+        note: extraNote && extraNote !== extractedName ? extraNote : "",
         source_document_id: uploaded.document_id,
         extract_confidence: extracted.confidence || "medium",
       });
@@ -176,12 +176,16 @@ export default function Financials() {
   const sym = data.currency_symbol || "$";
 
   const submitEntry = async () => {
-    if (!form.amount || !form.month) { toast.error("Add an amount and month"); return; }
+    if (!form.name?.trim() || !form.amount || !form.month) {
+      toast.error("Add a name, amount, and month");
+      return;
+    }
     setBusy(true);
     try {
       const payload = {
         type: form.type,
         category: form.category,
+        name: form.name.trim(),
         amount: parseFloat(form.amount),
         month: form.month,
         recurring: form.recurring,
@@ -349,7 +353,8 @@ export default function Financials() {
                 <thead>
                   <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
                     <th className="py-2 pr-3">Month</th><th className="py-2 pr-3">Type</th>
-                    <th className="py-2 pr-3">Category</th><th className="py-2 pr-3 text-right">Amount</th>
+                    <th className="py-2 pr-3">Name</th><th className="py-2 pr-3">Category</th>
+                    <th className="py-2 pr-3 text-right">Amount</th>
                     <th className="py-2">Note</th>
                   </tr>
                 </thead>
@@ -358,7 +363,8 @@ export default function Financials() {
                     <tr key={i} className="border-b border-white/[0.03]" data-testid={`csv-valid-${i}`}>
                       <td className="py-1.5 pr-3 font-mono text-zinc-400">{r.month}</td>
                       <td className="py-1.5 pr-3 text-zinc-300">{r.type}</td>
-                      <td className="py-1.5 pr-3 text-zinc-300">{r.category}</td>
+                      <td className="py-1.5 pr-3 text-white">{r.name || r.category}</td>
+                      <td className="py-1.5 pr-3 text-zinc-500">{r.category}</td>
                       <td className="py-1.5 pr-3 text-right font-mono text-white">{fmt(r.amount, sym)}</td>
                       <td className="py-1.5 text-zinc-500 truncate max-w-[140px]">{r.note || "—"}</td>
                     </tr>
@@ -539,7 +545,8 @@ export default function Financials() {
                 <thead>
                   <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
                     <th className="py-2 pr-4 font-medium">Month</th><th className="py-2 pr-4 font-medium">Type</th>
-                    <th className="py-2 pr-4 font-medium">Category</th><th className="py-2 pr-4 font-medium text-right">Amount</th>
+                    <th className="py-2 pr-4 font-medium">Name</th><th className="py-2 pr-4 font-medium">Category</th>
+                    <th className="py-2 pr-4 font-medium text-right">Amount</th>
                     <th className="py-2 pr-4 font-medium">Source</th><th className="py-2"></th>
                   </tr>
                 </thead>
@@ -548,8 +555,8 @@ export default function Financials() {
                     <tr key={e.id} className="border-b border-white/[0.03]" data-testid={`entry-${e.id}`}>
                       <td className="py-2.5 pr-4 font-mono text-zinc-400">{e.month}</td>
                       <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-emerald-400 bg-emerald-400/10" : "text-rose-400 bg-rose-400/10")}>{e.type}</span></td>
-                      <td className="py-2.5 pr-4 text-zinc-300">
-                        {e.category}
+                      <td className="py-2.5 pr-4 text-white">
+                        {e.name || e.category}
                         {e.recurring && e.type === "revenue" && (
                           <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>
                         )}
@@ -558,6 +565,11 @@ export default function Financials() {
                             {(e.recurrence || "monthly") === "annual" ? "Annual" : "Monthly"}
                           </span>
                         )}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span className="text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5 text-zinc-400 bg-white/5 border border-white/10">
+                          {e.category}
+                        </span>
                       </td>
                       <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount, sym)}</td>
                       <td className="py-2.5 pr-4">
@@ -624,6 +636,15 @@ export default function Financials() {
                 <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
                   {(form.type === "revenue" ? REV_CATS : EXP_CATS).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+              </label>
+              <label className="col-span-2 text-xs text-zinc-500">What was this for?
+                <input
+                  data-testid="entry-name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. MongoDB Database Subscription"
+                  className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                />
               </label>
               <label className="text-xs text-zinc-500">Amount ({(data.currency || "usd").toUpperCase()})
                 <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />

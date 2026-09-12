@@ -37,13 +37,20 @@ def sample_financial_entries(workspace_id):
     for month, rev, exp in zip(last_n_months(6), REV, EXP):
         entries.append({
             "id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": workspace_id, "type": "revenue",
-            "category": "Subscriptions", "amount": rev * 1000, "month": month, "recurring": True,
+            "category": "Subscriptions", "name": "Subscription MRR", "amount": rev * 1000, "month": month, "recurring": True,
             "note": "Recurring subscription revenue", "source": "manual", "created_by": "seed", "created_at": now,
         })
+        names = {
+            "Payroll": "Team payroll",
+            "Cloud/Infra": "Cloud infrastructure",
+            "Sales & Mktg": "Sales and marketing",
+            "G&A": "General and administrative",
+            "R&D Tools": "Engineering tools",
+        }
         for cat, pct in cats.items():
             entries.append({
                 "id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": workspace_id, "type": "expense",
-                "category": cat, "amount": round(exp * 1000 * pct), "month": month, "recurring": True,
+                "category": cat, "name": names.get(cat, cat), "amount": round(exp * 1000 * pct), "month": month, "recurring": True,
                 "note": "", "source": "manual", "created_by": "seed", "created_at": now,
             })
     return entries

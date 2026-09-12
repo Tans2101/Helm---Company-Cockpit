@@ -123,6 +123,7 @@ class TestApplyTemplate:
 class TestFinEntryCRUD:
     def test_create_edit_delete_entry(self, token, label):
         payload = {"type": "revenue", "category": f"TEST_{label}_cat",
+                   "name": f"TEST {label} item",
                    "amount": 1234.56, "month": "2025-10", "recurring": False,
                    "note": f"TEST entry {label}"}
         r = requests.post(f"{API}/financials/entries", headers=H(token), json=payload)
@@ -135,6 +136,7 @@ class TestFinEntryCRUD:
         assert entry["type"] == "revenue"
         assert entry["amount"] == 1234.56
         assert entry["category"] == f"TEST_{label}_cat"
+        assert entry["name"] == f"TEST {label} item"
         assert entry["month"] == "2025-10"
         eid = entry["id"]
 
@@ -161,7 +163,7 @@ class TestFinEntryCRUD:
 
     def test_invalid_type_400(self, token, label):
         r = requests.post(f"{API}/financials/entries", headers=H(token),
-                          json={"type": "junk", "category": "c", "amount": 1, "month": "2025-10"})
+                          json={"type": "junk", "category": "c", "name": "x", "amount": 1, "month": "2025-10"})
         # member is denied before validation (403); owner reaches validation (400)
         assert r.status_code == (403 if label == "member" else 400)
 
@@ -190,6 +192,7 @@ class TestFinancialFlowThrough:
     def test_recurring_revenue_flows_into_telemetry_and_briefing(self):
         # inject an unmistakably large recurring revenue for the latest month
         payload = {"type": "revenue", "category": "TEST_flow_revenue",
+                   "name": "TEST flow-through MRR",
                    "amount": 50000.0, "month": self._latest_month, "recurring": True,
                    "note": "TEST flow-through"}
         r = requests.post(f"{API}/financials/entries", headers=H(OWNER), json=payload)

@@ -343,7 +343,7 @@ export default function Reports() {
             <div>
               <SectionLabel>Financial Export</SectionLabel>
               <p className="text-sm text-zinc-400 max-w-xl mt-1">
-                Income Statement and Cash Summary for a selected month — the same figures as Financials, ready for your accountant. Not a balance sheet.
+                Income Statement, Cash Summary, and named line items for a selected month — the same figures as Financials, ready for your accountant. Not a balance sheet.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">

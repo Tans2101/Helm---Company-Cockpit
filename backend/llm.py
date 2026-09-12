@@ -21,13 +21,15 @@ If the document is clearly NOT a bill, receipt, or invoice (e.g. resume, contrac
 {"error": "not_financial"}
 
 Otherwise return:
-{"type": "revenue"|"expense", "category": string, "amount": number, "month": "YYYY-MM", "vendor": string, "note": string, "confidence": "high"|"medium"|"low"}
+{"type": "revenue"|"expense", "category": string, "name": string, "amount": number, "month": "YYYY-MM", "vendor": string, "note": string, "confidence": "high"|"medium"|"low"}
 
 Rules:
 - type is usually "expense" for bills/invoices you pay; use "revenue" only for incoming invoices you issued.
 - amount is the total in USD (number only, no currency symbols).
 - month is the invoice/bill date as YYYY-MM when possible; otherwise best estimate.
-- category should be a short label like Payroll, Cloud/Infra, Sales & Mktg, G&A, Subscriptions, etc.
+- category is a grouping label like Payroll, Cloud/Infra, Sales & Mktg, G&A, Subscriptions — not the specific purchase.
+- name is the specific line-item label (e.g. "MongoDB Database Subscription", "Render Hosting"). Prefer vendor + product/service when both are on the document. Do not copy category into name unless nothing more specific exists.
+- vendor is the payee or issuer name.
 - Do not guess amounts or dates — use confidence "low" when uncertain.
 """
 
@@ -146,12 +148,16 @@ def _validate_extracted_financial(data: dict) -> dict:
     else:
         month = month.strip()
 
+    category = _coerce_label(data.get("category"))
+    vendor = _coerce_label(data.get("vendor"))
+    name = _coerce_label(data.get("name")) or vendor or category
     return {
         "type": type_val,
         "amount": round(amount, 2),
         "month": month,
-        "category": _coerce_label(data.get("category")),
-        "vendor": _coerce_label(data.get("vendor")),
+        "category": category,
+        "name": name,
+        "vendor": vendor,
         "note": _coerce_label(data.get("note")),
         "confidence": confidence,
     }

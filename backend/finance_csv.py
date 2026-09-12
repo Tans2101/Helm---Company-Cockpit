@@ -1,6 +1,7 @@
 """Parse historical financial CSV uploads into preview rows (no DB writes).
 
-Expected columns (case-insensitive): date|month, type, category, amount, note(optional).
+Expected columns (case-insensitive): date|month, type, category, amount,
+optional name|item|vendor, optional note|description|memo.
 """
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ import io
 import re
 from datetime import datetime
 from typing import Any, Optional
+
+from finance_entry import normalize_entry_name
 
 
 TYPE_ALIASES = {
@@ -34,6 +37,10 @@ HEADER_MAP = {
     "entrytype": "type",
     "category": "category",
     "cat": "category",
+    "name": "name",
+    "item": "name",
+    "itemname": "name",
+    "vendor": "name",
     "amount": "amount",
     "value": "amount",
     "amt": "amount",
@@ -140,7 +147,7 @@ def parse_financial_csv(text: str) -> dict[str, Any]:
     if missing:
         raise ValueError(
             f"Missing required column(s): {', '.join(missing)}. "
-            "Expected date (or month), type, category, amount, and optional note."
+            "Expected date (or month), type, category, amount, and optional name/note."
         )
 
     valid = []
@@ -150,6 +157,7 @@ def parse_financial_csv(text: str) -> dict[str, Any]:
         raw_type = row.get(col_map["type"], "")
         raw_cat = row.get(col_map["category"], "")
         raw_amt = row.get(col_map["amount"], "")
+        raw_name = row.get(col_map["name"], "") if "name" in col_map else ""
         raw_note = row.get(col_map["note"], "") if "note" in col_map else ""
 
         month = _parse_month(raw_date)
@@ -172,6 +180,7 @@ def parse_financial_csv(text: str) -> dict[str, Any]:
         valid.append({
             "type": entry_type,
             "category": category,
+            "name": normalize_entry_name(raw_name, category),
             "amount": amount,
             "month": month,
             "note": note,
