@@ -4,7 +4,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle, FileSpreadsheet, Sheet } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
@@ -78,6 +78,7 @@ export default function Financials() {
   const [currency, setCurrency] = useState("usd");
   const [csvPreview, setCsvPreview] = useState(null);
   const [csvBusy, setCsvBusy] = useState(false);
+  const [sheetsBusy, setSheetsBusy] = useState(false);
   const fileInputRef = useRef(null);
   const csvInputRef = useRef(null);
 
@@ -148,6 +149,80 @@ export default function Financials() {
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     processBillFile(file);
+  };
+
+  const importFromDrive = async () => {
+    setUploadBusy(true);
+    try {
+      const { data: cfg } = await api.get("/integrations/google/picker");
+      if (cfg?.needs_reconnect) {
+        toast.error("Reconnect Google on Integrations to import from Drive");
+        return;
+      }
+      if (!cfg?.configured) {
+        toast.error("Drive import is not available yet");
+        return;
+      }
+      const { pickDriveBill } = await import("@/lib/googlePicker");
+      const picked = await pickDriveBill({
+        apiKey: cfg.api_key,
+        appId: cfg.app_id,
+        accessToken: cfg.access_token,
+      });
+      if (!picked?.fileId) return;
+      const { data: uploaded } = await api.post("/documents/from-drive", { file_id: picked.fileId }, { timeout: 60000 });
+      const { data: extracted } = await api.post(
+        `/documents/${uploaded.document_id}/extract`,
+        {},
+        { timeout: 120000 },
+      );
+      if (extracted?.error === "not_financial") {
+        toast.error("This doesn't look like a bill or invoice — pick a financial document.");
+        return;
+      }
+      if (extracted?.error === "unparseable_amount") {
+        toast.error("Couldn't read a clear amount from this document — try entering it manually.");
+        return;
+      }
+      const entryType = extracted.type === "revenue" ? "revenue" : "expense";
+      const extractedName = itemNameFromExtract(extracted);
+      const extraNote = String(extracted.note || "").trim();
+      setForm({
+        type: entryType,
+        category: mapCategory(entryType, extracted.category),
+        name: extractedName,
+        amount: extracted.amount != null ? String(extracted.amount) : "",
+        month: extracted.month || thisMonth(),
+        recurring: entryType === "revenue",
+        recurrence: "monthly",
+        note: extraNote && extraNote !== extractedName ? extraNote : "",
+        source_document_id: uploaded.document_id,
+        extract_confidence: extracted.confidence || "medium",
+      });
+      setShowForm(true);
+      toast.success("Review the extracted entry and save when it looks right");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e?.message || "Could not import from Drive");
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const exportToSheets = async () => {
+    setSheetsBusy(true);
+    try {
+      const { data: res } = await api.post("/financials/export-sheets", {}, { timeout: 45000 });
+      if (res?.url) {
+        window.open(res.url, "_blank", "noopener,noreferrer");
+        toast.success("Opened a Google Sheet with this ledger");
+      } else {
+        toast.error("Sheet was created but no URL came back");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Reconnect Google to export to Sheets");
+    } finally {
+      setSheetsBusy(false);
+    }
   };
 
   const openDocument = async (docId) => {
@@ -314,6 +389,30 @@ export default function Financials() {
         <Upload className="w-4 h-4" />
         {uploadBusy ? "Reading bill…" : "Upload a bill"}
       </button>
+      {data.google?.drive_file && (
+        <button
+          type="button"
+          data-testid="import-drive-btn"
+          disabled={uploadBusy || csvBusy}
+          onClick={importFromDrive}
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+        >
+          <FileText className="w-4 h-4" />
+          From Drive
+        </button>
+      )}
+      {data.google?.sheets && (
+        <button
+          type="button"
+          data-testid="export-sheets-btn"
+          disabled={sheetsBusy || !data.has_data}
+          onClick={exportToSheets}
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+        >
+          <Sheet className="w-4 h-4" />
+          {sheetsBusy ? "Creating Sheet…" : "Export to Sheets"}
+        </button>
+      )}
       <button
         type="button"
         data-testid="import-csv-btn"

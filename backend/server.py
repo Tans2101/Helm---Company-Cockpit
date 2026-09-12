@@ -32,6 +32,7 @@ import quickbooks as qb_sync
 import xero as xero_sync
 import hubspot as hubspot_sync
 import google_oauth as gcal
+import google_document_ai as gcp_docai
 import integrations_catalog as integ_catalog
 import clerk_auth
 import decision_engine
@@ -2379,12 +2380,13 @@ async def briefing(principal=Depends(get_principal)):
     b["email_threads"] = email_threads
     b["gmail_connected"] = gmail_meta["connected"]
     b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]
+    b["gmail_compose"] = gmail_meta.get("compose", False)
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
 
 
 async def _briefing_email_threads(workspace: dict) -> tuple[list, dict]:
     """Fetch a few relevant Gmail threads for the briefing; never writes email content to Mongo."""
-    meta = {"connected": False, "needs_reconnect": False}
+    meta = {"connected": False, "needs_reconnect": False, "compose": False}
     tokens = _integration_tokens(workspace, "google_tokens")
     if not tokens:
         return [], meta
@@ -2392,6 +2394,7 @@ async def _briefing_email_threads(workspace: dict) -> tuple[list, dict]:
         meta["needs_reconnect"] = True
         return [], meta
     meta["connected"] = True
+    meta["compose"] = gcal.has_scope(tokens, "gmail.compose")
     try:
         threads, refreshed = await gcal.fetch_important_threads(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, limit=5,
@@ -3219,9 +3222,12 @@ async def financials(principal=Depends(get_principal)):
         helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
         {"department": dept_catalog.TYPE_ACCOUNTING_FINANCE},
     )
+    ws = await get_ws(principal["workspace_id"])
     return {**fin, "entries": entries,
             "can_write": await can_section_write(principal, "financials", "finance:write"),
-            "can_manage": "integrations:manage" in perms_for(principal["pack"])}
+            "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+            "google": gcal.google_capabilities(_integration_tokens(ws, "google_tokens")),
+            }
 
 
 class FinEntryInput(BaseModel):
@@ -3322,7 +3328,7 @@ async def extract_financial_document_route(
         and doc.get("extracted_data")
     ):
         return doc["extracted_data"]
-    if not helm_llm.anthropic_configured():
+    if not helm_llm.extraction_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
     await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
@@ -3386,6 +3392,129 @@ async def get_financial_document(
         logger.exception("presigned url failed for %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
     return {**doc, "presigned_url": presigned_url}
+
+
+class DriveImportInput(BaseModel):
+    file_id: str
+
+
+@api_router.post("/documents/from-drive")
+async def import_financial_document_from_drive(
+    payload: DriveImportInput,
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    file_id = (payload.file_id or "").strip()
+    if not file_id:
+        raise HTTPException(status_code=400, detail="file_id is required")
+    c = await get_ws(principal["workspace_id"])
+    tokens = _integration_tokens(c, "google_tokens")
+    if not tokens or not gcal.has_scope(tokens, "drive.file"):
+        raise HTTPException(status_code=400, detail="Reconnect Google to import from Drive")
+    await _enforce_ai_extract_quota(principal)
+    await _enforce_document_rate_limit(
+        principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
+        "Upload limit reached — try again in a bit",
+    )
+    if not doc_storage.r2_configured():
+        raise HTTPException(status_code=503, detail="Document storage is not configured")
+    try:
+        data, mime, name, refreshed = await gcal.download_drive_file(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, file_id,
+        )
+        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+    except gcal.GoogleAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Drive import failed")
+        raise HTTPException(status_code=400, detail="Could not download that Drive file") from exc
+    if mime not in ALLOWED_DOC_TYPES:
+        raise HTTPException(status_code=400, detail="Use a PDF, PNG, or JPEG from Drive")
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
+    filename = (name or "document").replace("/", "_").replace("\\", "_")[:200]
+    try:
+        storage_key = await asyncio.to_thread(
+            doc_storage.upload_document,
+            principal["workspace_id"], data, filename, mime,
+        )
+    except Exception as exc:
+        logger.exception("document upload failed")
+        raise HTTPException(status_code=500, detail="Could not store document") from exc
+    doc_id = f"doc_{uuid.uuid4().hex[:12]}"
+    doc = {
+        "id": doc_id,
+        "workspace_id": principal["workspace_id"],
+        "storage_key": storage_key,
+        "filename": filename,
+        "content_type": mime,
+        "uploaded_by": principal["user_id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "status": "uploaded",
+        "extracted_data": None,
+        "linked_entry_id": None,
+        "source": "google_drive",
+    }
+    await db.documents.insert_one(doc)
+    await doc_rate_limit.record_event(db, principal["workspace_id"], "upload")
+    await log_activity(principal, "financials", "document.upload", f"Imported from Drive · {filename}")
+    return {"document_id": doc_id, "status": "uploaded"}
+
+
+@api_router.post("/financials/export-sheets")
+async def export_financials_to_sheets(principal=Depends(require_section("financials", "finance:write"))):
+    c = await get_ws(principal["workspace_id"])
+    tokens = _integration_tokens(c, "google_tokens")
+    if not tokens or not gcal.has_scope(tokens, "spreadsheets"):
+        raise HTTPException(status_code=400, detail="Reconnect Google to export to Sheets")
+    dept_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
+    )
+    fin = await compute_financials(principal["workspace_id"], department_ids=dept_ids)
+    entry_filt = dept_access.apply_department_filter(
+        {"workspace_id": principal["workspace_id"]}, dept_ids,
+    )
+    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
+    company = c.get("name") or "Helm"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    summary_rows = [
+        ["Metric", "Value"],
+        ["Company", company],
+        ["Exported", today],
+        ["MRR", fin.get("mrr") or "—"],
+        ["ARR", fin.get("arr") or "—"],
+        ["Cash", fin.get("cash") or "—"],
+        ["Burn", fin.get("burn") or "—"],
+        ["Runway (months)", fin.get("runway_months") if fin.get("runway_months") is not None else "—"],
+        ["Gross margin", fin.get("gross_margin") or "—"],
+    ]
+    entry_rows = [["Month", "Type", "Name", "Category", "Amount", "Recurring", "Note"]]
+    for e in entries:
+        entry_rows.append([
+            e.get("month") or "",
+            e.get("type") or "",
+            normalize_entry_name(e.get("name"), e.get("category")),
+            e.get("category") or "",
+            e.get("amount") if e.get("amount") is not None else "",
+            "yes" if e.get("recurring") else "",
+            (e.get("note") or "")[:200],
+        ])
+    body = gcal.build_ledger_spreadsheet_body(
+        f"{company} financials {today}",
+        summary_rows,
+        entry_rows,
+    )
+    try:
+        sid, url, refreshed = await gcal.create_spreadsheet(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, body,
+        )
+        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+    except gcal.GoogleAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Sheets export failed")
+        raise HTTPException(status_code=500, detail="Could not create Google Sheet") from exc
+    await log_activity(principal, "financials", "sheets.export", "Exported financials to Google Sheets")
+    return {"spreadsheet_id": sid, "url": url}
 
 
 @api_router.post("/financials/entries")
@@ -4514,6 +4643,8 @@ async def calendar(
     data["can_write"] = True
     data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+    tokens = _integration_tokens(c, "google_tokens") if data["google_connected"] else None
+    data["google"] = gcal.google_capabilities(tokens)
     return data
 
 
@@ -4524,14 +4655,18 @@ class CalendarEventInput(BaseModel):
     duration: int = 30
     type: str = "Internal"
     all_day: bool = False
+    push_to_google: bool = False
 
 
-def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = None) -> dict:
+def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = None, google_event_id: Optional[str] = None) -> dict:
     try:
         day = datetime.strptime(payload.date.strip(), "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
     eid = event_id or f"helm_{uuid.uuid4().hex[:10]}"
+    extra = {}
+    if google_event_id:
+        extra["google_event_id"] = google_event_id
     if payload.all_day:
         start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
         end = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
@@ -4540,6 +4675,7 @@ def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = Non
             "time": "", "duration": 0, "attendees": 0, "type": payload.type or "Internal",
             "prep": None, "importance": "medium", "source": "helm",
             "start_at": start.isoformat(), "end_at": end.isoformat(), "all_day": True,
+            **extra,
         }
     parts = (payload.time or "09:00").split(":")
     hour = int(parts[0])
@@ -4552,7 +4688,30 @@ def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = Non
         "time": f"{hour:02d}:{minute:02d}", "duration": duration, "attendees": 0,
         "type": payload.type or "Internal", "prep": None, "importance": "medium", "source": "helm",
         "start_at": start.isoformat(), "end_at": end.isoformat(), "all_day": False,
+        **extra,
     }
+
+
+async def _maybe_push_google_event(workspace: dict, ev: dict, payload: CalendarEventInput) -> dict:
+    if not payload.push_to_google:
+        return ev
+    tokens = _integration_tokens(workspace, "google_tokens")
+    if not tokens or not gcal.has_scope(tokens, "calendar.events"):
+        ev["google_push_error"] = "reconnect"
+        return ev
+    try:
+        gid, refreshed = await gcal.create_calendar_event(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+            title=ev["title"], start_iso=ev["start_at"], end_iso=ev["end_at"],
+            all_day=bool(ev.get("all_day")), date=ev.get("date"),
+        )
+        await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
+        if gid:
+            ev["google_event_id"] = gid
+    except Exception:
+        logger.exception("Google Calendar insert failed")
+        ev["google_push_error"] = "failed"
+    return ev
 
 
 @api_router.post("/calendar/events")
@@ -4563,6 +4722,7 @@ async def create_calendar_event(payload: CalendarEventInput, principal=Depends(g
     cal = dict(c.get("calendar") or {})
     events = list(cal.get("helm_events") or [])
     ev = _build_helm_event(payload)
+    ev = await _maybe_push_google_event(c, ev, payload)
     events.append(ev)
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
@@ -4580,8 +4740,21 @@ async def edit_calendar_event(event_id: str, payload: CalendarEventInput, princi
     found = None
     for i, ev in enumerate(events):
         if ev.get("id") == event_id and ev.get("source") == "helm":
-            events[i] = _build_helm_event(payload, event_id=event_id)
+            events[i] = _build_helm_event(payload, event_id=event_id, google_event_id=ev.get("google_event_id"))
             found = events[i]
+            gid = ev.get("google_event_id")
+            if gid:
+                tokens = _integration_tokens(c, "google_tokens")
+                if tokens and gcal.has_scope(tokens, "calendar.events"):
+                    try:
+                        refreshed = await gcal.patch_calendar_event(
+                            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, gid,
+                            title=found["title"], start_iso=found["start_at"], end_iso=found["end_at"],
+                            all_day=bool(found.get("all_day")), date=found.get("date"),
+                        )
+                        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+                    except Exception:
+                        logger.exception("Google Calendar patch failed")
             break
     if not found:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -4594,9 +4767,19 @@ async def edit_calendar_event(event_id: str, payload: CalendarEventInput, princi
 async def delete_calendar_event(event_id: str, principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
+    existing = [e for e in (cal.get("helm_events") or []) if e.get("id") == event_id]
     events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
     if len(events) == len(cal.get("helm_events") or []):
         raise HTTPException(status_code=404, detail="Event not found")
+    gid = (existing[0].get("google_event_id") if existing else None)
+    if gid:
+        tokens = _integration_tokens(c, "google_tokens")
+        if tokens and gcal.has_scope(tokens, "calendar.events"):
+            try:
+                refreshed = await gcal.delete_calendar_event(tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, gid)
+                await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+            except Exception:
+                logger.exception("Google Calendar delete failed")
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
     return {"ok": True}
@@ -6497,7 +6680,11 @@ api_router.add_api_route("/ai/ask-kalun", ask_helm, methods=["POST"])
 GOOGLE_SCOPES = [
     "openid", "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 
@@ -7058,6 +7245,69 @@ async def google_calendar_events(principal=Depends(get_principal)):
     except gcal.GoogleAuthError as exc:
         await _store_integration_tokens(c["workspace_id"], "google_tokens", None)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+class GmailDraftInput(BaseModel):
+    thread_id: str = ""
+    to_email: str = ""
+    subject: str = ""
+    snippet: str = ""
+
+
+@api_router.get("/integrations/google/picker")
+async def google_picker_config(principal=Depends(get_principal)):
+    """Short-lived OAuth token + picker keys for Drive file picker (browser only)."""
+    api_key = os.environ.get("GOOGLE_PICKER_API_KEY", "").strip()
+    app_id = os.environ.get("GOOGLE_CLOUD_PROJECT_NUMBER", "").strip()
+    c = await get_ws(principal["workspace_id"])
+    tokens = _integration_tokens(c, "google_tokens")
+    if not tokens or not gcal.has_scope(tokens, "drive.file"):
+        return {"configured": False, "needs_reconnect": True}
+    if not api_key or not app_id:
+        return {"configured": False, "needs_reconnect": False}
+    try:
+        refreshed = await gcal.refresh_google_token(tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+    except gcal.GoogleAuthError:
+        return {"configured": False, "needs_reconnect": True}
+    return {
+        "configured": True,
+        "api_key": api_key,
+        "app_id": app_id,
+        "client_id": GOOGLE_CLIENT_ID,
+        "access_token": refreshed.get("access_token"),
+    }
+
+
+@api_router.post("/integrations/google/gmail-draft")
+async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_principal)):
+    c = await get_ws(principal["workspace_id"])
+    tokens = _integration_tokens(c, "google_tokens")
+    if not tokens or not gcal.has_scope(tokens, "gmail.compose"):
+        raise HTTPException(status_code=400, detail="Reconnect Google to create Gmail drafts")
+    subject = (payload.subject or "Follow up").strip()[:200]
+    to_email = (payload.to_email or "").strip()[:200]
+    snippet = (payload.snippet or "").strip()[:500]
+    body = (
+        "Hi,\n\n"
+        "(Drafted in Helm — edit this in Gmail before you send.)\n\n"
+        + (f"On their last note:\n{snippet}\n" if snippet else "")
+    )
+    try:
+        draft_id, url, refreshed = await gcal.create_gmail_draft(
+            tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+            to_email=to_email or "me",
+            subject=subject,
+            body=body,
+            thread_id=(payload.thread_id or "").strip(),
+        )
+        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+    except gcal.GoogleAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Gmail draft failed")
+        raise HTTPException(status_code=500, detail="Could not create Gmail draft") from exc
+    return {"draft_id": draft_id, "url": url}
 
 
 # ------------------------- Payments -------------------------
@@ -7743,6 +7993,10 @@ async def setup_status(request: Request):
             "anthropic": {
                 "configured": helm_llm.anthropic_configured(),
                 "env": ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
+            },
+            "document_ai": {
+                "configured": gcp_docai.document_ai_configured(),
+                "env": ["GCP_PROJECT_ID", "GCP_DOCUMENT_AI_PROCESSOR_ID", "GCP_SERVICE_ACCOUNT_JSON"],
             },
             "r2": {
                 "configured": doc_storage.r2_configured(),

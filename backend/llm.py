@@ -151,7 +151,7 @@ def _validate_extracted_financial(data: dict) -> dict:
     category = _coerce_label(data.get("category"))
     vendor = _coerce_label(data.get("vendor"))
     name = _coerce_label(data.get("name")) or vendor or category
-    return {
+    out = {
         "type": type_val,
         "amount": round(amount, 2),
         "month": month,
@@ -161,9 +161,12 @@ def _validate_extracted_financial(data: dict) -> dict:
         "note": _coerce_label(data.get("note")),
         "confidence": confidence,
     }
+    if data.get("engine"):
+        out["engine"] = data.get("engine")
+    return out
 
 
-async def extract_financial_document(file_bytes: bytes, content_type: str) -> dict:
+async def extract_with_claude(file_bytes: bytes, content_type: str) -> dict:
     if content_type == "application/pdf":
         block = {
             "type": "document",
@@ -198,7 +201,45 @@ async def extract_financial_document(file_bytes: bytes, content_type: str) -> di
     raw = "".join(parts).strip()
     if not raw:
         raise ValueError("Empty response from model")
-    return _validate_extracted_financial(_parse_extract_json(raw))
+    out = _validate_extracted_financial(_parse_extract_json(raw))
+    out["engine"] = "anthropic"
+    return out
+
+
+def extraction_configured() -> bool:
+    try:
+        import google_document_ai as docai
+        return anthropic_configured() or docai.document_ai_configured()
+    except Exception:
+        return anthropic_configured()
+
+
+async def extract_financial_document(file_bytes: bytes, content_type: str) -> dict:
+    """Document AI first (GCP credits), Claude for low-confidence or missing parser."""
+    docai_result = None
+    try:
+        import google_document_ai as docai
+        docai_result = await docai.extract_invoice(file_bytes, content_type)
+    except Exception:
+        docai_result = None
+
+    if docai_result and not docai_result.get("error") and docai_result.get("confidence") == "high":
+        return _validate_extracted_financial(docai_result)
+
+    if anthropic_configured():
+        try:
+            claude = await extract_with_claude(file_bytes, content_type)
+            if claude.get("error") and docai_result and not docai_result.get("error"):
+                return _validate_extracted_financial(docai_result)
+            return claude
+        except Exception:
+            if docai_result and not docai_result.get("error"):
+                return _validate_extracted_financial(docai_result)
+            raise
+
+    if docai_result:
+        return docai_result if docai_result.get("error") else _validate_extracted_financial(docai_result)
+    raise RuntimeError("No extraction engine configured")
 
 
 _DECISION_DRAFT_SYSTEM = """You are Helm, drafting a decision card for a CEO based on a real signal detected in their business data.

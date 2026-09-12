@@ -5,6 +5,7 @@ Do not persist full message bodies; callers should pass through API responses on
 """
 from __future__ import annotations
 
+import base64
 import email.utils
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -16,7 +17,23 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 CALENDAR_EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
 GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+GMAIL_DRAFTS_URL = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+SHEETS_URL = "https://sheets.googleapis.com/v4/spreadsheets"
+DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
 GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+GMAIL_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
+CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+
+# Extra scopes beyond the original Calendar + Gmail read grant. Existing
+# workspaces need one reconnect (prompt=consent) before write features work.
+WRITE_SCOPE_FRAGMENTS = (
+    "calendar.events",
+    "gmail.compose",
+    "spreadsheets",
+    "drive.file",
+)
 
 # Prefer Gmail's own importance signal; fall back to recent primary inbox.
 _IMPORTANT_QUERY = "(is:important OR is:starred) newer_than:14d -category:promotions -category:social -category:forums"
@@ -29,9 +46,31 @@ class GoogleAuthError(Exception):
 
 def has_gmail_scope(tokens: Optional[dict]) -> bool:
     """True when the stored Google token grant includes gmail.readonly."""
-    if not tokens:
+    return has_scope(tokens, "gmail.readonly")
+
+
+def has_scope(tokens: Optional[dict], fragment: str) -> bool:
+    if not tokens or not fragment:
         return False
-    return "gmail.readonly" in (tokens.get("scope") or "")
+    return fragment in (tokens.get("scope") or "")
+
+
+def missing_write_scopes(tokens: Optional[dict]) -> list[str]:
+    if not tokens:
+        return list(WRITE_SCOPE_FRAGMENTS)
+    return [frag for frag in WRITE_SCOPE_FRAGMENTS if not has_scope(tokens, frag)]
+
+
+def google_capabilities(tokens: Optional[dict]) -> dict:
+    return {
+        "connected": bool(tokens),
+        "gmail": has_gmail_scope(tokens),
+        "gmail_compose": has_scope(tokens, "gmail.compose"),
+        "calendar_write": has_scope(tokens, "calendar.events"),
+        "sheets": has_scope(tokens, "spreadsheets"),
+        "drive_file": has_scope(tokens, "drive.file"),
+        "needs_reconnect": bool(tokens) and bool(missing_write_scopes(tokens)),
+    }
 
 
 def _token_needs_refresh(tokens: dict) -> bool:
@@ -400,3 +439,228 @@ async def fetch_important_threads(
 
     threads.sort(key=lambda t: t.get("last_message_at") or "", reverse=True)
     return threads[:limit], tokens
+
+
+async def create_calendar_event(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    *,
+    title: str,
+    start_iso: str,
+    end_iso: str,
+    all_day: bool = False,
+    date: Optional[str] = None,
+) -> tuple[str, dict]:
+    """Insert an event on the user's primary calendar. Returns (google_event_id, tokens)."""
+    if not has_scope(tokens, "calendar.events"):
+        raise GoogleAuthError("Calendar write access not granted — reconnect Google")
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    if all_day and date:
+        body = {
+            "summary": title,
+            "start": {"date": date},
+            "end": {"date": date},
+        }
+    else:
+        body = {
+            "summary": title,
+            "start": {"dateTime": start_iso, "timeZone": "UTC"},
+            "end": {"dateTime": end_iso, "timeZone": "UTC"},
+        }
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        resp = await hc.post(
+            CALENDAR_EVENTS_URL,
+            headers={"Authorization": f"Bearer {tokens.get('access_token')}", "Content-Type": "application/json"},
+            json=body,
+        )
+    if resp.status_code in (401, 403):
+        raise GoogleAuthError("Calendar write failed — reconnect Google")
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Calendar insert failed ({resp.status_code}): {resp.text[:300]}")
+    return (resp.json() or {}).get("id") or "", tokens
+
+
+async def patch_calendar_event(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    google_event_id: str,
+    *,
+    title: str,
+    start_iso: str,
+    end_iso: str,
+    all_day: bool = False,
+    date: Optional[str] = None,
+) -> dict:
+    if not google_event_id:
+        return tokens
+    if not has_scope(tokens, "calendar.events"):
+        return tokens
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    if all_day and date:
+        body = {"summary": title, "start": {"date": date}, "end": {"date": date}}
+    else:
+        body = {
+            "summary": title,
+            "start": {"dateTime": start_iso, "timeZone": "UTC"},
+            "end": {"dateTime": end_iso, "timeZone": "UTC"},
+        }
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        resp = await hc.patch(
+            f"{CALENDAR_EVENTS_URL}/{google_event_id}",
+            headers={"Authorization": f"Bearer {tokens.get('access_token')}", "Content-Type": "application/json"},
+            json=body,
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Calendar patch failed ({resp.status_code}): {resp.text[:300]}")
+    return tokens
+
+
+async def delete_calendar_event(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    google_event_id: str,
+) -> dict:
+    if not google_event_id or not has_scope(tokens, "calendar.events"):
+        return tokens
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        resp = await hc.delete(
+            f"{CALENDAR_EVENTS_URL}/{google_event_id}",
+            headers={"Authorization": f"Bearer {tokens.get('access_token')}"},
+        )
+    if resp.status_code not in (200, 204, 404, 410):
+        raise RuntimeError(f"Calendar delete failed ({resp.status_code}): {resp.text[:300]}")
+    return tokens
+
+
+def build_ledger_spreadsheet_body(title: str, summary_rows: list[list], entry_rows: list[list]) -> dict:
+    return {
+        "properties": {"title": title},
+        "sheets": [
+            {
+                "properties": {"title": "Summary", "gridProperties": {"frozenRowCount": 1}},
+                "data": [{
+                    "startRow": 0,
+                    "startColumn": 0,
+                    "rowData": [{"values": [{"userEnteredValue": {"stringValue": str(c)}} for c in row]} for row in summary_rows],
+                }],
+            },
+            {
+                "properties": {"title": "Ledger", "gridProperties": {"frozenRowCount": 1}},
+                "data": [{
+                    "startRow": 0,
+                    "startColumn": 0,
+                    "rowData": [{"values": [{"userEnteredValue": {"stringValue": str(c)}} for c in row]} for row in entry_rows],
+                }],
+            },
+        ],
+    }
+
+
+async def create_spreadsheet(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    body: dict,
+) -> tuple[str, str, dict]:
+    """Create a Google Sheet the user owns. Returns (id, url, tokens)."""
+    if not has_scope(tokens, "spreadsheets"):
+        raise GoogleAuthError("Sheets access not granted — reconnect Google")
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    async with httpx.AsyncClient(timeout=45.0) as hc:
+        resp = await hc.post(
+            SHEETS_URL,
+            headers={"Authorization": f"Bearer {tokens.get('access_token')}", "Content-Type": "application/json"},
+            json=body,
+        )
+    if resp.status_code in (401, 403):
+        raise GoogleAuthError("Sheets access not granted — reconnect Google")
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Sheets create failed ({resp.status_code}): {resp.text[:300]}")
+    data = resp.json() or {}
+    sid = data.get("spreadsheetId") or ""
+    url = data.get("spreadsheetUrl") or (f"https://docs.google.com/spreadsheets/d/{sid}" if sid else "")
+    return sid, url, tokens
+
+
+async def create_gmail_draft(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    *,
+    to_email: str,
+    subject: str,
+    body: str,
+    thread_id: str = "",
+) -> tuple[str, str, dict]:
+    """Create a Gmail draft (Helm never sends). Returns (draft_id, open_url, tokens)."""
+    if not has_scope(tokens, "gmail.compose"):
+        raise GoogleAuthError("Gmail draft access not granted — reconnect Google")
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    subj = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    rfc = (
+        f"To: {to_email}\r\n"
+        f"Subject: {subj}\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        f"{body}"
+    )
+    raw = base64.urlsafe_b64encode(rfc.encode("utf-8")).decode("ascii").rstrip("=")
+    payload: dict = {"message": {"raw": raw}}
+    if thread_id:
+        payload["message"]["threadId"] = thread_id
+    async with httpx.AsyncClient(timeout=30.0) as hc:
+        resp = await hc.post(
+            GMAIL_DRAFTS_URL,
+            headers={"Authorization": f"Bearer {tokens.get('access_token')}", "Content-Type": "application/json"},
+            json=payload,
+        )
+    if resp.status_code in (401, 403):
+        raise GoogleAuthError("Gmail draft access not granted — reconnect Google")
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Gmail draft failed ({resp.status_code}): {resp.text[:300]}")
+    data = resp.json() or {}
+    draft_id = data.get("id") or ""
+    msg_id = (data.get("message") or {}).get("id") or draft_id
+    open_url = f"https://mail.google.com/mail/u/0/#drafts?compose={msg_id}"
+    return draft_id, open_url, tokens
+
+
+async def download_drive_file(
+    tokens: dict,
+    client_id: str,
+    client_secret: str,
+    file_id: str,
+) -> tuple[bytes, str, str, dict]:
+    """Download a Drive file the user picked. Returns (bytes, mime, name, tokens)."""
+    if not has_scope(tokens, "drive.file"):
+        raise GoogleAuthError("Drive access not granted — reconnect Google")
+    if not file_id or "/" in file_id or ".." in file_id:
+        raise GoogleAuthError("Invalid Drive file")
+    tokens = await refresh_google_token(tokens, client_id, client_secret)
+    headers = {"Authorization": f"Bearer {tokens.get('access_token')}"}
+    async with httpx.AsyncClient(timeout=60.0) as hc:
+        meta = await hc.get(
+            f"{DRIVE_FILES_URL}/{file_id}",
+            headers=headers,
+            params={"fields": "id,name,mimeType,size"},
+        )
+        if meta.status_code in (401, 403):
+            raise GoogleAuthError("Drive access not granted — reconnect Google")
+        if meta.status_code != 200:
+            raise RuntimeError(f"Drive metadata failed ({meta.status_code}): {meta.text[:300]}")
+        info = meta.json() or {}
+        mime = info.get("mimeType") or "application/octet-stream"
+        name = info.get("name") or "document"
+        media = await hc.get(
+            f"{DRIVE_FILES_URL}/{file_id}",
+            headers=headers,
+            params={"alt": "media"},
+        )
+        if media.status_code != 200:
+            raise RuntimeError(f"Drive download failed ({media.status_code}): {media.text[:300]}")
+        return media.content, mime, name, tokens
+

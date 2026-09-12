@@ -28,8 +28,37 @@ Because Vercel proxies `/api` → Render, register the **www** URLs:
 https://www.helmcontrol.online/api/oauth/google/callback
 ```
 
-Also enable **Google Calendar API** and **Gmail API** for the project.
-Scopes requested: `calendar.readonly` and `gmail.readonly` (one Google connect grants both).
+Also enable **Google Calendar API**, **Gmail API**, **Google Sheets API**, **Google Drive API**, and **Google Picker API** for the project.
+Scopes requested (one Connect Google grant):
+
+```
+calendar.readonly
+calendar.events
+gmail.readonly
+gmail.compose
+spreadsheets
+drive.file
+```
+
+Existing workspaces must **Reconnect Google** once after this change.
+
+**Document AI (GCP $300 credits, optional)** — operator service account, not the user:
+
+```
+GCP_PROJECT_ID
+GCP_DOCUMENT_AI_PROCESSOR_ID
+GCP_DOCUMENT_AI_LOCATION=us
+GCP_SERVICE_ACCOUNT_JSON
+```
+
+See `GOOGLE_WORKSPACE_AND_CLOUD.txt` for the exact Cloud Console clicks.
+
+**Drive picker** (Financials → From Drive) also needs on Render:
+
+```
+GOOGLE_PICKER_API_KEY
+GOOGLE_CLOUD_PROJECT_NUMBER
+```
 
 **Intuit Developer → your app → Keys → Redirect URI**
 

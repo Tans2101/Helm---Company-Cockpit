@@ -370,7 +370,7 @@ export default function CalendarPage() {
   const [view, setView] = useState("week");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ title: "", date: "", time: "09:00", duration: 30, type: "Internal", all_day: false });
+  const [form, setForm] = useState({ title: "", date: "", time: "09:00", duration: 30, type: "Internal", all_day: false, push_to_google: false });
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
@@ -401,7 +401,7 @@ export default function CalendarPage() {
 
   const openAdd = (day) => {
     setEditing(null);
-    setForm({ title: "", date: toIsoDate(day || selectedDay), time: "09:00", duration: 30, type: "Internal", all_day: false });
+    setForm({ title: "", date: toIsoDate(day || selectedDay), time: "09:00", duration: 30, type: "Internal", all_day: false, push_to_google: false });
     setShowForm(true);
   };
 
@@ -415,6 +415,7 @@ export default function CalendarPage() {
       duration: ev.duration || 30,
       type: ev.type || "Internal",
       all_day: !!ev.all_day,
+      push_to_google: false,
     });
     setShowForm(true);
   };
@@ -661,6 +662,18 @@ export default function CalendarPage() {
                     <input type="number" min={15} step={15} value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: parseInt(e.target.value, 10) || 30 }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
                   </label>
                 </div>
+              )}
+              {googleConnected && !editing && (
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    data-testid="event-push-google"
+                    checked={form.push_to_google}
+                    onChange={(e) => setForm((f) => ({ ...f, push_to_google: e.target.checked }))}
+                    className="accent-gold"
+                  />
+                  Also add to Google Calendar
+                </label>
               )}
             </div>
             <div className="flex gap-2 mt-5">

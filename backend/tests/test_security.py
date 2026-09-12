@@ -100,6 +100,10 @@ def test_google_scopes_include_gmail():
 
     assert "https://www.googleapis.com/auth/gmail.readonly" in server.GOOGLE_SCOPES
     assert "https://www.googleapis.com/auth/calendar.readonly" in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/calendar.events" in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/gmail.compose" in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/spreadsheets" in server.GOOGLE_SCOPES
+    assert "https://www.googleapis.com/auth/drive.file" in server.GOOGLE_SCOPES
 
 
 def test_integration_oauth_state_is_user_bound_and_single_use():

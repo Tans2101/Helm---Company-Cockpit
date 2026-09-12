@@ -19,7 +19,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Sync your real meetings into Helm Calendar and your daily briefing. Connecting Google also enables Gmail for the briefing.",
+        "description": "Sync meetings into Helm Calendar and your briefing. One Google connect also enables Gmail, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
         "value": "See today's schedule, prep time, and deadlines in one place — no tab switching.",
         "cta_route": "/app/calendar",
         "cta_label": "Open calendar",
@@ -33,7 +33,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Surface important threads and external follow-ups in your morning briefing.",
+        "description": "Surface important threads in your morning briefing, and draft replies in Gmail without Helm sending mail as you.",
         "value": "Stay on top of customer and investor email without living in your inbox.",
         "cta_route": "/app",
         "cta_label": "Open briefing",
@@ -159,8 +159,16 @@ def merge_integrations(
                 if google_connected and not gmail_connected:
                     item["connect_label"] = "Enable Gmail"
                     item["needs_reconsent"] = True
+                elif gmail_connected and "gmail.compose" not in ((google_tokens or {}).get("scope") or ""):
+                    item["needs_reconsent"] = True
+                    item["connect_label"] = "Enable drafts"
             elif provider == "google":
                 item["connected"] = google_connected
+                scope = (google_tokens or {}).get("scope") or ""
+                write_missing = [s for s in ("calendar.events", "spreadsheets", "drive.file") if s not in scope]
+                if google_connected and write_missing:
+                    item["needs_reconsent"] = True
+                    item["connect_label"] = "Reconnect Google"
             elif provider == "quickbooks":
                 item["connected"] = qb_connected
                 item["last_synced_at"] = qb_last_synced

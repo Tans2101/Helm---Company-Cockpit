@@ -219,13 +219,10 @@ export default function Briefing() {
           {data.email_threads?.length > 0 ? (
             <div className="space-y-3">
               {data.email_threads.map((t, i) => (
-                <a
+                <div
                   key={t.id || i}
-                  href={t.thread_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   data-testid={`email-thread-${i}`}
-                  className="block rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-white/15 hover:bg-white/[0.04] group"
+                  className="rounded-lg border border-white/5 bg-white/[0.02] p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -234,12 +231,43 @@ export default function Briefing() {
                         {t.sender}{t.sender_email ? ` · ${t.sender_email}` : ""}
                       </p>
                     </div>
-                    <ArrowUpRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+                    <a
+                      href={t.thread_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-zinc-600 hover:text-zinc-400 shrink-0"
+                      title="Open in Gmail"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </a>
                   </div>
                   {t.snippet && (
                     <p className="text-xs text-zinc-400 mt-2 leading-relaxed line-clamp-2">{t.snippet}</p>
                   )}
-                </a>
+                  {data.gmail_compose && (
+                    <button
+                      type="button"
+                      data-testid={`gmail-draft-${i}`}
+                      onClick={async () => {
+                        try {
+                          const { data: res } = await api.post("/integrations/google/gmail-draft", {
+                            thread_id: t.id,
+                            to_email: t.sender_email || "",
+                            subject: t.subject || "",
+                            snippet: t.snippet || "",
+                          });
+                          if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
+                          toast.success("Opened a Gmail draft — Helm did not send it");
+                        } catch (e) {
+                          toast.error(e?.response?.data?.detail || "Reconnect Google to create drafts");
+                        }
+                      }}
+                      className="mt-2 text-xs text-gold hover:text-gold-hover"
+                    >
+                      Draft reply in Gmail
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           ) : data.gmail_connected ? (

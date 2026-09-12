@@ -98,6 +98,17 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         </p>
       )}
 
+      {it.needs_reconsent && it.connected && canManage && (
+        <button
+          type="button"
+          data-testid={`reconnect-${it.id}`}
+          onClick={() => onConnect(it.provider)}
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> {it.connect_label || "Reconnect Google"}
+        </button>
+      )}
+
       {it.sync_action && it.connected && lastSynced && (
         <p className="text-xs text-zinc-600 mt-3 flex items-center gap-1" data-testid={`${it.id}-last-synced`}>
           <Clock className="w-3 h-3" /> Last synced {lastSynced}
