@@ -21,7 +21,7 @@ export default function Login() {
   if (!clerkEnabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-helm-ink p-8">
-        <p className="text-sm text-rose-400">Sign-in is not available — Clerk is not configured on this deployment.</p>
+        <p className="text-sm text-helm-status-negative">Sign-in is not available — Clerk is not configured on this deployment.</p>
       </div>
     );
   }
@@ -66,7 +66,7 @@ function LoginClerk() {
         <LoadingScreen label={sessionError ? "Sign-in problem" : "Finishing sign-in"} />
         {sessionError && (
           <div className="mt-6 max-w-md space-y-4">
-            <p className="text-sm text-rose-400">{sessionError}</p>
+            <p className="text-sm text-helm-status-negative">{sessionError}</p>
             <button
               type="button"
               className="text-sm text-helm-gold hover:underline"
@@ -97,7 +97,7 @@ function LoginClerk() {
             {HERO_SUB}
           </p>
         </div>
-        <p className="text-xs text-zinc-700">Know what matters before your first meeting.</p>
+        <p className="text-xs text-helm-muted">Know what matters before your first meeting.</p>
       </div>
 
       <div className="flex items-center justify-center p-10 relative z-10">
@@ -106,7 +106,7 @@ function LoginClerk() {
           <p className="text-helm-slate text-sm mt-2">Sign in, then activate Helm to use the cockpit.</p>
 
           {urlError === "session_retired" && (
-            <p className="mt-4 text-sm text-amber-400">That sign-in link has expired. Please sign in again below.</p>
+            <p className="mt-4 text-sm text-helm-status-warning">That sign-in link has expired. Please sign in again below.</p>
           )}
 
           <div className="mt-6" data-testid="clerk-sign-in">
@@ -123,15 +123,15 @@ function LoginClerk() {
 
           <p className="mt-4 text-center text-xs text-helm-slate">
             <Link to="/" className="hover:text-helm-slate transition-colors">← Back to home</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/sign-up" className="hover:text-helm-gold transition-colors">Create account</Link>
           </p>
 

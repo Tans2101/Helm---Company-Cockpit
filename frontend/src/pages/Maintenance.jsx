@@ -9,16 +9,16 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
-  reported: { label: "Reported", className: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" },
-  diagnosed: { label: "Diagnosed", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
-  in_repair: { label: "In repair", className: "bg-amber-500/15 text-amber-200 border-amber-500/30" },
-  resolved: { label: "Resolved", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+  reported: { label: "Reported", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
+  diagnosed: { label: "Diagnosed", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
+  in_repair: { label: "In repair", className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30" },
+  resolved: { label: "Resolved", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
 };
 
 const PRIORITY_META = {
-  high: { label: "High", className: "text-rose-300" },
-  medium: { label: "Medium", className: "text-amber-200" },
-  low: { label: "Low", className: "text-zinc-400" },
+  high: { label: "High", className: "text-helm-status-negative" },
+  medium: { label: "Medium", className: "text-helm-status-warning" },
+  low: { label: "Low", className: "text-helm-muted" },
 };
 
 function StatusBadge({ status }) {
@@ -192,7 +192,7 @@ export default function Maintenance() {
             type="button"
             data-testid="add-maintenance-ticket-btn"
             onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover"
+            className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover"
           >
             <Plus className="w-4 h-4" /> Report ticket
           </button>
@@ -200,16 +200,16 @@ export default function Maintenance() {
       />
 
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs text-zinc-500 font-mono">
+        <p className="text-xs text-helm-muted font-mono">
           {visible.length} shown · {allTickets.length} total · open high-priority first
         </p>
-        <label className="inline-flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+        <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
           <input
             type="checkbox"
             data-testid="maintenance-show-resolved"
             checked={showResolved}
             onChange={(e) => setShowResolved(e.target.checked)}
-            className="rounded border-white/20 bg-transparent"
+            className="rounded border-helm-fg/20 bg-transparent"
           />
           Show resolved
         </label>
@@ -228,17 +228,17 @@ export default function Maintenance() {
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"
+              className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
             >
               <Plus className="w-4 h-4" /> Report ticket
             </button>
           )}
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-white/10 mb-6">
+        <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
           <table className="w-full text-left text-sm" data-testid="maintenance-table">
             <thead>
-              <tr className="border-b border-white/10 text-[10px] font-mono uppercase tracking-wide text-zinc-500">
+              <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
                 <th className="px-3 py-2 font-medium">Equipment</th>
                 <th className="px-3 py-2 font-medium">Priority</th>
                 <th className="px-3 py-2 font-medium">Technician</th>
@@ -252,15 +252,15 @@ export default function Maintenance() {
                   data-testid={`maintenance-row-${t.id}`}
                   onClick={() => setSelectedId(t.id)}
                   className={cn(
-                    "border-b border-white/5 cursor-pointer transition-colors hover:bg-white/[0.03]",
-                    selectedId === t.id && "bg-gold/[0.06]",
+                    "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                    selectedId === t.id && "bg-helm-gold/[0.06]",
                   )}
                 >
-                  <td className="px-3 py-2.5 text-white truncate max-w-[16rem]">{t.equipment_name}</td>
+                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">{t.equipment_name}</td>
                   <td className={cn("px-3 py-2.5 text-xs font-mono uppercase", PRIORITY_META[t.priority]?.className)}>
                     {PRIORITY_META[t.priority]?.label || t.priority}
                   </td>
-                  <td className="px-3 py-2.5 text-zinc-400 truncate max-w-[10rem]">
+                  <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">
                     {personLabel(t.technician)}
                   </td>
                   <td className="px-3 py-2.5"><StatusBadge status={t.status} /></td>
@@ -276,32 +276,32 @@ export default function Maintenance() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <SectionLabel>Ticket detail</SectionLabel>
-              <p className="text-white text-sm mt-1">{selected.equipment_name}</p>
+              <p className="text-helm-fg text-sm mt-1">{selected.equipment_name}</p>
             </div>
-            <button type="button" onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-white">
+            <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 md:col-span-2">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Equipment</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Equipment</span>
               <input
                 data-testid="maintenance-edit-equipment"
                 disabled={!canEdit || busy}
                 value={draft.equipment_name}
                 onChange={(e) => setDraft((d) => ({ ...d, equipment_name: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Priority</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Priority</span>
               <select
                 data-testid="maintenance-edit-priority"
                 disabled={!canEdit || busy}
                 value={draft.priority}
                 onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               >
                 {(data?.priorities || ["low", "medium", "high"]).map((p) => (
                   <option key={p} value={p}>{PRIORITY_META[p]?.label || p}</option>
@@ -309,13 +309,13 @@ export default function Maintenance() {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Status</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
               <select
                 data-testid="maintenance-edit-status"
                 disabled={!canEdit || busy}
                 value={draft.status}
                 onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               >
                 {(data?.statuses || Object.keys(STATUS_META)).map((s) => (
                   <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>
@@ -323,13 +323,13 @@ export default function Maintenance() {
               </select>
             </label>
             <label className="space-y-1 md:col-span-2">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Technician</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Technician</span>
               <select
                 data-testid="maintenance-edit-tech"
                 disabled={!isLead || busy}
                 value={draft.assigned_technician || ""}
                 onChange={(e) => setDraft((d) => ({ ...d, assigned_technician: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               >
                 <option value="">Unassigned</option>
                 {workspaceMembers.map((m) => (
@@ -337,37 +337,37 @@ export default function Maintenance() {
                 ))}
               </select>
               {!isLead && (
-                <span className="text-[10px] text-zinc-600">Only a lead or CEO can assign a technician</span>
+                <span className="text-[10px] text-helm-muted">Only a lead or CEO can assign a technician</span>
               )}
             </label>
           </div>
 
           <label className="block space-y-1">
-            <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Description</span>
+            <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Description</span>
             <textarea
               data-testid="maintenance-edit-description"
               disabled={!canEdit || busy}
               value={draft.description}
               onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
               rows={2}
-              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
             />
           </label>
 
           <label className="block space-y-1">
-            <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Notes</span>
+            <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Notes</span>
             <textarea
               data-testid="maintenance-edit-notes"
               disabled={!canEdit || busy}
               value={draft.notes}
               onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
               rows={3}
-              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
             />
           </label>
 
-          <div className="flex flex-wrap gap-4 text-xs text-zinc-500">
-            <span>Reported by: <span className="text-zinc-300">{personLabel(selected.reporter)}</span></span>
+          <div className="flex flex-wrap gap-4 text-xs text-helm-muted">
+            <span>Reported by: <span className="text-helm-fg">{personLabel(selected.reporter)}</span></span>
             <span>Status: <StatusBadge status={selected.status} /></span>
           </div>
 
@@ -378,7 +378,7 @@ export default function Maintenance() {
                 disabled={busy}
                 data-testid="maintenance-save-btn"
                 onClick={saveTicket}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Save changes
               </button>
@@ -389,7 +389,7 @@ export default function Maintenance() {
                 disabled={busy}
                 data-testid="maintenance-delete-btn"
                 onClick={deleteTicket}
-                className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 text-rose-300 text-sm px-3 py-2 hover:bg-rose-500/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
@@ -400,32 +400,32 @@ export default function Maintenance() {
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setAdding(false)} />
-          <div className="relative w-full max-w-md rounded-md border border-white/10 bg-helm-card p-5 space-y-3" data-testid="maintenance-create-modal">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setAdding(false)} />
+          <div className="relative w-full max-w-md rounded-md border border-helm-line bg-helm-card p-5 space-y-3" data-testid="maintenance-create-modal">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-white font-medium">Report maintenance ticket</p>
-              <button type="button" onClick={() => setAdding(false)} className="text-zinc-500 hover:text-white">
+              <p className="text-sm text-helm-fg font-medium">Report maintenance ticket</p>
+              <button type="button" onClick={() => setAdding(false)} className="text-helm-muted hover:text-helm-fg">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Equipment</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Equipment</span>
               <input
                 data-testid="maintenance-new-equipment"
                 value={form.equipment_name}
                 onChange={(e) => setForm((f) => ({ ...f, equipment_name: e.target.value }))}
                 placeholder="CNC Mill #3"
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 autoFocus
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Priority</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Priority</span>
               <select
                 data-testid="maintenance-new-priority"
                 value={form.priority}
                 onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               >
                 {(data?.priorities || ["low", "medium", "high"]).map((p) => (
                   <option key={p} value={p}>{PRIORITY_META[p]?.label || p}</option>
@@ -434,12 +434,12 @@ export default function Maintenance() {
             </label>
             {isLead && (
               <label className="block space-y-1">
-                <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Technician (optional)</span>
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Technician (optional)</span>
                 <select
                   data-testid="maintenance-new-tech"
                   value={form.assigned_technician}
                   onChange={(e) => setForm((f) => ({ ...f, assigned_technician: e.target.value }))}
-                  className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 >
                   <option value="">Unassigned</option>
                   {workspaceMembers.map((m) => (
@@ -449,33 +449,33 @@ export default function Maintenance() {
               </label>
             )}
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Description</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Description</span>
               <textarea
                 data-testid="maintenance-new-description"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={2}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Notes</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Notes</span>
               <textarea
                 data-testid="maintenance-new-notes"
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 rows={2}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setAdding(false)} className="text-sm text-zinc-400 px-3 py-2">Cancel</button>
+              <button type="button" onClick={() => setAdding(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
               <button
                 type="button"
                 disabled={busy}
                 data-testid="maintenance-create-submit"
                 onClick={createTicket}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Submit ticket
               </button>

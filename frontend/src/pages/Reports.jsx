@@ -225,7 +225,7 @@ export default function Reports() {
 
   const action = canWrite ? (
     <button data-testid="add-report-btn" onClick={openAdd}
-      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover">
+      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover">
       <Plus className="w-4 h-4" /> Add report
     </button>
   ) : null;
@@ -238,9 +238,9 @@ export default function Reports() {
         action={action}
       />
 
-      <GlassCard className="p-4 mb-6 fade-up border-white/5">
-        <p className="text-sm text-zinc-400 leading-relaxed">
-          <span className="text-white">What happens here:</span> Helm tracks money, team, and completed work week over week.
+      <GlassCard className="p-4 mb-6 fade-up border-helm-line">
+        <p className="text-sm text-helm-muted leading-relaxed">
+          <span className="text-helm-fg">What happens here:</span> Helm tracks money, team, and completed work week over week.
           Turn a trend card into a report when you want context on the record. Then draft the Weekly CEO Pack for a
           plain-English update you can share.
         </p>
@@ -249,25 +249,25 @@ export default function Reports() {
       {drafts.length > 0 && (
         <div className="mb-8" data-testid="department-drafts">
           <SectionLabel className="mb-3">Suggested from your departments</SectionLabel>
-          <p className="text-sm text-zinc-500 mb-3">
+          <p className="text-sm text-helm-muted mb-3">
             Rollups of completed department work this week. Review before they become a report — they are not published until you say so.
           </p>
           <div className="grid md:grid-cols-3 gap-4">
             {drafts.map((d, i) => (
-              <GlassCard key={d.id} className="p-5 fade-up border-gold/20" style={{ animationDelay: `${i * 60}ms` }} data-testid={`draft-${d.id}`}>
+              <GlassCard key={d.id} className="p-5 fade-up border-helm-gold/20" style={{ animationDelay: `${i * 60}ms` }} data-testid={`draft-${d.id}`}>
                 <div className="flex items-center gap-2 mb-3">
-                  <FileText className="w-4 h-4 text-gold" />
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{d.type} · {d.period}</span>
-                  <span className="text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto text-gold bg-gold/10">Draft</span>
+                  <FileText className="w-4 h-4 text-helm-gold" />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted">{d.type} · {d.period}</span>
+                  <span className="text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto text-helm-gold bg-helm-gold/10">Draft</span>
                 </div>
-                <h3 className="text-white font-medium">{d.title}</h3>
-                <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{d.summary}</p>
+                <h3 className="text-helm-fg font-medium">{d.title}</h3>
+                <p className="text-sm text-helm-muted mt-2 leading-relaxed">{d.summary}</p>
                 {d.metrics?.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/5">
+                  <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-helm-line">
                     {d.metrics.map((m) => (
                       <div key={m.label}>
-                        <p className="font-mono text-lg text-white">{m.value}</p>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wide">{m.label}</p>
+                        <p className="font-mono text-lg text-helm-fg">{m.value}</p>
+                        <p className="text-[10px] text-helm-muted uppercase tracking-wide">{m.label}</p>
                       </div>
                     ))}
                   </div>
@@ -278,7 +278,7 @@ export default function Reports() {
                       data-testid={`publish-draft-${d.id}`}
                       type="button"
                       onClick={() => openPublishDraft(d)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium px-3 py-2 hover:bg-gold-hover"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-3 py-2 hover:bg-helm-gold-hover"
                     >
                       <Check className="w-3.5 h-3.5" /> Publish
                     </button>
@@ -286,7 +286,7 @@ export default function Reports() {
                       data-testid={`dismiss-draft-${d.id}`}
                       type="button"
                       onClick={() => dismissDraft(d)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5"
                     >
                       <X className="w-3.5 h-3.5" /> Dismiss
                     </button>
@@ -318,7 +318,7 @@ export default function Reports() {
       {auto.length > 0 && (
         <div className="mb-8" data-testid="week-over-week-trends">
           <SectionLabel className="mb-2">Week-over-week trends</SectionLabel>
-          <p className="text-sm text-zinc-500 mb-4 max-w-2xl leading-relaxed">
+          <p className="text-sm text-helm-muted mb-4 max-w-2xl leading-relaxed">
             Auto-generated from your data — use these as a starting point for your own report.
           </p>
           <div className="grid md:grid-cols-3 gap-4">
@@ -338,23 +338,23 @@ export default function Reports() {
       )}
 
       {canExportFinancials && (
-        <GlassCard className="p-6 fade-up border-gold/20 mb-6" data-testid="financial-export-card">
+        <GlassCard className="p-6 fade-up border-helm-gold/20 mb-6" data-testid="financial-export-card">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <SectionLabel>Financial Export</SectionLabel>
-              <p className="text-sm text-zinc-400 max-w-xl mt-1">
+              <p className="text-sm text-helm-muted max-w-xl mt-1">
                 Income Statement, Cash Summary, and named line items for a selected month — the same figures as Financials, ready for your accountant. Not a balance sheet.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
-              <label className="text-xs text-zinc-500">
+              <label className="text-xs text-helm-muted">
                 Period
                 <input
                   data-testid="financial-export-period"
                   type="month"
                   value={finPeriod}
                   onChange={(e) => setFinPeriod(e.target.value)}
-                  className="mt-1 block rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                  className="mt-1 block rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
                 />
               </label>
               <div className="flex flex-wrap gap-2">
@@ -363,7 +363,7 @@ export default function Reports() {
                   type="button"
                   onClick={() => downloadFinancialExport("pdf")}
                   disabled={Boolean(finExporting)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {finExporting === "pdf" ? "Building PDF…" : "Download PDF"}
@@ -373,7 +373,7 @@ export default function Reports() {
                   type="button"
                   onClick={() => downloadFinancialExport("xlsx")}
                   disabled={Boolean(finExporting)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {finExporting === "xlsx" ? "Building Excel…" : "Download Excel"}
@@ -384,32 +384,32 @@ export default function Reports() {
         </GlassCard>
       )}
 
-      <GlassCard glow className="p-6 fade-up border-gold/20">
+      <GlassCard glow className="p-6 fade-up border-helm-gold/20">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <SectionLabel>Weekly CEO Pack</SectionLabel>
-            <p className="text-sm text-zinc-400 max-w-xl mt-1">
+            <p className="text-sm text-helm-muted max-w-xl mt-1">
               A one-page Friday update: what happened, what needs your attention, and what to do next.
               Helm drafts it from the week-over-week trends above and any reports your team added.
             </p>
           </div>
           {canGeneratePack ? (
             <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
-              className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60 shrink-0">
+              className="inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60 shrink-0">
               <FileText className="w-4 h-4" />{busy ? "Drafting…" : "Draft weekly update"}
             </button>
           ) : (
-            <p className="text-xs text-zinc-600 shrink-0">Owner or executive access required to generate.</p>
+            <p className="text-xs text-helm-muted shrink-0">Owner or executive access required to generate.</p>
           )}
         </div>
         {pack && (
-          <div className="mt-4 rounded-lg border border-white/5 bg-black/30 p-5" data-testid="pack-content">
+          <div className="mt-4 rounded-lg border border-helm-line bg-helm-ink/30 p-5" data-testid="pack-content">
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <button
                 data-testid="copy-pack-btn"
                 type="button"
                 onClick={copyPack}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5"
               >
                 <Copy className="w-3.5 h-3.5" />
                 {copied ? "Copied" : "Copy"}
@@ -420,7 +420,7 @@ export default function Reports() {
                   type="button"
                   onClick={downloadPdf}
                   disabled={exporting}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm px-3 py-2 hover:bg-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {exporting ? "Building PDF…" : "Download PDF"}
@@ -434,37 +434,37 @@ export default function Reports() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/70" onClick={closeForm} />
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={closeForm} />
           <GlassCard className="relative w-full sm:max-w-lg m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="report-form">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg text-white font-light">{editing ? "Edit report" : publishingDraftId ? "Review department draft" : "Add a report"}</h3>
-              <button onClick={closeForm} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h3 className="text-lg text-helm-fg font-light">{editing ? "Edit report" : publishingDraftId ? "Review department draft" : "Add a report"}</h3>
+              <button onClick={closeForm} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
-              <label className="text-xs text-zinc-500 block">Title
-                <input data-testid="report-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Sales Performance" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-helm-muted block">Title
+                <input data-testid="report-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Sales Performance" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs text-zinc-500">Type
-                  <input value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} placeholder="Sales" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <label className="text-xs text-helm-muted">Type
+                  <input value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} placeholder="Sales" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
                 </label>
-                <label className="text-xs text-zinc-500">Period
-                  <input value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="This week" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                <label className="text-xs text-helm-muted">Period
+                  <input value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} placeholder="This week" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
                 </label>
               </div>
-              <label className="text-xs text-zinc-500 block">Summary
-                <textarea value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} rows={3} placeholder="What happened and why it matters…" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40 resize-none" />
+              <label className="text-xs text-helm-muted block">Summary
+                <textarea value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} rows={3} placeholder="What happened and why it matters…" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40 resize-none" />
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {form.metrics.map((m, i) => (
                   <div key={i}>
-                    <input value={m.label} onChange={(e) => setForm((f) => { const metrics = [...f.metrics]; metrics[i] = { ...metrics[i], label: e.target.value }; return { ...f, metrics }; })} placeholder="Metric" className="w-full rounded-md border border-white/10 bg-helm-card text-white text-xs px-2 py-1.5 mb-1 focus:outline-none focus:border-gold/40" />
-                    <input value={m.value} onChange={(e) => setForm((f) => { const metrics = [...f.metrics]; metrics[i] = { ...metrics[i], value: e.target.value }; return { ...f, metrics }; })} placeholder="Value" className="w-full rounded-md border border-white/10 bg-helm-card text-white text-xs px-2 py-1.5 focus:outline-none focus:border-gold/40" />
+                    <input value={m.label} onChange={(e) => setForm((f) => { const metrics = [...f.metrics]; metrics[i] = { ...metrics[i], label: e.target.value }; return { ...f, metrics }; })} placeholder="Metric" className="w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-xs px-2 py-1.5 mb-1 focus:outline-none focus:border-helm-gold/40" />
+                    <input value={m.value} onChange={(e) => setForm((f) => { const metrics = [...f.metrics]; metrics[i] = { ...metrics[i], value: e.target.value }; return { ...f, metrics }; })} placeholder="Value" className="w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-xs px-2 py-1.5 focus:outline-none focus:border-helm-gold/40" />
                   </div>
                 ))}
               </div>
             </div>
-            <button data-testid="submit-report-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save report" : publishingDraftId ? "Publish report" : "Add report"}</button>
+            <button data-testid="submit-report-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save report" : publishingDraftId ? "Publish report" : "Add report"}</button>
           </GlassCard>
         </div>
       )}
@@ -477,37 +477,37 @@ function ReportCard({ report: r, index, canWrite, onEdit, onDelete, onAddToRepor
     <GlassCard className="p-5 fade-up group relative" style={{ animationDelay: `${index * 60}ms` }} data-testid={`report-${r.id}`}>
       {canWrite && onEdit && (
         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button type="button" onClick={onEdit} className="text-zinc-600 hover:text-gold p-1" aria-label="Edit report"><PenLine className="w-3.5 h-3.5" /></button>
-          <button type="button" onClick={onDelete} className="text-zinc-600 hover:text-rose-400 p-1" aria-label="Delete report"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={onEdit} className="text-helm-muted hover:text-helm-gold p-1" aria-label="Edit report"><PenLine className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={onDelete} className="text-helm-muted hover:text-helm-status-negative p-1" aria-label="Delete report"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       )}
       <div className="flex items-center gap-2 mb-3">
-        <FileText className="w-4 h-4 text-gold shrink-0" />
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">{r.type} · {r.period}</span>
+        <FileText className="w-4 h-4 text-helm-gold shrink-0" />
+        <span className="text-[10px] uppercase tracking-wider text-helm-muted">{r.type} · {r.period}</span>
         {badge && (
           <span className={cn(
             "text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 ml-auto",
             badge === "Auto" || badge === "Updated automatically"
-              ? "text-sky-400 bg-sky-400/10"
-              : "text-gold bg-gold/10",
+              ? "text-helm-muted bg-helm-muted/10"
+              : "text-helm-gold bg-helm-gold/10",
           )}
           >
             {badge}
           </span>
         )}
       </div>
-      <h3 className="text-white font-medium pr-8">{r.title}</h3>
+      <h3 className="text-helm-fg font-medium pr-8">{r.title}</h3>
       {!hideSummary && r.summary && (
-        <p className="text-sm text-zinc-500 mt-2 leading-relaxed">{r.summary}</p>
+        <p className="text-sm text-helm-muted mt-2 leading-relaxed">{r.summary}</p>
       )}
       {r.metrics?.length > 0 && (
-        <div className={cn("grid gap-3 mt-4 pt-4 border-t border-white/5", r.metrics.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
+        <div className={cn("grid gap-3 mt-4 pt-4 border-t border-helm-line", r.metrics.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
           {r.metrics.map((m) => (
             <div key={m.label} className="min-w-0">
-              <p className="font-mono text-xl md:text-2xl tracking-tight text-white tabular-nums leading-none">{m.value}</p>
-              <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">{m.label}</p>
+              <p className="font-mono text-xl md:text-2xl tracking-tight text-helm-fg tabular-nums leading-none">{m.value}</p>
+              <p className="mt-1.5 text-[11px] leading-snug text-helm-muted">{m.label}</p>
               {m.change && (
-                <p className="mt-1 text-[10px] leading-snug text-zinc-600">{m.change}</p>
+                <p className="mt-1 text-[10px] leading-snug text-helm-muted">{m.change}</p>
               )}
             </div>
           ))}
@@ -518,7 +518,7 @@ function ReportCard({ report: r, index, canWrite, onEdit, onDelete, onAddToRepor
           type="button"
           data-testid={`add-trend-to-report-${r.id}`}
           onClick={onAddToReport}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5 hover:text-white transition-colors"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5 hover:text-helm-fg transition-colors"
         >
           <Plus className="w-3.5 h-3.5" /> Add to report
         </button>
@@ -531,7 +531,7 @@ function InlineText({ children }) {
   const parts = String(children || "").split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, index) => (
     part.startsWith("**") && part.endsWith("**")
-      ? <strong key={index} className="font-medium text-white">{part.slice(2, -2)}</strong>
+      ? <strong key={index} className="font-medium text-helm-fg">{part.slice(2, -2)}</strong>
       : <span key={index}>{part}</span>
   ));
 }
@@ -539,20 +539,20 @@ function InlineText({ children }) {
 function PackPreview({ content }) {
   const lines = String(content || "").split("\n");
   return (
-    <div className="max-w-3xl text-sm leading-relaxed text-zinc-300" data-testid="formatted-pack-content">
+    <div className="max-w-3xl text-sm leading-relaxed text-helm-fg" data-testid="formatted-pack-content">
       {lines.map((raw, index) => {
         const line = raw.trim();
         if (!line) return <div key={index} className="h-2" />;
         if (line.startsWith("# ")) {
-          return <h2 key={index} className="mb-2 text-xl font-medium tracking-tight text-white"><InlineText>{line.slice(2)}</InlineText></h2>;
+          return <h2 key={index} className="mb-2 text-xl font-medium tracking-tight text-helm-fg"><InlineText>{line.slice(2)}</InlineText></h2>;
         }
         if (line.startsWith("## ")) {
-          return <h3 key={index} className="mb-2 mt-5 text-sm font-medium uppercase tracking-wider text-gold"><InlineText>{line.slice(3)}</InlineText></h3>;
+          return <h3 key={index} className="mb-2 mt-5 text-sm font-medium uppercase tracking-wider text-helm-gold"><InlineText>{line.slice(3)}</InlineText></h3>;
         }
         if (/^[-*]\s+/.test(line)) {
           return (
             <div key={index} className="mb-2 flex items-start gap-2.5">
-              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-gold" />
+              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-helm-gold" />
               <p><InlineText>{line.replace(/^[-*]\s+/, "")}</InlineText></p>
             </div>
           );
@@ -561,12 +561,12 @@ function PackPreview({ content }) {
         if (numbered) {
           return (
             <div key={index} className="mb-2 flex items-start gap-2.5">
-              <span className="min-w-4 font-mono text-xs text-gold">{line.match(/^\d+/)?.[0]}.</span>
+              <span className="min-w-4 font-mono text-xs text-helm-gold">{line.match(/^\d+/)?.[0]}.</span>
               <p><InlineText>{numbered[1]}</InlineText></p>
             </div>
           );
         }
-        if (line === "---") return <div key={index} className="my-4 border-t border-white/5" />;
+        if (line === "---") return <div key={index} className="my-4 border-t border-helm-line" />;
         return <p key={index} className="mb-2"><InlineText>{line}</InlineText></p>;
       })}
     </div>

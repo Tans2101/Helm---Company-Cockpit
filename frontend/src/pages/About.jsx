@@ -133,7 +133,7 @@ export default function About() {
           <h2 className="font-display mt-4 text-3xl font-medium tracking-tight">{TAGLINE}</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button type="button" onClick={enter}
-              className="group inline-flex items-center gap-2 rounded-full bg-helm-gold text-helm-navy font-medium px-6 py-3 hover:bg-gold-hover transition-colors">
+              className="group inline-flex items-center gap-2 rounded-full bg-helm-gold text-helm-navy font-medium px-6 py-3 hover:bg-helm-gold-hover transition-colors">
               {authed ? "Open your cockpit" : "Get started"}
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>

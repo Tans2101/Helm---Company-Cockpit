@@ -32,10 +32,10 @@ const fmt = (n, sym = "$") => `${sym}${Number(n || 0).toLocaleString()}`;
 function ChartTooltip({ active, payload, label, symbol = "$" }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-white/10 bg-helm-card px-3 py-2 text-xs">
-      {label && <p className="text-zinc-400 mb-1 font-mono">{label}</p>}
+    <div className="rounded-md border border-helm-line bg-helm-card px-3 py-2 text-xs">
+      {label && <p className="text-helm-muted mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
-        <p key={i} className="text-white font-mono">
+        <p key={i} className="text-helm-fg font-mono">
           <span style={{ color: p.color }}>●</span> {p.name}: {fmt(p.value, symbol)}
         </p>
       ))}
@@ -384,7 +384,7 @@ export default function Financials() {
         data-testid="upload-bill-btn"
         disabled={uploadBusy || csvBusy}
         onClick={() => fileInputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-gold/15 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/15 disabled:opacity-60"
       >
         <Upload className="w-4 h-4" />
         {uploadBusy ? "Reading bill…" : "Upload a bill"}
@@ -395,7 +395,7 @@ export default function Financials() {
           data-testid="import-drive-btn"
           disabled={uploadBusy || csvBusy}
           onClick={importFromDrive}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
         >
           <FileText className="w-4 h-4" />
           From Drive
@@ -407,7 +407,7 @@ export default function Financials() {
           data-testid="export-sheets-btn"
           disabled={sheetsBusy || !data.has_data}
           onClick={exportToSheets}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
         >
           <Sheet className="w-4 h-4" />
           {sheetsBusy ? "Creating Sheet…" : "Export to Sheets"}
@@ -418,13 +418,13 @@ export default function Financials() {
         data-testid="import-csv-btn"
         disabled={uploadBusy || csvBusy}
         onClick={() => csvInputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-3 py-2 transition-colors hover:bg-white/5 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
       >
         <FileSpreadsheet className="w-4 h-4" />
         {csvBusy ? "Reading CSV…" : "Import from CSV"}
       </button>
       <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
-        className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
+        className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover">
         <Plus className="w-4 h-4" /> Log entry
       </button>
     </div>
@@ -438,19 +438,19 @@ export default function Financials() {
         <GlassCard className="p-5 mb-6 fade-up" data-testid="csv-import-preview">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
-              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-gold">CSV import preview</p>
-              <p className="text-sm text-zinc-400 mt-1">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-gold">CSV import preview</p>
+              <p className="text-sm text-helm-muted mt-1">
                 {csvPreview.valid_count} ready · {csvPreview.skipped_count} skipped
                 {csvPreview.filename ? ` · ${csvPreview.filename}` : ""} — nothing is saved until you confirm.
               </p>
             </div>
-            <button type="button" onClick={() => setCsvPreview(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            <button type="button" onClick={() => setCsvPreview(null)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
           </div>
           {csvPreview.valid?.length > 0 && (
             <div className="overflow-x-auto mb-4 max-h-48 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-helm-muted border-b border-helm-line">
                     <th className="py-2 pr-3">Month</th><th className="py-2 pr-3">Type</th>
                     <th className="py-2 pr-3">Name</th><th className="py-2 pr-3">Category</th>
                     <th className="py-2 pr-3 text-right">Amount</th>
@@ -459,28 +459,28 @@ export default function Financials() {
                 </thead>
                 <tbody>
                   {csvPreview.valid.slice(0, 50).map((r, i) => (
-                    <tr key={i} className="border-b border-white/[0.03]" data-testid={`csv-valid-${i}`}>
-                      <td className="py-1.5 pr-3 font-mono text-zinc-400">{r.month}</td>
-                      <td className="py-1.5 pr-3 text-zinc-300">{r.type}</td>
-                      <td className="py-1.5 pr-3 text-white">{r.name || r.category}</td>
-                      <td className="py-1.5 pr-3 text-zinc-500">{r.category}</td>
-                      <td className="py-1.5 pr-3 text-right font-mono text-white">{fmt(r.amount, sym)}</td>
-                      <td className="py-1.5 text-zinc-500 truncate max-w-[140px]">{r.note || "—"}</td>
+                    <tr key={i} className="border-b border-helm-fg/[0.03]" data-testid={`csv-valid-${i}`}>
+                      <td className="py-1.5 pr-3 font-mono text-helm-muted">{r.month}</td>
+                      <td className="py-1.5 pr-3 text-helm-fg">{r.type}</td>
+                      <td className="py-1.5 pr-3 text-helm-fg">{r.name || r.category}</td>
+                      <td className="py-1.5 pr-3 text-helm-muted">{r.category}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono text-helm-fg">{fmt(r.amount, sym)}</td>
+                      <td className="py-1.5 text-helm-muted truncate max-w-[140px]">{r.note || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {csvPreview.valid.length > 50 && (
-                <p className="text-xs text-zinc-600 mt-2">Showing first 50 of {csvPreview.valid.length} valid rows.</p>
+                <p className="text-xs text-helm-muted mt-2">Showing first 50 of {csvPreview.valid.length} valid rows.</p>
               )}
             </div>
           )}
           {csvPreview.skipped?.length > 0 && (
-            <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3" data-testid="csv-skipped-list">
-              <p className="text-xs text-amber-200 mb-2">Skipped rows</p>
+            <div className="mb-4 rounded-lg border border-helm-status-warning/20 bg-helm-status-warning/5 p-3" data-testid="csv-skipped-list">
+              <p className="text-xs text-helm-status-warning mb-2">Skipped rows</p>
               <ul className="space-y-1 max-h-28 overflow-y-auto">
                 {csvPreview.skipped.map((s) => (
-                  <li key={s.row} className="text-xs text-zinc-400 font-mono">Row {s.row}: {s.reason}</li>
+                  <li key={s.row} className="text-xs text-helm-muted font-mono">Row {s.row}: {s.reason}</li>
                 ))}
               </ul>
             </div>
@@ -491,11 +491,11 @@ export default function Financials() {
               data-testid="confirm-csv-import-btn"
               disabled={csvBusy || !csvPreview.valid?.length}
               onClick={confirmCsvImport}
-              className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60"
+              className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover disabled:opacity-60"
             >
               {csvBusy ? "Importing…" : `Confirm import (${csvPreview.valid_count || 0})`}
             </button>
-            <button type="button" onClick={() => setCsvPreview(null)} className="rounded-md border border-white/10 text-zinc-400 text-sm px-4 py-2 hover:bg-white/5">
+            <button type="button" onClick={() => setCsvPreview(null)} className="rounded-md border border-helm-line text-helm-muted text-sm px-4 py-2 hover:bg-helm-fg/5">
               Cancel
             </button>
           </div>
@@ -509,16 +509,16 @@ export default function Financials() {
           onDrop={onDrop}
           className={cn(
             "mb-6 rounded-xl border border-dashed px-5 py-6 text-center transition-colors fade-up",
-            dragOver ? "border-gold/50 bg-gold/[0.06]" : "border-white/10 bg-white/[0.02]",
+            dragOver ? "border-helm-gold/50 bg-helm-gold/[0.06]" : "border-helm-line bg-helm-fg/[0.02]",
             uploadBusy && "opacity-70 pointer-events-none",
           )}
         >
           <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/25 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-gold" />
+            <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-helm-gold" />
             </div>
-            <p className="text-sm text-zinc-300">Drop a bill, receipt, or invoice here</p>
-            <p className="text-xs text-zinc-600">PDF, PNG, or JPEG · up to 15MB · Claude reads it and pre-fills an entry for you to confirm</p>
+            <p className="text-sm text-helm-fg">Drop a bill, receipt, or invoice here</p>
+            <p className="text-xs text-helm-muted">PDF, PNG, or JPEG · up to 15MB · Claude reads it and pre-fills an entry for you to confirm</p>
           </div>
         </div>
       )}
@@ -529,43 +529,43 @@ export default function Financials() {
           action={canWrite ? (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button data-testid="empty-upload-bill-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}
-                className="inline-flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-4 py-2 hover:bg-gold/15 disabled:opacity-60">
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-4 py-2 hover:bg-helm-gold/15 disabled:opacity-60">
                 <Upload className="w-4 h-4" /> Upload a bill
               </button>
               <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
-                className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover">
+                className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover">
                 <Plus className="w-4 h-4" /> Log first entry
               </button>
               <button data-testid="empty-settings-btn" onClick={openSettings}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 font-medium text-sm px-4 py-2 hover:bg-white/5">
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-4 py-2 hover:bg-helm-fg/5">
                 <PenLine className="w-4 h-4" /> Cash & currency
               </button>
             </div>
-          ) : <p className="text-sm text-zinc-600">Ask a workspace owner or finance teammate to add data.</p>}
+          ) : <p className="text-sm text-helm-muted">Ask a workspace owner or finance teammate to add data.</p>}
         />
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             {headline.map((h) => (
               <GlassCard key={h.label} className="p-4 fade-up" data-testid={`fin-${h.label}`}>
-                <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">{h.label}</p>
-                <p className="font-mono text-2xl text-white mt-2">{h.value}</p>
+                <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-helm-muted">{h.label}</p>
+                <p className="font-mono text-2xl text-helm-fg mt-2">{h.value}</p>
               </GlassCard>
             ))}
           </div>
 
           {finActs.length > 0 && (
             <GlassCard className="p-4 mb-6 fade-up" data-testid="financials-activity">
-              <div className="flex items-center gap-1.5 mb-3 text-gold">
+              <div className="flex items-center gap-1.5 mb-3 text-helm-gold">
                 <History className="w-3.5 h-3.5" />
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Recent activity</span>
               </div>
               <div className="space-y-2">
                 {finActs.map((a) => (
                   <div key={a.activity_id} className="flex items-center gap-2 text-sm" data-testid={`fin-activity-${a.activity_id}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-gold/60 shrink-0" />
-                    <span className="text-zinc-300 flex-1 truncate">{a.summary}</span>
-                    <span className="text-xs text-zinc-600 font-mono shrink-0 hidden sm:inline">{a.actor_name} · {a.ago}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-helm-gold/60 shrink-0" />
+                    <span className="text-helm-fg flex-1 truncate">{a.summary}</span>
+                    <span className="text-xs text-helm-muted font-mono shrink-0 hidden sm:inline">{a.actor_name} · {a.ago}</span>
                   </div>
                 ))}
               </div>
@@ -591,7 +591,7 @@ export default function Financials() {
             <GlassCard className="p-5 fade-up">
               <div className="flex items-center justify-between mb-2">
                 <SectionLabel>Cash & margin</SectionLabel>
-                {canWrite && <button data-testid="edit-settings-btn" onClick={openSettings} className="text-zinc-500 hover:text-gold"><PenLine className="w-3.5 h-3.5" /></button>}
+                {canWrite && <button data-testid="edit-settings-btn" onClick={openSettings} className="text-helm-muted hover:text-helm-gold"><PenLine className="w-3.5 h-3.5" /></button>}
               </div>
               {data.expense_breakdown.length > 0 ? (
                 <>
@@ -600,11 +600,11 @@ export default function Financials() {
                   </ResponsiveContainer>
                   <div className="space-y-1 mt-1">
                     {data.expense_breakdown.map((e, i) => (
-                      <div key={e.name} className="flex items-center gap-2 text-xs"><span className="w-2 h-2 rounded-sm" style={{ background: PIE[i % PIE.length] }} /><span className="text-zinc-400 flex-1">{e.name}</span><span className="font-mono text-zinc-300">{e.value}%</span></div>
+                      <div key={e.name} className="flex items-center gap-2 text-xs"><span className="w-2 h-2 rounded-sm" style={{ background: PIE[i % PIE.length] }} /><span className="text-helm-muted flex-1">{e.name}</span><span className="font-mono text-helm-fg">{e.value}%</span></div>
                     ))}
                   </div>
                 </>
-              ) : <p className="text-sm text-zinc-600 py-8 text-center">Log expenses to see the breakdown.</p>}
+              ) : <p className="text-sm text-helm-muted py-8 text-center">Log expenses to see the breakdown.</p>}
             </GlassCard>
           </div>
 
@@ -626,10 +626,10 @@ export default function Financials() {
                 <SectionLabel className="mb-4">Runway Scenarios</SectionLabel>
                 <div className="space-y-3">
                   {data.scenarios.map((s) => (
-                    <div key={s.name} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`scenario-${s.name}`}>
-                      <div className="flex items-center justify-between"><span className="text-sm text-white">{s.name}</span><span className="font-mono text-gold text-sm">{s.runway}mo</span></div>
-                      <p className="text-xs text-zinc-500 mt-1">{s.desc}</p>
-                      <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden"><div className="h-full bg-gold/70 rounded-full" style={{ width: `${Math.min(s.runway / 36 * 100, 100)}%` }} /></div>
+                    <div key={s.name} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`scenario-${s.name}`}>
+                      <div className="flex items-center justify-between"><span className="text-sm text-helm-fg">{s.name}</span><span className="font-mono text-helm-gold text-sm">{s.runway}mo</span></div>
+                      <p className="text-xs text-helm-muted mt-1">{s.desc}</p>
+                      <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden"><div className="h-full bg-helm-gold/70 rounded-full" style={{ width: `${Math.min(s.runway / 36 * 100, 100)}%` }} /></div>
                     </div>
                   ))}
                 </div>
@@ -642,7 +642,7 @@ export default function Financials() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-zinc-600 border-b border-white/5">
+                  <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-helm-muted border-b border-helm-line">
                     <th className="py-2 pr-4 font-medium">Month</th><th className="py-2 pr-4 font-medium">Type</th>
                     <th className="py-2 pr-4 font-medium">Name</th><th className="py-2 pr-4 font-medium">Category</th>
                     <th className="py-2 pr-4 font-medium text-right">Amount</th>
@@ -651,42 +651,42 @@ export default function Financials() {
                 </thead>
                 <tbody>
                   {data.entries.map((e) => (
-                    <tr key={e.id} className="border-b border-white/[0.03]" data-testid={`entry-${e.id}`}>
-                      <td className="py-2.5 pr-4 font-mono text-zinc-400">{e.month}</td>
-                      <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-emerald-400 bg-emerald-400/10" : "text-rose-400 bg-rose-400/10")}>{e.type}</span></td>
-                      <td className="py-2.5 pr-4 text-white">
+                    <tr key={e.id} className="border-b border-helm-fg/[0.03]" data-testid={`entry-${e.id}`}>
+                      <td className="py-2.5 pr-4 font-mono text-helm-muted">{e.month}</td>
+                      <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-helm-status-positive bg-helm-status-positive/10" : "text-helm-status-negative bg-helm-status-negative/10")}>{e.type}</span></td>
+                      <td className="py-2.5 pr-4 text-helm-fg">
                         {e.name || e.category}
                         {e.recurring && e.type === "revenue" && (
-                          <span className="ml-1.5 text-[9px] text-gold/70 font-mono">MRR</span>
+                          <span className="ml-1.5 text-[9px] text-helm-gold/70 font-mono">MRR</span>
                         )}
                         {e.recurring && e.type === "expense" && (
-                          <span className="ml-1.5 text-[9px] text-gold/70 font-mono">
+                          <span className="ml-1.5 text-[9px] text-helm-gold/70 font-mono">
                             {(e.recurrence || "monthly") === "annual" ? "Annual" : "Monthly"}
                           </span>
                         )}
                       </td>
                       <td className="py-2.5 pr-4">
-                        <span className="text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5 text-zinc-400 bg-white/5 border border-white/10">
+                        <span className="text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5 text-helm-muted bg-helm-fg/5 border border-helm-line">
                           {e.category}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-4 text-right font-mono text-white">{fmt(e.amount, sym)}</td>
+                      <td className="py-2.5 pr-4 text-right font-mono text-helm-fg">{fmt(e.amount, sym)}</td>
                       <td className="py-2.5 pr-4">
                         {e.source === "ai_upload" && e.source_document_id ? (
                           <button
                             type="button"
                             data-testid={`entry-doc-${e.id}`}
                             onClick={() => openDocument(e.source_document_id)}
-                            className="inline-flex items-center gap-1 text-[10px] font-mono text-gold hover:text-gold-hover transition-colors"
+                            className="inline-flex items-center gap-1 text-[10px] font-mono text-helm-gold hover:text-helm-gold-hover transition-colors"
                             title="View original document"
                           >
                             <Sparkles className="w-3 h-3" /> AI upload
                           </button>
                         ) : (
-                          <span className="text-[10px] font-mono text-zinc-600">{e.source}</span>
+                          <span className="text-[10px] font-mono text-helm-muted">{e.source}</span>
                         )}
                       </td>
-                      <td className="py-2.5 text-right">{canWrite && <button onClick={() => del(e.id)} data-testid={`del-${e.id}`} className="text-zinc-600 hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>}</td>
+                      <td className="py-2.5 text-right">{canWrite && <button onClick={() => del(e.id)} data-testid={`del-${e.id}`} className="text-helm-muted hover:text-helm-status-negative"><Trash2 className="w-3.5 h-3.5" /></button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -698,23 +698,23 @@ export default function Financials() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setShowForm(false)} />
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="entry-form">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg text-white font-light">
+              <h3 className="text-lg text-helm-fg font-light">
                 {form.source_document_id ? "Confirm extracted entry" : "Log a financial entry"}
               </h3>
-              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowForm(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
             </div>
             {form.extract_confidence === "low" && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200" data-testid="low-confidence-banner">
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-helm-status-warning/30 bg-helm-status-warning/10 px-3 py-2.5 text-sm text-helm-status-warning" data-testid="low-confidence-banner">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>Double-check this one — I wasn&apos;t fully sure.</span>
               </div>
             )}
             {form.source_document_id && (
-              <p className="mb-4 text-xs text-zinc-500 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-gold" />
+              <p className="mb-4 text-xs text-helm-muted flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-helm-gold" />
                 Pre-filled from your upload — edit anything before saving.
               </p>
             )}
@@ -728,38 +728,38 @@ export default function Financials() {
                     recurring: t === "revenue" ? true : f.recurring,
                     recurrence: f.recurrence || "monthly",
                   }))}
-                    className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-gold/10 border-gold/40 text-white" : "border-white/10 text-zinc-400 hover:bg-white/5")}>{t}</button>
+                    className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-helm-gold/10 border-helm-gold/40 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{t}</button>
                 ))}
               </div>
-              <label className="col-span-2 text-xs text-zinc-500">Category
-                <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+              <label className="col-span-2 text-xs text-helm-muted">Category
+                <select data-testid="entry-category" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40">
                   {(form.type === "revenue" ? REV_CATS : EXP_CATS).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
-              <label className="col-span-2 text-xs text-zinc-500">What was this for?
+              <label className="col-span-2 text-xs text-helm-muted">What was this for?
                 <input
                   data-testid="entry-name"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. MongoDB Database Subscription"
-                  className="mt-1 w-full rounded-md border border-white/10 bg-[#141417] text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
                 />
               </label>
-              <label className="text-xs text-zinc-500">Amount ({(data.currency || "usd").toUpperCase()})
-                <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-helm-muted">Amount ({(data.currency || "usd").toUpperCase()})
+                <input data-testid="entry-amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="50000" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
-              <label className="text-xs text-zinc-500">Month
-                <input data-testid="entry-month" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-helm-muted">Month
+                <input data-testid="entry-month" type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
               {form.type === "revenue" && (
-                <label className="col-span-2 flex items-center gap-2 text-sm text-zinc-300 mt-1">
-                  <input data-testid="entry-recurring" type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} className="accent-gold w-4 h-4" />
+                <label className="col-span-2 flex items-center gap-2 text-sm text-helm-fg mt-1">
+                  <input data-testid="entry-recurring" type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} className="accent-helm-gold w-4 h-4" />
                   Recurring (counts toward MRR)
                 </label>
               )}
               {form.type === "expense" && (
                 <div className="col-span-2 space-y-2 mt-1">
-                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <label className="flex items-center gap-2 text-sm text-helm-fg">
                     <input
                       data-testid="entry-recurring"
                       type="checkbox"
@@ -769,23 +769,23 @@ export default function Financials() {
                         recurring: e.target.checked,
                         recurrence: e.target.checked ? (f.recurrence || "monthly") : f.recurrence,
                       }))}
-                      className="accent-gold w-4 h-4"
+                      className="accent-helm-gold w-4 h-4"
                     />
                     Recurring expense
                   </label>
                   {form.recurring && (
-                    <label className="block text-xs text-zinc-500">
+                    <label className="block text-xs text-helm-muted">
                       Cadence
                       <select
                         data-testid="entry-recurrence"
                         value={form.recurrence || "monthly"}
                         onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))}
-                        className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                        className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
                       >
                         <option value="monthly">Monthly</option>
                         <option value="annual">Annual</option>
                       </select>
-                      <span className="block mt-1.5 text-[11px] text-zinc-600 leading-relaxed">
+                      <span className="block mt-1.5 text-[11px] text-helm-muted leading-relaxed">
                         {form.recurrence === "annual"
                           ? "Annual amount is spread across months (÷12) for burn and runway."
                           : "Counts every month from the start month onward for burn and runway."}
@@ -794,39 +794,39 @@ export default function Financials() {
                   )}
                 </div>
               )}
-              <label className="col-span-2 text-xs text-zinc-500">Note (optional)
-                <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="col-span-2 text-xs text-helm-muted">Note (optional)
+                <input data-testid="entry-note" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
             </div>
-            <button data-testid="submit-entry-btn" onClick={submitEntry} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save entry"}</button>
+            <button data-testid="submit-entry-btn" onClick={submitEntry} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save entry"}</button>
           </GlassCard>
         </div>
       )}
 
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setShowSettings(false)} />
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setShowSettings(false)} />
           <GlassCard className="relative w-full max-w-sm m-4 rounded-2xl p-6" data-testid="settings-form">
-            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">Cash & margin</h3><button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
-            <label className="text-xs text-zinc-500 block">Cash in bank
-              <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-helm-fg font-light">Cash & margin</h3><button onClick={() => setShowSettings(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button></div>
+            <label className="text-xs text-helm-muted block">Cash in bank
+              <input data-testid="settings-cash" type="number" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="3100000" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
             </label>
-            <label className="text-xs text-zinc-500 block mt-3">Gross margin % (optional)
-              <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            <label className="text-xs text-helm-muted block mt-3">Gross margin % (optional)
+              <input data-testid="settings-gm" type="number" value={gm} onChange={(e) => setGm(e.target.value)} placeholder="74" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
             </label>
-            <label className="text-xs text-zinc-500 block mt-3">Currency
+            <label className="text-xs text-helm-muted block mt-3">Currency
               <select
                 data-testid="settings-currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
               >
                 {CURRENCY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.code}>{c.label}</option>
                 ))}
               </select>
             </label>
-            <button data-testid="save-settings-btn" onClick={saveSettings} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+            <button data-testid="save-settings-btn" onClick={saveSettings} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
           </GlassCard>
         </div>
       )}

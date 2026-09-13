@@ -24,6 +24,7 @@ module.exports = {
         helm: {
           navy: HELM_PALETTE.navy,
           gold: HELM_PALETTE.gold,
+          "gold-hover": HELM_FLAGGED.goldHover,
           slate: HELM_PALETTE.slate,
           cream: HELM_PALETTE.cream,
           ink: HELM_FLAGGED.ink,

@@ -96,7 +96,7 @@ export default function People() {
 
   const action = canWrite ? (
     <button data-testid="add-person-btn" onClick={openAdd}
-      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
+      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover">
       <Plus className="w-4 h-4" /> Add person
     </button>
   ) : null;
@@ -106,7 +106,7 @@ export default function People() {
       <div>
         <PageHeader title="People" subtitle="Your team roster — linked with Team & Access for anyone who can log in." action={action} />
         <EmptyState title="No people yet" body="Add your team here — invites from Team & Access show up automatically."
-          action={canWrite ? <button data-testid="empty-add-person-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add first person</button> : null} />
+          action={canWrite ? <button data-testid="empty-add-person-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first person</button> : null} />
         {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, person: editingPerson, close: () => setShowForm(false), canInvite, packOptions }} />}
       </div>
     );
@@ -118,12 +118,12 @@ export default function People() {
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">
-          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Headcount</p>
-          <p className="font-mono text-3xl text-white mt-2" data-testid="people-headcount">{data.people.length}</p>
+          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-helm-muted">Headcount</p>
+          <p className="font-mono text-3xl text-helm-fg mt-2" data-testid="people-headcount">{data.people.length}</p>
         </GlassCard>
         <GlassCard className="p-5 fade-up">
-          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-500">Departments</p>
-          <p className="font-mono text-3xl text-white mt-2" data-testid="people-dept-count">{assignedDeptCount}</p>
+          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
+          <p className="font-mono text-3xl text-helm-fg mt-2" data-testid="people-dept-count">{assignedDeptCount}</p>
         </GlassCard>
       </div>
 
@@ -132,24 +132,24 @@ export default function People() {
         {data.people.map((p) => (
           <GlassCard key={p.id} className="p-4 fade-up transition-transform hover:-translate-y-0.5 group" data-testid={`person-${p.id}`}>
             <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center text-gold shrink-0">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div>
+              <div className="w-11 h-11 rounded-full bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center text-helm-gold shrink-0">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-white text-sm">{p.name}</p>
+                  <p className="text-helm-fg text-sm">{p.name}</p>
                   {p.has_access && (
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-400 border border-white/10 px-1.5 py-0.5 rounded" data-testid={`person-access-${p.id}`}>
+                    <span className="text-[10px] uppercase tracking-wider text-helm-muted border border-helm-line px-1.5 py-0.5 rounded" data-testid={`person-access-${p.id}`}>
                       Team & Access
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500" data-testid={`person-depts-${p.id}`}>
+                <p className="text-xs text-helm-muted" data-testid={`person-depts-${p.id}`}>
                   {p.role || "—"} · {formatDepartmentNames(p)}
                 </p>
               </div>
               {canWrite && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(p)} data-testid={`edit-person-${p.id}`} className="text-zinc-600 hover:text-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => del(p)} data-testid={`del-person-${p.id}`} className="text-zinc-600 hover:text-rose-400 p-1" title={p.has_access ? "Remove from Team & Access first" : "Remove"}><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => openEdit(p)} data-testid={`edit-person-${p.id}`} className="text-helm-muted hover:text-helm-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => del(p)} data-testid={`del-person-${p.id}`} className="text-helm-muted hover:text-helm-status-negative p-1" title={p.has_access ? "Remove from Team & Access first" : "Remove"}><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               )}
             </div>
@@ -166,60 +166,60 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/70" onClick={close} />
+      <div className="absolute inset-0 bg-helm-ink/70" onClick={close} />
       <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="person-form">
-        <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">{editing ? "Edit person" : "Add a person"}</h3><button onClick={close} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
+        <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-helm-fg font-light">{editing ? "Edit person" : "Add a person"}</h3><button onClick={close} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button></div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 text-xs text-zinc-500">Name
-            <input data-testid="person-name" value={form.name} onChange={set("name")} placeholder="Jane Doe" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+          <label className="col-span-2 text-xs text-helm-muted">Name
+            <input data-testid="person-name" value={form.name} onChange={set("name")} placeholder="Jane Doe" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
           </label>
-          <label className="col-span-2 text-xs text-zinc-500">Role
-            <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+          <label className="col-span-2 text-xs text-helm-muted">Role
+            <input data-testid="person-role" value={form.role} onChange={set("role")} placeholder="Engineer" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
           </label>
-          <div className="col-span-2 text-xs text-zinc-500">
-            <p className="uppercase tracking-wide text-[10px] text-zinc-600 mb-1">Departments</p>
-            <p className="text-sm text-zinc-300" data-testid="person-depts-readonly">
+          <div className="col-span-2 text-xs text-helm-muted">
+            <p className="uppercase tracking-wide text-[10px] text-helm-muted mb-1">Departments</p>
+            <p className="text-sm text-helm-fg" data-testid="person-depts-readonly">
               {editing ? formatDepartmentNames(person) : "Unassigned"}
             </p>
-            <p className="mt-1 text-zinc-600">
+            <p className="mt-1 text-helm-muted">
               Assign access in{" "}
-              <Link to="/app/members" className="text-gold hover:underline">Team & Access</Link>
+              <Link to="/app/members" className="text-helm-gold hover:underline">Team & Access</Link>
               {" "}→ department membership — not from this roster field.
             </p>
           </div>
           {!editing && canInvite && (
-            <div className="col-span-2 mt-1 space-y-3 border-t border-white/5 pt-3">
-              <label className="flex items-start gap-2 text-sm text-zinc-300 cursor-pointer">
+            <div className="col-span-2 mt-1 space-y-3 border-t border-helm-line pt-3">
+              <label className="flex items-start gap-2 text-sm text-helm-fg cursor-pointer">
                 <input
                   type="checkbox"
                   data-testid="person-invite-access"
                   checked={form.inviteToAccess}
                   onChange={(e) => setForm((f) => ({ ...f, inviteToAccess: e.target.checked }))}
-                  className="mt-1 rounded border-white/20 bg-helm-card"
+                  className="mt-1 rounded border-helm-fg/20 bg-helm-card"
                 />
                 <span>
                   Also include in Team & Access
-                  <span className="block text-xs text-zinc-500 mt-0.5">Sends a login invite so they can sign in.</span>
+                  <span className="block text-xs text-helm-muted mt-0.5">Sends a login invite so they can sign in.</span>
                 </span>
               </label>
               {form.inviteToAccess && (
                 <>
-                  <label className="block text-xs text-zinc-500">Email
+                  <label className="block text-xs text-helm-muted">Email
                     <input
                       data-testid="person-email"
                       type="email"
                       value={form.email}
                       onChange={set("email")}
                       placeholder="alex@company.com"
-                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
                     />
                   </label>
-                  <label className="block text-xs text-zinc-500">Access pack
+                  <label className="block text-xs text-helm-muted">Access pack
                     <select
                       data-testid="person-pack"
                       value={form.pack}
                       onChange={set("pack")}
-                      className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                      className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
                     >
                       {packOptions.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                     </select>
@@ -229,7 +229,7 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
             </div>
           )}
         </div>
-        <button data-testid="submit-person-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save changes" : form.inviteToAccess ? "Add & invite" : "Add person"}</button>
+        <button data-testid="submit-person-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save changes" : form.inviteToAccess ? "Add & invite" : "Add person"}</button>
       </GlassCard>
     </div>
   );

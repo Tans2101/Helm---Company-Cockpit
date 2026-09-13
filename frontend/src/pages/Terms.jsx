@@ -57,7 +57,7 @@ export default function Terms() {
 
           <section className="rounded-lg border border-helm-gold/30 bg-helm-gold/5 p-5">
             <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy — please read</h2>
-            <p className="text-zinc-200">
+            <p className="text-helm-fg">
               Helm uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to
               generate AI briefings and summaries. <span className="text-helm-cream font-medium">You must independently verify
               all AI-suggested data before relying on it for real business decisions.</span> Helm and its creators are

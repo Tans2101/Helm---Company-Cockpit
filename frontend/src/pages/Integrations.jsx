@@ -21,10 +21,10 @@ const ICONS = {
 };
 
 const STATUS_LABELS = {
-  connected: { text: "Connected", className: "text-emerald-400 bg-emerald-400/10" },
-  not_connected: { text: "Not connected", className: "text-zinc-400 border border-white/10" },
-  unavailable: { text: "Unavailable", className: "text-zinc-500 border border-white/10" },
-  coming_soon: { text: "Coming soon", className: "text-zinc-500 border border-white/10" },
+  connected: { text: "Connected", className: "text-helm-status-positive bg-helm-status-positive/10" },
+  not_connected: { text: "Not connected", className: "text-helm-muted border border-helm-line" },
+  unavailable: { text: "Unavailable", className: "text-helm-muted border border-helm-line" },
+  coming_soon: { text: "Coming soon", className: "text-helm-muted border border-helm-line" },
 };
 
 function formatLastSynced(iso) {
@@ -72,28 +72,28 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
   return (
     <GlassCard key={it.id} className="p-5 fade-up flex flex-col" data-testid={`integration-${it.id}`}>
       <div className="flex items-start justify-between mb-3">
-        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-gold" />
+        <div className="w-10 h-10 rounded-lg bg-helm-fg/5 border border-helm-line flex items-center justify-center">
+          <Icon className="w-5 h-5 text-helm-gold" />
         </div>
         <StatusBadge status={status} />
       </div>
 
-      <h3 className="text-white font-medium">{it.name}</h3>
-      <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">{it.category}</p>
-      <p className="text-sm text-zinc-500 mt-2 leading-relaxed flex-1 min-h-[40px]">{it.description}</p>
+      <h3 className="text-helm-fg font-medium">{it.name}</h3>
+      <p className="text-[11px] font-mono uppercase tracking-wide text-helm-muted mt-0.5">{it.category}</p>
+      <p className="text-sm text-helm-muted mt-2 leading-relaxed flex-1 min-h-[40px]">{it.description}</p>
 
       {it.value && (
-        <p className="text-xs text-zinc-400 mt-3 leading-relaxed border-l-2 border-gold/30 pl-2">{it.value}</p>
+        <p className="text-xs text-helm-muted mt-3 leading-relaxed border-l-2 border-helm-gold/30 pl-2">{it.value}</p>
       )}
 
       {it.connected && it.tenant_name && (
-        <p className="text-xs text-zinc-500 mt-2" data-testid={`${it.id}-tenant-name`}>
-          Organisation: <span className="text-zinc-300">{it.tenant_name}</span>
+        <p className="text-xs text-helm-muted mt-2" data-testid={`${it.id}-tenant-name`}>
+          Organisation: <span className="text-helm-fg">{it.tenant_name}</span>
         </p>
       )}
 
       {isUnavailable && (
-        <p className="text-xs text-zinc-600 mt-3 leading-relaxed" data-testid={`${it.id}-unavailable-hint`}>
+        <p className="text-xs text-helm-muted mt-3 leading-relaxed" data-testid={`${it.id}-unavailable-hint`}>
           This connection isn’t available for your workspace yet. Try again later, or use Helm without it.
         </p>
       )}
@@ -103,14 +103,14 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
           type="button"
           data-testid={`reconnect-${it.id}`}
           onClick={() => onConnect(it.provider)}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm py-2 hover:bg-helm-gold/15"
         >
           <RefreshCw className="w-3.5 h-3.5" /> {it.connect_label || "Reconnect Google"}
         </button>
       )}
 
       {it.sync_action && it.connected && lastSynced && (
-        <p className="text-xs text-zinc-600 mt-3 flex items-center gap-1" data-testid={`${it.id}-last-synced`}>
+        <p className="text-xs text-helm-muted mt-3 flex items-center gap-1" data-testid={`${it.id}-last-synced`}>
           <Clock className="w-3 h-3" /> Last synced {lastSynced}
         </p>
       )}
@@ -121,7 +121,7 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
           data-testid={`sync-${it.id}-btn`}
           onClick={() => onSync(it.provider)}
           disabled={syncBusy}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm py-2 hover:bg-gold/15 disabled:opacity-60"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm py-2 hover:bg-helm-gold/15 disabled:opacity-60"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", syncBusy && "animate-spin")} />
           {syncBusy
@@ -136,7 +136,7 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         <button
           type="button"
           onClick={() => onNavigate(it.cta_route)}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm py-2 hover:bg-white/5"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm py-2 hover:bg-helm-fg/5"
         >
           <ArrowRight className="w-3.5 h-3.5" /> {it.cta_label || "Open in Helm"}
         </button>
@@ -150,10 +150,10 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
           className={cn(
             "mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2.5 transition-colors disabled:opacity-50",
             it.connected
-              ? "border border-white/10 text-zinc-400 hover:bg-white/5"
+              ? "border border-helm-line text-helm-muted hover:bg-helm-fg/5"
               : isUnavailable
-                ? "border border-white/10 text-zinc-600 cursor-not-allowed"
-                : "bg-gold text-black font-medium hover:bg-gold-hover",
+                ? "border border-helm-line text-helm-muted cursor-not-allowed"
+                : "bg-helm-gold text-helm-navy font-medium hover:bg-helm-gold-hover",
           )}
         >
           {it.connected ? (
@@ -315,20 +315,20 @@ export default function Integrations() {
         subtitle="Connect your calendar, accounting, and tools — Helm pulls your data in so the briefing, financials, and calendar stay current."
       />
 
-      <GlassCard className="p-4 mb-8 fade-up border-white/5">
-        <p className="text-sm text-zinc-400 leading-relaxed">
-          Each connection is <span className="text-zinc-200">per company workspace</span> and uses secure OAuth —
+      <GlassCard className="p-4 mb-8 fade-up border-helm-line">
+        <p className="text-sm text-helm-muted leading-relaxed">
+          Each connection is <span className="text-helm-fg">per company workspace</span> and uses secure OAuth —
           Helm never sees your passwords. Owners connect accounts here; teammates see the results in Calendar and Financials.
           {connectedCount > 0 && (
-            <span className="text-emerald-400/90"> {connectedCount} connected.</span>
+            <span className="text-helm-status-positive/90"> {connectedCount} connected.</span>
           )}
         </p>
       </GlassCard>
 
       {data.can_manage && (data.xero_pending_tenants || []).length > 0 && (
-        <GlassCard className="p-5 mb-8 fade-up border-gold/20" data-testid="xero-tenant-picker">
-          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">Choose Xero organisation</p>
-          <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+        <GlassCard className="p-5 mb-8 fade-up border-helm-gold/20" data-testid="xero-tenant-picker">
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-2">Choose Xero organisation</p>
+          <p className="text-sm text-helm-muted mb-4 leading-relaxed">
             Your Xero login can access more than one organisation. Pick which one Helm should sync into Financials.
           </p>
           <div className="space-y-2">
@@ -339,39 +339,39 @@ export default function Integrations() {
                 data-testid={`xero-tenant-${t.tenant_id}`}
                 disabled={xeroTenantBusy}
                 onClick={() => selectXeroTenant(t.tenant_id)}
-                className="w-full text-left rounded-md border border-white/10 bg-white/[0.02] px-4 py-3 hover:border-gold/40 hover:bg-white/[0.04] disabled:opacity-60"
+                className="w-full text-left rounded-md border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/40 hover:bg-helm-fg/[0.04] disabled:opacity-60"
               >
-                <span className="text-sm text-white">{t.tenant_name}</span>
-                <span className="block text-[10px] font-mono text-zinc-600 mt-0.5">{t.tenant_id}</span>
+                <span className="text-sm text-helm-fg">{t.tenant_name}</span>
+                <span className="block text-[10px] font-mono text-helm-muted mt-0.5">{t.tenant_id}</span>
               </button>
             ))}
           </div>
         </GlassCard>
       )}
 
-      <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Connect your accounts</h2>
+      <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-3">Connect your accounts</h2>
       <div className="grid md:grid-cols-2 gap-4 mb-10">
         {data.can_manage && (
           <GlassCard className="p-5 fade-up flex flex-col" data-testid="slack-webhook-card">
             <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-gold" />
+              <div className="w-10 h-10 rounded-lg bg-helm-fg/5 border border-helm-line flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-helm-gold" />
               </div>
               <StatusBadge status={data.slack_webhook_configured ? "connected" : "not_connected"} />
             </div>
-            <h3 className="text-white font-medium">Slack</h3>
-            <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-600 mt-0.5">Alerts</p>
-            <p className="text-sm text-zinc-500 mt-2 leading-relaxed flex-1 min-h-[40px]">
+            <h3 className="text-helm-fg font-medium">Slack</h3>
+            <p className="text-[11px] font-mono uppercase tracking-wide text-helm-muted mt-0.5">Alerts</p>
+            <p className="text-sm text-helm-muted mt-2 leading-relaxed flex-1 min-h-[40px]">
               Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel. Leave blank to disable.
             </p>
-            <label className="text-xs text-zinc-500 block mt-3">
+            <label className="text-xs text-helm-muted block mt-3">
               Incoming webhook URL
               <input
                 data-testid="slack-webhook-input"
                 value={slackUrl}
                 onChange={(e) => setSlackUrl(e.target.value)}
                 placeholder="https://hooks.slack.com/services/…"
-                className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40"
+                className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
               />
             </label>
             <div className="mt-4 flex items-center gap-2">
@@ -380,12 +380,12 @@ export default function Integrations() {
                 data-testid="save-slack-webhook-btn"
                 disabled={slackBusy}
                 onClick={saveSlackWebhook}
-                className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 hover:bg-gold-hover disabled:opacity-60"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60"
               >
                 {slackBusy ? "Saving…" : "Save webhook"}
               </button>
               {data.slack_webhook_configured && (
-                <span className="text-xs text-emerald-400 font-mono">Configured</span>
+                <span className="text-xs text-helm-status-positive font-mono">Configured</span>
               )}
             </div>
           </GlassCard>
@@ -406,8 +406,8 @@ export default function Integrations() {
 
       {roadmap.length > 0 && (
         <>
-          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Coming soon</h2>
-          <p className="text-sm text-zinc-600 mb-4 max-w-2xl">More connections on the way — engineering tools next.</p>
+          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-3">Coming soon</h2>
+          <p className="text-sm text-helm-muted mb-4 max-w-2xl">More connections on the way — engineering tools next.</p>
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((it) => (
               <IntegrationCard

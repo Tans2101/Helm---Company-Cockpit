@@ -15,6 +15,7 @@ const MOODS = [
   { id: "stressed", label: "Stressed" },
 ];
 
+/* Sticky-note chips keep a distinct paper palette so notes stay scannable; not brand fills. */
 const NOTE_STYLES = {
   gold: "bg-[#fef9c3] text-[#422006] border-[#eab308]/40 shadow-[3px_3px_0_rgba(234,179,8,0.35)]",
   sky: "bg-[#e0f2fe] text-[#0c4a6e] border-[#38bdf8]/40 shadow-[3px_3px_0_rgba(56,189,248,0.35)]",
@@ -25,10 +26,10 @@ const NOTE_STYLES = {
 };
 
 const colStyle = {
-  done: "text-emerald-400",
-  in_progress: "text-gold",
-  review: "text-sky-400",
-  backlog: "text-zinc-500",
+  done: "text-helm-status-positive",
+  in_progress: "text-helm-gold",
+  review: "text-helm-muted",
+  backlog: "text-helm-muted",
 };
 
 const colLabel = { backlog: "To-Do", in_progress: "in progress", review: "review", done: "done" };
@@ -150,53 +151,53 @@ export default function MyDay() {
   return (
     <div>
       <div className="mb-8 fade-up">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">My Day</p>
-        <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-white">Morning, {first}.</h1>
-        <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">My Day</p>
+        <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-helm-fg">Morning, {first}.</h1>
+        <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-gold" />
+              <Lock className="w-3.5 h-3.5 text-helm-gold" />
               <SectionLabel>Notes</SectionLabel>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 bg-white/5 rounded px-2 py-0.5">Private · only you</span>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted bg-helm-fg/5 rounded px-2 py-0.5">Private · only you</span>
             </div>
             <button
               data-testid="new-note-btn"
               type="button"
               onClick={openNewNote}
-              className="inline-flex items-center gap-1 text-xs text-gold hover:text-gold-hover"
+              className="inline-flex items-center gap-1 text-xs text-helm-gold hover:text-helm-gold-hover"
             >
               <Plus className="w-3.5 h-3.5" /> New note
             </button>
           </div>
 
           {showNoteComposer && (
-            <GlassCard className="p-4 fade-up border-gold/20" data-testid="note-composer">
+            <GlassCard className="p-4 fade-up border-helm-gold/20" data-testid="note-composer">
               <textarea
                 data-testid="note-text"
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
                 rows={3}
                 placeholder="Jot a thought, reminder, or idea…"
-                className="w-full rounded-lg border border-white/10 bg-helm-card text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none"
+                className="w-full rounded-lg border border-helm-line bg-helm-card text-helm-fg text-sm p-3 focus:outline-none focus:border-helm-gold/40 resize-none"
               />
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 {Object.keys(NOTE_STYLES).map((c) => (
                   <button key={c} type="button" onClick={() => setNoteColor(c)}
-                    className={cn("w-6 h-6 rounded-full border-2", noteColor === c ? "border-white scale-110" : "border-transparent opacity-70")}
+                    className={cn("w-6 h-6 rounded-full border-2", noteColor === c ? "border-helm-line scale-110" : "border-transparent opacity-70")}
                     style={{ background: c === "gold" ? "#eab308" : c === "sky" ? "#38bdf8" : c === "emerald" ? "#34d399" : c === "rose" ? "#fb7185" : c === "violet" ? "#a78bfa" : "#fbbf24" }}
                     aria-label={`${c} note color`}
                   />
                 ))}
                 <button data-testid="save-note-btn" onClick={saveNote} disabled={noteBusy}
-                  className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-gold text-black text-sm font-medium px-3 py-1.5 hover:bg-gold-hover disabled:opacity-60">
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-3 py-1.5 hover:bg-helm-gold-hover disabled:opacity-60">
                   {noteBusy ? "Saving…" : editingNote ? "Save" : "Add note"}
                 </button>
                 {editingNote && (
-                  <button type="button" onClick={cancelNote} className="text-xs text-zinc-500 hover:text-white">Cancel</button>
+                  <button type="button" onClick={cancelNote} className="text-xs text-helm-muted hover:text-helm-fg">Cancel</button>
                 )}
               </div>
             </GlassCard>
@@ -204,7 +205,7 @@ export default function MyDay() {
 
           {notes.length === 0 && !showNoteComposer ? (
             <EmptyState title="No private notes yet" body="Sticky notes here are only visible to you — great for priorities, reminders, and scratch ideas."
-              action={<button type="button" onClick={openNewNote} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> Add your first note</button>} />
+              action={<button type="button" onClick={openNewNote} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add your first note</button>} />
           ) : (
             <div className="grid sm:grid-cols-2 gap-3" data-testid="sticky-notes-grid">
               {notes.map((n) => (
@@ -226,28 +227,28 @@ export default function MyDay() {
 
           <GlassCard className="p-4 fade-up">
             <button type="button" onClick={() => { setShowTeam((s) => !s); if (!showTeam && mine?.update) { setTeamText(mine.update.text || ""); setBlocker(!!mine.update.blocker); setMood(mine.update.mood || "good"); } }}
-              className="flex items-center gap-2 text-sm text-zinc-300 hover:text-white w-full text-left">
-              <Users className="w-4 h-4 text-gold" />
+              className="flex items-center gap-2 text-sm text-helm-fg hover:text-helm-fg w-full text-left">
+              <Users className="w-4 h-4 text-helm-gold" />
               <span>{showTeam ? "Hide team update" : "Share an update with your team (optional)"}</span>
             </button>
             {showTeam && (
-              <div className="mt-3 pt-3 border-t border-white/5" data-testid="team-update-form">
+              <div className="mt-3 pt-3 border-t border-helm-line" data-testid="team-update-form">
                 <textarea value={teamText} onChange={(e) => setTeamText(e.target.value)} rows={3}
                   placeholder="What did you move forward? Any blocker or ask?"
-                  className="w-full rounded-lg border border-white/10 bg-helm-card text-white text-sm p-3 focus:outline-none focus:border-gold/40 resize-none" />
+                  className="w-full rounded-lg border border-helm-line bg-helm-card text-helm-fg text-sm p-3 focus:outline-none focus:border-helm-gold/40 resize-none" />
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <div className="flex items-center gap-1.5">
                     {MOODS.map((m) => (
                       <button key={m.id} onClick={() => setMood(m.id)}
-                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", mood === m.id ? "border-gold/40 bg-gold/10 text-white" : "border-white/10 text-zinc-400 hover:bg-white/5")}>{m.label}</button>
+                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", mood === m.id ? "border-helm-gold/40 bg-helm-gold/10 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{m.label}</button>
                     ))}
                   </div>
-                  <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
-                    <input type="checkbox" checked={blocker} onChange={(e) => setBlocker(e.target.checked)} className="accent-gold w-4 h-4" />
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Blocked
+                  <label className="flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
+                    <input type="checkbox" checked={blocker} onChange={(e) => setBlocker(e.target.checked)} className="accent-helm-gold w-4 h-4" />
+                    <AlertTriangle className="w-3.5 h-3.5 text-helm-status-warning" /> Blocked
                   </label>
                   <button onClick={submitTeam} disabled={busy}
-                    className="ml-auto inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2 hover:bg-gold-hover disabled:opacity-60">
+                    className="ml-auto inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2 hover:bg-helm-gold-hover disabled:opacity-60">
                     {busy ? "Posting…" : "Post to team"} <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -257,19 +258,19 @@ export default function MyDay() {
         </div>
 
         <GlassCard className="p-5 fade-up" data-testid="team-updates-card">
-          <div className="flex items-center gap-1.5 mb-4 text-gold"><Users className="w-3.5 h-3.5" /><SectionLabel>Today across the team</SectionLabel></div>
+          <div className="flex items-center gap-1.5 mb-4 text-helm-gold"><Users className="w-3.5 h-3.5" /><SectionLabel>Today across the team</SectionLabel></div>
           {teamUpdates.length === 0 ? (
-            <p className="text-sm text-zinc-600 py-6 text-center">No teammate updates yet today.</p>
+            <p className="text-sm text-helm-muted py-6 text-center">No teammate updates yet today.</p>
           ) : (
             <div className="space-y-3 max-h-[320px] overflow-y-auto">
               {teamUpdates.map((u) => (
                 <div key={u.update_id} className="text-sm" data-testid={`team-update-${u.update_id}`}>
                   <div className="flex items-center gap-2">
-                    <span className="text-white text-xs font-medium">{u.user_name}</span>
-                    {u.blocker && <span className="text-[10px] text-amber-400 bg-amber-400/10 rounded px-1.5 py-0.5 font-mono uppercase">Blocked</span>}
-                    <span className="text-[10px] text-zinc-600 ml-auto font-mono">{u.ago}</span>
+                    <span className="text-helm-fg text-xs font-medium">{u.user_name}</span>
+                    {u.blocker && <span className="text-[10px] text-helm-status-warning bg-helm-status-warning/10 rounded px-1.5 py-0.5 font-mono uppercase">Blocked</span>}
+                    <span className="text-[10px] text-helm-muted ml-auto font-mono">{u.ago}</span>
                   </div>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{u.text}</p>
+                  <p className="text-helm-muted text-xs mt-1 leading-relaxed">{u.text}</p>
                 </div>
               ))}
             </div>
@@ -281,7 +282,7 @@ export default function MyDay() {
         <div className="flex items-center justify-between mb-4">
           <SectionLabel>My tasks</SectionLabel>
           <button data-testid="myday-add-task-btn" onClick={() => setShowTask((s) => !s)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 text-zinc-300 text-sm px-3 py-1.5 hover:bg-white/5">
+            className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm px-3 py-1.5 hover:bg-helm-fg/5">
             <Plus className="w-3.5 h-3.5" /> New task
           </button>
         </div>
@@ -291,11 +292,11 @@ export default function MyDay() {
             <div className="flex gap-2">
               <input data-testid="myday-task-input" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="What do you need to get done?"
-                className="flex-1 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+                className="flex-1 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               <input data-testid="myday-task-due" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)}
-                className="rounded-md border border-white/10 bg-helm-card text-white text-sm px-2 py-2 focus:outline-none focus:border-gold/40" />
+                className="rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-2 focus:outline-none focus:border-helm-gold/40" />
               <button data-testid="myday-task-save" onClick={addTask} disabled={taskBusy}
-                className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover disabled:opacity-60">{taskBusy ? "…" : "Add"}</button>
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover disabled:opacity-60">{taskBusy ? "…" : "Add"}</button>
             </div>
           </GlassCard>
         )}
@@ -306,20 +307,20 @@ export default function MyDay() {
           <div className="space-y-2">
             {openItems.map((t) => (
               <GlassCard key={t.id} className="p-3 fade-up flex items-center gap-3" data-testid={`myday-task-${t.id}`}>
-                <button onClick={() => moveTask(t, "done")} className="text-zinc-600 hover:text-emerald-400 shrink-0"><Circle className="w-4 h-4" /></button>
+                <button onClick={() => moveTask(t, "done")} className="text-helm-muted hover:text-helm-status-positive shrink-0"><Circle className="w-4 h-4" /></button>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{t.title}</p>
+                  <p className="text-sm text-helm-fg truncate">{t.title}</p>
                   <span className={cn("text-[10px] font-mono uppercase tracking-wide", colStyle[t.column])}>
                     {colLabel[t.column] || t.column.replace("_", " ")}{t.tag ? ` · ${t.tag}` : ""}
                   </span>
                 </div>
-                {t.due && <span className="text-[11px] font-mono text-zinc-600 shrink-0">{t.due}</span>}
+                {t.due && <span className="text-[11px] font-mono text-helm-muted shrink-0">{t.due}</span>}
               </GlassCard>
             ))}
             {doneItems.map((t) => (
               <GlassCard key={t.id} className="p-3 flex items-center gap-3 opacity-60" data-testid={`myday-task-${t.id}`}>
-                <button onClick={() => moveTask(t, "in_progress")} className="text-emerald-400 shrink-0"><CheckCircle2 className="w-4 h-4" /></button>
-                <p className="text-sm text-zinc-500 line-through truncate flex-1">{t.title}</p>
+                <button onClick={() => moveTask(t, "in_progress")} className="text-helm-status-positive shrink-0"><CheckCircle2 className="w-4 h-4" /></button>
+                <p className="text-sm text-helm-muted line-through truncate flex-1">{t.title}</p>
               </GlassCard>
             ))}
           </div>

@@ -58,11 +58,11 @@ export default function ProtectedRouteClerk() {
       const message = sessionError || "Connecting your account is taking too long. Try again.";
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-helm-ink p-8 text-center">
-          <p className="text-lg text-white mb-2">Could not connect your account</p>
-          <p className="text-sm text-rose-400 max-w-md mb-6">{message}</p>
+          <p className="text-lg text-helm-fg mb-2">Could not connect your account</p>
+          <p className="text-sm text-helm-status-negative max-w-md mb-6">{message}</p>
           <button
             type="button"
-            className="rounded-lg bg-gold text-black px-4 py-2 text-sm font-medium"
+            className="rounded-lg bg-helm-gold text-helm-navy px-4 py-2 text-sm font-medium"
             onClick={async () => {
               clearSessionError();
               setConnectTimedOut(false);

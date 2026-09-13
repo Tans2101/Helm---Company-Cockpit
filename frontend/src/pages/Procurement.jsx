@@ -9,11 +9,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
-  requested: { label: "Requested", className: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" },
-  approved: { label: "Approved", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
-  ordered: { label: "Ordered", className: "bg-amber-500/15 text-amber-200 border-amber-500/30" },
-  delivered: { label: "Delivered", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  rejected: { label: "Rejected", className: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
+  requested: { label: "Requested", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
+  approved: { label: "Approved", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
+  ordered: { label: "Ordered", className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30" },
+  delivered: { label: "Delivered", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
+  rejected: { label: "Rejected", className: "bg-helm-status-negative/15 text-helm-status-negative border-helm-status-negative/30" },
 };
 
 const CLOSED = new Set(["delivered", "rejected"]);
@@ -218,7 +218,7 @@ export default function Procurement() {
       type="button"
       data-testid="add-procurement-request-btn"
       onClick={() => setAdding(true)}
-      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover"
+      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover"
     >
       <Plus className="w-4 h-4" /> New request
     </button>
@@ -233,16 +233,16 @@ export default function Procurement() {
       />
 
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs text-zinc-500 font-mono">
+        <p className="text-xs text-helm-muted font-mono">
           {visible.length} shown · {allRequests.length} total
         </p>
-        <label className="inline-flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+        <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
           <input
             type="checkbox"
             data-testid="procurement-show-closed"
             checked={showClosed}
             onChange={(e) => setShowClosed(e.target.checked)}
-            className="rounded border-white/20 bg-transparent"
+            className="rounded border-helm-fg/20 bg-transparent"
           />
           Show delivered &amp; rejected
         </label>
@@ -261,17 +261,17 @@ export default function Procurement() {
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"
+              className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
             >
               <Plus className="w-4 h-4" /> New request
             </button>
           )}
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-white/10 mb-6">
+        <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
           <table className="w-full text-left text-sm" data-testid="procurement-table">
             <thead>
-              <tr className="border-b border-white/10 text-[10px] font-mono uppercase tracking-wide text-zinc-500">
+              <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
                 <th className="px-3 py-2 font-medium">Item</th>
                 <th className="px-3 py-2 font-medium">Qty</th>
                 <th className="px-3 py-2 font-medium">Vendor</th>
@@ -286,14 +286,14 @@ export default function Procurement() {
                   data-testid={`procurement-row-${req.id}`}
                   onClick={() => setSelectedId(req.id)}
                   className={cn(
-                    "border-b border-white/5 cursor-pointer transition-colors hover:bg-white/[0.03]",
-                    selectedId === req.id && "bg-gold/[0.06]",
+                    "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                    selectedId === req.id && "bg-helm-gold/[0.06]",
                   )}
                 >
-                  <td className="px-3 py-2.5 text-white truncate max-w-[14rem]">{req.item}</td>
-                  <td className="px-3 py-2.5 text-zinc-300 font-mono text-xs">{req.quantity}</td>
-                  <td className="px-3 py-2.5 text-zinc-400 truncate max-w-[10rem]">{req.vendor_name || "—"}</td>
-                  <td className="px-3 py-2.5 text-zinc-400 truncate max-w-[10rem]">{personLabel(req.requester)}</td>
+                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[14rem]">{req.item}</td>
+                  <td className="px-3 py-2.5 text-helm-fg font-mono text-xs">{req.quantity}</td>
+                  <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{req.vendor_name || "—"}</td>
+                  <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(req.requester)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={req.status} /></td>
                 </tr>
               ))}
@@ -307,72 +307,72 @@ export default function Procurement() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <SectionLabel>Request detail</SectionLabel>
-              <p className="text-white text-sm mt-1">{selected.item}</p>
+              <p className="text-helm-fg text-sm mt-1">{selected.item}</p>
             </div>
-            <button type="button" onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-white">
+            <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Item</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Item</span>
               <input
                 data-testid="procurement-edit-item"
                 disabled={!canEditContent || busy}
                 value={draft.item}
                 onChange={(e) => setDraft((d) => ({ ...d, item: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Quantity</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Quantity</span>
               <input
                 data-testid="procurement-edit-qty"
                 disabled={!canEditContent || busy}
                 value={draft.quantity}
                 onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Vendor</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Vendor</span>
               <input
                 data-testid="procurement-edit-vendor"
                 disabled={!canEditContent || busy}
                 value={draft.vendor_name}
                 onChange={(e) => setDraft((d) => ({ ...d, vendor_name: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Cost</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Cost</span>
               <input
                 data-testid="procurement-edit-cost"
                 disabled={!canEditContent || busy}
                 value={draft.cost}
                 onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))}
                 placeholder="Optional"
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
           </div>
 
           <label className="block space-y-1">
-            <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Notes</span>
+            <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Notes</span>
             <textarea
               data-testid="procurement-edit-notes"
               disabled={!canEditContent || busy}
               value={draft.notes}
               onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
               rows={3}
-              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
             />
           </label>
 
-          <div className="flex flex-wrap gap-4 text-xs text-zinc-500">
-            <span>Requester: <span className="text-zinc-300">{personLabel(selected.requester)}</span></span>
-            <span>Approver: <span className="text-zinc-300">{personLabel(selected.approver)}</span></span>
+          <div className="flex flex-wrap gap-4 text-xs text-helm-muted">
+            <span>Requester: <span className="text-helm-fg">{personLabel(selected.requester)}</span></span>
+            <span>Approver: <span className="text-helm-fg">{personLabel(selected.approver)}</span></span>
             <span>Status: <StatusBadge status={selected.status} /></span>
           </div>
 
@@ -383,7 +383,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-save-btn"
                 onClick={() => saveRequest()}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Save changes
               </button>
@@ -395,7 +395,7 @@ export default function Procurement() {
                   disabled={busy}
                   data-testid="procurement-approve-btn"
                   onClick={() => setStatus("approved")}
-                  className="rounded-md border border-sky-500/40 text-sky-200 text-sm px-3 py-2 hover:bg-sky-500/10 disabled:opacity-50"
+                  className="rounded-md border border-helm-muted/40 text-helm-muted text-sm px-3 py-2 hover:bg-helm-muted/10 disabled:opacity-50"
                 >
                   Approve
                 </button>
@@ -404,7 +404,7 @@ export default function Procurement() {
                   disabled={busy}
                   data-testid="procurement-reject-btn"
                   onClick={() => setStatus("rejected")}
-                  className="rounded-md border border-rose-500/40 text-rose-200 text-sm px-3 py-2 hover:bg-rose-500/10 disabled:opacity-50"
+                  className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50"
                 >
                   Reject
                 </button>
@@ -416,7 +416,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-ordered-btn"
                 onClick={() => setStatus("ordered")}
-                className="rounded-md border border-amber-500/40 text-amber-200 text-sm px-3 py-2 hover:bg-amber-500/10 disabled:opacity-50"
+                className="rounded-md border border-helm-status-warning/40 text-helm-status-warning text-sm px-3 py-2 hover:bg-helm-status-warning/10 disabled:opacity-50"
               >
                 Mark ordered
               </button>
@@ -427,7 +427,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-delivered-btn"
                 onClick={() => setStatus("delivered")}
-                className="rounded-md border border-emerald-500/40 text-emerald-200 text-sm px-3 py-2 hover:bg-emerald-500/10 disabled:opacity-50"
+                className="rounded-md border border-helm-status-positive/40 text-helm-status-positive text-sm px-3 py-2 hover:bg-helm-status-positive/10 disabled:opacity-50"
               >
                 Mark delivered
               </button>
@@ -438,7 +438,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-delete-btn"
                 onClick={deleteRequest}
-                className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 text-rose-300 text-sm px-3 py-2 hover:bg-rose-500/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
@@ -449,72 +449,72 @@ export default function Procurement() {
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setAdding(false)} />
-          <div className="relative w-full max-w-md rounded-md border border-white/10 bg-helm-card p-5 space-y-3" data-testid="procurement-create-modal">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setAdding(false)} />
+          <div className="relative w-full max-w-md rounded-md border border-helm-line bg-helm-card p-5 space-y-3" data-testid="procurement-create-modal">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-white font-medium">New purchase request</p>
-              <button type="button" onClick={() => setAdding(false)} className="text-zinc-500 hover:text-white">
+              <p className="text-sm text-helm-fg font-medium">New purchase request</p>
+              <button type="button" onClick={() => setAdding(false)} className="text-helm-muted hover:text-helm-fg">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Item</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Item</span>
               <input
                 data-testid="procurement-new-item"
                 value={form.item}
                 onChange={(e) => setForm((f) => ({ ...f, item: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 autoFocus
               />
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
-                <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Quantity</span>
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Quantity</span>
                 <input
                   data-testid="procurement-new-qty"
                   value={form.quantity}
                   onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                  className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Cost</span>
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Cost</span>
                 <input
                   data-testid="procurement-new-cost"
                   value={form.cost}
                   onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
                   placeholder="Optional"
-                  className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 />
               </label>
             </div>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Vendor</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Vendor</span>
               <input
                 data-testid="procurement-new-vendor"
                 value={form.vendor_name}
                 onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Notes</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Notes</span>
               <textarea
                 data-testid="procurement-new-notes"
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 rows={2}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setAdding(false)} className="text-sm text-zinc-400 px-3 py-2">Cancel</button>
+              <button type="button" onClick={() => setAdding(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
               <button
                 type="button"
                 disabled={busy}
                 data-testid="procurement-create-submit"
                 onClick={createRequest}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Submit request
               </button>

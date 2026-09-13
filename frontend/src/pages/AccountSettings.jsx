@@ -134,27 +134,27 @@ export default function AccountSettings() {
       />
 
       <GlassCard className="p-5 mb-4 fade-up">
-        <div className="flex items-center gap-1.5 mb-2 text-gold">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <ShieldCheck className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
           How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.
         </p>
         <Link
           to="/security"
-          className="inline-flex items-center text-sm text-gold hover:text-gold-hover"
+          className="inline-flex items-center text-sm text-helm-gold hover:text-helm-gold-hover"
         >
           Read how Helm protects company data →
         </Link>
       </GlassCard>
 
       <GlassCard className="p-5 mb-4 fade-up" data-testid="appearance-settings">
-        <div className="flex items-center gap-1.5 mb-2 text-gold">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Sun className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
           Choose how the Helm cockpit looks. Light mode is the default for reading dense data.
           Your choice is saved to your account and follows you across devices.
         </p>
@@ -174,22 +174,22 @@ export default function AccountSettings() {
                 }}
                 className={`relative rounded-lg border p-3 text-left transition-colors ${
                   selected
-                    ? "border-gold/50 bg-gold/10"
-                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                    ? "border-helm-gold/50 bg-helm-gold/10"
+                    : "border-helm-line bg-helm-fg/[0.02] hover:bg-helm-fg/[0.05]"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <Icon className={`h-4 w-4 ${selected ? "text-gold" : "text-zinc-500"}`} />
-                  {selected && <Check className="h-3.5 w-3.5 text-gold" />}
+                  <Icon className={`h-4 w-4 ${selected ? "text-helm-gold" : "text-helm-muted"}`} />
+                  {selected && <Check className="h-3.5 w-3.5 text-helm-gold" />}
                 </div>
-                <p className="mt-3 text-sm font-medium text-white">{option.label}</p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">{option.description}</p>
+                <p className="mt-3 text-sm font-medium text-helm-fg">{option.label}</p>
+                <p className="mt-0.5 text-[11px] text-helm-muted">{option.description}</p>
               </button>
             );
           })}
         </div>
         {theme === "system" && (
-          <p className="mt-3 text-xs text-zinc-600">
+          <p className="mt-3 text-xs text-helm-muted">
             This device is currently using {resolvedTheme} mode.
           </p>
         )}
@@ -199,18 +199,18 @@ export default function AccountSettings() {
       {isOwner && <DepartmentsSettings />}
 
       <GlassCard className="p-5 mb-4 fade-up">
-        <div className="flex items-center gap-1.5 mb-2 text-gold">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Download className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export data</span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
           Download a JSON copy of data associated with your account and active workspace.
         </p>
         <button
           data-testid="export-data-btn"
           onClick={exportData}
           disabled={!!busy}
-          className="rounded-md bg-gold text-black font-medium text-sm px-4 py-2.5 transition-colors hover:bg-gold-hover disabled:opacity-60"
+          className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 transition-colors hover:bg-helm-gold-hover disabled:opacity-60"
         >
           {busy === "export" ? "Exporting…" : "Export data"}
         </button>
@@ -218,7 +218,7 @@ export default function AccountSettings() {
           <a
             href="/app/billing"
             data-testid="settings-billing-link"
-            className="ml-3 inline-flex items-center rounded-md border border-white/10 text-zinc-300 text-sm px-4 py-2.5 hover:bg-white/5"
+            className="ml-3 inline-flex items-center rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5"
           >
             Billing
           </a>
@@ -227,52 +227,52 @@ export default function AccountSettings() {
 
       {canExportActivity && (
         <GlassCard className="p-5 mb-4 fade-up" data-testid="export-activity-card">
-          <div className="flex items-center gap-1.5 mb-2 text-gold">
+          <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
             <ScrollText className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export activity log</span>
           </div>
-          <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+          <p className="text-sm text-helm-muted mb-4 leading-relaxed">
             Download a CSV audit trail (timestamp, actor, area, action, message) for a date range. Owner/admin only.
           </p>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <label className="text-xs text-zinc-500">Start
+            <label className="text-xs text-helm-muted">Start
               <input data-testid="activity-export-start" type="date" value={actStart} onChange={(e) => setActStart(e.target.value)}
-                className="mt-1 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white" />
+                className="mt-1 w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg" />
             </label>
-            <label className="text-xs text-zinc-500">End
+            <label className="text-xs text-helm-muted">End
               <input data-testid="activity-export-end" type="date" value={actEnd} onChange={(e) => setActEnd(e.target.value)}
-                className="mt-1 w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white" />
+                className="mt-1 w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg" />
             </label>
           </div>
           <button
             data-testid="export-activity-btn"
             onClick={exportActivity}
             disabled={!!busy}
-            className="rounded-md border border-gold/30 bg-gold/10 text-gold font-medium text-sm px-4 py-2.5 transition-colors hover:bg-gold/15 disabled:opacity-60"
+            className="rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-4 py-2.5 transition-colors hover:bg-helm-gold/15 disabled:opacity-60"
           >
             {busy === "activity" ? "Exporting…" : "Export activity log"}
           </button>
         </GlassCard>
       )}
 
-      <GlassCard className="p-5 mb-4 fade-up border-rose-500/20">
-        <div className="flex items-center gap-1.5 mb-2 text-rose-400">
+      <GlassCard className="p-5 mb-4 fade-up border-helm-status-negative/20">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
           <Trash2 className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete account</span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
           Permanently remove your user account. You will be signed out.
         </p>
         {showAccountConfirm && (
           <div className="mb-4">
-            <label className="block text-xs text-zinc-500 mb-1.5">
-              Type <span className="text-zinc-300">{user?.email}</span> to confirm
+            <label className="block text-xs text-helm-muted mb-1.5">
+              Type <span className="text-helm-fg">{user?.email}</span> to confirm
             </label>
             <input
               data-testid="confirm-account-input"
               value={confirmAccount}
               onChange={(e) => setConfirmAccount(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               placeholder={user?.email}
             />
           </div>
@@ -281,31 +281,31 @@ export default function AccountSettings() {
           data-testid="delete-account-btn"
           onClick={deleteAccount}
           disabled={!!busy}
-          className="rounded-md border border-rose-500/40 text-rose-400 text-sm font-medium px-4 py-2.5 transition-colors hover:bg-rose-500/10 disabled:opacity-60"
+          className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
         >
           {busy === "account" ? "Deleting…" : showAccountConfirm ? "Confirm delete account" : "Delete account"}
         </button>
       </GlassCard>
 
       {isOwner && (
-        <GlassCard className="p-5 fade-up border-rose-500/20">
-          <div className="flex items-center gap-1.5 mb-2 text-rose-400">
+        <GlassCard className="p-5 fade-up border-helm-status-negative/20">
+          <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
             <AlertTriangle className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete workspace</span>
           </div>
-          <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+          <p className="text-sm text-helm-muted mb-4 leading-relaxed">
             As owner, you can permanently delete the current company workspace and all of its data for every member.
           </p>
           {showWorkspaceConfirm && (
             <div className="mb-4">
-              <label className="block text-xs text-zinc-500 mb-1.5">
-                Type <span className="text-zinc-300">{company?.name || "workspace name"}</span> to confirm
+              <label className="block text-xs text-helm-muted mb-1.5">
+                Type <span className="text-helm-fg">{company?.name || "workspace name"}</span> to confirm
               </label>
               <input
                 data-testid="confirm-workspace-input"
                 value={confirmWorkspace}
                 onChange={(e) => setConfirmWorkspace(e.target.value)}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 placeholder={company?.name}
               />
             </div>
@@ -314,7 +314,7 @@ export default function AccountSettings() {
             data-testid="delete-workspace-btn"
             onClick={deleteWorkspace}
             disabled={!!busy}
-            className="rounded-md border border-rose-500/40 text-rose-400 text-sm font-medium px-4 py-2.5 transition-colors hover:bg-rose-500/10 disabled:opacity-60"
+            className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
           >
             {busy === "workspace" ? "Deleting…" : showWorkspaceConfirm ? "Confirm delete workspace" : "Delete workspace"}
           </button>

@@ -46,7 +46,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
               data-testid="nav-signin-btn"
               type="button"
               onClick={onEnter}
-              className="group hidden sm:flex items-center gap-1.5 rounded-lg bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2 transition-colors hover:bg-gold-hover"
+              className="group hidden sm:flex items-center gap-1.5 rounded-lg bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2 transition-colors hover:bg-helm-gold-hover"
             >
               {authed ? "Open cockpit" : "Get started"}
               <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />

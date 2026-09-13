@@ -9,9 +9,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const STEP_STATUS_META = {
-  not_started: { label: "Not started", className: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" },
-  in_progress: { label: "In progress", className: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
-  done: { label: "Done", className: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+  not_started: { label: "Not started", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
+  in_progress: { label: "In progress", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
+  done: { label: "Done", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
 };
 
 function StepBadge({ status }) {
@@ -184,7 +184,7 @@ export default function HR() {
                 type="button"
                 data-testid="hr-edit-template-btn"
                 onClick={() => setEditingTemplate(true)}
-                className="rounded-md border border-white/15 text-zinc-300 text-sm px-3 py-2 hover:bg-white/5"
+                className="rounded-md border border-helm-fg/15 text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5"
               >
                 Edit template
               </button>
@@ -194,7 +194,7 @@ export default function HR() {
                 type="button"
                 data-testid="hr-add-onboarding-btn"
                 onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover"
+                className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover"
               >
                 <Plus className="w-4 h-4" /> New hire
               </button>
@@ -204,16 +204,16 @@ export default function HR() {
       />
 
       <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs text-zinc-500 font-mono">
+        <p className="text-xs text-helm-muted font-mono">
           {visible.length} shown · {all.length} total
         </p>
-        <label className="inline-flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+        <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
           <input
             type="checkbox"
             data-testid="hr-show-active"
             checked={showActive}
             onChange={(e) => setShowActive(e.target.checked)}
-            className="rounded border-white/20 bg-transparent"
+            className="rounded border-helm-fg/20 bg-transparent"
           />
           Show completed (active)
         </label>
@@ -234,17 +234,17 @@ export default function HR() {
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"
+              className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
             >
               <Plus className="w-4 h-4" /> New hire
             </button>
           ) : null}
         />
       ) : (
-        <div className="overflow-x-auto rounded-md border border-white/10 mb-6">
+        <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
           <table className="w-full text-left text-sm" data-testid="hr-table">
             <thead>
-              <tr className="border-b border-white/10 text-[10px] font-mono uppercase tracking-wide text-zinc-500">
+              <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
                 <th className="px-3 py-2 font-medium">Hire</th>
                 <th className="px-3 py-2 font-medium">Progress</th>
                 <th className="px-3 py-2 font-medium">Open steps</th>
@@ -260,26 +260,26 @@ export default function HR() {
                     data-testid={`hr-row-${inst.id}`}
                     onClick={() => setSelectedId(inst.id)}
                     className={cn(
-                      "border-b border-white/5 cursor-pointer transition-colors hover:bg-white/[0.03]",
-                      selectedId === inst.id && "bg-gold/[0.06]",
+                      "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                      selectedId === inst.id && "bg-helm-gold/[0.06]",
                     )}
                   >
                     <td className="px-3 py-2.5">
-                      <p className="text-white truncate max-w-[14rem]">{inst.hire_name}</p>
+                      <p className="text-helm-fg truncate max-w-[14rem]">{inst.hire_name}</p>
                       {inst.hire_email && (
-                        <p className="text-[11px] text-zinc-600 truncate">{inst.hire_email}</p>
+                        <p className="text-[11px] text-helm-muted truncate">{inst.hire_email}</p>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-400 font-mono text-xs">
+                    <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">
                       {inst.progress?.done || 0}/{inst.progress?.total || 0}
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-400 truncate max-w-[14rem] text-xs">
+                    <td className="px-3 py-2.5 text-helm-muted truncate max-w-[14rem] text-xs">
                       {open.length ? open.map((s) => s.name).join(", ") : "—"}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={cn(
                         "text-[10px] font-mono uppercase tracking-wide",
-                        inst.overall_status === "active" ? "text-emerald-300" : "text-sky-300",
+                        inst.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted",
                       )}
                       >
                         {inst.overall_status === "active" ? "Active" : "In progress"}
@@ -298,12 +298,12 @@ export default function HR() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <SectionLabel>Onboarding checklist</SectionLabel>
-              <p className="text-white text-sm mt-1">{selected.hire_name}</p>
+              <p className="text-helm-fg text-sm mt-1">{selected.hire_name}</p>
               {selected.hire_email && (
-                <p className="text-xs text-zinc-500">{selected.hire_email}</p>
+                <p className="text-xs text-helm-muted">{selected.hire_email}</p>
               )}
             </div>
-            <button type="button" onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-white">
+            <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -315,20 +315,20 @@ export default function HR() {
                 <div
                   key={step.id}
                   data-testid={`hr-step-${step.id}`}
-                  className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2"
+                  className="rounded-md border border-helm-line bg-helm-fg/[0.02] p-3 space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-sm text-white">{step.name}</p>
+                    <p className="text-sm text-helm-fg">{step.name}</p>
                     <StepBadge status={step.status} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <label className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Status</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
                       <select
                         disabled={!canEditStep || busy}
                         value={step.status}
                         onChange={(e) => patchStep(step, { status: e.target.value })}
-                        className="w-full rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5 text-sm text-white disabled:opacity-50"
+                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
                       >
                         {(data?.step_statuses || ["not_started", "in_progress", "done"]).map((s) => (
                           <option key={s} value={s}>{STEP_STATUS_META[s]?.label || s}</option>
@@ -336,12 +336,12 @@ export default function HR() {
                       </select>
                     </label>
                     <label className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Assignee</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>
                       <select
                         disabled={!isLead || busy}
                         value={step.assigned_to || ""}
                         onChange={(e) => patchStep(step, { assigned_to: e.target.value || null })}
-                        className="w-full rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5 text-sm text-white disabled:opacity-50"
+                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
                       >
                         <option value="">Unassigned</option>
                         {workspaceMembers.map((m) => (
@@ -350,16 +350,16 @@ export default function HR() {
                       </select>
                     </label>
                   </div>
-                  <p className="text-[11px] text-zinc-600">Assignee: {personLabel(step.assignee)}</p>
+                  <p className="text-[11px] text-helm-muted">Assignee: {personLabel(step.assignee)}</p>
                 </div>
               );
             })}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 text-xs text-helm-muted">
             <span>
               Overall:{" "}
-              <span className={selected.overall_status === "active" ? "text-emerald-300" : "text-sky-300"}>
+              <span className={selected.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted"}>
                 {selected.overall_status === "active" ? "Active" : "In progress"}
               </span>
             </span>
@@ -372,7 +372,7 @@ export default function HR() {
                 disabled={busy}
                 data-testid="hr-delete-btn"
                 onClick={deleteInstance}
-                className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 text-rose-300 text-sm px-3 py-1.5 hover:bg-rose-500/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
@@ -383,44 +383,44 @@ export default function HR() {
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setAdding(false)} />
-          <div className="relative w-full max-w-md rounded-md border border-white/10 bg-helm-card p-5 space-y-3" data-testid="hr-create-modal">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setAdding(false)} />
+          <div className="relative w-full max-w-md rounded-md border border-helm-line bg-helm-card p-5 space-y-3" data-testid="hr-create-modal">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-white font-medium">Start onboarding</p>
-              <button type="button" onClick={() => setAdding(false)} className="text-zinc-500 hover:text-white">
+              <p className="text-sm text-helm-fg font-medium">Start onboarding</p>
+              <button type="button" onClick={() => setAdding(false)} className="text-helm-muted hover:text-helm-fg">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Hire name</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Hire name</span>
               <input
                 data-testid="hr-new-name"
                 value={form.hire_name}
                 onChange={(e) => setForm((f) => ({ ...f, hire_name: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 autoFocus
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-500">Email</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Email</span>
               <input
                 data-testid="hr-new-email"
                 value={form.hire_email}
                 onChange={(e) => setForm((f) => ({ ...f, hire_email: e.target.value }))}
-                className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
-            <p className="text-[11px] text-zinc-600">
+            <p className="text-[11px] text-helm-muted">
               Checklist will be copied from the current template ({(tmplData?.template?.steps || []).length} steps).
             </p>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setAdding(false)} className="text-sm text-zinc-400 px-3 py-2">Cancel</button>
+              <button type="button" onClick={() => setAdding(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
               <button
                 type="button"
                 disabled={busy}
                 data-testid="hr-create-submit"
                 onClick={createInstance}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Start onboarding
               </button>
@@ -431,14 +431,14 @@ export default function HR() {
 
       {editingTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70" onClick={() => !busy && setEditingTemplate(false)} />
-          <div className="relative w-full max-w-lg rounded-md border border-white/10 bg-helm-card p-5 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="hr-template-modal">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setEditingTemplate(false)} />
+          <div className="relative w-full max-w-lg rounded-md border border-helm-line bg-helm-card p-5 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="hr-template-modal">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white font-medium">Onboarding template</p>
-                <p className="text-[11px] text-zinc-600">Changes only affect future hires.</p>
+                <p className="text-sm text-helm-fg font-medium">Onboarding template</p>
+                <p className="text-[11px] text-helm-muted">Changes only affect future hires.</p>
               </div>
-              <button type="button" onClick={() => setEditingTemplate(false)} className="text-zinc-500 hover:text-white">
+              <button type="button" onClick={() => setEditingTemplate(false)} className="text-helm-muted hover:text-helm-fg">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -452,18 +452,18 @@ export default function HR() {
                       next[idx] = { ...next[idx], name: e.target.value };
                       setTmplDraft(next);
                     }}
-                    className="flex-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white"
+                    className="flex-1 rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                   />
-                  <button type="button" disabled={idx === 0} onClick={() => moveTmplStep(idx, -1)} className="p-1 text-zinc-500 hover:text-white disabled:opacity-30">
+                  <button type="button" disabled={idx === 0} onClick={() => moveTmplStep(idx, -1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
                     <ChevronUp className="w-4 h-4" />
                   </button>
-                  <button type="button" disabled={idx === tmplDraft.length - 1} onClick={() => moveTmplStep(idx, 1)} className="p-1 text-zinc-500 hover:text-white disabled:opacity-30">
+                  <button type="button" disabled={idx === tmplDraft.length - 1} onClick={() => moveTmplStep(idx, 1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
                     <ChevronDown className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     onClick={() => setTmplDraft((d) => d.filter((_, i) => i !== idx))}
-                    className="p-1 text-rose-400 hover:text-rose-300"
+                    className="p-1 text-helm-status-negative hover:text-helm-status-negative"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -474,18 +474,18 @@ export default function HR() {
               type="button"
               data-testid="hr-template-add-step"
               onClick={() => setTmplDraft((d) => [...d, { id: `hstep_new_${Date.now()}`, name: "New step", order: d.length }])}
-              className="inline-flex items-center gap-1 text-xs text-gold"
+              className="inline-flex items-center gap-1 text-xs text-helm-gold"
             >
               <Plus className="w-3.5 h-3.5" /> Add step
             </button>
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setEditingTemplate(false)} className="text-sm text-zinc-400 px-3 py-2">Cancel</button>
+              <button type="button" onClick={() => setEditingTemplate(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
               <button
                 type="button"
                 disabled={busy}
                 data-testid="hr-template-save"
                 onClick={saveTemplate}
-                className="rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-50"
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Save template
               </button>
