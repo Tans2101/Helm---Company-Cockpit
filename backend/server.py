@@ -1926,6 +1926,7 @@ async def _user_session_payload(user: dict) -> dict:
         "name": user.get("name"),
         "picture": user.get("picture"),
         "appearance": _normalize_appearance(user.get("appearance")),
+        "age_confirmed": bool(user.get("age_confirmed")),
     }
     active = user.get("active_workspace_id")
     membership = None
@@ -2057,6 +2058,12 @@ class CreateWsInput(BaseModel):
 
 @api_router.post("/workspaces")
 async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
+    user_doc = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "age_confirmed": 1})
+    if not (user_doc or {}).get("age_confirmed"):
+        raise HTTPException(
+            status_code=403,
+            detail="Confirm you are 18 or older (or using Helm under a parent/guardian) before creating a company",
+        )
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
     doc = build_workspace(ws_id, payload.name.strip() or "New Company", user["user_id"], empty=True)
     await db.workspaces.insert_one(doc)
@@ -2582,7 +2589,7 @@ async def briefing(principal=Depends(get_principal)):
     b["what_to_delegate"] = _briefing_what_to_delegate(c)
     b["insights_generated_at"] = c.get("insights_generated_at")
     # Live Gmail threads for the briefing — metadata/snippets only, not persisted.
-    email_threads, gmail_meta = await _briefing_email_threads(c)
+    email_threads, gmail_meta = await _briefing_email_threads(c, principal)
     b["email_threads"] = email_threads
     b["gmail_connected"] = gmail_meta["connected"]
     b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]
@@ -2590,11 +2597,15 @@ async def briefing(principal=Depends(get_principal)):
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
 
 
-async def _briefing_email_threads(workspace: dict) -> tuple[list, dict]:
+async def _briefing_email_threads(workspace: dict, principal: dict | None = None) -> tuple[list, dict]:
     """Fetch a few relevant Gmail threads for the briefing; never writes email content to Mongo."""
-    meta = {"connected": False, "needs_reconnect": False, "compose": False}
+    meta = {"connected": False, "needs_reconnect": False, "compose": False, "access_denied": False}
     tokens = _integration_tokens(workspace, "google_tokens")
     if not tokens:
+        return [], meta
+    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
+        meta["connected"] = True
+        meta["access_denied"] = True
         return [], meta
     if not gcal.has_gmail_scope(tokens):
         meta["needs_reconnect"] = True
@@ -2893,7 +2904,7 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
     fin = await compute_financials(c["workspace_id"])
     # what_changed / what_to_decide are stored briefing lists (computed or previously
     # written). An empty list means nothing is queued — there is no "not entered" state.
-    cal_snap = await _google_calendar_snapshot(c)
+    cal_snap = await _google_calendar_snapshot(c, principal=principal)
     context = {
         "company": c["name"],
         "metrics": b.get("what_to_decide"),
@@ -3635,8 +3646,8 @@ async def import_financial_document_from_drive(
     if not file_id:
         raise HTTPException(status_code=400, detail="file_id is required")
     c = await get_ws(principal["workspace_id"])
-    tokens = _integration_tokens(c, "google_tokens")
-    if not tokens or not gcal.has_scope(tokens, "drive.file"):
+    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    if not gcal.has_scope(tokens, "drive.file"):
         raise HTTPException(status_code=400, detail="Reconnect Google to import from Drive")
     await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
@@ -3691,8 +3702,8 @@ async def import_financial_document_from_drive(
 @api_router.post("/financials/export-sheets")
 async def export_financials_to_sheets(principal=Depends(require_section("financials", "finance:write"))):
     c = await get_ws(principal["workspace_id"])
-    tokens = _integration_tokens(c, "google_tokens")
-    if not tokens or not gcal.has_scope(tokens, "spreadsheets"):
+    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    if not gcal.has_scope(tokens, "spreadsheets"):
         raise HTTPException(status_code=400, detail="Reconnect Google to export to Sheets")
     dept_ids = await dept_access.accessible_department_ids(
         db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
@@ -4714,11 +4725,26 @@ async def financial_export_xlsx(
     )
 
 
-async def _google_calendar_snapshot(workspace: dict, week_start: Optional[datetime] = None) -> Optional[dict]:
+async def _google_calendar_snapshot(
+    workspace: dict,
+    week_start: Optional[datetime] = None,
+    principal: dict | None = None,
+) -> Optional[dict]:
     """Fetch Google Calendar events for a week when connected; None if not connected."""
     tokens = _integration_tokens(workspace, "google_tokens")
     if not tokens:
         return None
+    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
+        return {
+            "events": [],
+            "meetings": [],
+            "focus_hours": 0,
+            "meeting_hours": 0,
+            "live": False,
+            "access_denied": True,
+            "source": "google_calendar",
+            "week_start": (week_start or _calendar_week_start(datetime.now(timezone.utc).date())).strftime("%Y-%m-%d"),
+        }
     if week_start is None:
         week_start = _calendar_week_start(datetime.now(timezone.utc).date())
     try:
@@ -4815,7 +4841,7 @@ async def calendar(
         anchor_day = datetime.now(timezone.utc).date()
     week_anchor = _calendar_week_start(anchor_day)
 
-    live_cal = await _google_calendar_snapshot(c, week_anchor)
+    live_cal = await _google_calendar_snapshot(c, week_anchor, principal)
     if live_cal is not None:
         data = {**dict(c["calendar"]), **live_cal}
     else:
@@ -4929,8 +4955,16 @@ def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = Non
     }
 
 
-async def _maybe_push_google_event(workspace: dict, ev: dict, payload: CalendarEventInput) -> dict:
+async def _maybe_push_google_event(
+    workspace: dict,
+    ev: dict,
+    payload: CalendarEventInput,
+    principal: dict | None = None,
+) -> dict:
     if not payload.push_to_google:
+        return ev
+    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
+        ev["google_push_error"] = "access_denied"
         return ev
     tokens = _integration_tokens(workspace, "google_tokens")
     if not tokens or not gcal.has_scope(tokens, "calendar.events"):
@@ -4959,7 +4993,7 @@ async def create_calendar_event(payload: CalendarEventInput, principal=Depends(g
     cal = dict(c.get("calendar") or {})
     events = list(cal.get("helm_events") or [])
     ev = _build_helm_event(payload)
-    ev = await _maybe_push_google_event(c, ev, payload)
+    ev = await _maybe_push_google_event(c, ev, payload, principal)
     events.append(ev)
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
@@ -4980,7 +5014,7 @@ async def edit_calendar_event(event_id: str, payload: CalendarEventInput, princi
             events[i] = _build_helm_event(payload, event_id=event_id, google_event_id=ev.get("google_event_id"))
             found = events[i]
             gid = ev.get("google_event_id")
-            if gid:
+            if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
                 tokens = _integration_tokens(c, "google_tokens")
                 if tokens and gcal.has_scope(tokens, "calendar.events"):
                     try:
@@ -5009,7 +5043,7 @@ async def delete_calendar_event(event_id: str, principal=Depends(get_principal))
     if len(events) == len(cal.get("helm_events") or []):
         raise HTTPException(status_code=404, detail="Event not found")
     gid = (existing[0].get("google_event_id") if existing else None)
-    if gid:
+    if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
         tokens = _integration_tokens(c, "google_tokens")
         if tokens and gcal.has_scope(tokens, "calendar.events"):
             try:
@@ -7428,13 +7462,71 @@ def _integration_tokens(workspace: dict, field: str) -> Optional[dict]:
         return None
 
 
-async def _store_integration_tokens(workspace_id: str, field: str, tokens: Optional[dict], *, extra_set: Optional[dict] = None, extra_unset: Optional[dict] = None):
-    """Encrypt credentials before writing to the workspace document."""
+async def _store_integration_tokens(
+    workspace_id: str,
+    field: str,
+    tokens: Optional[dict],
+    *,
+    extra_set: Optional[dict] = None,
+    extra_unset: Optional[dict] = None,
+    connected_by_user_id: Optional[str] = None,
+):
+    """Encrypt credentials before writing to the workspace document.
+
+    When tokens are saved, stamp who connected them so use of the grant can be
+    limited to that person (and workspace owners). Clearing tokens clears the stamp.
+    """
     sealed = cred_crypto.seal_credentials(tokens) if tokens else None
-    update: dict = {"$set": {field: sealed, **(extra_set or {})}}
-    if extra_unset:
-        update["$unset"] = extra_unset
+    sets = {**(extra_set or {})}
+    unsets = {**(extra_unset or {})}
+    by_field = _INTEGRATION_CONNECTED_BY.get(field)
+    at_field = _INTEGRATION_CONNECTED_AT.get(field)
+    if tokens:
+        sets[field] = sealed
+        if connected_by_user_id and by_field:
+            sets[by_field] = connected_by_user_id
+        if connected_by_user_id and at_field:
+            sets[at_field] = datetime.now(timezone.utc).isoformat()
+    else:
+        sets[field] = None
+        if by_field:
+            unsets[by_field] = ""
+        if at_field:
+            unsets[at_field] = ""
+    update: dict = {"$set": sets}
+    if unsets:
+        update["$unset"] = unsets
     await db.workspaces.update_one({"workspace_id": workspace_id}, update)
+
+
+def _is_workspace_owner_principal(principal: dict) -> bool:
+    return principal.get("role") == "owner" or principal.get("pack") == "owner" or pack_of(principal) == "owner"
+
+
+def _can_use_integration_tokens(principal: dict, workspace: dict, field: str) -> bool:
+    """Shared OAuth grants may be used by the connector or a workspace owner."""
+    if not workspace or not _integration_tokens(workspace, field):
+        return False
+    by_field = _INTEGRATION_CONNECTED_BY.get(field)
+    connected_by = (workspace.get(by_field) if by_field else None) or None
+    if not connected_by:
+        # Legacy unstamped connection: owners only until someone reconnects.
+        return _is_workspace_owner_principal(principal)
+    if principal.get("user_id") == connected_by:
+        return True
+    return _is_workspace_owner_principal(principal)
+
+
+def _require_integration_token_use(principal: dict, workspace: dict, field: str) -> dict:
+    tokens = _integration_tokens(workspace, field)
+    if not tokens:
+        raise HTTPException(status_code=400, detail="Integration is not connected")
+    if not _can_use_integration_tokens(principal, workspace, field):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the teammate who connected this integration (or a workspace owner) can use it",
+        )
+    return tokens
 
 
 def _provider_config(provider: str):
@@ -7498,10 +7590,24 @@ async def integrations(principal=Depends(get_principal)):
     xero_tokens = _integration_tokens(c, "xero_tokens")
     if xero_tokens and not xero_tokens.get("tenant_id"):
         xero_pending = list(xero_tokens.get("pending_tenants") or [])
+    connection_owners = {
+        "google": c.get("google_tokens_connected_by"),
+        "quickbooks": c.get("quickbooks_tokens_connected_by"),
+        "xero": c.get("xero_tokens_connected_by"),
+        "hubspot": c.get("hubspot_tokens_connected_by"),
+    }
+    can_use = {
+        "google": _can_use_integration_tokens(principal, c, "google_tokens"),
+        "quickbooks": _can_use_integration_tokens(principal, c, "quickbooks_tokens"),
+        "xero": _can_use_integration_tokens(principal, c, "xero_tokens"),
+        "hubspot": _can_use_integration_tokens(principal, c, "hubspot_tokens"),
+    }
     return {
         "integrations": ints,
         "is_pro": workspace_is_pro(c),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+        "connection_owners": connection_owners,
+        "can_use_connection": can_use,
         "slack_webhook_configured": bool((c.get("slack_webhook_url") or "").strip()),
         "slack_webhook_url": (c.get("slack_webhook_url") or "") if "integrations:manage" in perms_for(principal["pack"]) else "",
         "xero_pending_tenants": xero_pending if "integrations:manage" in perms_for(principal["pack"]) else [],
@@ -7751,15 +7857,15 @@ async def _complete_oauth_callback(
                 tokens["tenant_id"] = tenants[0]["tenant_id"]
                 tokens["tenant_name"] = tenants[0]["tenant_name"]
                 tokens.pop("pending_tenants", None)
-                await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
+                await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
                 return RedirectResponse(f"{integrations_path}?connected=xero")
             tokens["pending_tenants"] = tenants
             tokens.pop("tenant_id", None)
             tokens.pop("tenant_name", None)
             tokens = sanitize_oauth_token_payload(tokens)
-            await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
+            await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
             return RedirectResponse(f"{integrations_path}?xero_select=1")
-        await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
+        await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
     except Exception:
         logger.exception("oauth token exchange failed")
         return RedirectResponse(f"{integrations_path}?error=token")
@@ -7796,7 +7902,7 @@ async def xero_select_tenant(payload: XeroTenantInput, principal=Depends(require
     """Pick which Xero organisation to sync when the user has access to more than one."""
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = _integration_tokens(c, "xero_tokens")
+    tokens = _require_integration_token_use(principal, c, "xero_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
     tenant_id = (payload.tenant_id or "").strip()
@@ -7888,7 +7994,7 @@ async def _upsert_accounting_sync_entries(
 async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manage"))):
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = _integration_tokens(c, "quickbooks_tokens")
+    tokens = _require_integration_token_use(principal, c, "quickbooks_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="QuickBooks is not connected — connect it in Integrations first.")
     realm_id = tokens.get("realmId")
@@ -7929,7 +8035,7 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = _integration_tokens(c, "xero_tokens")
+    tokens = _require_integration_token_use(principal, c, "xero_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
     tenant_id = tokens.get("tenant_id")
@@ -7970,7 +8076,7 @@ async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:ma
 async def hubspot_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = _integration_tokens(c, "hubspot_tokens")
+    tokens = _require_integration_token_use(principal, c, "hubspot_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="HubSpot is not connected — connect it in Integrations first.")
 
@@ -8057,9 +8163,7 @@ async def _upsert_hubspot_deals(*, ws_id: str, principal: dict, deals: list) -> 
 @api_router.get("/integrations/google/calendar-events")
 async def google_calendar_events(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    tokens = _integration_tokens(c, "google_tokens")
-    if not tokens:
-        raise HTTPException(status_code=400, detail="Google not connected")
+    tokens = _require_integration_token_use(principal, c, "google_tokens")
     try:
         meetings, _, _, refreshed = await gcal.fetch_today_calendar(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, max_results=20,
@@ -8085,6 +8189,8 @@ async def google_picker_config(principal=Depends(get_principal)):
     api_key = os.environ.get("GOOGLE_PICKER_API_KEY", "").strip()
     app_id = os.environ.get("GOOGLE_CLOUD_PROJECT_NUMBER", "").strip()
     c = await get_ws(principal["workspace_id"])
+    if not _can_use_integration_tokens(principal, c, "google_tokens"):
+        return {"configured": False, "needs_reconnect": False, "access_denied": True}
     tokens = _integration_tokens(c, "google_tokens")
     if not tokens or not gcal.has_scope(tokens, "drive.file"):
         return {"configured": False, "needs_reconnect": True}
@@ -8107,8 +8213,8 @@ async def google_picker_config(principal=Depends(get_principal)):
 @api_router.post("/integrations/google/gmail-draft")
 async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
-    tokens = _integration_tokens(c, "google_tokens")
-    if not tokens or not gcal.has_scope(tokens, "gmail.compose"):
+    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    if not gcal.has_scope(tokens, "gmail.compose"):
         raise HTTPException(status_code=400, detail="Reconnect Google to create Gmail drafts")
     subject = (payload.subject or "Follow up").strip()[:200]
     to_email = (payload.to_email or "").strip()[:200]
@@ -8533,6 +8639,7 @@ _WORKSPACE_COLLECTIONS = (
     "financial_entries", "deals", "documents", "activities", "updates",
     "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
     "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
+    "document_ai_usage",
     "oauth_states",
     "product_events",
     "production_stage_templates", "production_work_orders", "production_stage_progress",
@@ -8540,6 +8647,22 @@ _WORKSPACE_COLLECTIONS = (
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
     "department_report_drafts",
 )
+
+# Per-provider stamp: who connected the shared workspace OAuth grant.
+_INTEGRATION_CONNECTED_BY = {
+    "google_tokens": "google_tokens_connected_by",
+    "quickbooks_tokens": "quickbooks_tokens_connected_by",
+    "xero_tokens": "xero_tokens_connected_by",
+    "hubspot_tokens": "hubspot_tokens_connected_by",
+}
+_INTEGRATION_CONNECTED_AT = {
+    "google_tokens": "google_tokens_connected_at",
+    "quickbooks_tokens": "quickbooks_tokens_connected_at",
+    "xero_tokens": "xero_tokens_connected_at",
+    "hubspot_tokens": "hubspot_tokens_connected_at",
+}
+
+_EXPORT_ROW_CAP = 5000
 
 
 def _strip_sensitive(doc: dict) -> dict:
@@ -8574,23 +8697,72 @@ async def get_membership(user=Depends(get_user), workspace_id: str = Depends(req
     return m
 
 
+async def _export_workspace_package(ws_id: str) -> dict:
+    """Full workspace data package for a DSAR / owner export (tokens stripped)."""
+    ws = await db.workspaces.find_one({"workspace_id": ws_id}, {"_id": 0})
+    departments = await db.departments.find({"workspace_id": ws_id}, {"_id": 0}).to_list(200)
+    dept_ids = [d["department_id"] for d in departments if d.get("department_id")]
+    department_members = []
+    if dept_ids:
+        department_members = await db.department_members.find(
+            {"department_id": {"$in": dept_ids}}, {"_id": 0},
+        ).to_list(5000)
+    memberships = await db.memberships.find({"workspace_id": ws_id}, {"_id": 0}).to_list(500)
+    collections = {}
+    for coll in _WORKSPACE_COLLECTIONS:
+        rows = await db[coll].find({"workspace_id": ws_id}, {"_id": 0}).to_list(_EXPORT_ROW_CAP)
+        collections[coll] = [_strip_sensitive(r) for r in rows]
+        if len(rows) >= _EXPORT_ROW_CAP:
+            collections[f"{coll}__truncated"] = True
+    return {
+        "workspace": _strip_sensitive(ws) if ws else None,
+        "memberships": memberships,
+        "departments": departments,
+        "department_members": department_members,
+        "collections": collections,
+    }
+
+
 @api_router.get("/account/export")
 async def export_account(user=Depends(get_user)):
+    """GDPR-oriented export: account profile plus owned workspace data packages."""
     user_doc = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     memberships = await db.memberships.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(100)
-    payload = {"user": _strip_sensitive(user_doc), "memberships": memberships}
+    payload = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "user": _strip_sensitive(user_doc),
+        "memberships": memberships,
+        "my_updates": await db.updates.find(
+            {"user_id": user["user_id"]}, {"_id": 0},
+        ).to_list(_EXPORT_ROW_CAP),
+        "my_chat_messages": await db.chat_messages.find(
+            {"user_id": user["user_id"]}, {"_id": 0},
+        ).to_list(_EXPORT_ROW_CAP),
+        "my_private_notes": await db.private_notes.find(
+            {"user_id": user["user_id"]}, {"_id": 0},
+        ).to_list(_EXPORT_ROW_CAP),
+        "my_product_events": await db.product_events.find(
+            {"user_id": user["user_id"]}, {"_id": 0},
+        ).to_list(_EXPORT_ROW_CAP),
+    }
     admin_ws = [
         m["workspace_id"] for m in memberships
         if m.get("status") == "active" and (m.get("role") == "owner" or pack_of(m) == "owner")
     ]
-    if admin_ws:
-        by_ws = await _docs_by_key(db.workspaces, "workspace_id", admin_ws, {"_id": 0})
-        workspaces = []
-        for ws_id in admin_ws:
-            ws = by_ws.get(ws_id)
-            if ws:
-                workspaces.append(_strip_sensitive(ws))
-        payload["workspaces"] = workspaces
+    payload["owned_workspaces"] = [
+        await _export_workspace_package(ws_id) for ws_id in admin_ws
+    ]
+    # Keep a light summary for non-owned memberships (no other tenants' data).
+    member_ws = [
+        m["workspace_id"] for m in memberships
+        if m.get("status") == "active" and m["workspace_id"] not in admin_ws
+    ]
+    if member_ws:
+        by_ws = await _docs_by_key(db.workspaces, "workspace_id", member_ws, {"_id": 0, "workspace_id": 1, "name": 1, "plan": 1})
+        payload["member_workspaces"] = [
+            {"workspace_id": wid, "name": (by_ws.get(wid) or {}).get("name"), "plan": (by_ws.get(wid) or {}).get("plan")}
+            for wid in member_ws
+        ]
     return payload
 
 
@@ -8619,6 +8791,24 @@ async def update_appearance(body: AppearanceInput, user=Depends(get_user)):
     return {"appearance": appearance}
 
 
+
+
+class AgeConfirmInput(BaseModel):
+    confirmed: bool = True
+
+
+@api_router.patch("/account/age-confirmation")
+async def confirm_age(payload: AgeConfirmInput, user=Depends(get_user)):
+    """Record that the account holder confirmed they are 18+ (or guardian-supervised)."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Age confirmation is required to use Helm")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"age_confirmed": True, "age_confirmed_at": now}},
+    )
+    return {"age_confirmed": True, "age_confirmed_at": now}
+
 @api_router.delete("/account")
 async def delete_account(user=Depends(get_user)):
     memberships = await db.memberships.find(
@@ -8638,11 +8828,19 @@ async def delete_account(user=Depends(get_user)):
             status_code=400,
             detail="Transfer or delete workspace first",
         )
-    await db.memberships.delete_many({"user_id": user["user_id"]})
-    await db.user_sessions.delete_many({"user_id": user["user_id"]})
-    await db.chat_messages.delete_many({"user_id": user["user_id"]})
-    await db.updates.delete_many({"user_id": user["user_id"]})
-    await db.users.delete_one({"user_id": user["user_id"]})
+    uid = user["user_id"]
+    await db.memberships.delete_many({"user_id": uid})
+    await db.user_sessions.delete_many({"user_id": uid})
+    await db.chat_messages.delete_many({"user_id": uid})
+    await db.updates.delete_many({"user_id": uid})
+    await db.private_notes.delete_many({"user_id": uid})
+    await db.product_events.delete_many({"user_id": uid})
+    # Anonymize activity rows rather than deleting the company audit trail.
+    await db.activities.update_many(
+        {"actor_user_id": uid},
+        {"$set": {"actor_user_id": None, "actor_name": "Deleted user"}},
+    )
+    await db.users.delete_one({"user_id": uid})
     return {"ok": True}
 
 
@@ -8759,96 +8957,20 @@ async def _probe_mongo_candidates() -> list[dict]:
 
 @api_router.get("/setup/status")
 async def setup_status(request: Request):
-    """Production readiness probe — no secrets."""
+    """Production readiness probe — boolean health only (no infra inventory)."""
     _require_setup_secret(request)
     mongo_ok = await _mongo_ping()
-    probes = await _probe_mongo_candidates()
-    clerk_sync = clerk_auth.clerk_sync_status()
-    oauth_redirects = {
-        "google": _oauth_callback_uri("google"),
-        "quickbooks": _oauth_callback_uri("quickbooks"),
-        "xero": _oauth_callback_uri("xero"),
-        "hubspot": _oauth_callback_uri("hubspot"),
-    }
+    clerk_ok = False
+    if clerk_auth.clerk_configured():
+        try:
+            clerk_ok = bool(await clerk_auth.clerk_api_ok())
+        except Exception:
+            clerk_ok = False
     return {
-        "frontend_url": FRONTEND_URL or None,
-        "app_url": APP_URL or None,
-        "public_api_origin": public_api_origin(),
-        "clerk_enabled": clerk_auth.clerk_configured(),
-        "clerk_jwks_host": clerk_auth.CLERK_JWKS_URL.split("/")[2] if clerk_auth.CLERK_JWKS_URL else None,
-        "clerk_secret_mode": (
-            "live" if clerk_auth.CLERK_SECRET_KEY.startswith("sk_live_")
-            else "test" if clerk_auth.CLERK_SECRET_KEY.startswith("sk_test_")
-            else "unknown"
-        ) if clerk_auth.clerk_configured() else None,
-        "clerk_publishable_key_set": bool(CLERK_PUBLISHABLE_KEY),
-        "clerk_keys_aligned": (
-            clerk_auth.clerk_keys_aligned(CLERK_PUBLISHABLE_KEY, clerk_auth.CLERK_JWKS_URL)
-            if CLERK_PUBLISHABLE_KEY
-            else None
-        ),
-        "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_auth.clerk_configured() else False,
-        "clerk_google_oauth": await clerk_auth.clerk_google_oauth_status() if clerk_auth.clerk_configured() else None,
-        "clerk_sync": clerk_sync,
-        "clerk_instance_env": clerk_sync.get("environment_type"),
-        "mongo": mongo_ok,
-        "mongo_source": MONGO_SOURCE,
-        "mongo_url": _redact_mongo_url(mongo_url),
-        "mongo_candidates": len(_mongo_candidate_urls()),
-        "mongo_probes": probes,
-        "use_atlas_mongo": os.environ.get("USE_ATLAS_MONGO", "false"),
-        "on_render": bool(os.environ.get("RENDER")),
-        "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT"),
-        "integrations": {
-            "google_calendar": {
-                "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
-                "env": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
-                "redirect_uri": oauth_redirects["google"],
-            },
-            "quickbooks": {
-                "configured": bool(QB_CLIENT_ID and QB_CLIENT_SECRET),
-                "env": ["QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_ENV"],
-                "redirect_uri": oauth_redirects["quickbooks"],
-                "env_value": QB_ENV,
-            },
-            "xero": {
-                "configured": bool(XERO_CLIENT_ID and XERO_CLIENT_SECRET),
-                "env": ["XERO_CLIENT_ID", "XERO_CLIENT_SECRET"],
-                "redirect_uri": oauth_redirects["xero"],
-            },
-            "hubspot": {
-                "configured": bool(HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET),
-                "env": ["HUBSPOT_CLIENT_ID", "HUBSPOT_CLIENT_SECRET"],
-                "redirect_uri": oauth_redirects["hubspot"],
-            },
-            "anthropic": {
-                "configured": helm_llm.anthropic_configured(),
-                "env": ["ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"],
-            },
-            "document_ai": {
-                "configured": gcp_docai.document_ai_configured(),
-                "env": ["GCP_PROJECT_ID", "GCP_DOCUMENT_AI_PROCESSOR_ID", "GCP_SERVICE_ACCOUNT_JSON"],
-                "global_daily_limit": doc_rate_limit.DOCUMENT_AI_GLOBAL_DAILY_LIMIT,
-                "workspace_daily_limit": doc_rate_limit.DOCUMENT_AI_WORKSPACE_DAILY_LIMIT,
-            },
-            "credential_encryption": {
-                "configured": cred_crypto.encryption_key_is_fernet(),
-                "env": ["INTEGRATION_ENCRYPTION_KEY"],
-            },
-            "r2": {
-                "configured": doc_storage.r2_configured(),
-                "env": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"],
-            },
-            "resend": {
-                "configured": bool(RESEND_API_KEY),
-                "env": ["RESEND_API_KEY", "SENDER_EMAIL"],
-            },
-            "paddle": {
-                "configured": bool(PADDLE_CLIENT_TOKEN and PADDLE_PRICE_ID),
-                "env": ["PADDLE_API_KEY", "PADDLE_CLIENT_TOKEN", "PADDLE_PRICE_ID", "PADDLE_WEBHOOK_SECRET", "PADDLE_ENV"],
-            },
-        },
-        "oauth_redirect_uris": oauth_redirects,
+        "ok": bool(mongo_ok and clerk_auth.clerk_configured()),
+        "mongo": bool(mongo_ok),
+        "clerk_configured": clerk_auth.clerk_configured(),
+        "clerk_api_ok": clerk_ok,
     }
 
 

@@ -32,9 +32,9 @@ export default function Privacy() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who can use Helm</h2>
             <p>
               Helm is open to individuals and businesses worldwide. There is no geographic restriction.
-              We do not impose a hard minimum age gate. If you are under 18, you should only use Helm under a parent
-              or guardian&apos;s supervision, at that guardian&apos;s discretion. Helm does not independently verify age
-              or guardian consent.
+              Before creating a company workspace, you must confirm that you are 18 or older, or that you are using
+              Helm under a parent or guardian&apos;s supervision. Helm records that confirmation on your account.
+              We do not independently verify age or guardian consent beyond that acknowledgment.
             </p>
           </section>
 
@@ -82,7 +82,7 @@ export default function Privacy() {
               render the current briefing. Helm does not request <span className="font-mono text-xs">gmail.send</span>.
               The original Connect Google grant was Calendar and Gmail read-only; existing workspaces keep that
               narrower access until an owner reconnects and consents again. Nothing from Google is accessed
-              until you explicitly connect the integration.
+              until you explicitly connect the integration. Shared Google (and other OAuth) tokens may only be used by the teammate who connected them, or by a workspace owner.
             </p>
           </section>
 
@@ -173,8 +173,10 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Retention &amp; deletion</h2>
             <p>
-              When you delete your account, your data is wiped immediately — there is no retention period after deletion.
-              You can export your data and delete your account yourself from{" "}
+              When you delete your account, your personal data is wiped immediately — there is no retention period after deletion.
+              Workspace owners can export a full data package for companies they own (workspace records with integration
+              tokens stripped). Non-owner members receive their own account data plus a summary of workspaces they belong to.
+              You can export and delete from{" "}
               <Link to="/app/settings" className="text-helm-gold hover:underline">Account Settings</Link>
               {" "}(<span className="font-mono text-xs text-helm-slate">/app/settings</span>).
             </p>

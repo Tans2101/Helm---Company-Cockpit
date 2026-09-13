@@ -12,15 +12,26 @@ export default function WorkspaceGate() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(Boolean(user?.age_confirmed));
 
   const create = async () => {
     if (!name.trim()) { toast.error("Name your company"); return; }
+    if (!ageConfirmed && !user?.age_confirmed) {
+      toast.error("Confirm you are 18+ (or using Helm under a parent/guardian)");
+      return;
+    }
     setBusy(true);
     try {
+      if (!user?.age_confirmed) {
+        await api.patch("/account/age-confirmation", { confirmed: true });
+      }
       await api.post("/workspaces", withReferralPayload({ name: name.trim() }));
       consumeReferralCode();
       window.location.href = "/app";
-    } catch (e) { toast.error("Could not create company"); setBusy(false); }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not create company");
+      setBusy(false);
+    }
   };
 
   const join = async () => {
@@ -95,9 +106,29 @@ export default function WorkspaceGate() {
                 onKeyDown={(e) => e.key === "Enter" && create()}
                 className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2.5 focus:outline-none focus:border-helm-gold/40" />
             </label>
+            {!user?.age_confirmed && (
+              <label className="mt-4 flex items-start gap-2.5 text-sm text-helm-muted cursor-pointer" data-testid="gate-age-confirm">
+                <input
+                  type="checkbox"
+                  checked={ageConfirmed}
+                  onChange={(e) => setAgeConfirmed(e.target.checked)}
+                  className="mt-0.5 rounded border-helm-line"
+                />
+                <span>
+                  I confirm I am 18 or older, or I am using Helm under a parent or guardian&apos;s supervision.
+                </span>
+              </label>
+            )}
             <div className="flex gap-2 mt-4">
               <button onClick={() => setMode(null)} className="rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5">Back</button>
-              <button data-testid="gate-create-btn" onClick={create} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Creating…" : "Create company"}</button>
+              <button
+                data-testid="gate-create-btn"
+                onClick={create}
+                disabled={busy || (!user?.age_confirmed && !ageConfirmed)}
+                className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60"
+              >
+                {busy ? "Creating…" : "Create company"}
+              </button>
             </div>
           </GlassCard>
         )}
