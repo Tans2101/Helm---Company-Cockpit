@@ -86,3 +86,27 @@ def test_refresh_raises_on_failure():
     with patch("quickbooks.httpx.AsyncClient", return_value=mock_hc):
         with pytest.raises(qb.QuickBooksAuthError):
             asyncio.run(qb.refresh_qb_token(tokens))
+
+
+def test_refresh_preserves_refresh_token_when_intuit_omits_it():
+    """Intuit sometimes omits refresh_token on refresh — do not drop the grant."""
+    tokens = {
+        "access_token": "old",
+        "refresh_token": "keep-me",
+        "expires_in": 3600,
+        "obtained_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+        "realmId": "realm-9",
+    }
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.json = lambda: {"access_token": "new", "expires_in": 3600}  # no refresh_token
+    mock_hc = AsyncMock()
+    mock_hc.post = AsyncMock(return_value=mock_resp)
+    mock_hc.__aenter__ = AsyncMock(return_value=mock_hc)
+    mock_hc.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("quickbooks.httpx.AsyncClient", return_value=mock_hc):
+        out = asyncio.run(qb.refresh_qb_token(tokens))
+    assert out["access_token"] == "new"
+    assert out["refresh_token"] == "keep-me"
+    assert out["realmId"] == "realm-9"

@@ -59,9 +59,12 @@ async def refresh_qb_token(tokens: dict) -> dict:
     if resp.status_code != 200:
         raise QuickBooksAuthError(resp.text[:300] or "Token refresh failed")
 
-    updated = resp.json()
+    updated = {**tokens, **resp.json()}
     updated["obtained_at"] = datetime.now(timezone.utc).isoformat()
-    if tokens.get("realmId"):
+    # Intuit may omit refresh_token / realmId on refresh — keep the prior grant.
+    if not updated.get("refresh_token") and refresh_token:
+        updated["refresh_token"] = refresh_token
+    if tokens.get("realmId") and not updated.get("realmId"):
         updated["realmId"] = tokens["realmId"]
     return updated
 

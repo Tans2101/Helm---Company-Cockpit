@@ -37,30 +37,38 @@ export default function ClerkHelmBridge() {
   const { user, setUser, setSessionError, clearSessionError } = useAuth();
   const { helmCanonicalOrigin, clerkPrimaryOrigin, clerkMultiDomain } = useClerkMode();
   const navigate = useNavigate();
-  const syncing = useRef(false);
+  const syncRunId = useRef(0);
+  const tokenGetterRef = useRef(null);
 
   const clerkReady = isLoaded && sessionLoaded;
   const clerkComplete = clerkSessionComplete({
     isSignedIn, userId, sessionId, session, sessionStatus,
   });
 
+  // Keep getter registration stable — update via ref so dep churn doesn't null the
+  // interceptor mid-flight or wipe a still-valid JWT cache.
+  tokenGetterRef.current = { clerkComplete, getToken, session };
+
   useEffect(() => {
-    // Hot path for every API call — cached JWT, not a 20-attempt Clerk refresh.
     setClerkTokenGetter(async () => {
-      if (!clerkComplete) return null;
-      return getCachedClerkToken(getToken, session);
+      const cur = tokenGetterRef.current;
+      if (!cur?.clerkComplete) return null;
+      return getCachedClerkToken(cur.getToken, cur.session);
     });
-    return () => {
-      setClerkTokenGetter(null);
-      clearClerkTokenCache();
-    };
-  }, [clerkComplete, getToken, session]);
+    return () => setClerkTokenGetter(null);
+  }, []);
 
   useEffect(() => {
-    if (!clerkReady || !clerkComplete || user || syncing.current) return;
+    if (!clerkComplete) {
+      clearClerkTokenCache();
+    }
+  }, [clerkComplete]);
 
+  useEffect(() => {
+    if (!clerkReady || !clerkComplete || user) return;
+
+    const runId = ++syncRunId.current;
     let cancelled = false;
-    syncing.current = true;
 
     (async () => {
       clearSessionError();
@@ -72,7 +80,7 @@ export default function ClerkHelmBridge() {
             continue;
           }
           const data = await exchangeClerkSession(token);
-          if (cancelled) return;
+          if (cancelled || runId !== syncRunId.current) return;
           setUser(data);
           clearSessionError();
           // Clerk may redirect to apexcoach.tech; send user to helmcontrol after session exchange.
@@ -104,7 +112,7 @@ export default function ClerkHelmBridge() {
             await sleep(1000);
             continue;
           }
-          if (cancelled) return;
+          if (cancelled || runId !== syncRunId.current) return;
           const detail = e?.response?.data?.detail;
           setSessionError(
             typeof detail === "string"
@@ -115,12 +123,10 @@ export default function ClerkHelmBridge() {
           return;
         }
       }
-      if (!cancelled) {
+      if (!cancelled && runId === syncRunId.current) {
         setSessionError("Clerk session not ready — wait a moment, then refresh.");
       }
-    })().finally(() => {
-      syncing.current = false;
-    });
+    })();
 
     return () => { cancelled = true; };
   }, [

@@ -2539,6 +2539,7 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
 
 
 _insights_refresh_inflight: set[str] = set()
+_insights_refresh_tasks: set[asyncio.Task] = set()
 
 
 def _schedule_insights_refresh(workspace_id: str) -> None:
@@ -2547,9 +2548,10 @@ def _schedule_insights_refresh(workspace_id: str) -> None:
         return
     if not helm_llm.anthropic_configured():
         return
+    # Claim the slot before create_task to avoid duplicate concurrent runs.
+    _insights_refresh_inflight.add(workspace_id)
 
     async def _run() -> None:
-        _insights_refresh_inflight.add(workspace_id)
         try:
             await _generate_insights(workspace_id, raise_on_rate_limit=False)
         except Exception:
@@ -2558,8 +2560,11 @@ def _schedule_insights_refresh(workspace_id: str) -> None:
             _insights_refresh_inflight.discard(workspace_id)
 
     try:
-        asyncio.get_running_loop().create_task(_run())
+        task = asyncio.get_running_loop().create_task(_run())
+        _insights_refresh_tasks.add(task)
+        task.add_done_callback(_insights_refresh_tasks.discard)
     except RuntimeError:
+        _insights_refresh_inflight.discard(workspace_id)
         logger.debug("no running loop — skip background insights for %s", workspace_id)
 
 
@@ -2844,6 +2849,15 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         except Exception:
             logger.exception("draft failed for signal %s", sig.get("type"))
 
+    # If every draft failed, keep prior suggestions and do not burn the daily stamp.
+    if signals and not decision_suggestions and not delegate_suggestions:
+        logger.warning(
+            "insights draft failure for %s — keeping prior suggestions (%d signals)",
+            workspace_id,
+            len(signals),
+        )
+        return {"skipped": "draft_failed", "signals": len(signals)}
+
     await doc_rate_limit.record_insights_event(db, workspace_id)
     await db.workspaces.update_one(
         {"workspace_id": workspace_id},
@@ -2945,14 +2959,15 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     b = c["briefing"]
     fin = await compute_financials(c["workspace_id"])
-    # what_changed / what_to_decide are stored briefing lists (computed or previously
-    # written). An empty list means nothing is queued — there is no "not entered" state.
+    # Use the same live builders as GET /briefing — stored lists are often empty seeds.
+    what_to_decide = _briefing_what_to_decide(c)
+    what_changed = b.get("what_changed") or []
     cal_snap = await _google_calendar_snapshot(c, principal=principal)
     context = {
         "company": c["name"],
-        "metrics": b.get("what_to_decide"),
-        "what_changed": b["what_changed"],
-        "decisions": b["what_to_decide"],
+        "metrics": what_to_decide,
+        "what_changed": what_changed,
+        "decisions": what_to_decide,
         "financials": financials_for_synthesis(fin),
         "calendar": calendar_for_synthesis(
             cal_snap,

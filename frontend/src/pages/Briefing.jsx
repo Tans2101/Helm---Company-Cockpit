@@ -44,10 +44,11 @@ export default function Briefing() {
   if (company.onboarding_done === false) return <Onboarding />;
 
   const generate = async () => {
+    if (genLoading) return;
     setGenLoading(true);
     try {
       const { data: res } = await api.post("/briefing/generate");
-      setData({ ...data, ai_summary: res.ai_summary });
+      setData((prev) => ({ ...(prev || {}), ai_summary: res.ai_summary }));
       toast.success("Briefing updated");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not generate briefing");
