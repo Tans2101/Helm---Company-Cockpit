@@ -2,7 +2,7 @@
 
 export const TAGLINE = "Run the business. Don't chase it.";
 export const CATEGORY = "CEO Operating System";
-export const AUDIENCE = "Built for CEOs running companies of up to 50 people — funded or not.";
+export const AUDIENCE = "Built for CEOs running companies of up to 50 people.";
 export const FOUNDER_NAME = "Tansher Dhawan";
 export const FOUNDER_ROLE = "CEO & Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
@@ -45,7 +45,7 @@ export const WHO_HELM_IS_FOR = [
   },
   {
     title: "Owner-operators & traditional businesses",
-    body: "Manufacturing, services, agencies, family companies — funded or not. Helm is a cockpit for running the operation, not a tool only venture-backed startups use.",
+    body: "Manufacturing, services, agencies, family companies. Helm is a cockpit for running the operation, not a tool only venture-backed startups use.",
   },
   {
     title: "Leadership teams",

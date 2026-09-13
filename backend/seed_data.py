@@ -167,7 +167,9 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
 
     return {
         "workspace_id": workspace_id, "name": name, "owner_user_id": owner_user_id, "plan": "free",
-        "stage": "Series A", "employees": 24 if not empty else 0, "founded": "2022",
+        "stage": "" if empty else "Established, growing",
+        "employees": 24 if not empty else 0,
+        "founded": "" if empty else "2014",
         "mission": "Autonomous inspection robots for industrial sites." if not empty else "",
         "onboarding_done": not empty, "company_setup_done": not empty,
         "industry": "" if empty else "Industrial Robotics",

@@ -20,8 +20,6 @@ const ROLE_ICONS = {
   President: Award,
 };
 
-const currentYear = new Date().getFullYear();
-
 export default function CompanySetup({ company }) {
   const { user } = useAuth();
   const [step, setStep] = useState(0);
@@ -30,9 +28,9 @@ export default function CompanySetup({ company }) {
     founder_title: company?.founder_title || "CEO",
     name: company?.name || "",
     industry: company?.industry || "",
-    stage: company?.stage && company.stage !== "Series A" ? company.stage : "",
+    stage: COMPANY_STAGES.includes(company?.stage) ? company.stage : "",
     employees: company?.employees > 0 ? company.employees : null,
-    founded: company?.founded && company.founded !== "2022" ? company.founded : String(currentYear - 2),
+    founded: /^\d{4}$/.test(company?.founded || "") ? company.founded : "",
     mission: company?.mission || "",
   });
 
@@ -169,7 +167,7 @@ export default function CompanySetup({ company }) {
                   </div>
                   <div>
                     <h2 className="text-lg text-white tracking-tight">About your company</h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">Name, industry, and stage — the basics for your cockpit.</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Name, industry, and how established you are — the basics for your cockpit.</p>
                   </div>
                 </div>
                 <div className="space-y-5">
@@ -205,7 +203,7 @@ export default function CompanySetup({ company }) {
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs text-zinc-500 mb-2">Stage</p>
+                    <p className="text-xs text-zinc-500 mb-2">Company maturity</p>
                     <div className="flex flex-wrap gap-2">
                       {COMPANY_STAGES.map((st) => (
                         <button
@@ -269,7 +267,7 @@ export default function CompanySetup({ company }) {
                       data-testid="setup-founded"
                       value={form.founded}
                       onChange={(e) => set("founded", e.target.value.replace(/\D/g, "").slice(0, 4))}
-                      placeholder="2022"
+                      placeholder="1998"
                       className="mt-1 w-32 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2.5 font-mono focus:outline-none focus:border-gold/40"
                     />
                   </label>
@@ -305,7 +303,7 @@ export default function CompanySetup({ company }) {
                     ["Your role", form.founder_title],
                     ["Company", form.name],
                     ["Industry", form.industry],
-                    ["Stage", form.stage],
+                    ["Maturity", form.stage],
                     ["Team size", teamSizeLabel()],
                     ["Founded", form.founded],
                     ...(form.mission ? [["Mission", form.mission]] : []),

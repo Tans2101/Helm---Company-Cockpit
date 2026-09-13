@@ -2227,7 +2227,13 @@ async def company(principal=Depends(get_principal)):
     }
 
 
-COMPANY_STAGES = frozenset({"Pre-seed", "Seed", "Series A", "Series B", "Growth", "Bootstrapped", "Other"})
+COMPANY_STAGES = frozenset({
+    "Just starting out",
+    "Established, growing",
+    "Established, stable",
+    "Family-owned / multi-generation",
+    "Other",
+})
 FOUNDER_TITLES = frozenset({"CEO", "Founder", "Co-founder", "Managing Director", "President", "Other"})
 
 
@@ -2256,7 +2262,7 @@ async def update_company(payload: CompanySetupInput, principal=Depends(require("
         stage = payload.stage.strip()
         if stage and stage not in COMPANY_STAGES:
             raise HTTPException(status_code=400, detail="Invalid company stage")
-        updates["stage"] = stage or "Series A"
+        updates["stage"] = stage
     if payload.employees is not None:
         if payload.employees < 0 or payload.employees > 100000:
             raise HTTPException(status_code=400, detail="Invalid team size")
@@ -2265,7 +2271,7 @@ async def update_company(payload: CompanySetupInput, principal=Depends(require("
         founded = payload.founded.strip()
         if founded and (len(founded) != 4 or not founded.isdigit()):
             raise HTTPException(status_code=400, detail="Founded year must be YYYY")
-        updates["founded"] = founded or "2022"
+        updates["founded"] = founded
     if payload.mission is not None:
         updates["mission"] = payload.mission.strip()[:500]
     if payload.founder_title is not None:

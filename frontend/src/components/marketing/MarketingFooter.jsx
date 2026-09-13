@@ -24,7 +24,7 @@ export default function MarketingFooter() {
           <div className="flex flex-col gap-2">
             <MarketingLogo size="sm" showTagline dark />
             <p className="text-xs text-helm-slate max-w-xs leading-relaxed mt-1">
-              The {CATEGORY.toLowerCase()} for CEOs running companies of up to 50 people — funded or not. One cockpit. Clear decisions. Quiet control.
+              The {CATEGORY.toLowerCase()} for CEOs running companies of up to 50 people. One cockpit. Clear decisions. Quiet control.
             </p>
             <a href={PUBLIC_CONTACT_MAILTO} className="text-xs text-helm-slate hover:text-helm-cream transition-colors mt-2">
               {PUBLIC_CONTACT_EMAIL}

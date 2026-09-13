@@ -9,23 +9,32 @@ export const FOUNDER_ROLES = [
 ];
 
 export const COMPANY_STAGES = [
-  "Pre-seed", "Seed", "Series A", "Series B", "Growth", "Bootstrapped", "Other",
+  "Just starting out",
+  "Established, growing",
+  "Established, stable",
+  "Family-owned / multi-generation",
+  "Other",
 ];
 
 export const INDUSTRIES = [
+  "Manufacturing",
+  "Logistics",
+  "Professional Services",
+  "Retail",
+  "Construction",
+  "Food & Beverage",
+  "Agriculture",
+  "Family Business",
+  "Healthcare",
+  "Education",
+  "E-commerce",
   "SaaS / Software",
   "Fintech",
-  "Healthcare",
-  "E-commerce",
   "Marketplace",
   "AI / ML",
   "Hardware / Robotics",
   "Climate / Energy",
-  "Education",
   "Media / Content",
-  "Professional Services",
-  "Manufacturing",
-  "Logistics",
   "Other",
 ];
 
