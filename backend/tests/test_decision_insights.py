@@ -173,6 +173,124 @@ def test_collect_signals_caps_and_ranks():
     assert signals[0]["severity"] in ("high", "medium", "low")
 
 
+def _stalled_item(spec, *, item_id, label, status, days_ago, now, extra=None):
+    updated = (now - timedelta(days=days_ago)).isoformat()
+    row = {
+        "id": item_id,
+        spec["status_field"]: status,
+        spec["label_field"]: label,
+        "updated_at": updated,
+    }
+    if extra:
+        row.update(extra)
+    return row
+
+
+def test_stalled_production_stage():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["production"]
+    items = [
+        _stalled_item(spec, item_id="p1", label="Weld line", status="in_progress", days_ago=6, now=now),
+        _stalled_item(spec, item_id="p2", label="Done stage", status="done", days_ago=20, now=now),
+        _stalled_item(spec, item_id="p3", label="Fresh", status="not_started", days_ago=1, now=now),
+    ]
+    sigs = eng.detect_stalled_department_item(items, spec, now=now)
+    assert len(sigs) == 1
+    assert sigs[0]["type"] == "stalled_department_item"
+    assert sigs[0]["related_id"] == "p1"
+    assert sigs[0]["severity"] == "medium"
+    assert "Weld line" in sigs[0]["summary"]
+
+
+def test_stalled_procurement_request():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["procurement"]
+    items = [
+        _stalled_item(spec, item_id="pr1", label="Steel coil", status="ordered", days_ago=8, now=now),
+        _stalled_item(spec, item_id="pr2", label="Arrived", status="delivered", days_ago=30, now=now),
+    ]
+    sigs = eng.detect_stalled_department_item(items, spec, now=now)
+    assert len(sigs) == 1
+    assert sigs[0]["related_id"] == "pr1"
+    assert "Steel coil" in sigs[0]["detail"]
+
+
+def test_stalled_legal_matter():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["legal"]
+    items = [
+        _stalled_item(spec, item_id="lm1", label="NDA Acme", status="internal_review", days_ago=7, now=now),
+        _stalled_item(spec, item_id="lm2", label="Filed", status="filed", days_ago=40, now=now),
+    ]
+    sigs = eng.detect_stalled_department_item(items, spec, now=now)
+    assert len(sigs) == 1
+    assert sigs[0]["related_id"] == "lm1"
+    assert sigs[0]["department_type"] == "legal"
+
+
+def test_stalled_maintenance_generic_and_urgent():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["engineering_maintenance"]
+    items = [
+        _stalled_item(spec, item_id="mt_med", label="Conveyor", status="diagnosed", days_ago=6, now=now, extra={"priority": "medium"}),
+        _stalled_item(spec, item_id="mt_hi", label="Press", status="reported", days_ago=3, now=now, extra={"priority": "high"}),
+        _stalled_item(spec, item_id="mt_fresh_hi", label="Pump", status="reported", days_ago=1, now=now, extra={"priority": "high"}),
+        _stalled_item(spec, item_id="mt_done", label="Old", status="resolved", days_ago=20, now=now, extra={"priority": "high"}),
+    ]
+    generic = eng.detect_stalled_department_item(items, spec, now=now)
+    urgent = eng.detect_urgent_maintenance(items, spec, now=now)
+    assert [s["related_id"] for s in generic] == ["mt_med"]
+    assert [s["related_id"] for s in urgent] == ["mt_hi"]
+    assert urgent[0]["type"] == "urgent_maintenance"
+    assert urgent[0]["severity"] == "high"
+    combined = eng.collect_department_signals([{"spec": spec, "items": items}], now=now)
+    types_by_id = {s["related_id"]: s["type"] for s in combined}
+    assert types_by_id["mt_hi"] == "urgent_maintenance"
+    assert types_by_id["mt_med"] == "stalled_department_item"
+    assert "mt_fresh_hi" not in types_by_id
+
+
+def test_stalled_onboarding():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["hr"]
+    items = [
+        _stalled_item(spec, item_id="hr1", label="Jordan Lee", status="in_progress", days_ago=9, now=now),
+        _stalled_item(spec, item_id="hr2", label="Alex Kim", status="active", days_ago=30, now=now),
+        _stalled_item(spec, item_id="hr3", label="New hire", status="not_started", days_ago=2, now=now),
+    ]
+    assert eng.detect_stalled_department_item(items, spec, now=now) == []
+    sigs = eng.detect_stalled_onboarding(items, spec, now=now)
+    assert len(sigs) == 1
+    assert sigs[0]["type"] == "stalled_onboarding"
+    assert sigs[0]["related_id"] == "hr1"
+    assert "Jordan Lee" in sigs[0]["summary"]
+    assert "hasn't progressed" in sigs[0]["summary"]
+
+
+def test_collect_signals_skips_departments_not_passed_in():
+    """Disabled departments are omitted by the caller; no extra signals."""
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["production"]
+    stalled = _stalled_item(spec, item_id="p1", label="Weld", status="in_progress", days_ago=10, now=now)
+    fin = {"has_data": False}
+    without = eng.collect_signals(fin=fin, expense_by_month={}, deals=[], tasks=[], updates=[], department_items=[], now=now)
+    with_prod = eng.collect_signals(
+        fin=fin, expense_by_month={}, deals=[], tasks=[], updates=[],
+        department_items=[{"spec": spec, "items": [stalled]}],
+        now=now,
+    )
+    assert without == []
+    assert len(with_prod) == 1
+    assert with_prod[0]["type"] == "stalled_department_item"
+
+
+def test_department_signal_type_buckets():
+    assert "urgent_maintenance" in eng.DECISION_SIGNAL_TYPES
+    assert "stalled_department_item" in eng.DELEGATE_SIGNAL_TYPES
+    assert "stalled_onboarding" in eng.DELEGATE_SIGNAL_TYPES
+    assert "stalled_department_item" not in eng.DECISION_SIGNAL_TYPES
+
+
 # ---- LLM draft validation ----
 
 def test_validate_decision_draft_clamps_confidence_and_impact():
