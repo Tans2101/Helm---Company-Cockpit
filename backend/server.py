@@ -7632,11 +7632,15 @@ async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_pri
     subject = (payload.subject or "Follow up").strip()[:200]
     to_email = (payload.to_email or "").strip()[:200]
     snippet = (payload.snippet or "").strip()[:500]
-    body = (
-        "Hi,\n\n"
-        "(Drafted in Helm — edit this in Gmail before you send.)\n\n"
-        + (f"On their last note:\n{snippet}\n" if snippet else "")
-    )
+    # AI drafts a real reply; on Anthropic failure we fall back to the template so
+    # the Gmail draft still opens instead of 500ing the briefing button.
+    try:
+        body = await helm_llm.draft_gmail_reply(
+            subject=subject, to_email=to_email, snippet=snippet,
+        )
+    except Exception:
+        logger.exception("Gmail AI draft failed — using template fallback")
+        body = helm_llm.fallback_gmail_draft_body(subject=subject, snippet=snippet)
     try:
         draft_id, url, refreshed = await gcal.create_gmail_draft(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,

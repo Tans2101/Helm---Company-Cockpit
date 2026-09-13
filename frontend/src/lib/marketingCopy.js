@@ -54,7 +54,7 @@ export const WHO_HELM_IS_FOR = [
 ];
 
 export const CEO_DAY = [
-  { time: "7:30 AM", title: "Morning Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data." },
+  { time: "7:30 AM", title: "Morning Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
   { time: "9:00 AM", title: "Decision Center", body: "Six pending approvals ranked by impact. Helm recommends which to tackle first and why." },
   { time: "12:00 PM", title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
   { time: "Friday", title: "Weekly CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
@@ -73,7 +73,7 @@ export const FEATURE_CATEGORIES = [
     id: "intelligence",
     label: "Executive intelligence",
     intro: "AI grounded in your company — not generic chatbot answers.",
-    modules: ["Morning Briefing", "Decision Center", "Ask Helm", "Weekly CEO Pack"],
+    modules: ["Morning Briefing", "Decision Center", "Ask Helm", "Weekly CEO Pack", "Gmail thread surfacing + AI draft replies"],
   },
   {
     id: "finance",
