@@ -35,34 +35,34 @@ export default function PaymentSuccess() {
         {status === "checking" && (
           <>
             <Spinner className="w-8 h-8 mx-auto mb-6" />
-            <h1 className="font-display text-2xl font-normal text-white">Confirming your payment…</h1>
-            <p className="text-zinc-500 text-sm mt-2">This only takes a moment.</p>
+            <h1 className="font-display text-2xl font-normal text-helm-fg">Confirming your payment…</h1>
+            <p className="text-helm-muted text-sm mt-2">This only takes a moment.</p>
           </>
         )}
         {status === "paid" && (
           <>
-            <div className="w-16 h-16 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-8 h-8 text-gold" />
+            <div className="w-16 h-16 rounded-full bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-8 h-8 text-helm-gold" />
             </div>
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Welcome to Helm</p>
-            <h1 className="font-display text-3xl font-normal text-white">You're in command.</h1>
-            <p className="text-zinc-400 mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Welcome to Helm</p>
+            <h1 className="font-display text-3xl font-normal text-helm-fg">You're in command.</h1>
+            <p className="text-helm-muted mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
             <button data-testid="success-continue-btn" onClick={() => navigate("/app")}
-              className="mt-8 inline-flex items-center gap-2 rounded-md bg-gold text-black font-medium px-5 py-2.5 text-sm transition-colors hover:bg-gold-hover">
+              className="mt-8 inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy font-medium px-5 py-2.5 text-sm transition-colors hover:bg-helm-gold-hover">
               Enter the cockpit <ArrowRight className="w-4 h-4" />
             </button>
           </>
         )}
         {(status === "failed" || status === "timeout") && (
           <>
-            <div className="w-16 h-16 rounded-full bg-rose-400/10 border border-rose-400/30 flex items-center justify-center mx-auto mb-6">
-              <XCircle className="w-8 h-8 text-rose-400" />
+            <div className="w-16 h-16 rounded-full bg-helm-status-negative/10 border border-helm-status-negative/30 flex items-center justify-center mx-auto mb-6">
+              <XCircle className="w-8 h-8 text-helm-status-negative" />
             </div>
-            <h1 className="font-display text-2xl font-normal text-white">{status === "timeout" ? "Still processing" : "Payment not completed"}</h1>
-            <p className="text-zinc-500 text-sm mt-2">
+            <h1 className="font-display text-2xl font-normal text-helm-fg">{status === "timeout" ? "Still processing" : "Payment not completed"}</h1>
+            <p className="text-helm-muted text-sm mt-2">
               {status === "timeout" ? "Your payment is taking longer than expected. Check billing shortly." : "No charge was made. You can try again anytime."}
             </p>
-            <button onClick={() => navigate("/app/billing")} className="mt-8 rounded-md border border-white/10 text-white px-5 py-2.5 text-sm hover:bg-white/5 transition-colors">Back to billing</button>
+            <button onClick={() => navigate("/app/billing")} className="mt-8 rounded-md border border-helm-line text-helm-fg px-5 py-2.5 text-sm hover:bg-helm-fg/5 transition-colors">Back to billing</button>
           </>
         )}
       </div>

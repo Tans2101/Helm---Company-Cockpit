@@ -81,23 +81,23 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
           {active.name?.[0]?.toUpperCase() || "K"}
         </div>
         <div className="flex-1 min-w-0 text-left">
-          <p className="text-xs text-white truncate">{active.name}</p>
-          <p className="text-[10px] text-zinc-600 uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan, billingEnforced)}</p>
+          <p className="text-xs text-helm-fg truncate">{active.name}</p>
+          <p className="text-[10px] text-helm-muted uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan, billingEnforced)}</p>
         </div>
-        <ChevronDown className={cn("w-4 h-4 text-zinc-500 transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-helm-muted transition-transform", open && "rotate-180")} />
       </button>
       {open && (
         <div className="absolute left-3 right-3 mt-1 z-50 rounded-md border border-helm-line bg-helm-card shadow-xl overflow-hidden">
           {list.map((w) => (
             <button key={w.workspace_id} onClick={() => switchWs(w.workspace_id)}
               data-testid={`ws-option-${w.workspace_id}`}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/5">
-              <span className="flex-1 min-w-0 text-xs text-white truncate">{w.name}</span>
-              {w.active && <Check className="w-3.5 h-3.5 text-gold" />}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-helm-fg/5">
+              <span className="flex-1 min-w-0 text-xs text-helm-fg truncate">{w.name}</span>
+              {w.active && <Check className="w-3.5 h-3.5 text-helm-gold" />}
             </button>
           ))}
           <button onClick={create} data-testid="ws-create-btn"
-            className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-white/5 transition-colors hover:bg-white/5 text-gold">
+            className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-helm-line transition-colors hover:bg-helm-fg/5 text-helm-gold">
             <Plus className="w-3.5 h-3.5" /><span className="text-xs">New company</span>
           </button>
         </div>
@@ -122,8 +122,8 @@ function SidebarContent({ onNavigate, billingEnforced }) {
             <span className="font-mono text-helm-gold text-sm font-medium">H</span>
           </div>
           <div>
-            <p className="text-white text-[15px] font-semibold leading-none tracking-tight">Helm</p>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 mt-1">Company cockpit</p>
+            <p className="text-helm-fg text-[15px] font-semibold leading-none tracking-tight">Helm</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-helm-muted mt-1">Company cockpit</p>
           </div>
         </div>
       </div>
@@ -142,15 +142,15 @@ function SidebarContent({ onNavigate, billingEnforced }) {
               cn(
                 "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
                 isActive
-                  ? "bg-gold/[0.08] text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
+                  ? "bg-helm-gold/[0.08] text-helm-fg"
+                  : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
               )
             }
           >
             {({ isActive }) => (
               <>
-                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-gold" />}
-                <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-gold" : "text-zinc-500 group-hover:text-zinc-300")} />
+                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-helm-gold" />}
+                <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
                 <span className="truncate">{item.label}</span>
               </>
             )}
@@ -158,8 +158,8 @@ function SidebarContent({ onNavigate, billingEnforced }) {
         ))}
 
         {deptNav.length > 0 && (
-          <div className="pt-3 mt-2 border-t border-white/5">
-            <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-600">Departments</p>
+          <div className="pt-3 mt-2 border-t border-helm-line">
+            <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
             {deptNav.map((dept) => {
               const Icon = departmentIcon(dept.icon);
               const to = departmentNavTo(dept.type);
@@ -173,15 +173,15 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                     cn(
                       "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
                       isActive
-                        ? "bg-gold/[0.08] text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
+                        ? "bg-helm-gold/[0.08] text-helm-fg"
+                        : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
                     )
                   }
                 >
                   {({ isActive }) => (
                     <>
-                      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-gold" />}
-                      <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-gold" : "text-zinc-500 group-hover:text-zinc-300")} />
+                      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-helm-gold" />}
+                      <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
                       <span className="truncate">{dept.name}</span>
                     </>
                   )}
@@ -195,36 +195,36 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       <div className="px-3 pb-4">
         <div className="flex items-center gap-3 rounded-md px-2 py-2">
           {user?.picture ? (
-            <img src={user.picture} alt="" className="w-8 h-8 rounded-full object-cover border border-white/10" />
+            <img src={user.picture} alt="" className="w-8 h-8 rounded-full object-cover border border-helm-line" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-white">
+            <div className="w-8 h-8 rounded-full bg-helm-fg/10 flex items-center justify-center text-xs text-helm-fg">
               {user?.name?.[0] || "C"}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-white truncate">{user?.name || "CEO"}</p>
+            <p className="text-xs text-helm-fg truncate">{user?.name || "CEO"}</p>
             {(user?.perms || []).includes("billing:manage") ? (
               <button
                 type="button"
                 data-testid="sidebar-billing-link"
                 onClick={() => { navigate("/app/billing"); onNavigate?.(); }}
-                className="text-[10px] text-zinc-600 truncate hover:text-gold transition-colors text-left"
+                className="text-[10px] text-helm-muted truncate hover:text-helm-gold transition-colors text-left"
               >
                 {helmPlanLabel(company?.plan, isPro, billingEnforced)} · Billing
               </button>
             ) : (
-              <p className="text-[10px] text-zinc-600 truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
+              <p className="text-[10px] text-helm-muted truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
             )}
           </div>
           <button
             data-testid="settings-link"
             onClick={() => { navigate("/app/settings"); onNavigate?.(); }}
-            className="text-zinc-500 hover:text-white transition-colors text-[10px] font-mono uppercase tracking-wide"
+            className="text-helm-muted hover:text-helm-fg transition-colors text-[10px] font-mono uppercase tracking-wide"
             title="Settings"
           >
             Settings
           </button>
-          <button data-testid="logout-btn" onClick={logout} className="text-zinc-500 hover:text-white transition-colors">
+          <button data-testid="logout-btn" onClick={logout} className="text-helm-muted hover:text-helm-fg transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
@@ -257,8 +257,8 @@ export default function AppLayout() {
   return (
     <div className="app-shell min-h-screen">
       {pastDue && (
-        <div className="lg:pl-[260px] bg-amber-500/10 border-b border-amber-500/30 px-5 py-2.5 text-center text-sm text-amber-200" data-testid="global-past-due-banner">
-          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-amber-100">update billing</button> to keep Helm access.
+        <div className="lg:pl-[260px] bg-helm-status-warning/10 border-b border-helm-status-warning/30 px-5 py-2.5 text-center text-sm text-helm-status-warning" data-testid="global-past-due-banner">
+          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
         </div>
       )}
       {/* Desktop sidebar */}
@@ -281,9 +281,9 @@ export default function AppLayout() {
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setMobileOpen(false)} />
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setMobileOpen(false)} />
           <div className="absolute inset-y-0 left-0 w-[280px] bg-helm-bg border-r border-helm-line">
-            <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 text-zinc-400 z-10">
+            <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 text-helm-muted z-10">
               <X className="w-5 h-5" />
             </button>
             <SidebarContent onNavigate={() => setMobileOpen(false)} billingEnforced={billingEnforced} />

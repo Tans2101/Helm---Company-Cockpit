@@ -168,6 +168,8 @@ html[data-theme="light"] .app-shell.grain::before {
   display: none;
 }
 
+/* Light-theme remaps. Zinc / bare-gold selectors are a safety net if any stray
+   pre-token class remains; in-app pages now use helm-* tokens. */
 html[data-theme="light"] .app-shell .text-white,
 html[data-theme="light"] .app-shell [class*="text-white/"],
 html[data-theme="light"] .app-shell .text-zinc-50,
@@ -195,7 +197,9 @@ html[data-theme="light"] .app-shell .text-helm-gold {
 }
 
 html[data-theme="light"] .app-shell .bg-gold .text-helm-navy,
-html[data-theme="light"] .app-shell button.bg-gold {
+html[data-theme="light"] .app-shell .bg-helm-gold .text-helm-navy,
+html[data-theme="light"] .app-shell button.bg-gold,
+html[data-theme="light"] .app-shell button.bg-helm-gold {
   color: var(--helm-navy) !important;
 }
 
@@ -238,13 +242,16 @@ html[data-theme="light"] .app-shell [class*="hover:bg-white"]:hover {
 }
 
 /* Primary gold fills become gold-outline + navy type so gold is not a large fill */
-html[data-theme="light"] .app-shell .bg-gold {
+html[data-theme="light"] .app-shell .bg-gold,
+html[data-theme="light"] .app-shell .bg-helm-gold {
   background-color: var(--helm-card) !important;
   color: var(--helm-navy) !important;
   box-shadow: inset 0 0 0 1px var(--helm-gold);
 }
 html[data-theme="light"] .app-shell .bg-gold:hover,
-html[data-theme="light"] .app-shell .hover\:bg-gold-hover:hover {
+html[data-theme="light"] .app-shell .bg-helm-gold:hover,
+html[data-theme="light"] .app-shell .hover\:bg-gold-hover:hover,
+html[data-theme="light"] .app-shell .hover\:bg-helm-gold-hover:hover {
   background-color: color-mix(in srgb, var(--helm-gold) 16%, var(--helm-card)) !important;
   color: var(--helm-navy) !important;
 }

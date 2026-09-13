@@ -8,9 +8,9 @@ import { PageHeader, GlassCard, LoadingScreen, ErrorScreen, EmptyState } from "@
 import { cn } from "@/lib/utils";
 
 const priorityStyle = {
-  High: "text-rose-400 bg-rose-400/10",
-  Medium: "text-amber-400 bg-amber-400/10",
-  Low: "text-zinc-400 bg-white/5",
+  High: "text-helm-status-negative bg-helm-status-negative/10",
+  Medium: "text-helm-status-warning bg-helm-status-warning/10",
+  Low: "text-helm-muted bg-helm-fg/5",
 };
 
 const emptyTask = () => ({ title: "", priority: "Medium", tag: "General", due: "", assignee_user_id: "" });
@@ -124,7 +124,7 @@ export default function Tasks() {
 
   const action = canCreate ? (
     <button data-testid="new-task-btn" onClick={() => { setForm(emptyTask()); setShowForm(true); }}
-      className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 transition-colors hover:bg-gold-hover">
+      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover">
       <Plus className="w-4 h-4" /> New task
     </button>
   ) : null;
@@ -138,9 +138,9 @@ export default function Tasks() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => onDrop(col.id)}
             data-testid={`column-${col.id}`}
-            className="rounded-xl border border-white/5 bg-white/[0.015] p-3 min-h-[200px]">
+            className="rounded-xl border border-helm-line bg-helm-fg/[0.015] p-3 min-h-[200px]">
             <div className="flex items-center justify-between gap-2 px-1 mb-3">
-              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-400">{col.name}</span>
+              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-helm-muted">{col.name}</span>
               <div className="flex items-center gap-2">
                 {col.id === "done" && items.length > 0 && (
                   <button
@@ -148,12 +148,12 @@ export default function Tasks() {
                     data-testid="clear-done-tasks-btn"
                     onClick={clearDone}
                     disabled={clearingDone}
-                    className="text-[10px] font-medium text-zinc-500 hover:text-helm-fg transition-colors disabled:opacity-60"
+                    className="text-[10px] font-medium text-helm-muted hover:text-helm-fg transition-colors disabled:opacity-60"
                   >
                     {clearingDone ? "Clearing…" : "Clear finished tasks"}
                   </button>
                 )}
-                <span className="font-mono text-xs text-zinc-600">{items.length}</span>
+                <span className="font-mono text-xs text-helm-muted">{items.length}</span>
               </div>
             </div>
             <div className="space-y-2">
@@ -165,27 +165,27 @@ export default function Tasks() {
                   onDragStart={() => setDragId(t.id)}
                   data-testid={`task-${t.id}`}
                   className={cn(
-                    "group rounded-lg border border-white/5 bg-helm-card p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-gold/30",
-                    mine && "border-l-2 border-l-gold/60",
-                    focusTaskId === t.id && "ring-1 ring-gold/50 border-gold/40",
+                    "group rounded-lg border border-helm-line bg-helm-card p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-helm-gold/30",
+                    mine && "border-l-2 border-l-helm-gold/60",
+                    focusTaskId === t.id && "ring-1 ring-helm-gold/50 border-helm-gold/40",
                   )}>
                   <div className="flex items-start gap-2">
-                    <GripVertical className="w-3.5 h-3.5 text-zinc-700 mt-0.5 group-hover:text-zinc-500" />
+                    <GripVertical className="w-3.5 h-3.5 text-helm-muted mt-0.5 group-hover:text-helm-muted" />
                     <div className="flex-1">
-                      <p className="text-sm text-white leading-snug">{t.title}</p>
+                      <p className="text-sm text-helm-fg leading-snug">{t.title}</p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", priorityStyle[t.priority])}>{t.priority}</span>
-                        <span className="text-[10px] font-mono text-zinc-600">{t.tag}</span>
-                        {t.due && <span className="text-[10px] font-mono text-zinc-600 ml-auto">{t.due}</span>}
+                        <span className="text-[10px] font-mono text-helm-muted">{t.tag}</span>
+                        {t.due && <span className="text-[10px] font-mono text-helm-muted ml-auto">{t.due}</span>}
                       </div>
                       {t.progress > 0 && t.progress < 100 && (
-                        <div className="mt-2 h-1 rounded-full bg-white/5 overflow-hidden">
-                          <div className="h-full bg-gold/70 rounded-full" style={{ width: `${t.progress}%` }} />
+                        <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden">
+                          <div className="h-full bg-helm-gold/70 rounded-full" style={{ width: `${t.progress}%` }} />
                         </div>
                       )}
                       <div className="flex items-center gap-1.5 mt-2">
-                        <span className="w-4 h-4 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center text-[9px] text-gold">{(t.assignee || "?")[0]}</span>
-                        <span className="text-[11px] text-zinc-500">{t.assignee}{mine && " · you"}</span>
+                        <span className="w-4 h-4 rounded-full bg-helm-gold/20 border border-helm-gold/30 flex items-center justify-center text-[9px] text-helm-gold">{(t.assignee || "?")[0]}</span>
+                        <span className="text-[11px] text-helm-muted">{t.assignee}{mine && " · you"}</span>
                       </div>
                     </div>
                   </div>
@@ -204,39 +204,39 @@ export default function Tasks() {
       <PageHeader title="Tasks" subtitle="Delegate, track and sync work across your team. Drag cards across the board — your tasks are marked in gold." action={action} />
       {data.items.length === 0 ? (
         <EmptyState title="No tasks yet" body="Create the first task, or assign work to a teammate."
-          action={canCreate ? <button data-testid="empty-new-task-btn" onClick={() => { setForm(emptyTask()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-4 py-2 hover:bg-gold-hover"><Plus className="w-4 h-4" /> New task</button> : null} />
+          action={canCreate ? <button data-testid="empty-new-task-btn" onClick={() => { setForm(emptyTask()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> New task</button> : null} />
       ) : board}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/70" onClick={() => setShowForm(false)} />
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setShowForm(false)} />
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="task-form">
-            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-white font-light">New task</h3><button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
-            <label className="text-xs text-zinc-500 block">Title
-              <input data-testid="task-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="What needs doing?" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+            <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-helm-fg font-light">New task</h3><button onClick={() => setShowForm(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button></div>
+            <label className="text-xs text-helm-muted block">Title
+              <input data-testid="task-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="What needs doing?" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
             </label>
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <label className="text-xs text-zinc-500">Priority
-                <select data-testid="task-priority" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+              <label className="text-xs text-helm-muted">Priority
+                <select data-testid="task-priority" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40">
                   {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-zinc-500">Due date
-                <input data-testid="task-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-helm-muted">Due date
+                <input data-testid="task-due" type="date" value={form.due} onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
-              <label className="text-xs text-zinc-500 col-span-2">Tag
-                <input data-testid="task-tag" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} placeholder="Growth" className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40" />
+              <label className="text-xs text-helm-muted col-span-2">Tag
+                <input data-testid="task-tag" value={form.tag} onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))} placeholder="Growth" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
               {canAssign && (
-                <label className="text-xs text-zinc-500 col-span-2">Assign to
-                  <select data-testid="task-assignee" value={form.assignee_user_id} onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))} className="mt-1 w-full rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2 focus:outline-none focus:border-gold/40">
+                <label className="text-xs text-helm-muted col-span-2">Assign to
+                  <select data-testid="task-assignee" value={form.assignee_user_id} onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40">
                     <option value="">Myself</option>
                     {assignableMembers.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.email}</option>)}
                   </select>
                 </label>
               )}
             </div>
-            <button data-testid="save-task-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-gold text-black font-medium py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60">{busy ? "Creating…" : "Create task"}</button>
+            <button data-testid="save-task-btn" onClick={submit} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Creating…" : "Create task"}</button>
           </GlassCard>
         </div>
       )}

@@ -21,10 +21,10 @@ export const clerkAppearance = {
     headerTitle: "text-helm-cream font-normal tracking-tight",
     headerSubtitle: "text-helm-slate",
     socialButtonsBlockButton:
-      "bg-helm-gold text-helm-navy font-medium border-0 hover:bg-gold-hover",
+      "bg-helm-gold text-helm-navy font-medium border-0 hover:bg-helm-gold-hover",
     socialButtonsBlockButtonText: "text-helm-navy font-medium",
-    formButtonPrimary: "bg-helm-gold text-helm-navy font-medium hover:bg-gold-hover",
-    footerActionLink: "text-helm-gold hover:text-gold-hover",
+    formButtonPrimary: "bg-helm-gold text-helm-navy font-medium hover:bg-helm-gold-hover",
+    footerActionLink: "text-helm-gold hover:text-helm-gold-hover",
     identityPreviewEditButton: "text-helm-gold",
     formFieldLabel: "text-helm-slate",
     formFieldInput:
@@ -36,10 +36,10 @@ export const clerkAppearance = {
     otpCodeFieldInput:
       "bg-helm-ink-card border border-helm-cream/20 text-helm-cream text-lg font-mono caret-helm-gold",
     otpCodeFieldInput__input: "text-helm-cream bg-helm-ink-card",
-    formResendCodeLink: "text-helm-gold hover:text-gold-hover",
+    formResendCodeLink: "text-helm-gold hover:text-helm-gold-hover",
     dividerLine: "bg-helm-cream/10",
     dividerText: "text-helm-slate",
     alertText: "text-helm-cream",
-    formFieldErrorText: "text-rose-400",
+    formFieldErrorText: "text-helm-status-negative",
   },
 };

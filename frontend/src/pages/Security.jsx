@@ -235,7 +235,7 @@ export default function Security() {
               </p>
             </div>
 
-            <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-helm-cream/[0.07] bg-white/[0.07] md:grid-cols-2">
+            <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-helm-cream/[0.07] bg-helm-fg/[0.07] md:grid-cols-2">
               {CONTROLS.map(({ icon: Icon, title, body }, index) => (
                 <motion.article
                   key={title}
@@ -273,7 +273,7 @@ export default function Security() {
 
             <ul className="grid gap-3 sm:grid-cols-2">
               {PRACTICES.map((practice) => (
-                <li key={practice} className="flex gap-3 rounded-xl border border-helm-cream/[0.06] bg-white/[0.02] p-4">
+                <li key={practice} className="flex gap-3 rounded-xl border border-helm-cream/[0.06] bg-helm-fg/[0.02] p-4">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-helm-gold/10">
                     <Check className="h-3 w-3 text-helm-gold" />
                   </span>
@@ -323,7 +323,7 @@ export default function Security() {
               <button
                 type="button"
                 onClick={enter}
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-helm-gold px-6 py-3 text-sm font-medium text-helm-navy transition-colors hover:bg-gold-hover"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-helm-gold px-6 py-3 text-sm font-medium text-helm-navy transition-colors hover:bg-helm-gold-hover"
               >
                 {authed ? "Open your cockpit" : "Get started securely"}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

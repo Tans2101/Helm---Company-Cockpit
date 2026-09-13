@@ -123,14 +123,14 @@ export default function Billing() {
 
     if (isCurrent) {
       return (
-        <div className="text-center text-xs font-mono uppercase tracking-wide text-gold border border-gold/30 bg-gold/10 rounded-md py-2.5">
+        <div className="text-center text-xs font-mono uppercase tracking-wide text-helm-gold border border-helm-gold/30 bg-helm-gold/10 rounded-md py-2.5">
           {isPaid ? "Current plan" : "On Free"}
         </div>
       );
     }
     if (pendingPlan === plan.id) {
       return (
-        <div className="text-center text-[11px] text-zinc-400 border border-white/10 rounded-md py-2.5 px-2">
+        <div className="text-center text-[11px] text-helm-muted border border-helm-line rounded-md py-2.5 px-2">
           Scheduled — takes effect next billing period
         </div>
       );
@@ -142,7 +142,7 @@ export default function Billing() {
           data-testid={`upgrade-${plan.id}`}
           onClick={() => activatePaddle(plan.id)}
           disabled={!!busy || plan.checkout_available === false}
-          className="w-full bg-gold text-black font-medium rounded-md py-2.5 text-sm transition-colors hover:bg-gold-hover disabled:opacity-60"
+          className="w-full bg-helm-gold text-helm-navy font-medium rounded-md py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60"
         >
           {busy === plan.id
             ? "Starting…"
@@ -161,7 +161,7 @@ export default function Billing() {
         data-testid={`downgrade-${plan.id}`}
         onClick={() => scheduleDowngrade(plan.id)}
         disabled={!!busy}
-        className="w-full border border-white/10 text-zinc-300 font-medium rounded-md py-2.5 text-sm hover:bg-white/5 disabled:opacity-60"
+        className="w-full border border-helm-line text-helm-fg font-medium rounded-md py-2.5 text-sm hover:bg-helm-fg/5 disabled:opacity-60"
       >
         {busy === `down-${plan.id}` ? "Scheduling…" : `Downgrade at period end`}
       </button>
@@ -170,18 +170,18 @@ export default function Billing() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-white mb-6 transition-colors" data-testid="billing-back">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-helm-muted hover:text-helm-fg mb-6 transition-colors" data-testid="billing-back">
         <ArrowLeft className="w-4 h-4" /> Back
       </button>
 
       {pastDue && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200" data-testid="past-due-banner">
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-helm-status-warning/30 bg-helm-status-warning/10 px-4 py-3 text-sm text-helm-status-warning" data-testid="past-due-banner">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-medium text-amber-100">Payment past due</p>
-            <p className="text-amber-200/80 mt-0.5">Update your payment method to keep paid features.</p>
+            <p className="font-medium text-helm-status-warning">Payment past due</p>
+            <p className="text-helm-status-warning/80 mt-0.5">Update your payment method to keep paid features.</p>
             {data.portal_available && (
-              <button onClick={openPortal} disabled={!!busy} className="mt-2 text-xs font-medium text-amber-100 underline hover:no-underline">
+              <button onClick={openPortal} disabled={!!busy} className="mt-2 text-xs font-medium text-helm-status-warning underline hover:no-underline">
                 Manage billing
               </button>
             )}
@@ -190,14 +190,14 @@ export default function Billing() {
       )}
 
       {trialing && (
-        <div className="mb-6 rounded-lg border border-gold/25 bg-gold/10 px-4 py-3 text-sm text-gold" data-testid="trialing-banner">
+        <div className="mb-6 rounded-lg border border-helm-gold/25 bg-helm-gold/10 px-4 py-3 text-sm text-helm-gold" data-testid="trialing-banner">
           You’re on a free trial — cancel anytime before it ends to avoid being charged.
         </div>
       )}
 
       {pendingPlan && (
-        <div className="mb-6 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300" data-testid="pending-downgrade-banner">
-          Downgrade to <span className="text-white">{pendingPlan}</span> is scheduled
+        <div className="mb-6 rounded-lg border border-helm-line bg-helm-fg/[0.03] px-4 py-3 text-sm text-helm-fg" data-testid="pending-downgrade-banner">
+          Downgrade to <span className="text-helm-fg">{pendingPlan}</span> is scheduled
           {data.pending_plan_effective_at
             ? ` for ${new Date(data.pending_plan_effective_at).toLocaleDateString()}`
             : " for the end of this billing period"}
@@ -206,9 +206,9 @@ export default function Billing() {
       )}
 
       {!billingEnforced && (
-        <div className="mb-6 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200" data-testid="billing-standby-banner">
-          <p className="font-medium text-emerald-100">Billing is paused</p>
-          <p className="text-emerald-200/80 mt-0.5">
+        <div className="mb-6 rounded-lg border border-helm-status-positive/25 bg-helm-status-positive/10 px-4 py-3 text-sm text-helm-status-positive" data-testid="billing-standby-banner">
+          <p className="font-medium text-helm-status-positive">Billing is paused</p>
+          <p className="text-helm-status-positive/80 mt-0.5">
             Feature gates are open while you build. Set <code className="font-mono text-xs">BILLING_ENFORCED=true</code> when ready.
             Configure <code className="font-mono text-xs">PADDLE_PRICE_ID_STARTER</code>, <code className="font-mono text-xs">PADDLE_PRICE_ID_GROWTH</code>, and <code className="font-mono text-xs">PADDLE_PRICE_ID_BUSINESS</code>.
           </p>
@@ -216,10 +216,10 @@ export default function Billing() {
       )}
 
       <div className="text-center mb-8 fade-up">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Pricing</p>
-        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-white">Choose your Helm plan</h1>
-        <p className="text-zinc-500 mt-3">
-          Paid plans include a <span className="text-zinc-300">7-day free trial</span>. Downgrades take effect next billing cycle.
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Pricing</p>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Choose your Helm plan</h1>
+        <p className="text-helm-muted mt-3">
+          Paid plans include a <span className="text-helm-fg">7-day free trial</span>. Downgrades take effect next billing cycle.
         </p>
       </div>
 
@@ -230,7 +230,7 @@ export default function Billing() {
             <SectionLabel>
               {data.ai_extracts_kind === "lifetime" ? "Free AI extracts (one-time)" : "Usage this billing period"}
             </SectionLabel>
-            <p className="text-sm text-zinc-400 mt-1">
+            <p className="text-sm text-helm-muted mt-1">
               {data.ai_extracts_kind === "lifetime"
                 ? `${extractsUsed} of ${extractsLimit} free AI extracts used — then upgrade to continue`
                 : extractsLimit > 0
@@ -240,14 +240,14 @@ export default function Billing() {
                     : "No document upload quota on this plan"}
             </p>
           </div>
-          <p className="text-xs font-mono text-zinc-600">
+          <p className="text-xs font-mono text-helm-muted">
             Seats {data.seats_used ?? 0}/{data.seats_limit ?? "—"}
           </p>
         </div>
         {extractsLimit > 0 && (
-          <div className="h-2 rounded-full bg-white/5 overflow-hidden" data-testid="usage-bar">
+          <div className="h-2 rounded-full bg-helm-fg/5 overflow-hidden" data-testid="usage-bar">
             <div
-              className={cn("h-full rounded-full transition-all", extractPct >= 100 ? "bg-rose-500" : extractPct >= 80 ? "bg-amber-500" : "bg-gold")}
+              className={cn("h-full rounded-full transition-all", extractPct >= 100 ? "bg-helm-status-negative" : extractPct >= 80 ? "bg-helm-status-warning" : "bg-helm-gold")}
               style={{ width: `${extractPct}%` }}
             />
           </div>
@@ -265,31 +265,31 @@ export default function Billing() {
               glow={highlighted && !isCurrent}
               className={cn(
                 "p-5 fade-up flex flex-col",
-                isCurrent && "border-gold/40",
-                highlighted && !isCurrent && "border-gold/25",
+                isCurrent && "border-helm-gold/40",
+                highlighted && !isCurrent && "border-helm-gold/25",
               )}
               data-testid={`plan-card-${plan.id}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel>{plan.label}</SectionLabel>
                 {isCurrent && (
-                  <span className="text-[10px] font-mono uppercase tracking-wide text-gold bg-gold/10 border border-gold/30 rounded px-1.5 py-0.5">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-gold bg-helm-gold/10 border border-helm-gold/30 rounded px-1.5 py-0.5">
                     Current
                   </span>
                 )}
               </div>
-              <p className="font-mono text-3xl text-white mt-3">
+              <p className="font-mono text-3xl text-helm-fg mt-3">
                 {price === 0 ? "$0" : `$${price}`}
-                <span className="text-sm text-zinc-600">{price === 0 ? "" : "/mo"}</span>
+                <span className="text-sm text-helm-muted">{price === 0 ? "" : "/mo"}</span>
               </p>
-              <p className="text-xs text-zinc-500 mt-1 min-h-[2.5rem]">{plan.for}</p>
+              <p className="text-xs text-helm-muted mt-1 min-h-[2.5rem]">{plan.for}</p>
               {plan.id !== "free" && (plan.trial_days || 7) > 0 && (
-                <p className="text-[11px] text-gold/80 font-mono mt-1">{plan.trial_days || 7}-day free trial</p>
+                <p className="text-[11px] text-helm-gold/80 font-mono mt-1">{plan.trial_days || 7}-day free trial</p>
               )}
               <ul className="mt-4 space-y-2 flex-1">
                 {(plan.includes || []).map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-zinc-300">
-                    <Check className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" /> {f}
+                  <li key={f} className="flex items-start gap-2 text-xs text-helm-fg">
+                    <Check className="w-3.5 h-3.5 text-helm-gold shrink-0 mt-0.5" /> {f}
                   </li>
                 ))}
               </ul>
@@ -304,30 +304,30 @@ export default function Billing() {
           data-testid="manage-billing-btn"
           onClick={openPortal}
           disabled={!!busy}
-          className="w-full max-w-md mx-auto flex items-center justify-center gap-2 border border-white/10 text-zinc-300 rounded-md py-2.5 text-sm hover:bg-white/5 transition-colors disabled:opacity-60 mb-4"
+          className="w-full max-w-md mx-auto flex items-center justify-center gap-2 border border-helm-line text-helm-fg rounded-md py-2.5 text-sm hover:bg-helm-fg/5 transition-colors disabled:opacity-60 mb-4"
         >
           <ExternalLink className="w-4 h-4" /> Manage billing in Paddle
         </button>
       )}
 
       {data.demo_reset_enabled && currentPlan !== "free" && (
-        <button onClick={resetDemo} data-testid="reset-demo-btn" className="w-full max-w-md mx-auto block border border-white/10 text-zinc-500 rounded-md py-2.5 text-sm hover:bg-white/5 transition-colors mb-4">
+        <button onClick={resetDemo} data-testid="reset-demo-btn" className="w-full max-w-md mx-auto block border border-helm-line text-helm-muted rounded-md py-2.5 text-sm hover:bg-helm-fg/5 transition-colors mb-4">
           Revert to Free (demo)
         </button>
       )}
 
-      <p className="text-center text-[11px] text-zinc-600 mt-6 leading-relaxed max-w-xl mx-auto">
+      <p className="text-center text-[11px] text-helm-muted mt-6 leading-relaxed max-w-xl mx-auto">
         Payments by Paddle (Merchant of Record). Upgrades via checkout; downgrades take effect at period end (no mid-cycle refunds).{" "}
-        <Link to="/terms" className="text-zinc-500 hover:text-zinc-300 transition-colors">Terms</Link>
+        <Link to="/terms" className="text-helm-muted hover:text-helm-fg transition-colors">Terms</Link>
         {" · "}
-        <Link to="/privacy" className="text-zinc-500 hover:text-zinc-300 transition-colors">Privacy</Link>
+        <Link to="/privacy" className="text-helm-muted hover:text-helm-fg transition-colors">Privacy</Link>
         {" · "}
-        <Link to="/security" className="text-zinc-500 hover:text-zinc-300 transition-colors">Security</Link>
+        <Link to="/security" className="text-helm-muted hover:text-helm-fg transition-colors">Security</Link>
         {" · "}
-        <Link to="/refunds" className="text-zinc-500 hover:text-zinc-300 transition-colors">Refunds</Link>
+        <Link to="/refunds" className="text-helm-muted hover:text-helm-fg transition-colors">Refunds</Link>
       </p>
-      <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-600 mt-3">
-        <ShieldCheck className="w-3.5 h-3.5 text-gold/70" /> Secure checkout by Paddle
+      <div className="flex items-center justify-center gap-1.5 text-[11px] text-helm-muted mt-3">
+        <ShieldCheck className="w-3.5 h-3.5 text-helm-gold/70" /> Secure checkout by Paddle
       </div>
     </div>
   );

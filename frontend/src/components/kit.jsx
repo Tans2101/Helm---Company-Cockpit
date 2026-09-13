@@ -36,14 +36,14 @@ export function SectionLabel({ children, className }) {
 }
 
 const toneColor = {
-  positive: "text-emerald-400",
-  negative: "text-rose-400",
-  neutral: "text-zinc-400",
+  positive: "text-helm-status-positive",
+  negative: "text-helm-status-negative",
+  neutral: "text-helm-muted",
 };
 
 export function Delta({ value, tone, invert }) {
   if (value === 0 || value === undefined || value === null) {
-    return <span className="text-zinc-500 font-mono text-xs">—</span>;
+    return <span className="text-helm-muted font-mono text-xs">—</span>;
   }
   const up = value > 0;
   const effectiveTone = tone || (up ? "positive" : "negative");
@@ -56,21 +56,21 @@ export function Delta({ value, tone, invert }) {
 
 export function ProBadge({ className }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-gold", className)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full border border-helm-gold/40 bg-helm-gold/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-helm-gold", className)}>
       Active
     </span>
   );
 }
 
 export function Spinner({ className }) {
-  return <div className={cn("w-5 h-5 rounded-full border-2 border-gold/30 border-t-gold animate-spin", className)} />;
+  return <div className={cn("w-5 h-5 rounded-full border-2 border-helm-gold/30 border-t-helm-gold animate-spin", className)} />;
 }
 
 export function LoadingScreen({ label = "Loading" }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-32">
       <Spinner className="w-6 h-6 mb-4" />
-      <p className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-600">{label}</p>
+      <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-muted">{label}</p>
     </div>
   );
 }
@@ -78,13 +78,13 @@ export function LoadingScreen({ label = "Loading" }) {
 export function ErrorScreen({ label = "Something went wrong", message, onRetry }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-32 px-6 text-center">
-      <p className="font-mono text-xs uppercase tracking-[0.25em] text-rose-400/80 mb-3">{label}</p>
-      <p className="text-sm text-zinc-400 max-w-md leading-relaxed">{message}</p>
+      <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-status-negative/80 mb-3">{label}</p>
+      <p className="text-sm text-helm-muted max-w-md leading-relaxed">{message}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-6 rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 transition-colors hover:border-gold/30 hover:text-white"
+          className="mt-6 rounded-md border border-helm-line bg-helm-fg/5 px-4 py-2 text-sm text-helm-fg transition-colors hover:border-helm-gold/30 hover:text-helm-fg"
         >
           Try again
         </button>

@@ -9,11 +9,11 @@ import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 import { timeGreeting } from "@/lib/greeting";
 
-const toneDot = { positive: "bg-emerald-500", negative: "bg-rose-500", neutral: "bg-zinc-400" };
+const toneDot = { positive: "bg-helm-status-positive", negative: "bg-helm-status-negative", neutral: "bg-helm-muted" };
 
 function BriefLabel({ children, className }) {
   return (
-    <h2 className={cn("text-sm font-medium tracking-tight text-zinc-300", className)}>
+    <h2 className={cn("text-sm font-medium tracking-tight text-helm-fg", className)}>
       {children}
     </h2>
   );
@@ -90,22 +90,22 @@ export default function Briefing() {
   return (
     <div className="max-w-5xl">
       <header className="mb-8 fade-up">
-        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 mb-3">
+        <p className="text-xs uppercase tracking-[0.18em] text-helm-muted mb-3">
           {data.date} · {briefingLabel}
         </p>
-        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-white">{greeting}.</h1>
-        <p className="text-zinc-400 mt-3 max-w-2xl text-base leading-relaxed">{data.headline}</p>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">{greeting}.</h1>
+        <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">{data.headline}</p>
       </header>
 
       {checklist && !checklist.complete && (
-        <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-helm-card p-5" data-testid="onboarding-checklist">
+        <section className="mb-6 fade-up rounded-xl border border-helm-fg/[0.08] bg-helm-card p-5" data-testid="onboarding-checklist">
           <div className="flex items-center gap-3 mb-4">
             <BriefLabel>Finish setting up</BriefLabel>
-            <span className="ml-auto text-xs text-zinc-500 tabular-nums">{doneCount}/{stepCount}</span>
+            <span className="ml-auto text-xs text-helm-muted tabular-nums">{doneCount}/{stepCount}</span>
           </div>
-          <div className="h-1 rounded-full bg-white/[0.06] mb-4 overflow-hidden">
+          <div className="h-1 rounded-full bg-helm-fg/[0.06] mb-4 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gold/70 transition-all"
+              className="h-full rounded-full bg-helm-gold/70 transition-all"
               style={{ width: stepCount ? `${(doneCount / stepCount) * 100}%` : "0%" }}
             />
           </div>
@@ -118,17 +118,17 @@ export default function Briefing() {
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
                   s.done
-                    ? "border-emerald-500/20 bg-emerald-500/[0.04]"
-                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                    ? "border-helm-status-positive/20 bg-helm-status-positive/[0.04]"
+                    : "border-helm-line bg-helm-fg/[0.02] hover:border-helm-fg/20"
                 )}
               >
                 {s.done
-                  ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  : <Circle className="w-4 h-4 text-zinc-500 shrink-0" />}
-                <span className={cn("text-sm", s.done ? "text-zinc-500 line-through" : "text-zinc-200")}>
+                  ? <CheckCircle2 className="w-4 h-4 text-helm-status-positive shrink-0" />
+                  : <Circle className="w-4 h-4 text-helm-muted shrink-0" />}
+                <span className={cn("text-sm", s.done ? "text-helm-muted line-through" : "text-helm-fg")}>
                   {s.label}
                 </span>
-                {!s.done && <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500 ml-auto shrink-0" />}
+                {!s.done && <ArrowUpRight className="w-3.5 h-3.5 text-helm-muted ml-auto shrink-0" />}
               </button>
             ))}
           </div>
@@ -139,16 +139,16 @@ export default function Briefing() {
         {data.metrics.map((m, i) => (
           <div
             key={m.label}
-            className="rounded-xl border border-white/[0.08] bg-helm-card p-4 fade-up"
+            className="rounded-xl border border-helm-fg/[0.08] bg-helm-card p-4 fade-up"
             style={{ animationDelay: `${i * 60}ms` }}
             data-testid={`briefing-metric-${i}`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-zinc-500">{m.label}</span>
+              <span className="text-xs uppercase tracking-wider text-helm-muted">{m.label}</span>
               <span className={cn("w-1.5 h-1.5 rounded-full", toneDot[m.tone])} />
             </div>
             <div className="mt-3 flex items-end justify-between gap-2">
-              <span className={cn("text-2xl md:text-3xl tabular-nums tracking-tight", m.missing ? "text-zinc-500" : "text-white")}>
+              <span className={cn("text-2xl md:text-3xl tabular-nums tracking-tight", m.missing ? "text-helm-muted" : "text-helm-fg")}>
                 {m.value}
               </span>
               <Delta value={m.delta} tone={m.tone} />
@@ -157,7 +157,7 @@ export default function Briefing() {
         ))}
       </div>
 
-      <section className="mb-6 fade-up rounded-xl border border-white/[0.08] bg-helm-card p-5 md:p-6">
+      <section className="mb-6 fade-up rounded-xl border border-helm-fg/[0.08] bg-helm-card p-5 md:p-6">
         <div className="flex items-center justify-between gap-3 mb-3">
           <BriefLabel>Today&apos;s summary</BriefLabel>
           {data.ai_summary && (
@@ -166,24 +166,24 @@ export default function Briefing() {
               data-testid="generate-briefing-btn"
               onClick={generate}
               disabled={genLoading}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+              className="text-xs text-helm-muted hover:text-helm-fg transition-colors disabled:opacity-50"
             >
               {genLoading ? "Updating…" : "Refresh"}
             </button>
           )}
         </div>
         {data.ai_summary ? (
-          <p className="text-zinc-200 leading-relaxed text-[15px] max-w-3xl">{data.ai_summary}</p>
+          <p className="text-helm-fg leading-relaxed text-[15px] max-w-3xl">{data.ai_summary}</p>
         ) : (
           <div>
-            <p className="text-zinc-500 text-sm mb-4 max-w-xl">
+            <p className="text-helm-muted text-sm mb-4 max-w-xl">
               Pull a short plain-language read of what changed, what needs a decision, and what to watch — from your live company data.
             </p>
             <button
               data-testid="generate-briefing-btn"
               onClick={generate}
               disabled={genLoading}
-              className="inline-flex items-center gap-2 rounded-md bg-gold text-black text-sm font-medium px-4 py-2 transition-colors hover:bg-gold-hover disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2 transition-colors hover:bg-helm-gold-hover disabled:opacity-60"
             >
               {genLoading ? "Writing summary…" : "Write today\u2019s summary"}
               {!genLoading && <Send className="w-3.5 h-3.5" />}
@@ -195,22 +195,22 @@ export default function Briefing() {
       {(data.email_threads?.length > 0 || data.gmail_connected || data.gmail_needs_reconnect) && (
         <GlassCard className="p-5 mb-6 fade-up" data-testid="briefing-email">
           <div className="flex items-center gap-2 mb-4">
-            <Mail className="w-4 h-4 text-zinc-500" />
+            <Mail className="w-4 h-4 text-helm-muted" />
             <BriefLabel>Email</BriefLabel>
             {data.email_threads?.length > 0 && (
-              <span className="text-xs tabular-nums text-zinc-500 ml-auto">{data.email_threads.length}</span>
+              <span className="text-xs tabular-nums text-helm-muted ml-auto">{data.email_threads.length}</span>
             )}
           </div>
           {data.gmail_needs_reconnect && (
-            <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3">
-              <p className="text-sm text-zinc-300 leading-relaxed">
+            <div className="mb-3 rounded-lg border border-helm-status-warning/20 bg-helm-status-warning/[0.04] p-3">
+              <p className="text-sm text-helm-fg leading-relaxed">
                 Google is connected for Calendar. Reconnect once to enable Gmail in your briefing.
               </p>
               <button
                 type="button"
                 data-testid="enable-gmail-btn"
                 onClick={() => navigate("/app/integrations")}
-                className="mt-2 text-xs text-gold hover:text-gold-hover"
+                className="mt-2 text-xs text-helm-gold hover:text-helm-gold-hover"
               >
                 Enable Gmail →
               </button>
@@ -222,12 +222,12 @@ export default function Briefing() {
                 <div
                   key={t.id || i}
                   data-testid={`email-thread-${i}`}
-                  className="rounded-lg border border-white/5 bg-white/[0.02] p-3"
+                  className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm text-white leading-snug truncate">{t.subject}</p>
-                      <p className="text-xs text-zinc-500 mt-1 truncate">
+                      <p className="text-sm text-helm-fg leading-snug truncate">{t.subject}</p>
+                      <p className="text-xs text-helm-muted mt-1 truncate">
                         {t.sender}{t.sender_email ? ` · ${t.sender_email}` : ""}
                       </p>
                     </div>
@@ -235,14 +235,14 @@ export default function Briefing() {
                       href={t.thread_link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-zinc-600 hover:text-zinc-400 shrink-0"
+                      className="text-helm-muted hover:text-helm-muted shrink-0"
                       title="Open in Gmail"
                     >
                       <ArrowUpRight className="w-4 h-4" />
                     </a>
                   </div>
                   {t.snippet && (
-                    <p className="text-xs text-zinc-400 mt-2 leading-relaxed line-clamp-2">{t.snippet}</p>
+                    <p className="text-xs text-helm-muted mt-2 leading-relaxed line-clamp-2">{t.snippet}</p>
                   )}
                   {data.gmail_compose && (
                     <button
@@ -262,7 +262,7 @@ export default function Briefing() {
                           toast.error(e?.response?.data?.detail || "Reconnect Google to create drafts");
                         }
                       }}
-                      className="mt-2 text-xs text-gold hover:text-gold-hover"
+                      className="mt-2 text-xs text-helm-gold hover:text-helm-gold-hover"
                     >
                       Draft reply in Gmail
                     </button>
@@ -271,7 +271,7 @@ export default function Briefing() {
               ))}
             </div>
           ) : data.gmail_connected ? (
-            <p className="text-sm text-zinc-500 leading-relaxed">
+            <p className="text-sm text-helm-muted leading-relaxed">
               No important threads in the last two weeks. Starred or Gmail-important mail will show here.
             </p>
           ) : null}
@@ -283,14 +283,14 @@ export default function Briefing() {
           <BriefLabel className="mb-4">What changed</BriefLabel>
           <div className="space-y-4">
             {data.what_changed.length === 0 && (
-              <p className="text-sm text-zinc-500 leading-relaxed">Nothing new logged yet.</p>
+              <p className="text-sm text-helm-muted leading-relaxed">Nothing new logged yet.</p>
             )}
             {data.what_changed.map((c, i) => (
               <div key={i} className="flex gap-3" data-testid={`changed-${i}`}>
                 <span className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", toneDot[c.tone])} />
                 <div>
-                  <p className="text-sm text-white leading-snug">{c.title}</p>
-                  <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{c.detail}</p>
+                  <p className="text-sm text-helm-fg leading-snug">{c.title}</p>
+                  <p className="text-xs text-helm-muted mt-1 leading-relaxed">{c.detail}</p>
                 </div>
               </div>
             ))}
@@ -300,35 +300,35 @@ export default function Briefing() {
         <GlassCard className="p-5 fade-up">
           <div className="flex items-center justify-between mb-4">
             <BriefLabel>What to decide</BriefLabel>
-            <span className="text-xs tabular-nums text-zinc-500">{data.what_to_decide.length}</span>
+            <span className="text-xs tabular-nums text-helm-muted">{data.what_to_decide.length}</span>
           </div>
           <div className="space-y-3">
             {data.what_to_decide.length === 0 && (
-              <p className="text-sm text-zinc-500 leading-relaxed">No open decisions. Log one when something needs a call.</p>
+              <p className="text-sm text-helm-muted leading-relaxed">No open decisions. Log one when something needs a call.</p>
             )}
             {data.what_to_decide.map((d) => (
               <button
                 key={d.id}
                 onClick={() => navigate("/app/decisions")}
                 data-testid={`decide-${d.id}`}
-                className="w-full text-left rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-white/15 hover:bg-white/[0.04] group"
+                className="w-full text-left rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3 transition-colors hover:border-helm-fg/15 hover:bg-helm-fg/[0.04] group"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm text-white leading-snug">{d.title}</p>
-                  <ArrowUpRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+                  <p className="text-sm text-helm-fg leading-snug">{d.title}</p>
+                  <ArrowUpRight className="w-4 h-4 text-helm-muted group-hover:text-helm-muted shrink-0" />
                 </div>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.detail}</p>
+                <p className="text-xs text-helm-muted mt-1 leading-relaxed">{d.detail}</p>
                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                   <span
                     className={cn(
                       "inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded",
-                      d.urgency === "high" ? "text-rose-400 bg-rose-400/10" : "text-amber-600 bg-amber-400/10"
+                      d.urgency === "high" ? "text-helm-status-negative bg-helm-status-negative/10" : "text-helm-status-warning bg-helm-status-warning/10"
                     )}
                   >
                     {d.urgency} priority
                   </span>
                   {d.source === "ai_suggested" && (
-                    <span className="inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded text-zinc-400 bg-white/[0.04]">
+                    <span className="inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded text-helm-muted bg-helm-fg/[0.04]">
                       Suggested{d.confidence != null ? ` · ${d.confidence}%` : ""}
                     </span>
                   )}
@@ -342,13 +342,13 @@ export default function Briefing() {
           <BriefLabel className="mb-4">What to hand off</BriefLabel>
           <div className="space-y-3">
             {data.what_to_delegate.length === 0 && (
-              <p className="text-sm text-zinc-500 leading-relaxed">No handoffs suggested. Overdue work will show up here.</p>
+              <p className="text-sm text-helm-muted leading-relaxed">No handoffs suggested. Overdue work will show up here.</p>
             )}
             {data.what_to_delegate.map((d, i) => (
-              <div key={d.id || i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`delegate-${d.id || i}`}>
-                <p className="text-sm text-white leading-snug">{d.title}</p>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{d.detail}</p>
-                <div className="flex items-center gap-1.5 mt-2 text-zinc-400">
+              <div key={d.id || i} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`delegate-${d.id || i}`}>
+                <p className="text-sm text-helm-fg leading-snug">{d.title}</p>
+                <p className="text-xs text-helm-muted mt-1 leading-relaxed">{d.detail}</p>
+                <div className="flex items-center gap-1.5 mt-2 text-helm-muted">
                   <UserCheck className="w-3.5 h-3.5" />
                   <span className="text-xs">{d.owner || d.suggested_owner_name}</span>
                 </div>
@@ -358,7 +358,7 @@ export default function Briefing() {
                       data-testid={`assign-delegate-${d.id}`}
                       disabled={delegateBusy === d.id}
                       onClick={() => assignDelegate(d.id)}
-                      className="flex-1 rounded-md bg-gold text-black text-xs font-medium py-1.5 hover:bg-gold-hover disabled:opacity-50"
+                      className="flex-1 rounded-md bg-helm-gold text-helm-navy text-xs font-medium py-1.5 hover:bg-helm-gold-hover disabled:opacity-50"
                     >
                       Assign as task
                     </button>
@@ -366,7 +366,7 @@ export default function Briefing() {
                       data-testid={`dismiss-delegate-${d.id}`}
                       disabled={delegateBusy === d.id}
                       onClick={() => dismissDelegate(d.id)}
-                      className="rounded-md border border-white/10 text-zinc-400 text-xs px-2 py-1.5 hover:bg-white/5 disabled:opacity-50"
+                      className="rounded-md border border-helm-line text-helm-muted text-xs px-2 py-1.5 hover:bg-helm-fg/5 disabled:opacity-50"
                     >
                       Dismiss
                     </button>
@@ -381,23 +381,23 @@ export default function Briefing() {
       {data.team_updates && data.team_updates.length > 0 && (
         <GlassCard className="p-5 mt-4 fade-up" data-testid="briefing-team-updates">
           <div className="flex items-center gap-2 mb-4">
-            <Users className="w-4 h-4 text-zinc-500" />
+            <Users className="w-4 h-4 text-helm-muted" />
             <BriefLabel>Today&apos;s team updates</BriefLabel>
-            <span className="text-xs tabular-nums text-zinc-500 ml-auto">{data.team_updates.length}</span>
+            <span className="text-xs tabular-nums text-helm-muted ml-auto">{data.team_updates.length}</span>
           </div>
           <div className="grid md:grid-cols-2 gap-3">
             {data.team_updates.map((u, i) => (
-              <div key={i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={`team-update-${i}`}>
+              <div key={i} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`team-update-${i}`}>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-white">{u.user_name}</span>
+                  <span className="text-sm text-helm-fg">{u.user_name}</span>
                   {u.blocker && (
-                    <span className="text-[10px] text-amber-600 bg-amber-400/10 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                    <span className="text-[10px] text-helm-status-warning bg-helm-status-warning/10 rounded px-1.5 py-0.5 uppercase tracking-wide">
                       Blocked
                     </span>
                   )}
-                  <span className="text-[10px] text-zinc-500 ml-auto">{u.ago}</span>
+                  <span className="text-[10px] text-helm-muted ml-auto">{u.ago}</span>
                 </div>
-                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">{u.text}</p>
+                <p className="text-xs text-helm-muted mt-1.5 leading-relaxed">{u.text}</p>
               </div>
             ))}
           </div>

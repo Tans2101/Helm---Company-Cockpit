@@ -48,9 +48,9 @@ export default function Refunds() {
             </p>
           </section>
 
-          <section className="rounded-lg border border-helm-cream/10 bg-white/[0.02] p-5">
+          <section className="rounded-lg border border-helm-cream/10 bg-helm-fg/[0.02] p-5">
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">No refunds after payment</h2>
-            <p className="text-zinc-200">
+            <p className="text-helm-fg">
               <span className="text-helm-cream font-medium">Once a payment is processed, it is non-refundable.</span>{" "}
               This includes the first charge after a trial and any subsequent renewal charges. Please use the free trial
               to evaluate Helm before your card is charged. If you believe a charge was made in error (for example a

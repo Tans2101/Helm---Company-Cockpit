@@ -79,7 +79,7 @@ export default function Landing() {
               className="mt-6 text-lg text-helm-slate leading-relaxed max-w-xl">{HERO_SUB}</motion.p>
             <motion.div variants={fade} initial="hidden" animate="show" custom={3} className="mt-9 flex flex-wrap items-center gap-3 relative z-10">
               <button data-testid="hero-cta-btn" onClick={enter} type="button"
-                className="group inline-flex items-center gap-2 rounded-lg bg-helm-gold text-helm-navy font-medium px-6 py-3 transition-colors hover:bg-gold-hover">
+                className="group inline-flex items-center gap-2 rounded-lg bg-helm-gold text-helm-navy font-medium px-6 py-3 transition-colors hover:bg-helm-gold-hover">
                 {authed ? "Open your cockpit" : "Start free"}
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
@@ -227,7 +227,7 @@ export default function Landing() {
                 <button type="button" onClick={enter} data-testid={`pricing-cta-${plan.id}`}
                   className={`mt-8 w-full rounded-lg font-medium py-3 transition-colors ${
                     plan.highlighted
-                      ? "bg-helm-gold text-helm-navy hover:bg-gold-hover"
+                      ? "bg-helm-gold text-helm-navy hover:bg-helm-gold-hover"
                       : "border border-helm-cream/10 text-helm-cream hover:bg-helm-cream/5"
                   }`}>
                   {authed ? "Open cockpit" : plan.id === "free" ? "Get started free" : "Start free trial"}
@@ -254,7 +254,7 @@ export default function Landing() {
           <p className="relative mt-5 text-helm-slate">Quiet control for the CEO everyone&apos;s counting on.</p>
           <div className="relative z-10 mt-9">
             <button data-testid="footer-cta-btn" onClick={enter} type="button"
-              className="group inline-flex items-center gap-2 rounded-lg bg-helm-gold text-helm-navy font-medium px-7 py-3 transition-colors hover:bg-gold-hover">
+              className="group inline-flex items-center gap-2 rounded-lg bg-helm-gold text-helm-navy font-medium px-7 py-3 transition-colors hover:bg-helm-gold-hover">
               {authed ? "Open your cockpit" : "Get started"}
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>

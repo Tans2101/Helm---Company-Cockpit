@@ -32,11 +32,11 @@ export function useClerkMode() {
 function ConfigErrorScreen({ message }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-helm-ink p-8 text-center">
-      <p className="text-lg text-white mb-2">Sign-in configuration problem</p>
-      <p className="text-sm text-rose-400 max-w-md">{message}</p>
+      <p className="text-lg text-helm-fg mb-2">Sign-in configuration problem</p>
+      <p className="text-sm text-helm-status-negative max-w-md">{message}</p>
       <button
         type="button"
-        className="mt-6 text-sm text-gold hover:underline"
+        className="mt-6 text-sm text-helm-gold hover:underline"
         onClick={() => window.location.reload()}
       >
         Retry

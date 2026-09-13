@@ -22,7 +22,7 @@ export default function NotFound() {
           <Link
             to={homeTo}
             data-testid="not-found-home-link"
-            className="inline-flex items-center rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-gold-hover"
+            className="inline-flex items-center rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
           >
             {homeLabel}
           </Link>

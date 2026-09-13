@@ -21,7 +21,7 @@ export default function SignUpPage() {
   if (!clerkEnabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-helm-ink p-8">
-        <p className="text-sm text-rose-400">Sign-up is not available — Clerk is not configured on this deployment.</p>
+        <p className="text-sm text-helm-status-negative">Sign-up is not available — Clerk is not configured on this deployment.</p>
       </div>
     );
   }
@@ -64,7 +64,7 @@ function SignUpClerk() {
         <LoadingScreen label={sessionError ? "Sign-up problem" : "Finishing sign-up"} />
         {sessionError && (
           <div className="mt-6 max-w-md text-center space-y-4">
-            <p className="text-sm text-rose-400">{sessionError}</p>
+            <p className="text-sm text-helm-status-negative">{sessionError}</p>
             <button
               type="button"
               className="text-sm text-helm-gold hover:underline"
@@ -95,7 +95,7 @@ function SignUpClerk() {
             Create your account and set up your workspace. Start on Free, or upgrade anytime — paid plans include a 7-day trial.
           </p>
         </div>
-        <p className="text-xs text-zinc-700">
+        <p className="text-xs text-helm-muted">
           Already have an account?{" "}
           <Link to="/login" className="text-helm-gold hover:underline">Sign in</Link>
         </p>
@@ -124,15 +124,15 @@ function SignUpClerk() {
           </div>
           <p className="mt-4 text-center text-xs text-helm-slate">
             <Link to="/" className="hover:text-helm-slate transition-colors">← Back to home</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
-            <span className="mx-2 text-zinc-700">·</span>
+            <span className="mx-2 text-helm-muted">·</span>
             <Link to="/login" className="hover:text-helm-slate transition-colors">Sign in</Link>
           </p>
         </div>

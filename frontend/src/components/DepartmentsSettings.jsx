@@ -113,11 +113,11 @@ export default function DepartmentsSettings() {
 
   return (
     <GlassCard className="p-5 mb-4 fade-up" data-testid="departments-settings">
-      <div className="flex items-center gap-1.5 mb-2 text-gold">
+      <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
         <Building2 className="w-4 h-4" />
         <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Departments</span>
       </div>
-      <p className="text-sm text-zinc-500 mb-5 leading-relaxed">
+      <p className="text-sm text-helm-muted mb-5 leading-relaxed">
         Enable departments for your company, then assign teammates. Enabled departments appear in the sidebar for members (CEO always sees all enabled).
       </p>
 
@@ -129,14 +129,14 @@ export default function DepartmentsSettings() {
           return (
             <div
               key={dept.type}
-              className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-3"
+              className="rounded-md border border-helm-line bg-helm-fg/[0.02] px-3 py-3"
               data-testid={`dept-row-${dept.type}`}
             >
               <div className="flex items-center gap-3">
-                <Icon className="w-4 h-4 text-zinc-400 shrink-0" />
+                <Icon className="w-4 h-4 text-helm-muted shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{dept.name}</p>
-                  <p className="text-[11px] text-zinc-600 font-mono">{dept.type}</p>
+                  <p className="text-sm text-helm-fg truncate">{dept.name}</p>
+                  <p className="text-[11px] text-helm-muted font-mono">{dept.type}</p>
                 </div>
                 <button
                   type="button"
@@ -147,12 +147,12 @@ export default function DepartmentsSettings() {
                   onClick={() => toggleDept(dept)}
                   className={cn(
                     "relative h-6 w-11 rounded-full transition-colors disabled:opacity-50",
-                    dept.enabled ? "bg-gold/80" : "bg-white/10",
+                    dept.enabled ? "bg-helm-gold/80" : "bg-helm-fg/10",
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+                      "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-helm-card transition-transform",
                       dept.enabled && "translate-x-5",
                     )}
                   />
@@ -160,12 +160,12 @@ export default function DepartmentsSettings() {
               </div>
 
               {dept.enabled && (
-                <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="mt-3 pt-3 border-t border-helm-line">
                   <button
                     type="button"
                     data-testid={`dept-manage-${dept.type}`}
                     onClick={() => toggleExpand(dept)}
-                    className="text-xs text-zinc-400 hover:text-gold transition-colors"
+                    className="text-xs text-helm-muted hover:text-helm-gold transition-colors"
                   >
                     {expanded === dept.department_id ? "Hide members" : "Manage members"}
                   </button>
@@ -173,26 +173,26 @@ export default function DepartmentsSettings() {
                   {expanded === dept.department_id && (
                     <div className="mt-3 space-y-3" data-testid={`dept-members-${dept.type}`}>
                       {(roster[dept.department_id] || []).length === 0 ? (
-                        <p className="text-xs text-zinc-600">No members yet.</p>
+                        <p className="text-xs text-helm-muted">No members yet.</p>
                       ) : (
                         <ul className="space-y-2">
                           {(roster[dept.department_id] || []).map((m) => (
                             <li key={m.user_id} className="flex items-center gap-2 text-sm">
                               {m.picture ? (
-                                <img src={m.picture} alt="" className="w-6 h-6 rounded-full object-cover border border-white/10" />
+                                <img src={m.picture} alt="" className="w-6 h-6 rounded-full object-cover border border-helm-line" />
                               ) : (
-                                <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                                  <User className="w-3 h-3 text-zinc-500" />
+                                <div className="w-6 h-6 rounded-full bg-helm-fg/5 border border-helm-line flex items-center justify-center">
+                                  <User className="w-3 h-3 text-helm-muted" />
                                 </div>
                               )}
-                              <span className="flex-1 truncate text-zinc-300">{m.name || m.email}</span>
-                              <span className="text-[10px] font-mono uppercase text-zinc-600">{m.role}</span>
+                              <span className="flex-1 truncate text-helm-fg">{m.name || m.email}</span>
+                              <span className="text-[10px] font-mono uppercase text-helm-muted">{m.role}</span>
                               <button
                                 type="button"
                                 data-testid={`dept-remove-${dept.type}-${m.user_id}`}
                                 disabled={memberBusy}
                                 onClick={() => removeMember(dept.department_id, m.user_id)}
-                                className="text-zinc-600 hover:text-rose-400 p-1"
+                                className="text-helm-muted hover:text-helm-status-negative p-1"
                                 title="Remove"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -207,7 +207,7 @@ export default function DepartmentsSettings() {
                           data-testid={`dept-add-user-${dept.type}`}
                           value={addUserId}
                           onChange={(e) => setAddUserId(e.target.value)}
-                          className="flex-1 rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
+                          className="flex-1 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                         >
                           <option value="">Select teammate…</option>
                           {workspaceMembers.map((m) => (
@@ -220,7 +220,7 @@ export default function DepartmentsSettings() {
                           data-testid={`dept-add-role-${dept.type}`}
                           value={addRole}
                           onChange={(e) => setAddRole(e.target.value)}
-                          className="rounded-md border border-white/10 bg-helm-card text-white text-sm px-3 py-2"
+                          className="rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                         >
                           <option value="member">Member</option>
                           <option value="lead">Lead</option>
@@ -230,7 +230,7 @@ export default function DepartmentsSettings() {
                           data-testid={`dept-add-btn-${dept.type}`}
                           disabled={memberBusy}
                           onClick={() => addMember(dept.department_id)}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-gold text-black font-medium text-sm px-3 py-2 hover:bg-gold-hover disabled:opacity-60"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-60"
                         >
                           <UserPlus className="w-3.5 h-3.5" /> Add
                         </button>

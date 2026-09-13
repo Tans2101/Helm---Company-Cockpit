@@ -102,14 +102,14 @@ export default function AskHelm() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-6">
         {messages.length === 0 && (
           <div className="max-w-xl">
-            <div className="flex items-center gap-2 mb-4 text-gold">
+            <div className="flex items-center gap-2 mb-4 text-helm-gold">
               <Sparkles className="w-4 h-4" />
               <span className="font-mono text-xs uppercase tracking-[0.2em]">Try asking</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-2">
               {SUGGESTIONS.map((s) => (
                 <button key={s} onClick={() => send(s)} data-testid="ask-suggestion"
-                  className="text-left rounded-lg border border-white/5 bg-white/[0.02] p-3 text-sm text-zinc-300 transition-colors hover:border-gold/30 hover:bg-white/[0.04]">
+                  className="text-left rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3 text-sm text-helm-fg transition-colors hover:border-helm-gold/30 hover:bg-helm-fg/[0.04]">
                   {s}
                 </button>
               ))}
@@ -120,29 +120,29 @@ export default function AskHelm() {
         {messages.map((m, i) => (
           <div key={i} className={cn("flex gap-3", m.role === "user" && "flex-row-reverse")} data-testid={`msg-${m.role}`}>
             <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
-              m.role === "user" ? "bg-white/5 border-white/10" : "bg-gold/15 border-gold/30")}>
-              {m.role === "user" ? <User className="w-3.5 h-3.5 text-zinc-400" /> : <span className="font-mono text-gold text-xs">H</span>}
+              m.role === "user" ? "bg-helm-fg/5 border-helm-line" : "bg-helm-gold/15 border-helm-gold/30")}>
+              {m.role === "user" ? <User className="w-3.5 h-3.5 text-helm-muted" /> : <span className="font-mono text-helm-gold text-xs">H</span>}
             </div>
             <div className={cn("max-w-[80%] rounded-xl px-4 py-3 text-[15px] leading-relaxed",
-              m.role === "user" ? "bg-gold/10 border border-gold/20 text-white" : "bg-helm-card border border-white/5 text-zinc-200")}>
+              m.role === "user" ? "bg-helm-gold/10 border border-helm-gold/20 text-helm-fg" : "bg-helm-card border border-helm-line text-helm-fg")}>
               {m.content ? <p className="whitespace-pre-wrap">{m.content}</p> : <Spinner className="w-4 h-4" />}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-white/5">
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-helm-card px-3 py-2 focus-within:border-gold/40 transition-colors">
+      <div className="mt-4 pt-4 border-t border-helm-line">
+        <div className="flex items-center gap-2 rounded-xl border border-helm-line bg-helm-card px-3 py-2 focus-within:border-helm-gold/40 transition-colors">
           <input
             data-testid="ask-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder="Ask Helm anything about your company…"
-            className="flex-1 bg-transparent text-white text-sm placeholder:text-zinc-600 focus:outline-none py-1.5"
+            className="flex-1 bg-transparent text-helm-fg text-sm placeholder:text-helm-muted focus:outline-none py-1.5"
           />
           <button data-testid="ask-send-btn" onClick={() => send()} disabled={streaming || !input.trim()}
-            className="w-9 h-9 rounded-lg bg-gold text-black flex items-center justify-center transition-colors hover:bg-gold-hover disabled:opacity-40">
+            className="w-9 h-9 rounded-lg bg-helm-gold text-helm-navy flex items-center justify-center transition-colors hover:bg-helm-gold-hover disabled:opacity-40">
             <Send className="w-4 h-4" />
           </button>
         </div>

@@ -91,7 +91,7 @@ export default function Features() {
           <p className="text-2xl font-light tracking-tight text-helm-cream">{TAGLINE}</p>
           <p className="mt-3 text-sm text-helm-slate">One plan. Full cockpit. Live in minutes.</p>
           <button type="button" onClick={enter}
-            className="mt-8 group inline-flex items-center gap-2 rounded-full bg-helm-gold text-helm-navy font-medium px-6 py-3 hover:bg-gold-hover transition-colors">
+            className="mt-8 group inline-flex items-center gap-2 rounded-full bg-helm-gold text-helm-navy font-medium px-6 py-3 hover:bg-helm-gold-hover transition-colors">
             {authed ? "Open your cockpit" : "Get started with Helm"}
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>

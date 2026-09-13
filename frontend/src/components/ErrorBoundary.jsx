@@ -23,18 +23,18 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-helm-ink grain p-6">
           <div className="relative z-10 max-w-md w-full text-center">
-            <div className="w-12 h-12 rounded-md bg-gold/15 border border-gold/30 flex items-center justify-center mx-auto mb-6">
-              <span className="font-mono text-gold font-medium">H</span>
+            <div className="w-12 h-12 rounded-md bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center mx-auto mb-6">
+              <span className="font-mono text-helm-gold font-medium">H</span>
             </div>
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-gold mb-3">Something went wrong</p>
-            <h1 className="font-display text-2xl font-normal text-white tracking-tight">This screen hit an unexpected error.</h1>
-            <p className="text-sm text-zinc-500 mt-3 leading-relaxed">
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Something went wrong</p>
+            <h1 className="font-display text-2xl font-normal text-helm-fg tracking-tight">This screen hit an unexpected error.</h1>
+            <p className="text-sm text-helm-muted mt-3 leading-relaxed">
               You can try again. If it keeps happening, refresh the page or sign back in.
             </p>
             <button
               data-testid="error-retry-btn"
               onClick={this.retry}
-              className="mt-8 rounded-md bg-gold text-black font-medium text-sm px-5 py-2.5 transition-colors hover:bg-gold-hover"
+              className="mt-8 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-5 py-2.5 transition-colors hover:bg-helm-gold-hover"
             >
               Try again
             </button>
