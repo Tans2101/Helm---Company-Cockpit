@@ -1,8 +1,9 @@
 """In-process tests for insights generation, rate limit, and briefing wiring."""
+import asyncio
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pymongo
@@ -126,6 +127,80 @@ async def test_generate_insights_rate_limit_and_writes_suggestions(mongo):
     mongo.financial_entries.delete_many({"workspace_id": ws_id})
     mongo.deals.delete_many({"workspace_id": ws_id})
     mongo.updates.delete_many({"workspace_id": ws_id})
+
+
+@pytest.mark.asyncio
+async def test_briefing_schedules_insights_without_awaiting_them():
+    """Stale insights must not block /briefing (was causing multi-second freezes)."""
+    import time
+    import server as srv
+
+    ws = {
+        "workspace_id": "ws_speed",
+        "briefing": {"headline": "Hello", "what_changed": []},
+        "insights_generated_at": None,
+        "decisions": [],
+        "decision_suggestions": [],
+        "delegate_suggestions": [],
+    }
+    principal = {"workspace_id": "ws_speed", "user_id": "u1", "role": "owner", "pack": "owner"}
+
+    scheduled = {"n": 0}
+
+    def fake_schedule(ws_id):
+        scheduled["n"] += 1
+
+    empty_cursor = MagicMock()
+    empty_cursor.sort.return_value = empty_cursor
+    empty_cursor.to_list = AsyncMock(return_value=[])
+
+    with patch.object(srv, "get_ws", AsyncMock(return_value=ws)), \
+         patch.object(srv.db.workspaces, "update_one", AsyncMock()), \
+         patch.object(srv, "compute_financials", AsyncMock(return_value={
+             "mrr": 0, "mrr_known": False, "mrr_delta": 0,
+             "runway_months": None, "burn": 0, "burn_known": False, "burn_tone": "neutral",
+         })), \
+         patch.object(srv, "db") as mock_db, \
+         patch.object(srv, "_briefing_email_threads", AsyncMock(return_value=([], {
+             "connected": False, "needs_reconnect": False, "compose": False,
+         }))), \
+         patch.object(srv, "workspace_is_pro", return_value=False), \
+         patch.object(srv, "_insights_stale", return_value=True), \
+         patch.object(srv, "_schedule_insights_refresh", side_effect=fake_schedule):
+        mock_db.workspaces.update_one = AsyncMock()
+        mock_db.activities.find.return_value = empty_cursor
+        mock_db.updates.find.return_value = empty_cursor
+        t0 = time.monotonic()
+        result = await srv.briefing(principal)
+        elapsed = time.monotonic() - t0
+
+    assert elapsed < 1.0, f"briefing blocked on insights ({elapsed:.2f}s)"
+    assert scheduled["n"] == 1
+    assert result.get("headline") == "Hello" or result.get("metrics") is not None
+
+
+@pytest.mark.asyncio
+async def test_schedule_insights_refresh_is_background():
+    """_schedule_insights_refresh must return immediately while generate runs."""
+    import time
+    import server as srv
+
+    finished = asyncio.Event()
+
+    async def slow_generate(ws_id, raise_on_rate_limit=False):
+        await asyncio.sleep(0.4)
+        finished.set()
+        return {"ok": True}
+
+    with patch.object(srv, "_generate_insights", side_effect=slow_generate), \
+         patch.object(srv.helm_llm, "anthropic_configured", return_value=True):
+        srv._insights_refresh_inflight.clear()
+        t0 = time.monotonic()
+        srv._schedule_insights_refresh("ws_bg")
+        elapsed = time.monotonic() - t0
+        assert elapsed < 0.2, f"schedule blocked ({elapsed:.2f}s)"
+        assert not finished.is_set()
+        await asyncio.wait_for(finished.wait(), timeout=2.0)
 
 
 @pytest.mark.asyncio

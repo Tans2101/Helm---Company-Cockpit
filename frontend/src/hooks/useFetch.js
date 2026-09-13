@@ -10,7 +10,8 @@ export function useFetch(path, deps = []) {
   useEffect(() => {
     if (!path) { setLoading(false); return; }
     let mounted = true;
-    setLoading(true);
+    // Soft reload: keep showing existing data instead of blanking the UI for ~5s.
+    setLoading((prev) => (data == null ? true : prev));
     setError(null);
     api.get(path)
       .then((r) => {

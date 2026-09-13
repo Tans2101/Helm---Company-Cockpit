@@ -24,9 +24,10 @@ api.interceptors.request.use(async (config) => {
   const url = config.url || "";
   if (BOOTSTRAP_PATHS.some((p) => url.includes(p))) return config;
   try {
+    // Short race: cached tokens resolve in ms; never stall clicks for 4s.
     const token = await Promise.race([
       clerkGetToken(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("clerk-token-timeout")), 4000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("clerk-token-timeout")), 1500)),
     ]);
     if (token) {
       config.headers = config.headers || {};

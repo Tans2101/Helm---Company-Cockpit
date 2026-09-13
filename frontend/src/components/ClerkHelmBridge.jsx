@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { useAuth } from "@/context/AuthContext";
 import { api, setClerkTokenGetter } from "@/lib/api";
-import { resolveClerkToken } from "@/lib/clerkToken";
+import { clearClerkTokenCache, getCachedClerkToken, resolveClerkToken } from "@/lib/clerkToken";
 import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,11 +45,15 @@ export default function ClerkHelmBridge() {
   });
 
   useEffect(() => {
+    // Hot path for every API call — cached JWT, not a 20-attempt Clerk refresh.
     setClerkTokenGetter(async () => {
       if (!clerkComplete) return null;
-      return resolveClerkToken(getToken, session);
+      return getCachedClerkToken(getToken, session);
     });
-    return () => setClerkTokenGetter(null);
+    return () => {
+      setClerkTokenGetter(null);
+      clearClerkTokenCache();
+    };
   }, [clerkComplete, getToken, session]);
 
   useEffect(() => {

@@ -1764,8 +1764,16 @@ async def auth_config():
         if clerk_on and CLERK_PUBLISHABLE_KEY
         else None
     )
-    ssl_ok = await clerk_auth.clerk_custom_domain_ssl_ok() if clerk_on else None
-    signup_policy = await clerk_auth.clerk_signup_policy() if clerk_on else {}
+    ssl_ok = api_ok = jwks_ok = None
+    signup_policy: dict = {}
+    if clerk_on:
+        # Probe Clerk in parallel + TTL cache (see clerk_auth) — was ~1.5s sequential.
+        ssl_ok, api_ok, jwks_ok, signup_policy = await asyncio.gather(
+            clerk_auth.clerk_custom_domain_ssl_ok(),
+            clerk_auth.clerk_api_ok(),
+            clerk_auth.clerk_jwks_ok(),
+            clerk_auth.clerk_signup_policy(),
+        )
     return {
         "demo_login": ALLOW_DEMO_LOGIN,
         "clerk_enabled": clerk_on,
@@ -1778,8 +1786,8 @@ async def auth_config():
         "clerk_post_auth_url": clerk_auth.clerk_post_auth_url() if clerk_on else None,
         "helm_canonical_origin": HELM_CANONICAL_ORIGIN,
         "clerk_multi_domain": clerk_auth.clerk_multi_domain_auth() if clerk_on else False,
-        "clerk_api_ok": await clerk_auth.clerk_api_ok() if clerk_on else None,
-        "clerk_jwks_ok": await clerk_auth.clerk_jwks_ok() if clerk_on else None,
+        "clerk_api_ok": api_ok,
+        "clerk_jwks_ok": jwks_ok,
         "clerk_custom_domain_ssl_ok": ssl_ok,
         "clerk_proxy_url": clerk_auth.clerk_proxy_url() if clerk_on else None,
         "clerk_use_proxy": (not ssl_ok) if clerk_on else None,
@@ -2530,6 +2538,31 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
     return {"ok": True}
 
 
+_insights_refresh_inflight: set[str] = set()
+
+
+def _schedule_insights_refresh(workspace_id: str) -> None:
+    """Refresh AI suggestions in the background — never block the briefing response."""
+    if workspace_id in _insights_refresh_inflight:
+        return
+    if not helm_llm.anthropic_configured():
+        return
+
+    async def _run() -> None:
+        _insights_refresh_inflight.add(workspace_id)
+        try:
+            await _generate_insights(workspace_id, raise_on_rate_limit=False)
+        except Exception:
+            logger.exception("background insights refresh failed for %s", workspace_id)
+        finally:
+            _insights_refresh_inflight.discard(workspace_id)
+
+    try:
+        asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        logger.debug("no running loop — skip background insights for %s", workspace_id)
+
+
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
@@ -2540,13 +2573,9 @@ async def briefing(principal=Depends(get_principal)):
         )
     except Exception:
         logger.debug("last_active_at update skipped", exc_info=True)
-    # Lazy refresh of AI decision/delegate suggestions when stale (>24h)
-    if _insights_stale(c) and helm_llm.anthropic_configured():
-        try:
-            await _generate_insights(c["workspace_id"], raise_on_rate_limit=False)
-            c = await get_ws(principal["workspace_id"])
-        except Exception:
-            logger.exception("lazy insights generation failed for %s", c.get("workspace_id"))
+    # Stale AI suggestions: refresh in background so Briefing stays fast.
+    if _insights_stale(c):
+        _schedule_insights_refresh(c["workspace_id"])
     b = dict(c["briefing"])
     # Soften legacy vibecode default copy stored on older workspaces
     if (b.get("headline") or "").startswith("Your cockpit is ready"):
@@ -2591,8 +2620,19 @@ async def briefing(principal=Depends(get_principal)):
     b["what_to_decide"] = _briefing_what_to_decide(c)
     b["what_to_delegate"] = _briefing_what_to_delegate(c)
     b["insights_generated_at"] = c.get("insights_generated_at")
-    # Live Gmail threads for the briefing — metadata/snippets only, not persisted.
-    email_threads, gmail_meta = await _briefing_email_threads(c, principal)
+    # Live Gmail threads — cap wait so a slow Google call cannot freeze Briefing.
+    try:
+        email_threads, gmail_meta = await asyncio.wait_for(
+            _briefing_email_threads(c, principal),
+            timeout=3.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Gmail briefing fetch timed out for %s", c.get("workspace_id"))
+        email_threads, gmail_meta = [], {
+            "connected": bool(_integration_tokens(c, "google_tokens")),
+            "needs_reconnect": False,
+            "compose": False,
+        }
     b["email_threads"] = email_threads
     b["gmail_connected"] = gmail_meta["connected"]
     b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]

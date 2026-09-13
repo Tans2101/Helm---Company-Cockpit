@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { clearClerkTokenCache } from "@/lib/clerkToken";
 
 const AuthContext = createContext(null);
 
@@ -48,6 +49,7 @@ export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (e) {}
+    clearClerkTokenCache();
     setUser(null);
     setSessionError("");
     if (onLogoutExtra) {
