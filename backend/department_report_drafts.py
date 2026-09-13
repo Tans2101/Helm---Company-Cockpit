@@ -1,6 +1,8 @@
 """Deterministic department activity → unpublished report drafts.
 
 No LLM. Cron-driven rollup of real completion events from the current week.
+Missing-vs-zero AI discipline does not apply: this module never calls the model.
+Zero completions in a week is a computed count (none finished), not an untracked field.
 """
 from __future__ import annotations
 

@@ -33,6 +33,10 @@ Rules:
 - Do not guess amounts or dates — use confidence "low" when uncertain.
 """
 
+# Workspace missing-vs-zero does not apply to extract_with_claude: the model reads
+# document bytes, not Helm fields. Unreadable amounts already fail closed
+# (do-not-guess + unparseable_amount).
+
 _client: Optional[AsyncAnthropic] = None
 
 
@@ -260,6 +264,7 @@ Rules:
 - confidence is your genuine estimate from 0-100 that this recommendation is the right call given the signal (integer).
 - category is a short label like Finance, Sales, People, Product, Ops.
 - impact reflects business urgency: High / Medium / Low.
+- Company context may include unknown_fields and instructions_for_missing_data. Follow those instructions. Null financials are not zero. Do not claim $0 cash, 0 MRR, or that they are out of runway when those fields are unknown.
 """
 
 _DELEGATE_DRAFT_SYSTEM = """You are Helm, drafting a delegation card for a CEO based on a real operational signal.
@@ -270,6 +275,7 @@ Rules:
 - Be specific — cite the task, person, and dates from the signal.
 - suggested_owner_user_id and suggested_owner_name MUST come from the signal context (assignee_user_id / assignee_name). Do not invent a person.
 - title is a short actionable handoff; detail explains what to do and why.
+- If company context lists unknown_fields, do not fill those gaps with invented numbers or a $0 default.
 """
 
 _VALID_IMPACT = frozenset({"High", "Medium", "Low"})
