@@ -67,7 +67,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "label": "Starter",
         "price": 15,
         "for": "Small businesses",
-        "seats": 3,
+        "seats": 10,
         "ai_extracts_mo": 30,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_STARTER",
@@ -81,7 +81,7 @@ PLANS: dict[str, dict[str, Any]] = {
             FEATURE_PRIORITY_SUPPORT: False,
         },
         "includes": [
-            "Up to 3 team members",
+            "Up to 10 team members",
             "AI document upload (30/billing period)",
             "QuickBooks sync",
             "Ask Helm AI",
