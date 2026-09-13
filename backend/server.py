@@ -1452,6 +1452,188 @@ def financials_for_synthesis(fin: dict) -> dict:
     }
 
 
+def company_profile_for_synthesis(c: dict) -> dict:
+    """Stage/headcount for AI: blank or default-zero is not a measured 0-person company."""
+    stage = (c.get("stage") or "").strip() or None
+    employees_entered = bool(c.get("employees_entered"))
+    raw_employees = c.get("employees")
+    unknown = []
+    if stage is None:
+        unknown.append("stage")
+    if employees_entered:
+        employees = 0 if raw_employees is None else raw_employees
+    elif raw_employees in (None, 0, "0"):
+        employees = None
+        unknown.append("employees")
+    else:
+        employees = raw_employees
+    return {
+        "name": c.get("name"),
+        "stage": stage,
+        "employees": employees,
+        "employees_entered": employees_entered,
+        "unknown_fields": unknown,
+        "instructions_for_missing_data": (
+            "Null stage or employees were never entered — they are not zero. "
+            "Do not call this a 0-person company or invent a funding stage."
+            if unknown
+            else ""
+        ),
+    }
+
+
+def calendar_for_synthesis(cal_snap: Optional[dict]) -> dict:
+    """Calendar for AI: not connected is not the same as a free day."""
+    if not cal_snap:
+        return {
+            "connected": False,
+            "meetings": None,
+            "meeting_count": None,
+            "unknown_fields": ["calendar"],
+            "instructions_for_missing_data": (
+                "Google Calendar is not connected. Do not invent meetings and do not "
+                "say the founder has a free day. Say calendar data is not available."
+            ),
+        }
+    meetings = [
+        {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
+        for m in (cal_snap.get("meetings") or [])[:8]
+    ]
+    return {
+        "connected": True,
+        "meetings": meetings,
+        "meeting_count": len(cal_snap.get("meetings") or []),
+        "unknown_fields": [],
+        "instructions_for_missing_data": "",
+    }
+
+
+def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
+    """Pipeline for AI: Sales off + no deals is not the same as a $0 pipeline."""
+    deals = list(deals or [])
+    if not deals and not sales_tracked:
+        return {
+            "tracked": False,
+            "deal_count": None,
+            "open_value": None,
+            "unknown_fields": ["sales_pipeline"],
+            "instructions_for_missing_data": (
+                "Sales pipeline is not tracked in this workspace. Do not say pipeline "
+                "is $0 or that there are no deals as if that was measured. Say pipeline "
+                "data is not available."
+            ),
+        }
+    normalized = [
+        {"stage": d.get("stage") or "lead", "value": float(d.get("value") or 0)}
+        for d in deals
+    ]
+    metrics = _deal_metrics(normalized)
+    return {
+        "tracked": True,
+        "deal_count": metrics["open_count"],
+        "open_value": metrics["open_value"],
+        "unknown_fields": [],
+        "instructions_for_missing_data": "",
+    }
+
+
+def onboarding_for_synthesis(instances, *, hr_tracked: bool) -> dict:
+    """HR onboarding for AI: HR unused is not the same as zero hires onboarding."""
+    instances = list(instances or [])
+    if not instances and not hr_tracked:
+        return {
+            "tracked": False,
+            "instance_count": None,
+            "unknown_fields": ["hr_onboarding"],
+            "instructions_for_missing_data": (
+                "HR onboarding is not used in this workspace. Do not say there are no "
+                "hires onboarding as if that was measured. Say onboarding tracking is "
+                "not available."
+            ),
+        }
+    return {
+        "tracked": True,
+        "instance_count": len(instances),
+        "unknown_fields": [],
+        "instructions_for_missing_data": "",
+    }
+
+
+def risks_for_synthesis(c: dict) -> dict:
+    """Risk radar for AI: seeded sample risks are not workspace-entered facts."""
+    manual = c.get("telemetry_manual") or {}
+    if manual.get("risks") is not None:
+        return {
+            "tracked": True,
+            "items": list(manual.get("risks") or []),
+            "unknown_fields": [],
+            "instructions_for_missing_data": "",
+        }
+    return {
+        "tracked": False,
+        "items": None,
+        "unknown_fields": ["risk_radar"],
+        "instructions_for_missing_data": (
+            "Risk radar has not been filled in by this workspace. Do not invent risks "
+            "or treat a sample list as real. Say risk tracking is not in Helm yet."
+        ),
+    }
+
+
+def company_context_for_synthesis(c: dict, fin: dict) -> dict:
+    """Decision-draft company payload: finance + profile, with missing-data instructions."""
+    profile = company_profile_for_synthesis(c)
+    nums = financials_for_synthesis(fin)
+    unknown = list(dict.fromkeys([*profile["unknown_fields"], *nums["unknown_fields"]]))
+    instructions = " ".join(
+        part for part in (
+            profile.get("instructions_for_missing_data"),
+            nums.get("instructions_for_missing_data"),
+        ) if part
+    )
+    return {
+        "name": profile.get("name"),
+        "stage": profile.get("stage"),
+        "employees": profile.get("employees"),
+        "cash": nums.get("cash"),
+        "cash_entered": nums.get("cash_entered"),
+        "mrr": nums.get("mrr"),
+        "mrr_known": nums.get("mrr_known"),
+        "burn": nums.get("burn"),
+        "burn_known": nums.get("burn_known"),
+        "runway_months": nums.get("runway_months"),
+        "currency": nums.get("currency"),
+        "unknown_fields": unknown,
+        "instructions_for_missing_data": instructions,
+    }
+
+
+def ask_context_for_synthesis(
+    c: dict,
+    fin: dict,
+    *,
+    deals=None,
+    sales_tracked: bool = False,
+    onboarding_instances=None,
+    hr_tracked: bool = False,
+) -> dict:
+    """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished."""
+    profile = company_profile_for_synthesis(c)
+    return {
+        "company": profile.get("name"),
+        "company_profile": profile,
+        "financials": financials_for_synthesis(fin),
+        "pipeline": pipeline_for_synthesis(deals, sales_tracked=sales_tracked),
+        "onboarding": onboarding_for_synthesis(onboarding_instances, hr_tracked=hr_tracked),
+        "risks": risks_for_synthesis(c),
+        # Pending decision titles are a computed list of existing cards — empty means
+        # none are pending, not that the Decision Center was never used.
+        "open_decisions": [
+            d.get("title") for d in (c.get("decisions") or []) if d.get("status") == "pending"
+        ],
+    }
+
+
 # ------------------------- Auth routes -------------------------
 class SessionInput(BaseModel):
     session_id: str
@@ -2552,15 +2734,10 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         currency=currency,
         department_items=department_items,
     )
-    company_context = {
-        "name": c.get("name"),
-        "stage": c.get("stage"),
-        "employees": c.get("employees"),
-        "mrr": fin.get("mrr") if fin.get("mrr_known") else None,
-        "runway_months": fin.get("runway_months"),
-        "burn": fin.get("burn") if fin.get("burn_known") else None,
-        "cash_entered": fin.get("cash_entered"),
-    }
+    # Detector counts (overdue tasks, stall days, deal age) are computed — zero means
+    # none matched, not "not entered". Missing-vs-zero applies to company financials
+    # and profile fields on the draft payload, not to the signal list itself.
+    company_context = company_context_for_synthesis(c, fin)
     decision_suggestions = []
     delegate_suggestions = []
     now = datetime.now(timezone.utc).isoformat()
@@ -2696,19 +2873,17 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     b = c["briefing"]
     fin = await compute_financials(c["workspace_id"])
+    # what_changed / what_to_decide are stored briefing lists (computed or previously
+    # written). An empty list means nothing is queued — there is no "not entered" state.
+    cal_snap = await _google_calendar_snapshot(c)
     context = {
         "company": c["name"],
         "metrics": b.get("what_to_decide"),
         "what_changed": b["what_changed"],
         "decisions": b["what_to_decide"],
         "financials": financials_for_synthesis(fin),
+        "calendar": calendar_for_synthesis(cal_snap),
     }
-    cal_snap = await _google_calendar_snapshot(c)
-    if cal_snap and cal_snap.get("meetings"):
-        context["calendar_today"] = [
-            {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
-            for m in cal_snap["meetings"][:8]
-        ]
     system = (
         "You are a clear, practical chief of staff writing a short daily note for a founder. "
         "Write 3–4 sentences in plain English. Sound like a thoughtful human, not an AI analysis. "
@@ -2717,7 +2892,9 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         "Never say 'synthesis', 'signal', 'blind spot', 'monetization', 'execution velocity', "
         "'worth confirming', or similar consultant/AI phrasing. "
         "Never treat missing financial figures as zero. Follow financials.instructions_for_missing_data exactly: "
-        "if cash was not entered, say to add a cash balance for an accurate runway picture — do not claim they are out of runway."
+        "if cash was not entered, say to add a cash balance for an accurate runway picture — do not claim they are out of runway. "
+        "Follow calendar.instructions_for_missing_data: if calendar is not connected, say so — "
+        "do not treat a missing calendar as a free day."
     )
     text = await helm_llm.complete(
         system,
@@ -4128,6 +4305,10 @@ async def _apply_report_snapshot(workspace_id: str, current: dict) -> Optional[d
 
 
 def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
+    # Task / update / blocker / shipped counts and people-roster headcount are
+    # computed from workspace collections. Zero is unambiguous (none found) —
+    # there is no separate "not entered" state. Money fields still use fin
+    # display values ("—" when unknown) and financials_for_synthesis in the pack.
     curr = _report_metric_snapshot(fin, items, ups, headcount)
     first_week = prior is None
     baseline_at = (prior or {}).get("taken_at")
@@ -4318,14 +4499,19 @@ async def dismiss_report_draft(draft_id: str, principal=Depends(require_section(
 
 
 def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dict:
-    """Assemble a small, null-safe context with one unambiguous weekly baseline."""
+    """Assemble a small, null-safe context with one unambiguous weekly baseline.
+
+    Stored telemetry.kpis are omitted: they can be seed/sample values, and live
+    money/team/work figures already come from financials_for_synthesis plus the
+    auto cards. Auto-card counts (open tasks, updates, blockers, shipped items,
+    headcount from the people roster) are computed — zero means none, not unknown.
+    """
     manual = [r for r in (c.get("manual_reports") or []) if r.get("source") != helm_dept_drafts.SOURCE]
     auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     return {
         "company": c["name"],
         "financials": financials_for_synthesis(fin),
         "financial_period": fin.get("latest_month"),
-        "kpis": (c.get("telemetry") or {}).get("kpis") or [],
         "reports": [{"title": r["title"], "summary": r["summary"]} for r in manual],
         "weekly_comparison": {
             "baseline_at": (prior or {}).get("taken_at"),
@@ -6669,19 +6855,32 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     fin = await compute_financials(c["workspace_id"])
-    context = {
-        "company": c["name"], "stage": c["stage"], "employees": c["employees"],
-        "financials": financials_for_synthesis(fin),
-        "kpis": c["telemetry"]["kpis"],
-        "open_decisions": [d["title"] for d in c["decisions"] if d["status"] == "pending"],
-        "risks": c["telemetry"]["risks"],
-    }
+    deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
+    onboarding_rows = await db.hr_onboarding_instances.find(
+        {"workspace_id": c["workspace_id"]}, {"_id": 0},
+    ).to_list(500)
+    sales_dept = await dept_migrate.get_enabled_department(
+        db, c["workspace_id"], dept_catalog.TYPE_SALES,
+    )
+    hr_dept = await dept_migrate.get_enabled_department(
+        db, c["workspace_id"], dept_catalog.TYPE_HR,
+    )
+    context = ask_context_for_synthesis(
+        c,
+        fin,
+        deals=deals,
+        sales_tracked=sales_dept is not None,
+        onboarding_instances=onboarding_rows,
+        hr_tracked=hr_dept is not None,
+    )
     system = (
-        f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']} "
-        f"(a {c['stage']} startup, {c['employees']} people). Answer like a sharp, trusted operator: "
-        f"direct, quantified, decisive. Use the live company data provided. Synthesis over raw data, "
-        f"signal over noise. Keep answers tight. "
-        f"Never treat missing financial figures as zero — follow financials.instructions_for_missing_data. "
+        f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
+        "Answer like a sharp, trusted operator: direct, quantified, decisive. "
+        "Use the live company snapshot provided. Keep answers tight. "
+        "Never treat missing figures as zero. Follow every instructions_for_missing_data "
+        "block in the snapshot (company_profile, financials, pipeline, onboarding, risks). "
+        "If a field is null or listed in unknown_fields, say the data is not in Helm yet — "
+        "do not infer it and do not describe it as zero. "
         f"Current company snapshot:\n{json.dumps(context, indent=2)}"
     )
 
