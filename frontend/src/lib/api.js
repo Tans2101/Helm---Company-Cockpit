@@ -20,6 +20,9 @@ export function setClerkTokenGetter(getter) {
 }
 
 api.interceptors.request.use(async (config) => {
+  config.headers = config.headers || {};
+  // Caller already attached a Bearer token (e.g. Clerk exchange) — don't override/block.
+  if (config.headers.Authorization) return config;
   if (!clerkGetToken) return config;
   const url = config.url || "";
   if (BOOTSTRAP_PATHS.some((p) => url.includes(p))) return config;
@@ -30,13 +33,16 @@ api.interceptors.request.use(async (config) => {
       new Promise((_, reject) => setTimeout(() => reject(new Error("clerk-token-timeout")), 1500)),
     ]);
     if (token) {
-      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
+      return config;
     }
-  } catch {
-    /* Clerk not ready — do not block API calls */
+    // No token yet — fail instead of sending an unauthenticated call that 401s
+    // and flips soft-reload pages into ErrorScreen.
+    return Promise.reject(new Error("clerk-token-timeout"));
+  } catch (err) {
+    const msg = err?.message || "clerk-token-timeout";
+    return Promise.reject(new Error(msg === "clerk-token-timeout" ? msg : "clerk-token-timeout"));
   }
-  return config;
 });
 
 /** Fetch auth config without Clerk token (bootstrap). */

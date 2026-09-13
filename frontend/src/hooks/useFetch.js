@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 
 export function useFetch(path, deps = []) {
@@ -6,20 +6,45 @@ export function useFetch(path, deps = []) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const prevPathRef = useRef(path);
 
   useEffect(() => {
-    if (!path) { setLoading(false); return; }
+    if (!path) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      prevPathRef.current = path;
+      return;
+    }
     let mounted = true;
-    // Soft reload: keep showing existing data instead of blanking the UI for ~5s.
-    setLoading((prev) => (data == null ? true : prev));
+    const pathChanged = prevPathRef.current !== path;
+    prevPathRef.current = path;
+
+    if (pathChanged) {
+      // Different resource — never show the previous path's data.
+      setData(null);
+      setLoading(true);
+    } else {
+      // Soft reload of the same path: keep showing existing rows.
+      setLoading((prev) => (data == null ? true : prev));
+    }
     setError(null);
+
     api.get(path)
       .then((r) => {
         if (!mounted) return;
         setData(r.data);
         setError(null);
       })
-      .catch((e) => { if (mounted) setError(e); })
+      .catch((e) => {
+        if (!mounted) return;
+        // Soft reload: keep prior data and don't flip the whole page to ErrorScreen.
+        if (pathChanged) {
+          setError(e);
+        } else {
+          setError((prev) => (data == null ? e : prev));
+        }
+      })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

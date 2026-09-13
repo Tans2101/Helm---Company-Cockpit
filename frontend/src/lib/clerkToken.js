@@ -21,17 +21,20 @@ function jwtExpMs(token) {
 let cachedToken = null;
 let cachedExpMs = 0;
 let inflight = null;
+let cacheGeneration = 0;
 
 /** Drop cached JWT (e.g. after sign-out). */
 export function clearClerkTokenCache() {
   cachedToken = null;
   cachedExpMs = 0;
   inflight = null;
+  cacheGeneration += 1;
 }
 
 /**
  * Fast path for API calls: reuse Clerk JWT until ~60s before expiry.
  * Uses Clerk's own cache (skipCache: false) — never hammer Clerk on every click.
+ * On refresh failure, still returns a not-yet-expired cached token when possible.
  */
 export async function getCachedClerkToken(getToken, session, { tokenTimeoutMs = 1500 } = {}) {
   const now = Date.now();
@@ -40,18 +43,26 @@ export async function getCachedClerkToken(getToken, session, { tokenTimeoutMs = 
   }
   if (inflight) return inflight;
 
+  const gen = cacheGeneration;
+  const priorToken = cachedToken && cachedExpMs > now + 5_000 ? cachedToken : null;
+
   inflight = (async () => {
     try {
-      // Single getToken call — Clerk caches internally; avoid double round-trips.
-      const token = await withTimeout(getToken(), tokenTimeoutMs, "auth-token-timeout").catch(() => null);
+      const fromSession = session?.getToken
+        ? await withTimeout(session.getToken(), tokenTimeoutMs, "session-token-timeout").catch(() => null)
+        : null;
+      const fromAuth = await withTimeout(getToken(), tokenTimeoutMs, "auth-token-timeout").catch(() => null);
+      const token = fromSession || fromAuth;
+      if (gen !== cacheGeneration) return priorToken;
       if (token && token.split(".").length === 3) {
         cachedToken = token;
         cachedExpMs = jwtExpMs(token) || now + 55_000;
         return token;
       }
-      return null;
+      // Refresh timed out / failed — keep serving a still-valid JWT.
+      return priorToken;
     } finally {
-      inflight = null;
+      if (gen === cacheGeneration) inflight = null;
     }
   })();
 

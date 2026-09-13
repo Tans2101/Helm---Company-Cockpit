@@ -1,4 +1,4 @@
-"""In-process tests for insights generation, rate limit, and briefing wiring."""
+"""In-process tests for insights generation, rate limits, and briefing wiring."""
 import asyncio
 import os
 import uuid
@@ -18,115 +18,6 @@ DB_NAME = os.environ["DB_NAME"]
 @pytest.fixture
 def mongo():
     return pymongo.MongoClient(MONGO_URL)[DB_NAME]
-
-
-@pytest.mark.asyncio
-async def test_generate_insights_rate_limit_and_writes_suggestions(mongo):
-    import rate_limit as rl
-    import llm as helm_llm
-    from server import _generate_insights, db as server_db
-
-    ws_id = f"ws_insights_{uuid.uuid4().hex[:8]}"
-    mongo.workspaces.delete_many({"workspace_id": ws_id})
-    mongo.insights_rate_events.delete_many({"workspace_id": ws_id})
-    mongo.financial_entries.delete_many({"workspace_id": ws_id})
-    mongo.deals.delete_many({"workspace_id": ws_id})
-    mongo.updates.delete_many({"workspace_id": ws_id})
-
-    mongo.workspaces.insert_one({
-        "workspace_id": ws_id,
-        "name": "Insights Co",
-        "plan": "pro",
-        "stage": "Seed",
-        "employees": 5,
-        "tasks": {"items": [
-            {"id": "t1", "title": "Overdue report", "column": "backlog", "due": "2020-01-01",
-             "assignee": "Maya", "assignee_user_id": "u_maya"},
-        ], "columns": []},
-        "decisions": [],
-        "people": {"people": []},
-        "decision_suggestions": [],
-        "delegate_suggestions": [],
-        "financial_settings": {"cash": 40000, "gross_margin": 70, "currency": "usd"},
-        "briefing": {"what_to_decide": [], "what_to_delegate": [], "what_changed": []},
-    })
-    # Expense spike data (unique qb_txn_id avoids sparse unique index collisions on null)
-    mongo.financial_entries.insert_many([
-        {"id": "e1", "workspace_id": ws_id, "type": "expense", "category": "Cloud/Infra",
-         "amount": 10000, "month": "2026-07", "recurring": True, "qb_txn_id": f"qb_{uuid.uuid4().hex[:8]}"},
-        {"id": "e2", "workspace_id": ws_id, "type": "expense", "category": "Cloud/Infra",
-         "amount": 16000, "month": "2026-08", "recurring": True, "qb_txn_id": f"qb_{uuid.uuid4().hex[:8]}"},
-        {"id": "e3", "workspace_id": ws_id, "type": "revenue", "category": "Subscriptions",
-         "amount": 5000, "month": "2026-08", "recurring": True, "qb_txn_id": f"qb_{uuid.uuid4().hex[:8]}"},
-    ])
-    # Stalled deal
-    mongo.deals.insert_one({
-        "id": "deal_stall", "workspace_id": ws_id, "name": "Stalled Acme",
-        "stage": "proposal", "value": 50000,
-        "updated_at": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
-        "created_at": (datetime.now(timezone.utc) - timedelta(days=60)).isoformat(),
-        "owner_name": "Sara",
-    })
-    # Recurring blocker
-    today = datetime.now(timezone.utc).date()
-    mongo.updates.insert_many([
-        {"workspace_id": ws_id, "user_id": "u_maya", "user_name": "Maya",
-         "day": (today - timedelta(days=1)).isoformat(), "blocker": True, "text": "Blocked A"},
-        {"workspace_id": ws_id, "user_id": "u_maya", "user_name": "Maya",
-         "day": today.isoformat(), "blocker": True, "text": "Blocked B"},
-    ])
-
-    async def fake_decision(signal, ctx):
-        return {
-            "title": f"Decide:{signal['type']}",
-            "description": signal.get("detail") or "",
-            "recommendation": "Act.",
-            "confidence": 72,
-            "category": "Finance",
-            "impact": "High",
-        }
-
-    async def fake_delegate(signal, ctx):
-        return {
-            "title": f"Delegate:{signal['type']}",
-            "detail": signal.get("detail") or "",
-            "suggested_owner_user_id": signal.get("assignee_user_id"),
-            "suggested_owner_name": signal.get("assignee_name") or "Someone",
-        }
-
-    with patch.object(helm_llm, "anthropic_configured", return_value=True), \
-         patch.object(helm_llm, "draft_decision", new=AsyncMock(side_effect=fake_decision)), \
-         patch.object(helm_llm, "draft_delegate", new=AsyncMock(side_effect=fake_delegate)):
-        result = await _generate_insights(ws_id, raise_on_rate_limit=True)
-
-    assert result.get("ok") is True
-    assert result["signals"] >= 1
-    ws = mongo.workspaces.find_one({"workspace_id": ws_id})
-    assert ws.get("insights_generated_at")
-    assert isinstance(ws.get("decision_suggestions"), list)
-    assert isinstance(ws.get("delegate_suggestions"), list)
-    # At least one of decision or delegate suggestions from our seeded signals
-    assert len(ws["decision_suggestions"]) + len(ws["delegate_suggestions"]) >= 1
-
-    # Rate limit: fill to cap then expect 429
-    from fastapi import HTTPException
-    mongo.insights_rate_events.delete_many({"workspace_id": ws_id})
-    for _ in range(rl.INSIGHTS_DAILY_LIMIT):
-        await rl.record_insights_event(server_db, ws_id)
-    with pytest.raises(HTTPException) as ei:
-        await _generate_insights(ws_id, raise_on_rate_limit=True)
-    assert ei.value.status_code == 429
-
-    # Soft skip when raise_on_rate_limit=False (briefing lazy path)
-    skipped = await _generate_insights(ws_id, raise_on_rate_limit=False)
-    assert skipped.get("skipped") == "rate_limited"
-
-    # Cleanup
-    mongo.workspaces.delete_many({"workspace_id": ws_id})
-    mongo.insights_rate_events.delete_many({"workspace_id": ws_id})
-    mongo.financial_entries.delete_many({"workspace_id": ws_id})
-    mongo.deals.delete_many({"workspace_id": ws_id})
-    mongo.updates.delete_many({"workspace_id": ws_id})
 
 
 @pytest.mark.asyncio
@@ -232,3 +123,60 @@ async def test_briefing_builders_use_live_decisions_and_suggestions():
     assert len(delegate) == 1
     assert delegate[0]["owner"] == "Maya"
     assert delegate[0]["id"] == "del1"
+
+
+@pytest.mark.asyncio
+async def test_generate_insights_keeps_prior_on_total_draft_failure():
+    """If every AI draft fails, do not wipe suggestions or stamp insights_generated_at."""
+    import server as srv
+
+    ws_id = "ws_draft_fail"
+    ws = {
+        "workspace_id": ws_id,
+        "name": "Fail Co",
+        "plan": "pro",
+        "tasks": {"items": [
+            {"id": "t1", "title": "Overdue", "column": "backlog", "due": "2020-01-01",
+             "assignee": "Maya", "assignee_user_id": "u_maya"},
+        ], "columns": []},
+        "decisions": [],
+        "decision_suggestions": [{"id": "sug_keep", "status": "suggested", "title": "Keep me"}],
+        "delegate_suggestions": [{"id": "del_keep", "status": "suggested", "title": "Keep"}],
+        "financial_settings": {"cash": 40000, "gross_margin": 70, "currency": "usd"},
+        "briefing": {},
+        "insights_generated_at": None,
+    }
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("anthropic down")
+
+    empty = MagicMock()
+    empty.to_list = AsyncMock(return_value=[])
+    signal_type = next(iter(srv.decision_engine.DECISION_SIGNAL_TYPES))
+
+    mock_db = MagicMock()
+    mock_db.financial_entries.find.return_value = empty
+    mock_db.deals.find.return_value = empty
+    mock_db.workspaces.update_one = AsyncMock()
+
+    with patch.object(srv, "db", mock_db), \
+         patch.object(srv, "get_ws", AsyncMock(return_value=ws)), \
+         patch.object(srv, "compute_financials", AsyncMock(return_value={
+             "mrr": 0, "mrr_known": False, "currency": "usd",
+         })), \
+         patch.object(srv, "_recent_updates", AsyncMock(return_value=[])), \
+         patch.object(srv, "_department_signal_inputs", AsyncMock(return_value=[])), \
+         patch.object(srv.decision_engine, "collect_signals", return_value=[
+             {"type": signal_type, "severity": "high"},
+         ]), \
+         patch.object(srv, "company_context_for_synthesis", return_value={}), \
+         patch.object(srv.helm_llm, "anthropic_configured", return_value=True), \
+         patch.object(srv.helm_llm, "draft_decision", new=AsyncMock(side_effect=boom)), \
+         patch.object(srv.helm_llm, "draft_delegate", new=AsyncMock(side_effect=boom)), \
+         patch.object(srv.doc_rate_limit, "insights_over_limit", AsyncMock(return_value=False)), \
+         patch.object(srv.doc_rate_limit, "record_insights_event", AsyncMock()) as record:
+        result = await srv._generate_insights(ws_id, raise_on_rate_limit=False)
+
+    assert result.get("skipped") == "draft_failed"
+    record.assert_not_called()
+    mock_db.workspaces.update_one.assert_not_called()

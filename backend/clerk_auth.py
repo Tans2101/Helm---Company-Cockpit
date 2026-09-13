@@ -293,7 +293,8 @@ def _bapi_headers() -> dict[str, str]:
 
 
 _health_probe_cache: dict[str, tuple[float, bool]] = {}
-_HEALTH_PROBE_TTL_SECONDS = 120.0
+_HEALTH_PROBE_TTL_OK_SECONDS = 120.0
+_HEALTH_PROBE_TTL_FAIL_SECONDS = 15.0
 
 
 def _cached_health(name: str) -> bool | None:
@@ -301,7 +302,8 @@ def _cached_health(name: str) -> bool | None:
     if not row:
         return None
     at, value = row
-    if time.time() - at > _HEALTH_PROBE_TTL_SECONDS:
+    ttl = _HEALTH_PROBE_TTL_OK_SECONDS if value else _HEALTH_PROBE_TTL_FAIL_SECONDS
+    if time.time() - at > ttl:
         return None
     return value
 
