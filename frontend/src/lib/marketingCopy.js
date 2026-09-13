@@ -63,7 +63,7 @@ export const CEO_DAY = [
 export const PRICING_FAQ = [
   { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract quotas, more seats, and QuickBooks." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members. Starter and Growth both support up to 10, and Business supports up to 50 — with role-based access packs." },
+  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50 — with role-based access packs." },
   { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment — use the trial to evaluate." },
 ];
@@ -130,11 +130,11 @@ export const PLANS = [
     label: "Growth",
     price: 39,
     for: "Growing businesses",
-    seats: 10,
+    seats: 25,
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Up to 10 team members",
+      "Up to 25 team members",
       "AI document upload (150/billing period)",
       "Priority QuickBooks sync",
       "Advanced reports & CEO Pack",

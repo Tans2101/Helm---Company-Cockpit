@@ -94,7 +94,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "label": "Growth",
         "price": 39,
         "for": "Growing businesses",
-        "seats": 10,
+        "seats": 25,
         "ai_extracts_mo": 150,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_GROWTH",
@@ -108,7 +108,7 @@ PLANS: dict[str, dict[str, Any]] = {
             FEATURE_PRIORITY_SUPPORT: False,
         },
         "includes": [
-            "Up to 10 team members",
+            "Up to 25 team members",
             "AI document upload (150/billing period)",
             "Priority QuickBooks sync",
             "Advanced reports & CEO Pack",

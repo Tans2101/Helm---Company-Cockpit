@@ -22,7 +22,7 @@ def test_normalize_legacy_pro_to_starter():
 def test_member_caps_per_plan():
     assert plans.seats_limit("free") == 3
     assert plans.seats_limit("starter") == 10
-    assert plans.seats_limit("growth") == 10
+    assert plans.seats_limit("growth") == 25
     assert plans.seats_limit("business") == 50
 
 
@@ -125,8 +125,9 @@ def test_public_plan_list_shape():
     starter = next(r for r in rows if r["id"] == "starter")
     growth = next(r for r in rows if r["id"] == "growth")
     assert starter["seats"] == 10
-    assert growth["seats"] == 10
+    assert growth["seats"] == 25
     assert any("Up to 10 team members" in line for line in starter["includes"])
+    assert any("Up to 25 team members" in line for line in growth["includes"])
     assert free["ai_extracts_lifetime"] == 5
     assert free["ask_helm_mo"] == 10
     assert any("5 free AI extracts" in line for line in free["includes"])
@@ -156,3 +157,23 @@ async def test_starter_seat_enforcement_allows_10th_blocks_11th():
             await server._enforce_seat_available("ws_test", "starter")
         assert ei.value.status_code == 403
         assert "10/10" in ei.value.detail
+
+
+@pytest.mark.asyncio
+async def test_growth_seat_enforcement_allows_25th_blocks_26th():
+    """Invite-time cap reads plans.seats_limit() for Growth (25), not a leftover 10."""
+    os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
+    os.environ.setdefault("DB_NAME", "test_growth_seats")
+    import server
+    from fastapi import HTTPException
+
+    with patch.object(server, "BILLING_ENFORCED", True), \
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=24)):
+        await server._enforce_seat_available("ws_test", "growth")
+
+    with patch.object(server, "BILLING_ENFORCED", True), \
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=25)):
+        with pytest.raises(HTTPException) as ei:
+            await server._enforce_seat_available("ws_test", "growth")
+        assert ei.value.status_code == 403
+        assert "25/25" in ei.value.detail
