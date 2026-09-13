@@ -451,3 +451,40 @@ def test_free_lifetime_extract_quota_asks_to_upgrade(client):
     detail = r.json()["detail"].lower()
     assert "upgrade to continue" in detail
     assert "5 free" in detail
+
+
+def test_extract_skips_document_ai_when_daily_cap_hit(client):
+    doc_id = "doc_dai_cap"
+    server.db.documents.find_one = AsyncMock(return_value={
+        "id": doc_id,
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "storage_key": "ws_doc_test/key.pdf",
+        "filename": "invoice.pdf",
+        "content_type": "application/pdf",
+        "status": "uploaded",
+    })
+    extracted_payload = {
+        "type": "expense",
+        "amount": 9.0,
+        "month": "2026-09",
+        "category": "G&A",
+        "vendor": "Acme",
+        "confidence": "high",
+        "engine": "anthropic",
+    }
+    with patch.object(server.doc_storage, "get_document_bytes", return_value=PDF_BYTES), patch.object(
+        server.helm_llm, "extraction_configured", return_value=True
+    ), patch.object(
+        server.helm_llm, "extract_financial_document", new_callable=AsyncMock, return_value=extracted_payload
+    ) as extract_mock, patch.object(
+        server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=False
+    ), patch.object(server.doc_rate_limit, "record_event", new_callable=AsyncMock), patch.object(
+        server.gcp_docai, "document_ai_configured", return_value=True
+    ), patch.object(
+        server.doc_rate_limit, "document_ai_allowed", new_callable=AsyncMock, return_value=False
+    ), patch.object(server.doc_rate_limit, "record_document_ai", new_callable=AsyncMock) as record_dai:
+        r = client.post(f"/api/documents/{doc_id}/extract")
+
+    assert r.status_code == 200
+    assert extract_mock.await_args.kwargs.get("use_document_ai") is False
+    record_dai.assert_not_awaited()

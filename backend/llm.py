@@ -214,14 +214,23 @@ def extraction_configured() -> bool:
         return anthropic_configured()
 
 
-async def extract_financial_document(file_bytes: bytes, content_type: str) -> dict:
-    """Document AI first (GCP credits), Claude for low-confidence or missing parser."""
+async def extract_financial_document(
+    file_bytes: bytes,
+    content_type: str,
+    *,
+    use_document_ai: bool = True,
+) -> dict:
+    """Document AI first (GCP credits), Claude for low-confidence or missing parser.
+
+    use_document_ai=False skips the GCP Invoice Parser (daily spend caps / kill switch).
+    """
     docai_result = None
-    try:
-        import google_document_ai as docai
-        docai_result = await docai.extract_invoice(file_bytes, content_type)
-    except Exception:
-        docai_result = None
+    if use_document_ai:
+        try:
+            import google_document_ai as docai
+            docai_result = await docai.extract_invoice(file_bytes, content_type)
+        except Exception:
+            docai_result = None
 
     if docai_result and not docai_result.get("error") and docai_result.get("confidence") == "high":
         return _validate_extracted_financial(docai_result)

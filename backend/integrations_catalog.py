@@ -104,6 +104,13 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
 INTEGRATION_CATALOG = USER_INTEGRATIONS
 
 
+def _token_scope(tokens: dict | None) -> str:
+    scope = (tokens or {}).get("scope") or ""
+    if isinstance(scope, (list, tuple)):
+        return " ".join(str(item) for item in scope)
+    return str(scope)
+
+
 def merge_integrations(
     workspace: dict,
     *,
@@ -134,9 +141,8 @@ def merge_integrations(
             google_tokens = cred_crypto.unseal_credentials(workspace.get("google_tokens"))
         except cred_crypto.CredentialCryptoError:
             google_tokens = None
-    gmail_connected = bool(
-        google_tokens and "gmail.readonly" in (google_tokens.get("scope") or "")
-    )
+    google_scope = _token_scope(google_tokens)
+    gmail_connected = bool(google_tokens and "gmail.readonly" in google_scope)
 
     oauth_configured = {
         "google": google_configured,
@@ -159,13 +165,12 @@ def merge_integrations(
                 if google_connected and not gmail_connected:
                     item["connect_label"] = "Enable Gmail"
                     item["needs_reconsent"] = True
-                elif gmail_connected and "gmail.compose" not in ((google_tokens or {}).get("scope") or ""):
+                elif gmail_connected and "gmail.compose" not in google_scope:
                     item["needs_reconsent"] = True
                     item["connect_label"] = "Enable drafts"
             elif provider == "google":
                 item["connected"] = google_connected
-                scope = (google_tokens or {}).get("scope") or ""
-                write_missing = [s for s in ("calendar.events", "spreadsheets", "drive.file") if s not in scope]
+                write_missing = [s for s in ("calendar.events", "spreadsheets", "drive.file") if s not in google_scope]
                 if google_connected and write_missing:
                     item["needs_reconsent"] = True
                     item["connect_label"] = "Reconnect Google"

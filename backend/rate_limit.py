@@ -17,6 +17,12 @@ INSIGHTS_COLLECTION = "insights_rate_events"
 ASK_HELM_COLLECTION = "ask_helm_rate_events"
 ASK_HELM_WINDOW_SECONDS = 30 * 24 * 3600
 ASK_HELM_FREE_MONTHLY_LIMIT = 10
+# Document AI Invoice Parser is billed to Helm's GCP project (trial credits).
+# 0 disables Document AI (Claude-only). Defaults keep a small daily budget.
+DOCUMENT_AI_COLLECTION = "document_ai_usage"
+DOCUMENT_AI_WINDOW_SECONDS = 86400
+DOCUMENT_AI_GLOBAL_DAILY_LIMIT = int(os.environ.get("DOCUMENT_AI_GLOBAL_DAILY_LIMIT", "80"))
+DOCUMENT_AI_WORKSPACE_DAILY_LIMIT = int(os.environ.get("DOCUMENT_AI_WORKSPACE_DAILY_LIMIT", "8"))
 
 
 async def count_events(db, workspace_id: str, action: str) -> int:
@@ -77,3 +83,31 @@ async def ask_helm_over_limit(
     if limit <= 0:
         return False
     return await count_ask_helm_events(db, workspace_id) >= limit
+
+
+async def document_ai_allowed(
+    db,
+    workspace_id: str,
+    *,
+    global_limit: int = DOCUMENT_AI_GLOBAL_DAILY_LIMIT,
+    workspace_limit: int = DOCUMENT_AI_WORKSPACE_DAILY_LIMIT,
+) -> bool:
+    """True when this extract may call Google Document AI.
+
+    Unlike other limiters, 0 is a kill switch (skip Document AI, use Claude).
+    Over-limit also skips Document AI rather than 429 the user.
+    """
+    if global_limit <= 0 or workspace_limit <= 0:
+        return False
+    global_count = await db.document_ai_usage.count_documents({})
+    if global_count >= global_limit:
+        return False
+    ws_count = await db.document_ai_usage.count_documents({"workspace_id": workspace_id})
+    return ws_count < workspace_limit
+
+
+async def record_document_ai(db, workspace_id: str) -> None:
+    await db.document_ai_usage.insert_one({
+        "workspace_id": workspace_id,
+        "created_at": datetime.now(timezone.utc),
+    })

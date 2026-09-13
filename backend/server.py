@@ -3335,9 +3335,16 @@ async def extract_financial_document_route(
         principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
         "Extraction limit reached — try again in a bit",
     )
+    use_document_ai = False
+    if gcp_docai.document_ai_configured():
+        use_document_ai = await doc_rate_limit.document_ai_allowed(db, principal["workspace_id"])
     try:
         file_bytes = await asyncio.to_thread(doc_storage.get_document_bytes, doc["storage_key"])
-        extracted = await helm_llm.extract_financial_document(file_bytes, doc["content_type"])
+        if use_document_ai:
+            await doc_rate_limit.record_document_ai(db, principal["workspace_id"])
+        extracted = await helm_llm.extract_financial_document(
+            file_bytes, doc["content_type"], use_document_ai=use_document_ai,
+        )
         await doc_rate_limit.record_event(db, principal["workspace_id"], "extract")
         status = "failed" if extracted.get("error") in ("not_financial", "unparseable_amount") else "extracted"
         await db.documents.update_one(
@@ -6841,11 +6848,96 @@ async def integration_connect(provider: str, request: Request, principal=Depends
     return {"configured": True, "authorization_url": f"{cfg['auth_uri']}?{urlencode(params)}"}
 
 
+def _oauth_datetime_expired(expires_at) -> bool:
+    """True when an oauth_states.expires_at value is missing or in the past.
+
+    Mongo may return naive datetimes; comparing those to aware UTC used to 500
+    the Google callback after the user clicked Allow.
+    """
+    if expires_at is None:
+        return True
+    now = datetime.now(timezone.utc)
+    parsed = expires_at
+    if isinstance(expires_at, str):
+        try:
+            parsed = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            return True
+    if not isinstance(parsed, datetime):
+        return True
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed < now
+
+
+_OAUTH_TOKEN_SCALAR_KEYS = (
+    "access_token",
+    "refresh_token",
+    "token_type",
+    "expires_in",
+    "expiry",
+    "obtained_at",
+    "realmId",
+    "tenant_id",
+    "tenant_name",
+    "scope",
+)
+
+
+def sanitize_oauth_token_payload(raw) -> dict:
+    """Keep JSON-safe OAuth fields; drop id_token and other provider extras."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for key in _OAUTH_TOKEN_SCALAR_KEYS:
+        value = raw.get(key)
+        if value is None:
+            continue
+        if key == "scope" and isinstance(value, (list, tuple)):
+            out[key] = " ".join(str(item) for item in value if item)
+        elif isinstance(value, (str, int, float, bool)):
+            out[key] = value
+    pending = raw.get("pending_tenants")
+    if isinstance(pending, list):
+        cleaned = []
+        for tenant in pending:
+            if not isinstance(tenant, dict):
+                continue
+            tid = tenant.get("tenant_id")
+            if not tid:
+                continue
+            cleaned.append({
+                "tenant_id": str(tid),
+                "tenant_name": str(tenant.get("tenant_name") or ""),
+            })
+        if cleaned:
+            out["pending_tenants"] = cleaned
+    return out
+
+
+def _integrations_oauth_redirect() -> str:
+    frontend = (APP_URL or public_api_origin()).rstrip("/")
+    return f"{frontend}/app/integrations"
+
+
 @api_router.get("/oauth/{provider}/callback")
 async def oauth_callback(provider: str, request: Request, code: Optional[str] = None, state: Optional[str] = None, realmId: Optional[str] = None):
+    integrations_path = _integrations_oauth_redirect()
+    try:
+        return await _complete_oauth_callback(provider, code, state, realmId, integrations_path)
+    except Exception:
+        logger.exception("oauth callback failed for %s", provider)
+        return RedirectResponse(f"{integrations_path}?error=token")
+
+
+async def _complete_oauth_callback(
+    provider: str,
+    code: Optional[str],
+    state: Optional[str],
+    realmId: Optional[str],
+    integrations_path: str,
+):
     cfg = _provider_config(provider)
-    frontend = (APP_URL or public_api_origin()).rstrip("/")
-    integrations_path = f"{frontend}/app/integrations"
     if not cfg or not code or not state:
         return RedirectResponse(f"{integrations_path}?error=oauth")
     verified = _verify_state(state)
@@ -6858,7 +6950,7 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
         "workspace_id": workspace_id,
         "user_id": user_id,
     })
-    if not state_row or state_row.get("expires_at") < datetime.now(timezone.utc):
+    if not state_row or _oauth_datetime_expired(state_row.get("expires_at")):
         return RedirectResponse(f"{integrations_path}?error=state")
     membership = await db.memberships.find_one({
         "workspace_id": workspace_id,
@@ -6906,11 +6998,19 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
                     headers={"Accept": "application/json"},
                 )
         if tr.status_code >= 400:
-            logger.error("oauth token exchange %s failed with status %s", provider, tr.status_code)
+            logger.error("oauth token exchange %s failed with status %s: %s", provider, tr.status_code, (tr.text or "")[:300])
             return RedirectResponse(f"{integrations_path}?error=token")
-        tokens = tr.json()
-        if tokens.get("error"):
+        try:
+            tokens = tr.json()
+        except Exception:
+            logger.error("oauth token response was not JSON for %s", provider)
+            return RedirectResponse(f"{integrations_path}?error=token")
+        if not isinstance(tokens, dict) or tokens.get("error"):
             logger.error("oauth token response contained an error for %s", provider)
+            return RedirectResponse(f"{integrations_path}?error=token")
+        tokens = sanitize_oauth_token_payload(tokens)
+        if not tokens.get("access_token"):
+            logger.error("oauth token response missing access_token for %s", provider)
             return RedirectResponse(f"{integrations_path}?error=token")
         if realmId:
             tokens["realmId"] = realmId
@@ -6932,6 +7032,7 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
             tokens["pending_tenants"] = tenants
             tokens.pop("tenant_id", None)
             tokens.pop("tenant_name", None)
+            tokens = sanitize_oauth_token_payload(tokens)
             await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
             return RedirectResponse(f"{integrations_path}?xero_select=1")
         await _store_integration_tokens(workspace_id, cfg["token_field"], tokens)
@@ -7997,6 +8098,8 @@ async def setup_status(request: Request):
             "document_ai": {
                 "configured": gcp_docai.document_ai_configured(),
                 "env": ["GCP_PROJECT_ID", "GCP_DOCUMENT_AI_PROCESSOR_ID", "GCP_SERVICE_ACCOUNT_JSON"],
+                "global_daily_limit": doc_rate_limit.DOCUMENT_AI_GLOBAL_DAILY_LIMIT,
+                "workspace_daily_limit": doc_rate_limit.DOCUMENT_AI_WORKSPACE_DAILY_LIMIT,
             },
             "r2": {
                 "configured": doc_storage.r2_configured(),
@@ -8170,6 +8273,8 @@ async def _ensure_indexes():
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
         (db.insights_rate_events, [("workspace_id", 1)], {}),
         (db.ask_helm_rate_events, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.ASK_HELM_WINDOW_SECONDS}),
+        (db.document_ai_usage, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.DOCUMENT_AI_WINDOW_SECONDS}),
+        (db.document_ai_usage, [("workspace_id", 1)], {}),
         (db.oauth_states, [("state_hash", 1)], {"unique": True}),
         (db.oauth_states, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.ask_helm_rate_events, [("workspace_id", 1)], {}),

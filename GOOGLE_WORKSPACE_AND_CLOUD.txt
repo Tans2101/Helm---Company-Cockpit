@@ -98,6 +98,13 @@ Document AI processor (this is what the $300 is for)
   leave the processor; Helm still works on Claude alone if ANTHROPIC_API_KEY
   is set.
 
+  Spend caps (Mongo, rolling 24h TTL) — over-limit skips Document AI, uses Claude:
+    DOCUMENT_AI_GLOBAL_DAILY_LIMIT=80      all workspaces combined; 0 = off
+    DOCUMENT_AI_WORKSPACE_DAILY_LIMIT=8    per company; 0 = off
+  Invoice Parser is billed per page on the Helm GCP project. These defaults
+  keep trial credits from being burned by a busy tenant. Tighten further
+  on Render if needed.
+
 Do NOT move Render, Vercel, MongoDB Atlas, R2, Clerk, Resend, or Paddle
 onto GCP to "use the credits". Those stay where they are.
 

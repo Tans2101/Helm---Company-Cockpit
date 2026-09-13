@@ -202,7 +202,9 @@ export default function Integrations() {
       toast.error(
         err === "xero_org"
           ? "No Xero organisations were available on that account."
-          : "Could not complete the connection. Try again or use a different account.",
+          : err === "token"
+            ? "Google accepted the grant, but Helm could not save the connection. Try Connect again."
+            : "Could not complete the connection. Try again or use a different account.",
       );
       setParams({});
     }

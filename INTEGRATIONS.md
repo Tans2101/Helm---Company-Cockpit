@@ -49,7 +49,11 @@ GCP_PROJECT_ID
 GCP_DOCUMENT_AI_PROCESSOR_ID
 GCP_DOCUMENT_AI_LOCATION=us
 GCP_SERVICE_ACCOUNT_JSON
+DOCUMENT_AI_GLOBAL_DAILY_LIMIT=80
+DOCUMENT_AI_WORKSPACE_DAILY_LIMIT=8
 ```
+
+Over those daily caps Helm still extracts bills with Claude; it just stops calling Document AI so GCP credits are not exhausted. `0` turns Document AI off.
 
 See `GOOGLE_WORKSPACE_AND_CLOUD.txt` for the exact Cloud Console clicks.
 
