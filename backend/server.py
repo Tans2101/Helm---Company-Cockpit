@@ -7992,36 +7992,75 @@ async def _upsert_accounting_sync_entries(
     return synced_count
 
 
-# Manual QuickBooks sync — periodic auto-sync (APScheduler / Render cron) is a natural next step.
-@api_router.post("/integrations/quickbooks/sync")
-async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manage"))):
-    ws_id = principal["workspace_id"]
-    c = await get_ws(ws_id)
-    tokens = _require_integration_token_use(principal, c, "quickbooks_tokens")
+def _system_accounting_principal(workspace: dict, token_field: str) -> dict:
+    """Actor for cron syncs — prefer the teammate who connected the grant."""
+    by_field = _INTEGRATION_CONNECTED_BY.get(token_field)
+    connected_by = (workspace.get(by_field) if by_field else None) or "system:accounting-sync"
+    return {
+        "user_id": connected_by,
+        "workspace_id": workspace["workspace_id"],
+        "role": "owner",
+        "pack": "owner",
+    }
+
+
+async def _run_quickbooks_sync_for_workspace(c: dict, principal: dict, *, source: str = "quickbooks_sync") -> dict:
+    """Refresh + fetch + upsert QuickBooks. Raises QuickBooksAuthError on expired grants."""
+    ws_id = c["workspace_id"]
+    tokens = _integration_tokens(c, "quickbooks_tokens")
     if not tokens:
         raise HTTPException(status_code=400, detail="QuickBooks is not connected — connect it in Integrations first.")
     realm_id = tokens.get("realmId")
     if not realm_id:
         raise HTTPException(status_code=400, detail="QuickBooks company (realmId) is missing — reconnect QuickBooks.")
 
-    try:
-        tokens = await qb_sync.refresh_qb_token(tokens)
-        await _store_integration_tokens(ws_id, "quickbooks_tokens", tokens)
+    tokens = await qb_sync.refresh_qb_token(tokens)
+    await _store_integration_tokens(ws_id, "quickbooks_tokens", tokens)
+    since = c.get("qb_last_synced_at")
+    txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
+    synced_count = await _upsert_accounting_sync_entries(
+        ws_id=ws_id, principal=principal, txns=txns, source=source,
+    )
+    last_synced_at = datetime.now(timezone.utc).isoformat()
+    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
 
-        since = c.get("qb_last_synced_at")
-        txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
-        synced_count = await _upsert_accounting_sync_entries(
-            ws_id=ws_id, principal=principal, txns=txns, source="quickbooks_sync",
-        )
-        last_synced_at = datetime.now(timezone.utc).isoformat()
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
+
+async def _run_xero_sync_for_workspace(c: dict, principal: dict, *, source: str = "xero_sync") -> dict:
+    """Refresh + fetch + upsert Xero. Raises XeroAuthError on expired grants."""
+    ws_id = c["workspace_id"]
+    tokens = _integration_tokens(c, "xero_tokens")
+    if not tokens:
+        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
+    tenant_id = tokens.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Choose a Xero organisation before syncing.")
+
+    tokens = await xero_sync.refresh_xero_token(tokens)
+    await _store_integration_tokens(ws_id, "xero_tokens", tokens)
+    since = c.get("xero_last_synced_at")
+    txns = await xero_sync.fetch_xero_transactions(tokens, tenant_id, since)
+    synced_count = await _upsert_accounting_sync_entries(
+        ws_id=ws_id, principal=principal, txns=txns, source=source,
+    )
+    last_synced_at = datetime.now(timezone.utc).isoformat()
+    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"xero_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
+
+
+@api_router.post("/integrations/quickbooks/sync")
+async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manage"))):
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    _require_integration_token_use(principal, c, "quickbooks_tokens")
+    try:
+        result = await _run_quickbooks_sync_for_workspace(c, principal, source="quickbooks_sync")
         await log_activity(
             principal, "integrations", "quickbooks.sync",
-            f"Synced {synced_count} transaction{'s' if synced_count != 1 else ''} from QuickBooks",
-            {"synced_count": synced_count},
+            f"Synced {result['synced_count']} transaction{'s' if result['synced_count'] != 1 else ''} from QuickBooks",
+            {"synced_count": result["synced_count"]},
         )
-        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
-
+        return {"ok": True, **result}
     except qb_sync.QuickBooksAuthError as exc:
         logger.warning("QuickBooks auth failed for %s: %s", ws_id, exc)
         await _store_integration_tokens(ws_id, "quickbooks_tokens", None, extra_unset={"qb_last_synced_at": ""})
@@ -8029,6 +8068,8 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
             status_code=401,
             detail="QuickBooks connection expired — please reconnect in Integrations.",
         ) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("QuickBooks sync failed for %s", ws_id)
         raise HTTPException(status_code=502, detail="QuickBooks sync failed — try again shortly.") from exc
@@ -8038,31 +8079,15 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
 async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
     ws_id = principal["workspace_id"]
     c = await get_ws(ws_id)
-    tokens = _require_integration_token_use(principal, c, "xero_tokens")
-    if not tokens:
-        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
-    tenant_id = tokens.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Choose a Xero organisation before syncing.")
-
+    _require_integration_token_use(principal, c, "xero_tokens")
     try:
-        tokens = await xero_sync.refresh_xero_token(tokens)
-        await _store_integration_tokens(ws_id, "xero_tokens", tokens)
-
-        since = c.get("xero_last_synced_at")
-        txns = await xero_sync.fetch_xero_transactions(tokens, tenant_id, since)
-        synced_count = await _upsert_accounting_sync_entries(
-            ws_id=ws_id, principal=principal, txns=txns, source="xero_sync",
-        )
-        last_synced_at = datetime.now(timezone.utc).isoformat()
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"xero_last_synced_at": last_synced_at}})
+        result = await _run_xero_sync_for_workspace(c, principal, source="xero_sync")
         await log_activity(
             principal, "integrations", "xero.sync",
-            f"Synced {synced_count} transaction{'s' if synced_count != 1 else ''} from Xero",
-            {"synced_count": synced_count},
+            f"Synced {result['synced_count']} transaction{'s' if result['synced_count'] != 1 else ''} from Xero",
+            {"synced_count": result["synced_count"]},
         )
-        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
-
+        return {"ok": True, **result}
     except xero_sync.XeroAuthError as exc:
         logger.warning("Xero auth failed for %s: %s", ws_id, exc)
         await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
@@ -8070,9 +8095,87 @@ async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:ma
             status_code=401,
             detail="Xero connection expired — please reconnect in Integrations.",
         ) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Xero sync failed for %s", ws_id)
         raise HTTPException(status_code=502, detail="Xero sync failed — try again shortly.") from exc
+
+
+async def run_accounting_auto_sync() -> dict:
+    """Cron: sync every workspace with a live QuickBooks or Xero connection."""
+    cursor = db.workspaces.find(
+        {
+            "$or": [
+                {"quickbooks_tokens": {"$exists": True, "$ne": None}},
+                {"xero_tokens": {"$exists": True, "$ne": None}},
+            ],
+        },
+        {"_id": 0},
+    )
+    workspaces = await cursor.to_list(2000)
+    stats = {
+        "workspaces_scanned": len(workspaces),
+        "quickbooks_ok": 0,
+        "quickbooks_skipped": 0,
+        "quickbooks_auth_errors": 0,
+        "quickbooks_errors": 0,
+        "xero_ok": 0,
+        "xero_skipped": 0,
+        "xero_auth_errors": 0,
+        "xero_errors": 0,
+        "transactions_synced": 0,
+    }
+    for c in workspaces:
+        ws_id = c.get("workspace_id") or ""
+        if cred_crypto.credentials_present(c.get("quickbooks_tokens")):
+            try:
+                principal = _system_accounting_principal(c, "quickbooks_tokens")
+                result = await _run_quickbooks_sync_for_workspace(
+                    c, principal, source="quickbooks_auto_sync",
+                )
+                stats["quickbooks_ok"] += 1
+                stats["transactions_synced"] += int(result.get("synced_count") or 0)
+            except HTTPException as exc:
+                if exc.status_code == 400:
+                    stats["quickbooks_skipped"] += 1
+                else:
+                    stats["quickbooks_errors"] += 1
+                    logger.warning("QuickBooks auto-sync skipped for %s: %s", ws_id, exc.detail)
+            except qb_sync.QuickBooksAuthError as exc:
+                stats["quickbooks_auth_errors"] += 1
+                logger.warning("QuickBooks auto-sync auth failed for %s: %s", ws_id, exc)
+                await _store_integration_tokens(ws_id, "quickbooks_tokens", None, extra_unset={"qb_last_synced_at": ""})
+            except Exception:
+                stats["quickbooks_errors"] += 1
+                logger.exception("QuickBooks auto-sync failed for %s", ws_id)
+
+        if cred_crypto.credentials_present(c.get("xero_tokens")):
+            tokens = _integration_tokens(c, "xero_tokens") or {}
+            if not tokens.get("tenant_id"):
+                stats["xero_skipped"] += 1
+                continue
+            try:
+                principal = _system_accounting_principal(c, "xero_tokens")
+                result = await _run_xero_sync_for_workspace(
+                    c, principal, source="xero_auto_sync",
+                )
+                stats["xero_ok"] += 1
+                stats["transactions_synced"] += int(result.get("synced_count") or 0)
+            except HTTPException as exc:
+                if exc.status_code == 400:
+                    stats["xero_skipped"] += 1
+                else:
+                    stats["xero_errors"] += 1
+                    logger.warning("Xero auto-sync skipped for %s: %s", ws_id, exc.detail)
+            except xero_sync.XeroAuthError as exc:
+                stats["xero_auth_errors"] += 1
+                logger.warning("Xero auto-sync auth failed for %s: %s", ws_id, exc)
+                await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
+            except Exception:
+                stats["xero_errors"] += 1
+                logger.exception("Xero auto-sync failed for %s", ws_id)
+    return stats
 
 
 @api_router.post("/integrations/hubspot/sync")
@@ -9023,6 +9126,13 @@ async def internal_run_retention_checks(request: Request):
         logger.exception("department report drafts cron failed")
         result = {**result, "department_drafts": {"error": True}}
     return result
+
+
+@api_router.post("/internal/run-accounting-sync")
+async def internal_run_accounting_sync(request: Request):
+    """Hourly Render cron: pull QuickBooks/Xero transactions into Financials. Shared-secret header required."""
+    _require_internal_cron(request)
+    return await run_accounting_auto_sync()
 
 
 @api_router.get("/internal/analytics-summary")

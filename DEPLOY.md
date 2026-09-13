@@ -229,6 +229,26 @@ value. Do not reuse `SETUP_SECRET`.
 
 ---
 
+## 7c. Accounting auto-sync (QuickBooks + Xero)
+
+Helm does not keep an in-process scheduler for accounting. A **Render Cron Job**
+(see `render.yaml` → `helm-accounting-sync`) runs hourly and hits:
+
+`POST https://www.helmcontrol.online/api/internal/run-accounting-sync`
+
+```bash
+curl -sf -X POST "https://www.helmcontrol.online/api/internal/run-accounting-sync" \
+  -H "X-Helm-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
+```
+
+Uses the same `INTERNAL_CRON_SECRET` as retention. For each workspace with a live
+QuickBooks or Xero connection it refreshes tokens, pulls new transactions since
+`qb_last_synced_at` / `xero_last_synced_at`, and upserts into Financials.
+Expired grants are cleared so owners can reconnect in Integrations. Manual
+**Sync** on the Integrations page still works anytime.
+
+---
+
 ## 8. Smoke test (must pass before you tell anyone)
 
 1. Open your domain → **Continue with Google**  

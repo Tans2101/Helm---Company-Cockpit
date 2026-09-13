@@ -140,3 +140,21 @@ services:
         sync: false
       - key: RETENTION_CRON_URL
         value: https://www.helmcontrol.online/api/internal/run-retention-checks
+
+  - type: cron
+    name: helm-accounting-sync
+    runtime: python
+    plan: starter
+    repo: https://github.com/Tans2101/Helm---Company-Cockpit
+    branch: main
+    rootDir: backend
+    schedule: "15 * * * *"
+    buildCommand: pip install --upgrade pip
+    startCommand: python scripts/run_accounting_sync_cron.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: INTERNAL_CRON_SECRET
+        sync: false
+      - key: ACCOUNTING_SYNC_CRON_URL
+        value: https://www.helmcontrol.online/api/internal/run-accounting-sync
