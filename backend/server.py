@@ -5795,11 +5795,33 @@ async def list_production_work_orders(
     )
     is_lead = _can_lead_production(principal, membership)
     templates = await _enrich_stage_templates(await _list_stage_templates(dept["department_id"]))
+    completed_progress = await db.production_stage_progress.find(
+        {
+            "department_id": dept["department_id"],
+            "entered_at": {"$nin": [None, ""]},
+            "exited_at": {"$nin": [None, ""]},
+        },
+        {"_id": 0, "stage_id": 1, "entered_at": 1, "exited_at": 1},
+    ).to_list(5000)
+    averages = decision_engine.compute_average_stage_time(completed_progress)
+    name_by_id = {t["id"]: t.get("name") or t["id"] for t in templates}
+    order_by_id = {t["id"]: t.get("order", 0) for t in templates}
+    stage_time_averages = []
+    for row in averages:
+        sid = row.get("stage_id")
+        if sid not in name_by_id:
+            continue
+        stage_time_averages.append({
+            **row,
+            "stage_name": name_by_id[sid],
+        })
+    stage_time_averages.sort(key=lambda r: order_by_id.get(r["stage_id"], 10_000))
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Production",
         "work_orders": orders,
         "stages": templates,
+        "stage_time_averages": stage_time_averages,
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_edit_structure": is_lead,

@@ -413,3 +413,61 @@ def test_generate_suggestions_rate_limit_and_approve_dismiss():
     r = owner.post(f"{BASE_URL}/api/decisions/generate-suggestions")
     # 429 when AI configured and over limit; 503 if AI missing — both prove the gate ran
     assert r.status_code in (429, 503), r.text
+
+
+def test_overdue_work_orders_is_plain_date_check():
+    today = date(2026, 9, 13)
+    orders = [
+        {"id": "late", "reference": "WO-100", "status": "active", "due_date": "2026-09-01"},
+        {"id": "on_time", "reference": "WO-101", "status": "active", "due_date": "2026-09-20"},
+        {"id": "done_late", "reference": "WO-102", "status": "done", "due_date": "2026-09-01"},
+        {"id": "no_due", "reference": "WO-103", "status": "active", "due_date": ""},
+    ]
+    sigs = eng.detect_overdue_work_orders(orders, today=today)
+    assert len(sigs) == 1
+    assert sigs[0]["type"] == "overdue_work_order"
+    assert sigs[0]["related_id"] == "late"
+    assert sigs[0]["days_late"] == 12
+    assert "WO-100" in sigs[0]["summary"]
+
+
+def test_average_stage_time_omits_stages_without_completions():
+    t0 = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    records = [
+        {
+            "stage_id": "cut",
+            "entered_at": t0.isoformat(),
+            "exited_at": (t0 + timedelta(days=2)).isoformat(),
+        },
+        {
+            "stage_id": "cut",
+            "entered_at": t0.isoformat(),
+            "exited_at": (t0 + timedelta(days=4)).isoformat(),
+        },
+        {
+            "stage_id": "pack",
+            "entered_at": t0.isoformat(),
+            "exited_at": None,
+        },
+    ]
+    rows = eng.compute_average_stage_time(records)
+    assert len(rows) == 1
+    assert rows[0]["stage_id"] == "cut"
+    assert rows[0]["sample_count"] == 2
+    assert rows[0]["average_seconds"] == pytest.approx(3 * 86400)
+    # Stage with only incomplete records must not appear as a zero average
+    assert all(r["stage_id"] != "pack" for r in rows)
+
+
+def test_overdue_work_order_wired_into_department_signals():
+    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["production"]
+    items = [
+        {"id": "late", "reference": "Late job", "status": "active", "due_date": "2026-09-01",
+         "updated_at": (now - timedelta(days=1)).isoformat()},
+    ]
+    sigs = eng.collect_department_signals([{"spec": spec, "items": items}], now=now)
+    overdue = [s for s in sigs if s["type"] == "overdue_work_order"]
+    assert len(overdue) == 1
+    assert overdue[0]["related_id"] == "late"
+    assert "overdue_work_order" in eng.DECISION_SIGNAL_TYPES

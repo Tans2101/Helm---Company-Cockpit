@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from money_fmt import fmt_money_plain
-from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR
+from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_PRODUCTION
 from department_report_drafts import SPEC_BY_TYPE
 
 
@@ -35,6 +35,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     # Unresolved high-priority equipment tickets may need CEO-level escalation
     # (downtime), unlike generic department stall nudges.
     "urgent_maintenance",
+    # Past-due production work orders (fact check, not a forecast).
+    "overdue_work_order",
 })
 DELEGATE_SIGNAL_TYPES = frozenset({
     "overdue_task",
@@ -487,6 +489,73 @@ def detect_stalled_onboarding(
     return out
 
 
+
+def detect_overdue_work_orders(work_orders: list, *, today: Optional[date] = None) -> list:
+    """Flag work orders whose due_date has passed and status is not done.
+
+    Straightforward date comparison only — no projection or estimation.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    out = []
+    for wo in work_orders or []:
+        if wo.get("status") == "done":
+            continue
+        due_d = parse_task_due_date(wo.get("due_date"))
+        if due_d is None or due_d >= today:
+            continue
+        days_late = (today - due_d).days
+        label = (wo.get("reference") or "").strip() or "Untitled work order"
+        severity = "high" if days_late >= 7 else "medium"
+        out.append(_signal(
+            "overdue_work_order",
+            severity,
+            summary=f"Overdue work order: {label}",
+            detail=(
+                f"Work order '{label}' was due {due_d.isoformat()} "
+                f"({days_late} day(s) late) and is still '{wo.get('status')}'."
+            ),
+            related_id=wo.get("id"),
+            department_type="production",
+            department_name="Production",
+            item_label=label,
+            due=due_d.isoformat(),
+            days_late=days_late,
+            status=wo.get("status"),
+        ))
+    return out
+
+
+def compute_average_stage_time(progress_records: list) -> list:
+    """Average exited_at - entered_at per stage for completed progress records.
+
+    Stages with zero completed records are omitted — never a fabricated 0.
+    """
+    buckets: dict = {}
+    for row in progress_records or []:
+        stage_id = row.get("stage_id")
+        if not stage_id:
+            continue
+        entered = _parse_iso_dt(row.get("entered_at"))
+        exited = _parse_iso_dt(row.get("exited_at"))
+        if entered is None or exited is None:
+            continue
+        if exited < entered:
+            continue
+        buckets.setdefault(stage_id, []).append((exited - entered).total_seconds())
+
+    out = []
+    for stage_id, durations in buckets.items():
+        if not durations:
+            continue
+        avg = sum(durations) / len(durations)
+        out.append({
+            "stage_id": stage_id,
+            "average_seconds": round(avg, 3),
+            "sample_count": len(durations),
+        })
+    return out
+
+
 def collect_department_signals(
     department_items: list | None,
     *,
@@ -502,6 +571,8 @@ def collect_department_signals(
         if dtype == TYPE_HR:
             signals.extend(detect_stalled_onboarding(items, spec, now=now))
             continue
+        if dtype == TYPE_PRODUCTION:
+            signals.extend(detect_overdue_work_orders(items, today=now.date()))
         generic = detect_stalled_department_item(items, spec, now=now)
         if dtype == TYPE_ENGINEERING_MAINTENANCE:
             urgent = detect_urgent_maintenance(items, spec, now=now)

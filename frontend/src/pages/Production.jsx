@@ -86,6 +86,22 @@ function upsertWorkOrder(list, order) {
   return next;
 }
 
+/** Format average dwell time for display — informational, not a forecast. */
+function formatAverageStageTime(seconds) {
+  if (seconds == null || Number.isNaN(Number(seconds))) return null;
+  const s = Number(seconds);
+  if (s >= 86400) {
+    const days = s / 86400;
+    return `${days >= 10 ? Math.round(days) : days.toFixed(1).replace(/\.0$/, "")}d`;
+  }
+  if (s >= 3600) {
+    const hours = s / 3600;
+    return `${hours >= 10 ? Math.round(hours) : hours.toFixed(1).replace(/\.0$/, "")}h`;
+  }
+  const mins = Math.max(1, Math.round(s / 60));
+  return `${mins}m`;
+}
+
 export default function Production() {
   const { data, loading, error, reload, setData } = useFetch("/production/work-orders");
   const { data: membersData } = useFetch("/members");
@@ -126,6 +142,10 @@ export default function Production() {
   const openProcurement = useMemo(
     () => procRequests.filter((r) => PROC_OPEN.has(r.status)),
     [procRequests],
+  );
+  const stageTimeAverages = useMemo(
+    () => (data?.stage_time_averages || []).filter((row) => row?.stage_id && row.sample_count > 0),
+    [data?.stage_time_averages],
   );
   const ordersByStage = useMemo(() => {
     const map = {};
@@ -561,6 +581,27 @@ export default function Production() {
           )}
         />
       ) : (
+        <>
+        {view === "board" && stageTimeAverages.length > 0 && (
+          <p
+            className="mb-3 text-xs text-helm-muted"
+            data-testid="stage-time-averages"
+          >
+            <span className="font-mono uppercase tracking-wide text-[10px] mr-2">Average time in stage</span>
+            {stageTimeAverages.map((row, i) => {
+              const label = formatAverageStageTime(row.average_seconds);
+              if (!label) return null;
+              return (
+                <span key={row.stage_id}>
+                  {i > 0 ? <span className="mx-1.5 text-helm-line">·</span> : null}
+                  <span data-testid={`stage-avg-${row.stage_id}`}>
+                    {row.stage_name || row.stage_id} {label}
+                  </span>
+                </span>
+              );
+            })}
+          </p>
+        )}
         <div
           className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1"
           data-testid="production-board"
@@ -645,6 +686,7 @@ export default function Production() {
             );
           })}
         </div>
+        </>
       )}
 
       {selected && draft && view === "board" && (
