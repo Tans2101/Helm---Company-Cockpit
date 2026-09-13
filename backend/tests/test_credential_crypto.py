@@ -72,3 +72,13 @@ def test_production_rejects_non_fernet_key(monkeypatch):
     monkeypatch.setenv("INTEGRATION_ENCRYPTION_KEY", "weak-passphrase")
     with pytest.raises(cc.CredentialCryptoError):
         cc.encrypt_credential("secret")
+
+
+def test_encryption_key_is_fernet_and_assert_ready(monkeypatch):
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("INTEGRATION_ENCRYPTION_KEY", key)
+    assert cc.encryption_key_is_fernet() is True
+    assert cc.assert_encryption_ready() == key.encode("utf-8")
+    monkeypatch.delenv("INTEGRATION_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert cc.encryption_key_is_fernet() is False

@@ -11,6 +11,9 @@ ALWAYS_REQUIRED = [
     "FRONTEND_URL",
     "APP_URL",
     "CORS_ORIGINS",
+    # Fernet key for OAuth/ERP credentials at rest. Missing this used to
+    # ship a successful Render build and only fail on the first token save.
+    "INTEGRATION_ENCRYPTION_KEY",
 ]
 
 RECOMMENDED = [
@@ -23,7 +26,6 @@ RECOMMENDED = [
     "XERO_CLIENT_SECRET",
     "HUBSPOT_CLIENT_ID",
     "HUBSPOT_CLIENT_SECRET",
-    "INTEGRATION_ENCRYPTION_KEY",
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "R2_BUCKET_NAME",
@@ -97,6 +99,15 @@ def main() -> int:
         )
 
     rec_missing = [k for k in RECOMMENDED if not (os.environ.get(k) or "").strip()]
+
+    integ_key = (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip()
+    if integ_key:
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(integ_key.encode("utf-8"))
+        except Exception:
+            missing.append("INTEGRATION_ENCRYPTION_KEY (must be a Fernet key, not a passphrase)")
 
     if missing:
         print("MISSING required env:", ", ".join(missing))

@@ -247,7 +247,7 @@ def _enforce_production_config() -> None:
         )
     else:
         try:
-            cred_crypto.encrypt_credential("production-config-check")
+            cred_crypto.assert_encryption_ready()
         except cred_crypto.CredentialCryptoError:
             problems.append("INTEGRATION_ENCRYPTION_KEY must be a valid Fernet key")
     if not CORS_ORIGINS:
@@ -8101,6 +8101,10 @@ async def setup_status(request: Request):
                 "global_daily_limit": doc_rate_limit.DOCUMENT_AI_GLOBAL_DAILY_LIMIT,
                 "workspace_daily_limit": doc_rate_limit.DOCUMENT_AI_WORKSPACE_DAILY_LIMIT,
             },
+            "credential_encryption": {
+                "configured": cred_crypto.encryption_key_is_fernet(),
+                "env": ["INTEGRATION_ENCRYPTION_KEY"],
+            },
             "r2": {
                 "configured": doc_storage.r2_configured(),
                 "env": ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"],
@@ -8366,6 +8370,8 @@ async def _connect_mongo_at_startup() -> None:
 
 @app.on_event("startup")
 async def startup():
+    if ENVIRONMENT == "production":
+        cred_crypto.assert_encryption_ready()
     await _connect_mongo_at_startup()
     # Do not block Render health checks — indexes / migrations run after listen.
     asyncio.create_task(_ensure_indexes())

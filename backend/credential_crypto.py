@@ -72,6 +72,23 @@ def _fernet() -> Fernet:
     return Fernet(_fernet_key_bytes())
 
 
+def encryption_key_is_fernet() -> bool:
+    """True when INTEGRATION_ENCRYPTION_KEY is present and a real Fernet key."""
+    raw = (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip()
+    if not raw:
+        return False
+    try:
+        Fernet(raw.encode("utf-8"))
+    except Exception:
+        return False
+    return True
+
+
+def assert_encryption_ready() -> bytes:
+    """Validate the at-rest encryption key immediately (boot / build)."""
+    return _fernet_key_bytes()
+
+
 def encrypt_credential(value: str) -> str:
     """Encrypt a single secret string. Returns a Fernet token (url-safe text)."""
     if value is None:
