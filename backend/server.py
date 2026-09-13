@@ -1482,29 +1482,38 @@ def company_profile_for_synthesis(c: dict) -> dict:
     }
 
 
-def calendar_for_synthesis(cal_snap: Optional[dict]) -> dict:
-    """Calendar for AI: not connected is not the same as a free day."""
-    if not cal_snap:
+def calendar_for_synthesis(cal_snap: Optional[dict], *, google_connected: bool = False) -> dict:
+    """Calendar for AI: not connected / fetch failure is not the same as a free day."""
+    unavailable = (
+        "Google Calendar could not be loaded. Do not invent meetings and do not "
+        "say the founder has a free day. Say calendar data is not available."
+    )
+    not_connected = (
+        "Google Calendar is not connected. Do not invent meetings and do not "
+        "say the founder has a free day. Say calendar data is not available."
+    )
+    snap = cal_snap or {}
+    live = bool(cal_snap) and snap.get("live") is not False and snap.get("meetings") is not None
+    if live:
+        all_meetings = snap.get("meetings") or []
+        meetings = [
+            {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
+            for m in all_meetings[:8]
+        ]
         return {
-            "connected": False,
-            "meetings": None,
-            "meeting_count": None,
-            "unknown_fields": ["calendar"],
-            "instructions_for_missing_data": (
-                "Google Calendar is not connected. Do not invent meetings and do not "
-                "say the founder has a free day. Say calendar data is not available."
-            ),
+            "connected": True,
+            "meetings": meetings,
+            "meeting_count": len(all_meetings),
+            "unknown_fields": [],
+            "instructions_for_missing_data": "",
         }
-    meetings = [
-        {"time": m.get("time"), "title": m.get("title"), "duration": m.get("duration")}
-        for m in (cal_snap.get("meetings") or [])[:8]
-    ]
+    failed = google_connected or snap.get("live") is False or snap.get("auth_error") or snap.get("fetch_error")
     return {
-        "connected": True,
-        "meetings": meetings,
-        "meeting_count": len(cal_snap.get("meetings") or []),
-        "unknown_fields": [],
-        "instructions_for_missing_data": "",
+        "connected": bool(google_connected or snap.get("live") is False or snap.get("auth_error")),
+        "meetings": None,
+        "meeting_count": None,
+        "unknown_fields": ["calendar"],
+        "instructions_for_missing_data": unavailable if failed else not_connected,
     }
 
 
@@ -1523,10 +1532,13 @@ def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
                 "data is not available."
             ),
         }
-    normalized = [
-        {"stage": d.get("stage") or "lead", "value": float(d.get("value") or 0)}
-        for d in deals
-    ]
+    normalized = []
+    for d in deals:
+        try:
+            value = float(d.get("value") or 0)
+        except (TypeError, ValueError):
+            value = 0.0
+        normalized.append({"stage": d.get("stage") or "lead", "value": value})
     metrics = _deal_metrics(normalized)
     return {
         "tracked": True,
@@ -1551,9 +1563,11 @@ def onboarding_for_synthesis(instances, *, hr_tracked: bool) -> dict:
                 "not available."
             ),
         }
+    # "active" means the hire finished onboarding — not currently in the pipeline.
+    in_progress = [i for i in instances if (i.get("overall_status") or "in_progress") != "active"]
     return {
         "tracked": True,
-        "instance_count": len(instances),
+        "instance_count": len(in_progress),
         "unknown_fields": [],
         "instructions_for_missing_data": "",
     }
@@ -1619,9 +1633,12 @@ def ask_context_for_synthesis(
 ) -> dict:
     """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished."""
     profile = company_profile_for_synthesis(c)
+    roster = ((c.get("people") or {}).get("people") or [])
     return {
         "company": profile.get("name"),
         "company_profile": profile,
+        # People-roster length is computed — 0 means nobody on the list, not "headcount not entered".
+        "people_count": len(roster),
         "financials": financials_for_synthesis(fin),
         "pipeline": pipeline_for_synthesis(deals, sales_tracked=sales_tracked),
         "onboarding": onboarding_for_synthesis(onboarding_instances, hr_tracked=hr_tracked),
@@ -2449,6 +2466,7 @@ async def update_company(payload: CompanySetupInput, principal=Depends(require("
         if payload.employees < 0 or payload.employees > 100000:
             raise HTTPException(status_code=400, detail="Invalid team size")
         updates["employees"] = payload.employees
+        updates["employees_entered"] = True
     if payload.founded is not None:
         founded = payload.founded.strip()
         if founded and (len(founded) != 4 or not founded.isdigit()):
@@ -2882,7 +2900,10 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         "what_changed": b["what_changed"],
         "decisions": b["what_to_decide"],
         "financials": financials_for_synthesis(fin),
-        "calendar": calendar_for_synthesis(cal_snap),
+        "calendar": calendar_for_synthesis(
+            cal_snap,
+            google_connected=bool(_integration_tokens(c, "google_tokens")),
+        ),
     }
     system = (
         "You are a clear, practical chief of staff writing a short daily note for a founder. "

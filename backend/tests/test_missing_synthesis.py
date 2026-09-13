@@ -31,6 +31,22 @@ def test_calendar_connected_empty_is_confirmed_zero():
     assert payload["unknown_fields"] == []
 
 
+def test_calendar_auth_failure_is_not_a_free_day():
+    payload = server.calendar_for_synthesis({"meetings": [], "live": False, "auth_error": "revoked"})
+    assert payload["meetings"] is None
+    assert payload["meeting_count"] is None
+    assert "calendar" in payload["unknown_fields"]
+    assert "could not be loaded" in payload["instructions_for_missing_data"]
+
+
+def test_calendar_fetch_failure_while_connected_is_not_disconnected():
+    payload = server.calendar_for_synthesis(None, google_connected=True)
+    assert payload["meetings"] is None
+    assert "calendar" in payload["unknown_fields"]
+    assert "could not be loaded" in payload["instructions_for_missing_data"]
+    assert "not connected" not in payload["instructions_for_missing_data"]
+
+
 def test_pipeline_not_tracked_is_unknown_not_zero():
     payload = server.pipeline_for_synthesis([], sales_tracked=False)
     assert payload["tracked"] is False
@@ -48,7 +64,13 @@ def test_pipeline_tracked_empty_is_confirmed_zero():
     assert payload["unknown_fields"] == []
 
 
-def test_onboarding_not_tracked_is_unknown_not_zero():
+def test_pipeline_malformed_value_does_not_crash():
+    payload = server.pipeline_for_synthesis(
+        [{"stage": "lead", "value": "not-a-number"}], sales_tracked=True,
+    )
+    assert payload["tracked"] is True
+    assert payload["deal_count"] == 1
+    assert payload["open_value"] == 0
     payload = server.onboarding_for_synthesis([], hr_tracked=False)
     assert payload["tracked"] is False
     assert payload["instance_count"] is None
@@ -63,7 +85,13 @@ def test_onboarding_tracked_empty_is_confirmed_zero():
     assert payload["unknown_fields"] == []
 
 
-def test_risks_sample_is_unknown_not_empty_radar():
+def test_onboarding_finished_hires_are_not_current_pipeline():
+    payload = server.onboarding_for_synthesis(
+        [{"overall_status": "active"}, {"overall_status": "in_progress"}],
+        hr_tracked=True,
+    )
+    assert payload["tracked"] is True
+    assert payload["instance_count"] == 1
     payload = server.risks_for_synthesis({"telemetry": {"risks": [{"label": "Sample"}]}})
     assert payload["tracked"] is False
     assert payload["items"] is None
@@ -161,6 +189,7 @@ def test_ask_context_does_not_treat_untracked_pipeline_as_zero():
     assert payload["onboarding"]["instance_count"] is None
     assert payload["risks"]["items"] is None
     assert payload["open_decisions"] == []
+    assert payload["people_count"] == 0
 
 
 def test_ask_context_preserves_confirmed_empty_pipeline_and_onboarding():
@@ -178,6 +207,7 @@ def test_ask_context_preserves_confirmed_empty_pipeline_and_onboarding():
         "name": "Acme",
         "stage": "Seed",
         "employees": 2,
+        "people": {"people": [{"id": "p1"}, {"id": "p2"}]},
         "decisions": [{"title": "Hire", "status": "pending"}],
         "telemetry_manual": {"risks": []},
     }
@@ -190,3 +220,4 @@ def test_ask_context_preserves_confirmed_empty_pipeline_and_onboarding():
     assert payload["risks"]["items"] == []
     assert payload["financials"]["cash"] == 0.0
     assert payload["open_decisions"] == ["Hire"]
+    assert payload["people_count"] == 2
