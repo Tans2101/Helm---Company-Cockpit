@@ -30,13 +30,13 @@ DEPT_SPECS = (
     {
         "type": dept_catalog.TYPE_PRODUCTION,
         "name": "Production",
-        "collection": "production_stages",
+        "collection": "production_work_orders",
         "status_field": "status",
         "done_value": "done",
-        "label_field": "name",
-        "metric_label": "Stages finished",
-        "noun": "production stage",
-        "noun_plural": "production stages",
+        "label_field": "reference",
+        "metric_label": "Work orders finished",
+        "noun": "work order",
+        "noun_plural": "work orders",
         "verb": "Finished",
     },
     {

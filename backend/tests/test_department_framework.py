@@ -140,9 +140,13 @@ def dept_api():
     })
     mock_db.users.find_one = AsyncMock(return_value={"name": "Alex", "email": "alex@acme.com"})
     attach_users_in_find(mock_db.users)
-    # production_stages for dependent-data guard
-    mock_db.production_stages = MagicMock()
-    mock_db.production_stages.find_one = AsyncMock(return_value=None)
+    # production feature collections for dependent-data guard
+    mock_db.production_stage_templates = MagicMock()
+    mock_db.production_stage_templates.find_one = AsyncMock(return_value=None)
+    mock_db.production_work_orders = MagicMock()
+    mock_db.production_work_orders.find_one = AsyncMock(return_value=None)
+    mock_db.production_stage_progress = MagicMock()
+    mock_db.production_stage_progress.find_one = AsyncMock(return_value=None)
     # HR enable seeds default onboarding template
     hr_templates = []
 
@@ -236,8 +240,10 @@ def test_disable_clears_dependent_data(dept_api):
     client, depts, members, mock_db, as_ceo, as_member = dept_api
     client.post("/api/departments", json={"type": "production"})
     dept_id = depts.rows[0]["department_id"]
-    mock_db.production_stages.find_one = AsyncMock(return_value={"_id": "x"})
-    mock_db.production_stages.delete_many = AsyncMock(return_value=MagicMock(deleted_count=2))
+    mock_db.production_work_orders.find_one = AsyncMock(return_value={"_id": "x"})
+    mock_db.production_work_orders.delete_many = AsyncMock(return_value=MagicMock(deleted_count=2))
+    mock_db.production_stage_templates.delete_many = AsyncMock(return_value=MagicMock(deleted_count=1))
+    mock_db.production_stage_progress.delete_many = AsyncMock(return_value=MagicMock(deleted_count=3))
     # Other feature collections used by clear_department_feature_data
     for name in (
         "procurement_requests", "legal_matters", "maintenance_tickets",
@@ -253,7 +259,9 @@ def test_disable_clears_dependent_data(dept_api):
     r = client.delete(f"/api/departments/{dept_id}")
     assert r.status_code == 200, r.text
     assert r.json()["ok"] is True
-    mock_db.production_stages.delete_many.assert_called()
+    mock_db.production_work_orders.delete_many.assert_called()
+    mock_db.production_stage_templates.delete_many.assert_called()
+    mock_db.production_stage_progress.delete_many.assert_called()
     assert not any(d["department_id"] == dept_id for d in depts.rows)
 
 

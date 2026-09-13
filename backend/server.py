@@ -5427,7 +5427,13 @@ async def get_department_by_type(dept_type: str, principal=Depends(get_principal
 
 
 # ------------------------- Production chain -------------------------
-PRODUCTION_STATUSES = frozenset({"not_started", "in_progress", "blocked", "done"})
+# Stage templates define the sequence. Work orders move through them independently
+# so multiple jobs can be in progress at once. Progress is tracked per
+# (work_order, stage), not as a single global status on the template.
+PRODUCTION_PROGRESS_STATUSES = frozenset({"not_started", "in_progress", "blocked", "done"})
+PRODUCTION_WORK_ORDER_STATUSES = frozenset({"active", "done", "cancelled"})
+PRODUCTION_PRIORITIES = frozenset({"low", "normal", "high"})
+PRODUCTION_BLOCKED_CATEGORIES = frozenset({"material", "labor", "machine", "quality", "other"})
 
 
 async def _production_department(principal: dict) -> dict:
@@ -5447,59 +5453,159 @@ async def _production_department(principal: dict) -> dict:
     return doc
 
 
-def _can_lead_production(principal: dict, department_id: str, membership: dict | None) -> bool:
+def _can_lead_production(principal: dict, membership: dict | None) -> bool:
     if dept_access.is_workspace_ceo(principal):
         return True
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_stage_assignees(stage: dict, users: dict | None = None) -> dict:
-    ids = list(stage.get("assigned_user_ids") or [])
+def _can_update_production_progress(principal: dict, membership: dict | None, progress: dict) -> bool:
+    """Lead/CEO can update any progress; members only when assigned (or unassigned)."""
+    if _can_lead_production(principal, membership):
+        return True
+    assigned = list(progress.get("assigned_user_ids") or [])
+    if not assigned:
+        return True
+    return principal["user_id"] in assigned
+
+
+async def _enrich_assignee_ids(user_ids: list, users: dict | None = None) -> list:
+    ids = [u for u in (user_ids or []) if u]
     lookup = users if users is not None else await _users_by_ids(ids)
-    assignees = [_user_card(uid, lookup.get(uid)) for uid in ids]
-    out = dict(stage)
-    out["assignees"] = assignees
+    return [_user_card(uid, lookup.get(uid)) for uid in ids]
+
+
+async def _list_stage_templates(department_id: str) -> list:
+    return await db.production_stage_templates.find(
+        {"department_id": department_id},
+        {"_id": 0},
+    ).sort("order", 1).to_list(500)
+
+
+async def _enrich_stage_templates(rows: list) -> list:
+    ids = []
+    for r in rows:
+        ids.extend(r.get("default_assigned_user_ids") or [])
+    users = await _users_by_ids(ids)
+    out = []
+    for r in rows:
+        item = dict(r)
+        item["assignees"] = await _enrich_assignee_ids(
+            item.get("default_assigned_user_ids") or [], users,
+        )
+        out.append(item)
     return out
 
 
-async def _enrich_stages(rows: list) -> list:
-    ids = []
-    for r in rows:
-        ids.extend(r.get("assigned_user_ids") or [])
-    users = await _users_by_ids(ids)
-    return [await _enrich_stage_assignees(r, users) for r in rows]
+async def _enrich_progress(progress: dict, users: dict | None = None) -> dict:
+    out = dict(progress)
+    out["assignees"] = await _enrich_assignee_ids(out.get("assigned_user_ids") or [], users)
+    return out
+
+
+def _normalize_blocked_reason(raw, *, require: bool) -> Optional[dict]:
+    if raw is None:
+        if require:
+            raise HTTPException(
+                status_code=400,
+                detail="blocked_reason.category is required when status is blocked",
+            )
+        return None
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="blocked_reason must be an object")
+    category = str(raw.get("category") or "").strip().lower()
+    detail = str(raw.get("detail") or "").strip()[:500]
+    if require and not category:
+        raise HTTPException(
+            status_code=400,
+            detail="blocked_reason.category is required when status is blocked",
+        )
+    if category and category not in PRODUCTION_BLOCKED_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Invalid blocked_reason.category")
+    if not category and not detail:
+        return None
+    if not category:
+        raise HTTPException(status_code=400, detail="blocked_reason.category is required")
+    return {"category": category, "detail": detail}
+
+
+async def _get_work_order(department_id: str, work_order_id: str) -> dict:
+    doc = await db.production_work_orders.find_one(
+        {"id": work_order_id, "department_id": department_id},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    return doc
+
+
+async def _current_progress_for_order(work_order: dict) -> Optional[dict]:
+    stage_id = work_order.get("current_stage_id")
+    if not stage_id:
+        return None
+    return await db.production_stage_progress.find_one(
+        {"work_order_id": work_order["id"], "stage_id": stage_id},
+        {"_id": 0},
+    )
+
+
+async def _embed_work_order(order: dict, progress: Optional[dict], users: dict | None = None) -> dict:
+    out = dict(order)
+    out["current_progress"] = await _enrich_progress(progress, users) if progress else None
+    return out
 
 
 class ProductionStageCreate(BaseModel):
     name: str
-    status: str = "not_started"
-    assigned_user_ids: list[str] = []
-    notes: str = ""
+    default_assigned_user_ids: list[str] = []
 
 
 class ProductionStagePatch(BaseModel):
     name: Optional[str] = None
-    status: Optional[str] = None
-    assigned_user_ids: Optional[list[str]] = None
-    notes: Optional[str] = None
+    default_assigned_user_ids: Optional[list[str]] = None
 
 
 class ProductionReorderInput(BaseModel):
     stage_ids: list[str]
 
 
+class ProductionWorkOrderCreate(BaseModel):
+    reference: str
+    product: str = ""
+    quantity: Optional[float] = None
+    customer: str = ""
+    priority: str = "normal"
+    due_date: str = ""
+
+
+class ProductionWorkOrderPatch(BaseModel):
+    reference: Optional[str] = None
+    product: Optional[str] = None
+    quantity: Optional[float] = None
+    customer: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    status: Optional[str] = None  # active / cancelled only via this path
+
+
+class ProductionStageProgressPatch(BaseModel):
+    status: Optional[str] = None
+    assigned_user_ids: Optional[list[str]] = None
+    notes: Optional[str] = None
+    blocked_reason: Optional[dict] = None
+    linked_procurement_request_id: Optional[str] = None
+
+
 @api_router.get("/production/stages")
 async def list_production_stages(principal=Depends(get_principal)):
+    """List stage templates (sequence definition — not live job status)."""
     dept = await _production_department(principal)
-    rows = await db.production_stages.find(
-        {"department_id": dept["department_id"]},
-        {"_id": 0},
-    ).sort("order", 1).to_list(500)
-    stages = await _enrich_stages(rows)
+    rows = await _list_stage_templates(dept["department_id"])
+    stages = await _enrich_stage_templates(rows)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    is_lead = _can_lead_production(principal, dept["department_id"], membership)
+    is_lead = _can_lead_production(principal, membership)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Production",
@@ -5507,8 +5613,9 @@ async def list_production_stages(principal=Depends(get_principal)):
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_edit_structure": is_lead,
-        "can_update_stage": True,  # caller already passed access check
-        "statuses": sorted(PRODUCTION_STATUSES),
+        "progress_statuses": sorted(PRODUCTION_PROGRESS_STATUSES),
+        "priorities": sorted(PRODUCTION_PRIORITIES),
+        "blocked_categories": sorted(PRODUCTION_BLOCKED_CATEGORIES),
     }
 
 
@@ -5518,38 +5625,31 @@ async def create_production_stage(payload: ProductionStageCreate, principal=Depe
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    if not _can_lead_production(principal, dept["department_id"], membership):
+    if not _can_lead_production(principal, membership):
         raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can add stages")
     name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Stage name is required")
-    status = (payload.status or "not_started").strip()
-    if status not in PRODUCTION_STATUSES:
-        raise HTTPException(status_code=400, detail="Invalid status")
-    assigned = [u for u in (payload.assigned_user_ids or []) if u]
-    # Next order = max + 1
-    last = await db.production_stages.find(
+    assigned = [u for u in (payload.default_assigned_user_ids or []) if u]
+    last = await db.production_stage_templates.find(
         {"department_id": dept["department_id"]},
         {"_id": 0, "order": 1},
     ).sort("order", -1).to_list(1)
     next_order = int((last[0]["order"] if last else -1)) + 1
     now = datetime.now(timezone.utc).isoformat()
     stage = {
-        "id": f"pstage_{uuid.uuid4().hex[:10]}",
+        "id": f"pstpl_{uuid.uuid4().hex[:10]}",
         "department_id": dept["department_id"],
         "workspace_id": principal["workspace_id"],
         "name": name,
         "order": next_order,
-        "status": status,
-        "assigned_user_ids": assigned,
-        "notes": (payload.notes or "").strip(),
+        "default_assigned_user_ids": assigned,
         "created_at": now,
         "updated_at": now,
     }
-    if status == "done":
-        stage["completed_at"] = now
-    await db.production_stages.insert_one(stage)
-    return {"ok": True, "stage": await _enrich_stage_assignees({k: v for k, v in stage.items() if k != "_id"})}
+    await db.production_stage_templates.insert_one(stage)
+    enriched = (await _enrich_stage_templates([{k: v for k, v in stage.items() if k != "_id"}]))[0]
+    return {"ok": True, "stage": enriched}
 
 
 @api_router.patch("/production/stages/reorder")
@@ -5558,12 +5658,12 @@ async def reorder_production_stages(payload: ProductionReorderInput, principal=D
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    if not _can_lead_production(principal, dept["department_id"], membership):
+    if not _can_lead_production(principal, membership):
         raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can reorder stages")
     ids = [s for s in (payload.stage_ids or []) if s]
     if not ids:
         raise HTTPException(status_code=400, detail="stage_ids is required")
-    existing = await db.production_stages.find(
+    existing = await db.production_stage_templates.find(
         {"department_id": dept["department_id"]},
         {"_id": 0, "id": 1},
     ).to_list(500)
@@ -5572,7 +5672,7 @@ async def reorder_production_stages(payload: ProductionReorderInput, principal=D
         raise HTTPException(status_code=400, detail="stage_ids must include every stage exactly once")
     now = datetime.now(timezone.utc).isoformat()
     for i, sid in enumerate(ids):
-        await db.production_stages.update_one(
+        await db.production_stage_templates.update_one(
             {"id": sid, "department_id": dept["department_id"]},
             {"$set": {"order": i, "updated_at": now}},
         )
@@ -5589,8 +5689,9 @@ async def patch_production_stage(
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    is_lead = _can_lead_production(principal, dept["department_id"], membership)
-    stage = await db.production_stages.find_one(
+    if not _can_lead_production(principal, membership):
+        raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can edit stage templates")
+    stage = await db.production_stage_templates.find_one(
         {"id": stage_id, "department_id": dept["department_id"]},
         {"_id": 0},
     )
@@ -5598,31 +5699,22 @@ async def patch_production_stage(
         raise HTTPException(status_code=404, detail="Stage not found")
     upd = {}
     if payload.name is not None:
-        if not is_lead:
-            raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can rename stages")
         name = payload.name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="Stage name is required")
         upd["name"] = name
-    if payload.status is not None:
-        status = payload.status.strip()
-        if status not in PRODUCTION_STATUSES:
-            raise HTTPException(status_code=400, detail="Invalid status")
-        upd["status"] = status
-    helm_dept_drafts.apply_status_completion(stage, upd, done_status="done")
-    if payload.assigned_user_ids is not None:
-        upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
-    if payload.notes is not None:
-        upd["notes"] = payload.notes.strip()
+    if payload.default_assigned_user_ids is not None:
+        upd["default_assigned_user_ids"] = [u for u in payload.default_assigned_user_ids if u]
     if not upd:
-        return {"ok": True, "stage": await _enrich_stage_assignees(stage)}
+        enriched = (await _enrich_stage_templates([stage]))[0]
+        return {"ok": True, "stage": enriched}
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.production_stages.update_one(
+    await db.production_stage_templates.update_one(
         {"id": stage_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
-    updated = {**stage, **upd}
-    return {"ok": True, "stage": await _enrich_stage_assignees(updated)}
+    enriched = (await _enrich_stage_templates([{**stage, **upd}]))[0]
+    return {"ok": True, "stage": enriched}
 
 
 @api_router.delete("/production/stages/{stage_id}")
@@ -5631,25 +5723,392 @@ async def delete_production_stage(stage_id: str, principal=Depends(get_principal
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    if not _can_lead_production(principal, dept["department_id"], membership):
+    if not _can_lead_production(principal, membership):
         raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can delete stages")
-    result = await db.production_stages.delete_one(
+    # Refuse delete if any active work order is currently on this stage.
+    in_use = await db.production_work_orders.find_one(
+        {
+            "department_id": dept["department_id"],
+            "current_stage_id": stage_id,
+            "status": "active",
+        },
+        {"_id": 0, "id": 1},
+    )
+    if in_use:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a stage while an active work order is on it",
+        )
+    result = await db.production_stage_templates.delete_one(
         {"id": stage_id, "department_id": dept["department_id"]},
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Stage not found")
-    # Compact order values
-    rows = await db.production_stages.find(
+    rows = await db.production_stage_templates.find(
         {"department_id": dept["department_id"]},
         {"_id": 0, "id": 1},
     ).sort("order", 1).to_list(500)
     now = datetime.now(timezone.utc).isoformat()
     for i, row in enumerate(rows):
-        await db.production_stages.update_one(
+        await db.production_stage_templates.update_one(
             {"id": row["id"]},
             {"$set": {"order": i, "updated_at": now}},
         )
     return {"ok": True}
+
+
+@api_router.get("/production/work-orders")
+async def list_production_work_orders(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+):
+    dept = await _production_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in PRODUCTION_WORK_ORDER_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    rows = await db.production_work_orders.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    progress_ids = [(r.get("id"), r.get("current_stage_id")) for r in rows if r.get("current_stage_id")]
+    progress_by_key = {}
+    if progress_ids:
+        progress_rows = await db.production_stage_progress.find(
+            {
+                "work_order_id": {"$in": [p[0] for p in progress_ids]},
+                "stage_id": {"$in": list({p[1] for p in progress_ids if p[1]})},
+            },
+            {"_id": 0},
+        ).to_list(5000)
+        for p in progress_rows:
+            progress_by_key[(p["work_order_id"], p["stage_id"])] = p
+    assignee_ids = []
+    for p in progress_by_key.values():
+        assignee_ids.extend(p.get("assigned_user_ids") or [])
+    users = await _users_by_ids(assignee_ids)
+    orders = []
+    for r in rows:
+        prog = progress_by_key.get((r["id"], r.get("current_stage_id")))
+        orders.append(await _embed_work_order(r, prog, users))
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_production(principal, membership)
+    templates = await _enrich_stage_templates(await _list_stage_templates(dept["department_id"]))
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "Production",
+        "work_orders": orders,
+        "stages": templates,
+        "is_ceo": dept_access.is_workspace_ceo(principal),
+        "is_lead": is_lead,
+        "can_edit_structure": is_lead,
+        "progress_statuses": sorted(PRODUCTION_PROGRESS_STATUSES),
+        "priorities": sorted(PRODUCTION_PRIORITIES),
+        "blocked_categories": sorted(PRODUCTION_BLOCKED_CATEGORIES),
+    }
+
+
+@api_router.post("/production/work-orders")
+async def create_production_work_order(payload: ProductionWorkOrderCreate, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    reference = (payload.reference or "").strip()
+    if not reference:
+        raise HTTPException(status_code=400, detail="reference is required")
+    priority = (payload.priority or "normal").strip().lower()
+    if priority not in PRODUCTION_PRIORITIES:
+        raise HTTPException(status_code=400, detail="Invalid priority")
+    templates = await _list_stage_templates(dept["department_id"])
+    if not templates:
+        raise HTTPException(
+            status_code=400,
+            detail="Add at least one production stage before creating a work order",
+        )
+    first = templates[0]
+    now = datetime.now(timezone.utc).isoformat()
+    order = {
+        "id": f"pwo_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "reference": reference[:200],
+        "product": (payload.product or "").strip()[:200],
+        "quantity": payload.quantity,
+        "customer": (payload.customer or "").strip()[:200],
+        "priority": priority,
+        "due_date": (payload.due_date or "").strip()[:32],
+        "current_stage_id": first["id"],
+        "status": "active",
+        "created_at": now,
+        "updated_at": now,
+        "completed_at": None,
+    }
+    progress = {
+        "id": f"psp_{uuid.uuid4().hex[:10]}",
+        "work_order_id": order["id"],
+        "stage_id": first["id"],
+        "workspace_id": principal["workspace_id"],
+        "department_id": dept["department_id"],
+        "status": "not_started",
+        "assigned_user_ids": list(first.get("default_assigned_user_ids") or []),
+        "notes": "",
+        "blocked_reason": None,
+        "linked_procurement_request_id": None,
+        "entered_at": now,
+        "exited_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.production_work_orders.insert_one(order)
+    await db.production_stage_progress.insert_one(progress)
+    embedded = await _embed_work_order(
+        {k: v for k, v in order.items() if k != "_id"},
+        {k: v for k, v in progress.items() if k != "_id"},
+    )
+    return {"ok": True, "work_order": embedded}
+
+
+@api_router.patch("/production/work-orders/{work_order_id}")
+async def patch_production_work_order(
+    work_order_id: str,
+    payload: ProductionWorkOrderPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    upd = {}
+    if payload.reference is not None:
+        ref = payload.reference.strip()
+        if not ref:
+            raise HTTPException(status_code=400, detail="reference is required")
+        upd["reference"] = ref[:200]
+    if payload.product is not None:
+        upd["product"] = payload.product.strip()[:200]
+    if payload.quantity is not None:
+        upd["quantity"] = payload.quantity
+    if payload.customer is not None:
+        upd["customer"] = payload.customer.strip()[:200]
+    if payload.priority is not None:
+        pr = payload.priority.strip().lower()
+        if pr not in PRODUCTION_PRIORITIES:
+            raise HTTPException(status_code=400, detail="Invalid priority")
+        upd["priority"] = pr
+    if payload.due_date is not None:
+        upd["due_date"] = payload.due_date.strip()[:32]
+    if payload.status is not None:
+        st = payload.status.strip().lower()
+        if st not in ("active", "cancelled"):
+            raise HTTPException(
+                status_code=400,
+                detail="Use /advance to complete a work order; status here may be active or cancelled",
+            )
+        membership = await dept_access.get_department_membership(
+            db, dept["department_id"], principal["user_id"],
+        )
+        if st == "cancelled" and not _can_lead_production(principal, membership):
+            raise HTTPException(status_code=403, detail="Only the CEO or a Production lead can cancel work orders")
+        upd["status"] = st
+        if st == "cancelled":
+            upd["completed_at"] = datetime.now(timezone.utc).isoformat()
+    if not upd:
+        progress = await _current_progress_for_order(order)
+        return {"ok": True, "work_order": await _embed_work_order(order, progress)}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.production_work_orders.update_one(
+        {"id": work_order_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    updated = {**order, **upd}
+    progress = await _current_progress_for_order(updated)
+    return {"ok": True, "work_order": await _embed_work_order(updated, progress)}
+
+
+@api_router.patch("/production/work-orders/{work_order_id}/advance")
+async def advance_production_work_order(work_order_id: str, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    if order.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Only active work orders can be advanced")
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    progress = await _current_progress_for_order(order)
+    if not progress:
+        raise HTTPException(status_code=400, detail="Work order has no current stage progress")
+    if not _can_update_production_progress(principal, membership, progress):
+        raise HTTPException(status_code=403, detail="You are not assigned to this stage")
+    templates = await _list_stage_templates(dept["department_id"])
+    by_id = {t["id"]: t for t in templates}
+    current_tpl = by_id.get(order.get("current_stage_id"))
+    if not current_tpl:
+        raise HTTPException(status_code=400, detail="Current stage template is missing")
+    now = datetime.now(timezone.utc).isoformat()
+    # Close current progress
+    await db.production_stage_progress.update_one(
+        {"id": progress["id"]},
+        {"$set": {
+            "status": "done",
+            "exited_at": now,
+            "updated_at": now,
+            "blocked_reason": None,
+        }},
+    )
+    # Find next template by order
+    next_tpl = None
+    for t in templates:
+        if t["order"] > current_tpl["order"]:
+            next_tpl = t
+            break
+    if next_tpl is None:
+        await db.production_work_orders.update_one(
+            {"id": order["id"]},
+            {"$set": {
+                "status": "done",
+                "completed_at": now,
+                "updated_at": now,
+                "current_stage_id": order.get("current_stage_id"),
+            }},
+        )
+        updated = {**order, "status": "done", "completed_at": now, "updated_at": now}
+        closed = {
+            **progress,
+            "status": "done",
+            "exited_at": now,
+            "updated_at": now,
+            "blocked_reason": None,
+        }
+        return {"ok": True, "work_order": await _embed_work_order(updated, closed)}
+
+    existing_next = await db.production_stage_progress.find_one(
+        {"work_order_id": order["id"], "stage_id": next_tpl["id"]},
+        {"_id": 0},
+    )
+    if existing_next:
+        await db.production_stage_progress.update_one(
+            {"id": existing_next["id"]},
+            {"$set": {
+                "status": "in_progress",
+                "entered_at": now,
+                "exited_at": None,
+                "updated_at": now,
+                "blocked_reason": None,
+            }},
+        )
+        next_progress = {
+            **existing_next,
+            "status": "in_progress",
+            "entered_at": now,
+            "exited_at": None,
+            "updated_at": now,
+            "blocked_reason": None,
+        }
+    else:
+        next_progress = {
+            "id": f"psp_{uuid.uuid4().hex[:10]}",
+            "work_order_id": order["id"],
+            "stage_id": next_tpl["id"],
+            "workspace_id": principal["workspace_id"],
+            "department_id": dept["department_id"],
+            "status": "in_progress",
+            "assigned_user_ids": list(next_tpl.get("default_assigned_user_ids") or []),
+            "notes": "",
+            "blocked_reason": None,
+            "linked_procurement_request_id": None,
+            "entered_at": now,
+            "exited_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.production_stage_progress.insert_one(next_progress)
+        next_progress = {k: v for k, v in next_progress.items() if k != "_id"}
+
+    await db.production_work_orders.update_one(
+        {"id": order["id"]},
+        {"$set": {
+            "current_stage_id": next_tpl["id"],
+            "updated_at": now,
+        }},
+    )
+    updated = {**order, "current_stage_id": next_tpl["id"], "updated_at": now}
+    return {"ok": True, "work_order": await _embed_work_order(updated, next_progress)}
+
+
+@api_router.patch("/production/work-orders/{work_order_id}/stage")
+async def patch_production_work_order_stage(
+    work_order_id: str,
+    payload: ProductionStageProgressPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    if order.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Only active work orders can update stage progress")
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    progress = await _current_progress_for_order(order)
+    if not progress:
+        raise HTTPException(status_code=400, detail="Work order has no current stage progress")
+    if not _can_update_production_progress(principal, membership, progress):
+        raise HTTPException(status_code=403, detail="You are not assigned to this stage")
+
+    upd = {}
+    target_status = progress.get("status")
+    if payload.status is not None:
+        status = payload.status.strip()
+        if status not in PRODUCTION_PROGRESS_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        upd["status"] = status
+        target_status = status
+        if status == "in_progress" and not progress.get("entered_at"):
+            upd["entered_at"] = datetime.now(timezone.utc).isoformat()
+        if status == "done":
+            upd["exited_at"] = datetime.now(timezone.utc).isoformat()
+            upd["blocked_reason"] = None
+        if status != "blocked":
+            # Clear blocked reason unless explicitly re-supplied below while blocked
+            if payload.blocked_reason is None:
+                upd["blocked_reason"] = None
+
+    if payload.assigned_user_ids is not None:
+        upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
+    if payload.notes is not None:
+        upd["notes"] = payload.notes.strip()[:2000]
+    if payload.blocked_reason is not None or target_status == "blocked":
+        reason = _normalize_blocked_reason(
+            payload.blocked_reason if payload.blocked_reason is not None else progress.get("blocked_reason"),
+            require=(target_status == "blocked"),
+        )
+        if target_status == "blocked":
+            upd["blocked_reason"] = reason
+        elif payload.blocked_reason is not None:
+            upd["blocked_reason"] = reason
+    if payload.linked_procurement_request_id is not None:
+        link = payload.linked_procurement_request_id.strip()
+        if link:
+            req = await db.procurement_requests.find_one(
+                {"id": link, "workspace_id": principal["workspace_id"]},
+                {"_id": 0, "id": 1},
+            )
+            if not req:
+                raise HTTPException(status_code=400, detail="Procurement request not found in this workspace")
+            upd["linked_procurement_request_id"] = link
+        else:
+            upd["linked_procurement_request_id"] = None
+
+    if not upd:
+        return {"ok": True, "work_order": await _embed_work_order(order, progress)}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.production_stage_progress.update_one(
+        {"id": progress["id"]},
+        {"$set": upd},
+    )
+    await db.production_work_orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"updated_at": upd["updated_at"]}},
+    )
+    updated_progress = {**progress, **upd}
+    updated_order = {**order, "updated_at": upd["updated_at"]}
+    return {"ok": True, "work_order": await _embed_work_order(updated_order, updated_progress)}
 
 
 # ------------------------- Procurement request queue -------------------------
@@ -8053,7 +8512,9 @@ _WORKSPACE_COLLECTIONS = (
     "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
     "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
     "oauth_states",
-    "product_events", "production_stages", "procurement_requests", "legal_matters",
+    "product_events",
+    "production_stage_templates", "production_work_orders", "production_stage_progress",
+    "procurement_requests", "legal_matters",
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
     "department_report_drafts",
 )
@@ -8539,9 +9000,16 @@ async def _ensure_indexes():
         (db.departments, [("department_id", 1)], {"unique": True}),
         (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),
         (db.department_members, [("user_id", 1)], {}),
-        (db.production_stages, [("id", 1)], {"unique": True}),
-        (db.production_stages, [("department_id", 1), ("order", 1)], {}),
-        (db.production_stages, [("workspace_id", 1)], {}),
+        (db.production_stage_templates, [("id", 1)], {"unique": True}),
+        (db.production_stage_templates, [("department_id", 1), ("order", 1)], {}),
+        (db.production_stage_templates, [("workspace_id", 1)], {}),
+        (db.production_work_orders, [("id", 1)], {"unique": True}),
+        (db.production_work_orders, [("department_id", 1), ("status", 1), ("created_at", -1)], {}),
+        (db.production_work_orders, [("workspace_id", 1)], {}),
+        (db.production_stage_progress, [("id", 1)], {"unique": True}),
+        (db.production_stage_progress, [("work_order_id", 1), ("stage_id", 1)], {"unique": True}),
+        (db.production_stage_progress, [("department_id", 1)], {}),
+        (db.production_stage_progress, [("workspace_id", 1)], {}),
         (db.procurement_requests, [("id", 1)], {"unique": True}),
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),

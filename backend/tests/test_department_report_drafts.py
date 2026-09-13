@@ -38,11 +38,11 @@ def test_empty_activity_builds_nothing():
     ) is None
 
 
-def test_production_draft_lists_completed_stages():
+def test_production_draft_lists_completed_work_orders():
     spec = drafts.SPEC_BY_TYPE[catalog.TYPE_PRODUCTION]
     items = [
-        {"id": "a", "name": "Cut", "status": "done", "completed_at": "2026-09-07T12:00:00+00:00"},
-        {"id": "b", "name": "Weld", "status": "done", "completed_at": "2026-09-08T09:00:00+00:00"},
+        {"id": "a", "reference": "Order #1", "status": "done", "completed_at": "2026-09-07T12:00:00+00:00"},
+        {"id": "b", "reference": "Order #2", "status": "done", "completed_at": "2026-09-08T09:00:00+00:00"},
     ]
     start, end, period, key = drafts.week_window(NOW)
     kept = drafts.filter_completed(items, spec, start, end)
@@ -53,9 +53,9 @@ def test_production_draft_lists_completed_stages():
     assert doc["source"] == "department_draft"
     assert doc["status"] == "draft"
     assert doc["type"] == "Production"
-    assert "2 production stages" in doc["summary"]
-    assert "Cut" in doc["summary"] and "Weld" in doc["summary"]
-    assert doc["metrics"] == [{"label": "Stages finished", "value": "2"}]
+    assert "2 work orders" in doc["summary"]
+    assert "Order #1" in doc["summary"] and "Order #2" in doc["summary"]
+    assert doc["metrics"] == [{"label": "Work orders finished", "value": "2"}]
 
 
 def test_old_completions_are_not_in_this_week():
@@ -145,9 +145,9 @@ def _store(rows):
 
 @pytest.mark.asyncio
 async def test_run_upserts_activity_and_skips_empty():
-    stages = [
+    orders = [
         {
-            "id": "s1", "workspace_id": "ws1", "name": "Pack", "status": "done",
+            "id": "s1", "workspace_id": "ws1", "reference": "Pack job", "status": "done",
             "completed_at": "2026-09-07T10:00:00+00:00",
         },
     ]
@@ -160,7 +160,7 @@ async def test_run_upserts_activity_and_skips_empty():
         {"type": "engineering_maintenance"},
         {"type": "hr"},
     ])
-    db.production_stages.find.return_value = _cursor(stages)
+    db.production_work_orders.find.return_value = _cursor(orders)
     db.procurement_requests.find.return_value = _cursor([])
     db.legal_matters.find.return_value = _cursor([])
     db.maintenance_tickets.find.return_value = _cursor([])
@@ -192,8 +192,8 @@ async def test_run_does_not_regenerate_dismissed():
     db = MagicMock()
     db.workspaces.find.return_value = _cursor([{"workspace_id": "ws1"}])
     db.departments.find.return_value = _cursor([{"type": "production"}])
-    db.production_stages.find.return_value = _cursor([{
-        "id": "s1", "workspace_id": "ws1", "name": "Pack", "status": "done",
+    db.production_work_orders.find.return_value = _cursor([{
+        "id": "s1", "workspace_id": "ws1", "reference": "Pack job", "status": "done",
         "completed_at": "2026-09-07T10:00:00+00:00",
     }])
     db.procurement_requests.find.return_value = _cursor([])

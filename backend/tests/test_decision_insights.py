@@ -186,13 +186,13 @@ def _stalled_item(spec, *, item_id, label, status, days_ago, now, extra=None):
     return row
 
 
-def test_stalled_production_stage():
+def test_stalled_production_work_order():
     now = datetime(2026, 9, 13, tzinfo=timezone.utc)
     spec = eng.SPEC_BY_TYPE["production"]
     items = [
-        _stalled_item(spec, item_id="p1", label="Weld line", status="in_progress", days_ago=6, now=now),
-        _stalled_item(spec, item_id="p2", label="Done stage", status="done", days_ago=20, now=now),
-        _stalled_item(spec, item_id="p3", label="Fresh", status="not_started", days_ago=1, now=now),
+        _stalled_item(spec, item_id="p1", label="Weld line", status="active", days_ago=6, now=now),
+        _stalled_item(spec, item_id="p2", label="Done order", status="done", days_ago=20, now=now),
+        _stalled_item(spec, item_id="p3", label="Fresh", status="active", days_ago=1, now=now),
     ]
     sigs = eng.detect_stalled_department_item(items, spec, now=now)
     assert len(sigs) == 1
@@ -271,7 +271,7 @@ def test_collect_signals_skips_departments_not_passed_in():
     """Disabled departments are omitted by the caller; no extra signals."""
     now = datetime(2026, 9, 13, tzinfo=timezone.utc)
     spec = eng.SPEC_BY_TYPE["production"]
-    stalled = _stalled_item(spec, item_id="p1", label="Weld", status="in_progress", days_ago=10, now=now)
+    stalled = _stalled_item(spec, item_id="p1", label="Weld", status="active", days_ago=10, now=now)
     fin = {"has_data": False}
     without = eng.collect_signals(fin=fin, expense_by_month={}, deals=[], tasks=[], updates=[], department_items=[], now=now)
     with_prod = eng.collect_signals(

@@ -39,8 +39,8 @@ async def test_department_signal_inputs_skips_disabled_types():
     production_rows = [{
         "id": "p_stall",
         "workspace_id": "ws_test",
-        "name": "Weld",
-        "status": "in_progress",
+        "reference": "Order #Weld",
+        "status": "active",
         "updated_at": old,
     }]
     legal_rows = [{
@@ -52,7 +52,7 @@ async def test_department_signal_inputs_skips_disabled_types():
     }]
 
     mock_db = MagicMock()
-    mock_db.production_stages = Coll(production_rows)
+    mock_db.production_work_orders = Coll(production_rows)
     mock_db.legal_matters = Coll(legal_rows)
     mock_db.procurement_requests = Coll([])
     mock_db.maintenance_tickets = Coll([])
