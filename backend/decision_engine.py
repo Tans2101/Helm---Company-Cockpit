@@ -9,13 +9,22 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from money_fmt import fmt_money_plain
+from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR
+from department_report_drafts import SPEC_BY_TYPE
 
 
 SEVERITIES = ("high", "medium", "low")
 STALLED_DEAL_DAYS = 14
+STALLED_DEPARTMENT_DAYS = 5
+URGENT_MAINTENANCE_DAYS = 2
 RUNWAY_MONTHS_THRESHOLD = 6
 BURN_INCREASE_PCT = 0.20
 EXPENSE_SPIKE_PCT = 0.25
+SIGNAL_CAP = 12
+
+# Keep in sync with server._MAINT_PRIORITY_RANK — 0 is the top (most urgent) rank.
+MAINT_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+MAINT_TOP_PRIORITY_RANK = min(MAINT_PRIORITY_RANK.values())
 
 # Signals that become decision suggestions vs delegate suggestions
 DECISION_SIGNAL_TYPES = frozenset({
@@ -23,10 +32,15 @@ DECISION_SIGNAL_TYPES = frozenset({
     "burn_increase",
     "expense_spike",
     "stalled_deal",
+    # Unresolved high-priority equipment tickets may need CEO-level escalation
+    # (downtime), unlike generic department stall nudges.
+    "urgent_maintenance",
 })
 DELEGATE_SIGNAL_TYPES = frozenset({
     "overdue_task",
     "recurring_blocker",
+    "stalled_department_item",
+    "stalled_onboarding",
 })
 
 
@@ -332,6 +346,172 @@ def detect_recurring_blockers(updates: list) -> list:
     return out
 
 
+def _item_last_activity(item: dict) -> Optional[datetime]:
+    return _parse_iso_dt(item.get("updated_at") or item.get("created_at"))
+
+
+def _item_label(item: dict, spec: dict) -> str:
+    return (item.get(spec.get("label_field") or "name") or "").strip() or "Untitled"
+
+
+def detect_stalled_department_item(
+    items: list,
+    spec: dict,
+    *,
+    threshold_days: int = STALLED_DEPARTMENT_DAYS,
+    now: Optional[datetime] = None,
+) -> list:
+    """Flag open department records with no `updated_at` movement past `threshold_days`.
+
+    `spec` is a `department_report_drafts.DEPT_SPECS` row (status_field, done_value, …).
+    HR onboarding uses `detect_stalled_onboarding` instead.
+    """
+    if (spec or {}).get("type") == TYPE_HR:
+        return []
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=threshold_days)
+    status_field = spec["status_field"]
+    done_value = spec["done_value"]
+    dept_name = spec.get("name") or spec.get("type") or "Department"
+    noun = spec.get("noun") or "item"
+    out = []
+    for item in items or []:
+        status = item.get(status_field)
+        if status == done_value:
+            continue
+        updated = _item_last_activity(item)
+        if updated is None or updated >= cutoff:
+            continue
+        idle_days = (now - updated).days
+        label = _item_label(item, spec)
+        out.append(_signal(
+            "stalled_department_item",
+            "medium",
+            summary=f"{dept_name}: {label} hasn't moved in {idle_days} days",
+            detail=(
+                f"{noun.capitalize()} '{label}' is still '{status}' after {idle_days} days "
+                f"with no update (last activity {updated.date().isoformat()})."
+            ),
+            related_id=item.get("id"),
+            department_type=spec.get("type"),
+            department_name=dept_name,
+            item_label=label,
+            status=status,
+            idle_days=idle_days,
+        ))
+    return out
+
+
+def detect_urgent_maintenance(
+    items: list,
+    spec: dict | None = None,
+    *,
+    threshold_days: int = URGENT_MAINTENANCE_DAYS,
+    now: Optional[datetime] = None,
+) -> list:
+    """Unresolved top-rank (high) maintenance tickets idle past a short window."""
+    spec = spec or SPEC_BY_TYPE[TYPE_ENGINEERING_MAINTENANCE]
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=threshold_days)
+    status_field = spec["status_field"]
+    done_value = spec["done_value"]
+    out = []
+    for item in items or []:
+        if item.get(status_field) == done_value:
+            continue
+        rank = MAINT_PRIORITY_RANK.get(str(item.get("priority") or "").lower(), 9)
+        if rank != MAINT_TOP_PRIORITY_RANK:
+            continue
+        updated = _item_last_activity(item)
+        if updated is None or updated >= cutoff:
+            continue
+        idle_days = (now - updated).days
+        label = _item_label(item, spec)
+        out.append(_signal(
+            "urgent_maintenance",
+            "high",
+            summary=f"Urgent maintenance: {label}",
+            detail=(
+                f"High-priority ticket on '{label}' is still '{item.get(status_field)}' "
+                f"after {idle_days} days with no update (last activity {updated.date().isoformat()}). "
+                f"Equipment downtime may need CEO-level escalation."
+            ),
+            related_id=item.get("id"),
+            department_type=spec.get("type"),
+            department_name=spec.get("name") or "Engineering & Maintenance",
+            item_label=label,
+            status=item.get(status_field),
+            priority=item.get("priority"),
+            idle_days=idle_days,
+        ))
+    return out
+
+
+def detect_stalled_onboarding(
+    items: list,
+    spec: dict | None = None,
+    *,
+    threshold_days: int = STALLED_DEPARTMENT_DAYS,
+    now: Optional[datetime] = None,
+) -> list:
+    """HR hires not yet `active` with no progress past `threshold_days`."""
+    spec = spec or SPEC_BY_TYPE[TYPE_HR]
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=threshold_days)
+    status_field = spec["status_field"]
+    done_value = spec["done_value"]
+    out = []
+    for item in items or []:
+        if item.get(status_field) == done_value:
+            continue
+        updated = _item_last_activity(item)
+        if updated is None or updated >= cutoff:
+            continue
+        idle_days = (now - updated).days
+        hire = _item_label(item, spec)
+        out.append(_signal(
+            "stalled_onboarding",
+            "medium",
+            summary=f"Onboarding for {hire} hasn't progressed in {idle_days} days",
+            detail=(
+                f"Onboarding for {hire} is still '{item.get(status_field)}' after {idle_days} days "
+                f"with no update (last activity {updated.date().isoformat()})."
+            ),
+            related_id=item.get("id"),
+            department_type=spec.get("type"),
+            department_name=spec.get("name") or "HR",
+            item_label=hire,
+            status=item.get(status_field),
+            idle_days=idle_days,
+        ))
+    return out
+
+
+def collect_department_signals(
+    department_items: list | None,
+    *,
+    now: Optional[datetime] = None,
+) -> list:
+    """Run department stall detectors. `department_items` is [{spec, items}, ...] for enabled depts only."""
+    now = now or datetime.now(timezone.utc)
+    signals = []
+    for bundle in department_items or []:
+        spec = bundle.get("spec") or {}
+        items = bundle.get("items") or []
+        dtype = spec.get("type")
+        if dtype == TYPE_HR:
+            signals.extend(detect_stalled_onboarding(items, spec, now=now))
+            continue
+        generic = detect_stalled_department_item(items, spec, now=now)
+        if dtype == TYPE_ENGINEERING_MAINTENANCE:
+            urgent = detect_urgent_maintenance(items, spec, now=now)
+            urgent_ids = {s.get("related_id") for s in urgent}
+            generic = [s for s in generic if s.get("related_id") not in urgent_ids]
+            signals.extend(urgent)
+        signals.extend(generic)
+    return signals
+
+
 def collect_signals(
     *,
     fin: dict,
@@ -340,6 +520,8 @@ def collect_signals(
     tasks: list,
     updates: list,
     currency: str = "usd",
+    department_items: list | None = None,
+    now: Optional[datetime] = None,
 ) -> list:
     """Run all detectors and return a flat list of signals."""
     signals = []
@@ -347,10 +529,11 @@ def collect_signals(
     if runway:
         signals.append(runway)
     signals.extend(detect_expense_spike(expense_by_month, currency=currency))
-    signals.extend(detect_stalled_deals(deals, currency=currency))
+    signals.extend(detect_stalled_deals(deals, currency=currency, now=now))
     signals.extend(detect_overdue_tasks(tasks))
     signals.extend(detect_recurring_blockers(updates))
+    signals.extend(collect_department_signals(department_items, now=now))
     # Cap volume so one regenerate can't spawn dozens of LLM calls
     severity_rank = {"high": 0, "medium": 1, "low": 2}
     signals.sort(key=lambda s: (severity_rank.get(s.get("severity"), 9), s.get("type") or ""))
-    return signals[:8]
+    return signals[:SIGNAL_CAP]

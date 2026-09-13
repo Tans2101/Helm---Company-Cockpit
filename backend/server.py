@@ -2504,6 +2504,21 @@ async def _recent_updates(workspace_id: str, days: int = 7) -> list:
     ).to_list(500)
 
 
+async def _department_signal_inputs(workspace_id: str) -> list:
+    """Load open department records only for types this workspace has enabled."""
+    out = []
+    for spec in helm_dept_drafts.DEPT_SPECS:
+        enabled = await dept_migrate.get_enabled_department(db, workspace_id, spec["type"])
+        if not enabled:
+            continue
+        coll = getattr(db, spec["collection"], None)
+        if coll is None:
+            continue
+        items = await coll.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
+        out.append({"spec": spec, "items": items})
+    return out
+
+
 async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = True) -> dict:
     """Detect signals, draft AI suggestions, replace workspace suggestion lists."""
     if await doc_rate_limit.insights_over_limit(db, workspace_id):
@@ -2527,6 +2542,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
     deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
     tasks = list((c.get("tasks") or {}).get("items") or [])
     updates = await _recent_updates(workspace_id, days=7)
+    department_items = await _department_signal_inputs(workspace_id)
     signals = decision_engine.collect_signals(
         fin=fin,
         expense_by_month=expense_by_month,
@@ -2534,6 +2550,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         tasks=tasks,
         updates=updates,
         currency=currency,
+        department_items=department_items,
     )
     company_context = {
         "name": c.get("name"),
