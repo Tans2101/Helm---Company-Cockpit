@@ -51,7 +51,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNavigate, syncingProvider }) {
+function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconnect, onSync, onNavigate, syncingProvider }) {
   const Icon = ICONS[it.id] || Cloud;
   const status = it.status || (it.connected ? "connected" : "not_connected");
   const lastSynced = it.sync_action ? formatLastSynced(it.last_synced_at) : null;
@@ -115,7 +115,14 @@ function IntegrationCard({ it, canManage, onConnect, onDisconnect, onSync, onNav
         </p>
       )}
 
-      {it.sync_action && it.connected && canManage && (
+      
+      {it.connected && canManage && !canUseConnection && (
+        <p className="text-xs text-helm-muted mt-3 leading-relaxed" data-testid={`${it.id}-token-restricted`}>
+          Only the teammate who connected this integration (or a workspace owner) can sync or use it.
+        </p>
+      )}
+
+      {it.sync_action && it.connected && canManage && canUseConnection && (
         <button
           type="button"
           data-testid={`sync-${it.id}-btn`}
@@ -395,6 +402,7 @@ export default function Integrations() {
             key={it.id}
             it={it}
             canManage={data.can_manage}
+            canUseConnection={Boolean(data.can_use_connection?.[it.provider ?? it.id])}
             onConnect={oauthConnect}
             onDisconnect={oauthDisconnect}
             onSync={syncAccounting}
@@ -414,6 +422,7 @@ export default function Integrations() {
                 key={it.id}
                 it={it}
                 canManage={data.can_manage}
+                canUseConnection={Boolean(data.can_use_connection?.[it.provider ?? it.id])}
                 onConnect={oauthConnect}
                 onDisconnect={oauthDisconnect}
                 onSync={syncAccounting}

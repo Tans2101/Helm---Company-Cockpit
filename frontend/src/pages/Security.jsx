@@ -86,6 +86,7 @@ const CONTROLS = [
 
 const PRACTICES = [
   "Integration access is opt-in and can be disconnected at any time.",
+  "Shared OAuth connections (Google, QuickBooks, Xero, HubSpot) can be used only by the teammate who connected them, or by a workspace owner. Legacy unstamped connections are limited to owners until someone reconnects.",
   "Google is not read-only. The current Connect Google grant includes Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm — not a full mailbox or Drive dump.",
   "Workspaces that connected Google under the original Calendar + Gmail read grant keep that narrower access until an owner reconnects and accepts the wider consent screen.",
   "Payment card details are handled by Paddle, not stored on Helm servers.",

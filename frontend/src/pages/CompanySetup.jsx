@@ -56,6 +56,9 @@ export default function CompanySetup({ company }) {
     }
     setBusy(true);
     try {
+      if (!user?.age_confirmed) {
+        await api.patch("/account/age-confirmation", { confirmed: true });
+      }
       await api.patch("/company", {
         name: form.name.trim(),
         industry: form.industry,

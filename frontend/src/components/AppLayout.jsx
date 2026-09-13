@@ -66,10 +66,17 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
     const name = window.prompt("Name your new company workspace");
     if (!name) return;
     try {
+      if (!user?.age_confirmed) {
+        const ok = window.confirm(
+          "Confirm you are 18 or older (or using Helm under a parent/guardian) to create a company.",
+        );
+        if (!ok) return;
+        await api.patch("/account/age-confirmation", { confirmed: true });
+      }
       await api.post("/workspaces", withReferralPayload({ name }));
       consumeReferralCode();
       window.location.href = "/app";
-    } catch (e) { toast.error("Could not create workspace"); }
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not create workspace"); }
   };
 
   if (!active) return null;
