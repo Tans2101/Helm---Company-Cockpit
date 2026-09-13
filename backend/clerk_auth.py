@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -291,35 +292,60 @@ def _bapi_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
 
 
+_health_probe_cache: dict[str, tuple[float, bool]] = {}
+_HEALTH_PROBE_TTL_SECONDS = 120.0
+
+
+def _cached_health(name: str) -> bool | None:
+    row = _health_probe_cache.get(name)
+    if not row:
+        return None
+    at, value = row
+    if time.time() - at > _HEALTH_PROBE_TTL_SECONDS:
+        return None
+    return value
+
+
+def _store_health(name: str, value: bool) -> bool:
+    _health_probe_cache[name] = (time.time(), value)
+    return value
+
+
 async def clerk_api_ok() -> bool:
     """True when CLERK_SECRET_KEY can reach the Clerk API (matches publishable key instance)."""
+    cached = _cached_health("api")
+    if cached is not None:
+        return cached
     if not CLERK_SECRET_KEY:
-        return False
+        return _store_health("api", False)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(f"{CLERK_BAPI}/instance", headers=_bapi_headers())
-            return r.status_code == 200
+            return _store_health("api", r.status_code == 200)
     except Exception:
-        return False
+        return _store_health("api", False)
 
 
 async def clerk_jwks_ok() -> bool:
     """True when JWKS is reachable (public URL or Clerk Backend API)."""
+    cached = _cached_health("jwks")
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(CLERK_JWKS_URL)
             if r.status_code == 200 and b"keys" in r.content:
-                return True
+                return _store_health("jwks", True)
     except Exception:
         pass
     if not CLERK_SECRET_KEY:
-        return False
+        return _store_health("jwks", False)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(f"{CLERK_BAPI}/jwks", headers=_bapi_headers())
-            return r.status_code == 200 and b"keys" in r.content
+            return _store_health("jwks", r.status_code == 200 and b"keys" in r.content)
     except Exception:
-        return False
+        return _store_health("jwks", False)
 
 
 async def _clerk_primary_domain_record() -> dict[str, Any] | None:
@@ -474,24 +500,27 @@ async def clerk_google_oauth_status() -> dict[str, Any]:
 
 async def clerk_custom_domain_ssl_ok() -> bool:
     """True when clerk.* FAPI accepts TLS or Clerk BAPI reports certs issued."""
+    cached = _cached_health("ssl")
+    if cached is not None:
+        return cached
     host = clerk_jwks_host()
     if not host or host.endswith(".clerk.accounts.dev"):
-        return True
+        return _store_health("ssl", True)
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(f"https://{host}/v1/client")
             if r.status_code < 500:
-                return True
+                return _store_health("ssl", True)
     except Exception:
         pass
     # Some hosts (Render) cannot TLS-probe Clerk even when certs are issued — trust BAPI.
     domain = await _clerk_primary_domain_record()
     if not domain:
-        return False
+        return _store_health("ssl", False)
     if not (domain.get("proxy_url") or "").strip():
-        return True
+        return _store_health("ssl", True)
     # Proxy still registered but Clerk Dashboard may show SSL issued — prefer DNS mode.
-    return True
+    return _store_health("ssl", True)
 
 
 def clerk_proxy_url() -> str | None:
