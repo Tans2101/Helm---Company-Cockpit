@@ -13,7 +13,7 @@ export default function Privacy() {
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-4">Legal</p>
         <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-helm-cream">Privacy Policy</h1>
-        <p className="text-helm-slate text-sm mt-3">Last updated: September 11, 2026</p>
+        <p className="text-helm-slate text-sm mt-3">Last updated: September 13, 2026</p>
 
         <div className="mt-10 space-y-8 text-[15px] text-helm-cream/80 leading-relaxed">
           <section>
@@ -71,13 +71,18 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Google data</h2>
             <p>
-              If you connect Google from Integrations, Helm requests read-only access to your{" "}
-              <span className="text-helm-cream">Google Calendar</span> events and{" "}
-              <span className="text-helm-cream">Gmail</span> metadata so we can show meetings and a small set of
-              relevant email threads in your cockpit briefing. For Gmail we read message metadata and short
-              snippets (sender, subject, preview text, and thread links) — not full email bodies — and we do
-              not store that email content in your workspace beyond what is needed to render the current briefing.
-              Nothing from Google is accessed until you explicitly connect the integration.
+              If you connect Google from Integrations, Helm requests access to{" "}
+              <span className="text-helm-cream">Google Calendar</span> (read events, and write events when you
+              create or update them in Helm), <span className="text-helm-cream">Gmail</span> (read message
+              metadata and short snippets for the briefing; compose access to create drafts — Helm does not
+              send mail), <span className="text-helm-cream">Google Sheets</span> (create a Financials export
+              spreadsheet you trigger), and <span className="text-helm-cream">Google Drive</span> files you
+              pick in Helm (bill import via <span className="font-mono text-xs">drive.file</span>, not full Drive).
+              For Gmail we do not store full email bodies as a mailbox archive — only the metadata needed to
+              render the current briefing. Helm does not request <span className="font-mono text-xs">gmail.send</span>.
+              The original Connect Google grant was Calendar and Gmail read-only; existing workspaces keep that
+              narrower access until an owner reconnects and consents again. Nothing from Google is accessed
+              until you explicitly connect the integration.
             </p>
           </section>
 

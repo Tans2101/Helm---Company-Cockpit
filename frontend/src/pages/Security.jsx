@@ -86,7 +86,8 @@ const CONTROLS = [
 
 const PRACTICES = [
   "Integration access is opt-in and can be disconnected at any time.",
-  "Google access is read-only for Calendar and limited Gmail metadata and snippets — not full mailbox dumps.",
+  "Google is not read-only. The current Connect Google grant includes Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm — not a full mailbox or Drive dump.",
+  "Workspaces that connected Google under the original Calendar + Gmail read grant keep that narrower access until an owner reconnects and accepts the wider consent screen.",
   "Payment card details are handled by Paddle, not stored on Helm servers.",
   "Authentication is handled by Clerk using secure session controls.",
   "Sensitive credentials and provider token responses are excluded from application logs.",
@@ -100,7 +101,11 @@ const QUESTIONS = [
   },
   {
     q: "Does Helm store our full email inbox?",
-    a: "No. If Google is connected, Helm reads calendar events and a small set of Gmail metadata and snippets for the briefing. Full email bodies are not stored as a mailbox archive.",
+    a: "No. Helm reads Gmail metadata and short snippets (sender, subject, preview, thread link) for the briefing. Full message bodies are not stored as a mailbox archive. If compose access is granted, Helm can create a Gmail draft when you click Draft reply — it does not send mail. You send from Gmail.",
+  },
+  {
+    q: "What Google access does Helm request now?",
+    a: "Connect Google currently requests Calendar read and write (Helm can create or update events when you ask), Gmail read for briefing snippets plus gmail.compose for drafts only (not gmail.send), Google Sheets to create a Financials export spreadsheet, and drive.file so you can pick a bill in Drive. Google’s consent screen may label compose as managing drafts and sending; Helm only posts to Gmail’s drafts API. The original grant was Calendar + Gmail read. Reconnect Google to add the write scopes.",
   },
   {
     q: "Who can see uploaded bills and legal files?",
@@ -166,7 +171,7 @@ export default function Security() {
               custom={3}
               className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-helm-slate"
             >
-              Last updated September 11, 2026
+              Last updated September 13, 2026
             </motion.p>
           </div>
         </section>
