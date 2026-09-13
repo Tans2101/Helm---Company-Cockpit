@@ -86,6 +86,21 @@ function upsertWorkOrder(list, order) {
   return next;
 }
 
+/** high → normal → low; earlier due_date first; undated last. */
+const PRIORITY_RANK = { high: 0, normal: 1, low: 2 };
+
+function compareWorkOrders(a, b) {
+  const pa = PRIORITY_RANK[a?.priority] ?? PRIORITY_RANK.normal;
+  const pb = PRIORITY_RANK[b?.priority] ?? PRIORITY_RANK.normal;
+  if (pa !== pb) return pa - pb;
+  const da = (a?.due_date || "").trim();
+  const db = (b?.due_date || "").trim();
+  if (da && db && da !== db) return da < db ? -1 : 1;
+  if (da && !db) return -1;
+  if (!da && db) return 1;
+  return String(a?.reference || "").localeCompare(String(b?.reference || ""));
+}
+
 /** Format average dwell time for display — informational, not a forecast. */
 function formatAverageStageTime(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return null;
@@ -154,6 +169,9 @@ export default function Production() {
       const sid = o.current_stage_id;
       if (!map[sid]) map[sid] = [];
       map[sid].push(o);
+    }
+    for (const sid of Object.keys(map)) {
+      map[sid].sort(compareWorkOrders);
     }
     return map;
   }, [stages, workOrders]);
@@ -395,6 +413,13 @@ export default function Production() {
     const idx = stages.findIndex((s) => s.id === stage.id);
     const swap = idx + direction;
     if (idx < 0 || swap < 0 || swap >= stages.length) return;
+    if (workOrders.length > 0) {
+      const ok = window.confirm(
+        `${workOrders.length} active work order${workOrders.length === 1 ? " is" : "s are"} on the board. `
+        + "Reordering stages changes which stage Advance moves them to next. Continue?",
+      );
+      if (!ok) return;
+    }
     const next = stages.map((s) => s.id);
     [next[idx], next[swap]] = [next[swap], next[idx]];
     setBusy(true);
