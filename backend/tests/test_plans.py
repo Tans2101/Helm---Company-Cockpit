@@ -3,6 +3,9 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -18,7 +21,7 @@ def test_normalize_legacy_pro_to_starter():
 
 def test_member_caps_per_plan():
     assert plans.seats_limit("free") == 3
-    assert plans.seats_limit("starter") == 3
+    assert plans.seats_limit("starter") == 10
     assert plans.seats_limit("growth") == 10
     assert plans.seats_limit("business") == 50
 
@@ -119,6 +122,11 @@ def test_public_plan_list_shape():
     free = next(r for r in rows if r["id"] == "free")
     assert free["checkout_available"] is False
     assert free["seats"] == 3
+    starter = next(r for r in rows if r["id"] == "starter")
+    growth = next(r for r in rows if r["id"] == "growth")
+    assert starter["seats"] == 10
+    assert growth["seats"] == 10
+    assert any("Up to 10 team members" in line for line in starter["includes"])
     assert free["ai_extracts_lifetime"] == 5
     assert free["ask_helm_mo"] == 10
     assert any("5 free AI extracts" in line for line in free["includes"])
@@ -128,3 +136,23 @@ def test_public_plan_list_shape():
 def test_lifetime_extract_count_reads_workspace_field():
     assert plan_usage.get_lifetime_extract_count(None) == 0
     assert plan_usage.get_lifetime_extract_count({"ai_extracts_lifetime_used": 5}) == 5
+
+
+@pytest.mark.asyncio
+async def test_starter_seat_enforcement_allows_10th_blocks_11th():
+    """Invite-time cap reads plans.seats_limit(), not a hardcoded 3 for Starter."""
+    os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
+    os.environ.setdefault("DB_NAME", "test_starter_seats")
+    import server
+    from fastapi import HTTPException
+
+    with patch.object(server, "BILLING_ENFORCED", True), \
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=9)):
+        await server._enforce_seat_available("ws_test", "starter")
+
+    with patch.object(server, "BILLING_ENFORCED", True), \
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=10)):
+        with pytest.raises(HTTPException) as ei:
+            await server._enforce_seat_available("ws_test", "starter")
+        assert ei.value.status_code == 403
+        assert "10/10" in ei.value.detail
