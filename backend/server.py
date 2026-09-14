@@ -6912,6 +6912,7 @@ LEGAL_STATUSES = frozenset({
 LEGAL_MEMBER_STATUSES = frozenset({"draft", "internal_review"})
 LEGAL_LEAD_ONLY_STATUSES = frozenset({"counterparty_review", "signed", "filed"})
 LEGAL_MATTER_TYPES = frozenset({"contract", "compliance", "other"})
+LEGAL_RECURRENCE = frozenset({"annual", "quarterly", "monthly"})
 
 
 async def _legal_department(principal: dict) -> dict:
@@ -6986,6 +6987,113 @@ def _normalize_optional_ymd(raw, *, field_name: str = "due_date") -> str:
     return s[:10]
 
 
+def _normalize_legal_recurrence(raw, *, matter_type: str) -> Optional[str]:
+    """Recurrence only applies to compliance matters; others store null."""
+    if (matter_type or "").strip().lower() != "compliance":
+        return None
+    value = (raw or "").strip().lower()
+    if not value:
+        return None
+    if value not in LEGAL_RECURRENCE:
+        raise HTTPException(
+            status_code=400,
+            detail="recurrence must be annual, quarterly, monthly, or empty",
+        )
+    return value
+
+
+def _advance_legal_due_date(due_date: str, recurrence: str) -> str:
+    """Advance YYYY-MM-DD by the recurrence interval. Empty in → empty out."""
+    raw = (due_date or "").strip()
+    if not raw:
+        return ""
+    try:
+        d = datetime.strptime(raw[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return ""
+    if recurrence == "annual":
+        year, month, day = d.year + 1, d.month, d.day
+    elif recurrence == "quarterly":
+        month = d.month + 3
+        year = d.year + (month - 1) // 12
+        month = (month - 1) % 12 + 1
+        day = d.day
+    elif recurrence == "monthly":
+        month = d.month + 1
+        year = d.year + (month - 1) // 12
+        month = (month - 1) % 12 + 1
+        day = d.day
+    else:
+        return ""
+    # Inline days-in-month — module name `calendar` is shadowed by a route helper.
+    if month == 2:
+        leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+        dim = 29 if leap else 28
+    elif month in (4, 6, 9, 11):
+        dim = 30
+    else:
+        dim = 31
+    day = min(day, dim)
+    return date(year, month, day).isoformat()
+
+
+async def _spawn_compliance_renewal(filed_matter: dict, principal: dict, dept: dict) -> Optional[dict]:
+    """Create the next-cycle compliance matter once when a recurring matter is filed."""
+    if (filed_matter.get("matter_type") or "").strip().lower() != "compliance":
+        return None
+    recurrence = filed_matter.get("recurrence")
+    if recurrence not in LEGAL_RECURRENCE:
+        return None
+    matter_id = filed_matter.get("id")
+    if not matter_id:
+        return None
+    if filed_matter.get("renewed_to_matter_id"):
+        existing = await db.legal_matters.find_one(
+            {"id": filed_matter["renewed_to_matter_id"], "department_id": dept["department_id"]},
+            {"_id": 0},
+        )
+        return existing
+    existing = await db.legal_matters.find_one(
+        {"department_id": dept["department_id"], "renewed_from_matter_id": matter_id},
+        {"_id": 0},
+    )
+    if existing:
+        await db.legal_matters.update_one(
+            {"id": matter_id, "department_id": dept["department_id"]},
+            {"$set": {"renewed_to_matter_id": existing["id"]}},
+        )
+        return existing
+
+    now = datetime.now(timezone.utc).isoformat()
+    next_due = _advance_legal_due_date(filed_matter.get("due_date") or "", recurrence)
+    child = {
+        "id": f"lmat_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "title": filed_matter.get("title") or "Compliance renewal",
+        "matter_type": "compliance",
+        "assigned_to": filed_matter.get("assigned_to") or principal["user_id"],
+        "created_by": principal["user_id"],
+        "status": "draft",
+        "document_ref": None,
+        "notes": "",
+        "due_date": next_due,
+        "recurrence": recurrence,
+        "counterparty": (filed_matter.get("counterparty") or "").strip(),
+        "renewed_from_matter_id": matter_id,
+        "renewed_to_matter_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.legal_matters.insert_one(dict(child))
+    await db.legal_matters.update_one(
+        {"id": matter_id, "department_id": dept["department_id"]},
+        {"$set": {"renewed_to_matter_id": child["id"]}},
+    )
+    child.pop("_id", None)
+    return child
+
+
 class LegalMatterCreate(BaseModel):
     title: str
     matter_type: str = "contract"
@@ -6993,6 +7101,8 @@ class LegalMatterCreate(BaseModel):
     notes: str = ""
     status: str = "draft"
     due_date: str = ""
+    recurrence: Optional[str] = None
+    counterparty: str = ""
 
 
 class LegalMatterPatch(BaseModel):
@@ -7002,6 +7112,8 @@ class LegalMatterPatch(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
+    recurrence: Optional[str] = None
+    counterparty: Optional[str] = None
 
 
 def _normalize_matter_type(raw: str) -> str:
@@ -7012,10 +7124,54 @@ def _normalize_matter_type(raw: str) -> str:
     return (raw or "other").strip()[:80] or "other"
 
 
+
+@api_router.get("/legal/counterparty-suggestions")
+async def legal_counterparty_suggestions(
+    q: str = Query("", min_length=0),
+    principal=Depends(get_principal),
+):
+    """Historical counterparty memory — distinct past values for this Legal department."""
+    dept = await _legal_department(principal)
+    needle = (q or "").strip().lower()
+    if len(needle) < 1:
+        return {"suggestions": []}
+    rows = await db.legal_matters.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "counterparty": 1, "created_at": 1, "updated_at": 1},
+    ).sort("created_at", -1).to_list(2000)
+    groups: dict[str, list] = {}
+    for r in rows:
+        name = (r.get("counterparty") or "").strip()
+        if not name:
+            continue
+        if needle not in name.lower():
+            continue
+        groups.setdefault(name, []).append(r)
+    suggestions = []
+    for name, hist in groups.items():
+        hist_sorted = sorted(
+            hist,
+            key=lambda x: x.get("updated_at") or x.get("created_at") or "",
+            reverse=True,
+        )
+        last = hist_sorted[0]
+        suggestions.append({
+            "counterparty": name,
+            "matter_count": len(hist_sorted),
+            "last_matter_date": (last.get("updated_at") or last.get("created_at") or "")[:10],
+        })
+    suggestions.sort(
+        key=lambda s: (s["matter_count"], s.get("last_matter_date") or ""),
+        reverse=True,
+    )
+    return {"suggestions": suggestions[:10]}
+
+
 @api_router.get("/legal/matters")
 async def list_legal_matters(
     principal=Depends(get_principal),
     status: Optional[str] = Query(None),
+    counterparty: Optional[str] = Query(None),
 ):
     dept = await _legal_department(principal)
     filt: dict = {"department_id": dept["department_id"]}
@@ -7024,6 +7180,10 @@ async def list_legal_matters(
         if st not in LEGAL_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status filter")
         filt["status"] = st
+    if counterparty is not None:
+        cp = counterparty.strip()
+        if cp:
+            filt["counterparty"] = cp
     rows = await db.legal_matters.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
@@ -7036,6 +7196,7 @@ async def list_legal_matters(
         "matters": items,
         "statuses": ["draft", "internal_review", "counterparty_review", "signed", "filed"],
         "matter_types": sorted(LEGAL_MATTER_TYPES),
+        "recurrence_options": sorted(LEGAL_RECURRENCE),
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_reassign": is_lead,
@@ -7077,9 +7238,16 @@ async def create_legal_matter(payload: LegalMatterCreate, principal=Depends(get_
         "document_ref": None,
         "notes": (payload.notes or "").strip(),
         "due_date": _normalize_optional_ymd(payload.due_date, field_name="due_date"),
+        "counterparty": (payload.counterparty or "").strip()[:200],
+        "recurrence": None,
+        "renewed_from_matter_id": None,
+        "renewed_to_matter_id": None,
         "created_at": now,
         "updated_at": now,
     }
+    matter["recurrence"] = _normalize_legal_recurrence(
+        payload.recurrence, matter_type=matter["matter_type"],
+    )
     if matter["status"] == "filed":
         matter["completed_at"] = now
     await db.legal_matters.insert_one(dict(matter))
@@ -7121,6 +7289,8 @@ async def patch_legal_matter(
         upd["notes"] = payload.notes.strip()
     if payload.due_date is not None:
         upd["due_date"] = _normalize_optional_ymd(payload.due_date, field_name="due_date")
+    if payload.counterparty is not None:
+        upd["counterparty"] = payload.counterparty.strip()[:200]
 
     if payload.assigned_to is not None:
         new_assignee = (payload.assigned_to or "").strip() or None
@@ -7146,16 +7316,32 @@ async def patch_legal_matter(
                 raise HTTPException(status_code=403, detail="Invalid status for your role")
             upd["status"] = new_status
 
+    # Resolve recurrence against the post-patch matter type.
+    next_type = upd.get("matter_type", matter.get("matter_type") or "other")
+    if payload.recurrence is not None or "matter_type" in upd:
+        raw_rec = payload.recurrence if payload.recurrence is not None else matter.get("recurrence")
+        upd["recurrence"] = _normalize_legal_recurrence(raw_rec, matter_type=next_type)
+
     helm_dept_drafts.apply_status_completion(matter, upd, done_status="filed")
     if not upd:
         return {"ok": True, "matter": await _enrich_legal_matter(matter)}
 
+    becoming_filed = upd.get("status") == "filed" and matter.get("status") != "filed"
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.legal_matters.update_one(
         {"id": matter_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
-    return {"ok": True, "matter": await _enrich_legal_matter({**matter, **upd})}
+    updated = {**matter, **upd}
+    renewal = None
+    if becoming_filed:
+        renewal = await _spawn_compliance_renewal(updated, principal, dept)
+        if renewal and renewal.get("id"):
+            updated["renewed_to_matter_id"] = renewal["id"]
+    out = {"ok": True, "matter": await _enrich_legal_matter(updated)}
+    if renewal:
+        out["renewal_matter"] = await _enrich_legal_matter(renewal)
+    return out
 
 
 @api_router.post("/legal/matters/{matter_id}/document")

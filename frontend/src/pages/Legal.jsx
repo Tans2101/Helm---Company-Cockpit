@@ -46,14 +46,20 @@ function isDueDateOverdue(dueDate, status) {
 
 
 export default function Legal() {
-  const { data, loading, error, reload } = useFetch("/legal/matters");
+  const [counterpartyFilterInput, setCounterpartyFilterInput] = useState("");
+  const [counterpartyFilter, setCounterpartyFilter] = useState("");
+  const mattersUrl = counterpartyFilter.trim()
+    ? `/legal/matters?counterparty=${encodeURIComponent(counterpartyFilter.trim())}`
+    : "/legal/matters";
+  const { data, loading, error, reload } = useFetch(mattersUrl);
   const { data: membersData } = useFetch("/members");
   const [showFiled, setShowFiled] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "" });
+  const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "", recurrence: "", counterparty: "" });
+  const [counterpartySuggestions, setCounterpartySuggestions] = useState([]);
   const fileRef = useRef(null);
 
   const allMatters = useMemo(() => data?.matters || [], [data?.matters]);
@@ -79,6 +85,8 @@ export default function Legal() {
       notes: selected.notes || "",
       status: selected.status || "draft",
       due_date: selected.due_date || "",
+      recurrence: selected.recurrence || "",
+      counterparty: selected.counterparty || "",
     });
   }, [selected]);
 
@@ -130,11 +138,14 @@ export default function Legal() {
         matter_type: form.matter_type,
         notes: form.notes.trim(),
         due_date: form.due_date.trim(),
+        counterparty: form.counterparty.trim(),
+        recurrence: form.matter_type === "compliance" && form.recurrence ? form.recurrence : null,
       };
       if (form.assigned_to) body.assigned_to = form.assigned_to;
       const { data: res } = await api.post("/legal/matters", body);
       toast.success("Matter created");
-      setForm({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "" });
+      setForm({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "", recurrence: "", counterparty: "" });
+      setCounterpartySuggestions([]);
       setAdding(false);
       await reload();
       if (res?.matter?.id) setSelectedId(res.matter.id);
@@ -154,6 +165,8 @@ export default function Legal() {
       body.notes = draft.notes;
       body.status = draft.status;
       body.due_date = (draft.due_date || "").trim();
+      body.counterparty = (draft.counterparty || "").trim();
+      body.recurrence = draft.matter_type === "compliance" ? (draft.recurrence || null) : null;
     }
     if (isLead && draft.assigned_to !== selected.assigned_to) {
       body.assigned_to = draft.assigned_to || null;
@@ -165,7 +178,11 @@ export default function Legal() {
     setBusy(true);
     try {
       const { data: res } = await api.patch(`/legal/matters/${selected.id}`, body);
-      toast.success("Matter updated");
+      if (res?.renewal_matter?.id) {
+        toast.success(`Matter filed — next cycle created (${res.renewal_matter.due_date || "set a due date"})`);
+      } else {
+        toast.success("Matter updated");
+      }
       await reload();
       if (res?.matter?.id) setSelectedId(res.matter.id);
     } catch (e) {
@@ -245,10 +262,40 @@ export default function Legal() {
         )}
       />
 
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs text-helm-muted font-mono">
-          {visible.length} shown · {allMatters.length} total
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-helm-muted font-mono">
+            {visible.length} shown · {allMatters.length} total
+          </p>
+          <input
+            data-testid="legal-counterparty-filter"
+            value={counterpartyFilterInput}
+            onChange={(e) => setCounterpartyFilterInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setCounterpartyFilter(counterpartyFilterInput.trim());
+            }}
+            placeholder="Filter counterparty (exact)"
+            className="rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1 text-xs text-helm-fg w-44"
+          />
+          <button
+            type="button"
+            data-testid="legal-counterparty-filter-apply"
+            onClick={() => setCounterpartyFilter(counterpartyFilterInput.trim())}
+            className="text-xs text-helm-muted hover:text-helm-fg"
+          >
+            Apply
+          </button>
+          {counterpartyFilter.trim() ? (
+            <button
+              type="button"
+              data-testid="legal-counterparty-filter-clear"
+              onClick={() => { setCounterpartyFilter(""); setCounterpartyFilterInput(""); }}
+              className="text-xs text-helm-muted hover:text-helm-fg"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
         <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
           <input
             type="checkbox"
@@ -287,6 +334,7 @@ export default function Legal() {
               <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
                 <th className="px-3 py-2 font-medium">Title</th>
                 <th className="px-3 py-2 font-medium">Type</th>
+                <th className="px-3 py-2 font-medium">Counterparty</th>
                 <th className="px-3 py-2 font-medium">Assignee</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Due</th>
@@ -308,6 +356,7 @@ export default function Legal() {
                 >
                   <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">{m.title}</td>
                   <td className="px-3 py-2.5 text-helm-muted capitalize">{m.matter_type || "—"}</td>
+                  <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{m.counterparty || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(m.assignee)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={m.status} /></td>
                   <td
@@ -383,6 +432,34 @@ export default function Legal() {
                 )}
               />
             </label>
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Counterparty</span>
+              <input
+                data-testid="legal-edit-counterparty"
+                disabled={!canEdit || busy}
+                value={draft.counterparty || ""}
+                onChange={(e) => setDraft((d) => ({ ...d, counterparty: e.target.value }))}
+                placeholder="Vendor, customer, or other party"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+              />
+            </label>
+            {draft.matter_type === "compliance" && (
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Recurrence</span>
+                <select
+                  data-testid="legal-edit-recurrence"
+                  disabled={!canEdit || busy}
+                  value={draft.recurrence || ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, recurrence: e.target.value }))}
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+                >
+                  <option value="">One-off</option>
+                  {(data?.recurrence_options || ["annual", "quarterly", "monthly"]).map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
               <select
@@ -551,6 +628,66 @@ export default function Legal() {
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Counterparty</span>
+              <input
+                data-testid="legal-new-counterparty"
+                value={form.counterparty}
+                onChange={async (e) => {
+                  const value = e.target.value;
+                  setForm((f) => ({ ...f, counterparty: value }));
+                  const q = value.trim();
+                  if (q.length < 1) {
+                    setCounterpartySuggestions([]);
+                    return;
+                  }
+                  try {
+                    const { data: res } = await api.get("/legal/counterparty-suggestions", { params: { q } });
+                    setCounterpartySuggestions(res?.suggestions || []);
+                  } catch {
+                    setCounterpartySuggestions([]);
+                  }
+                }}
+                placeholder="Vendor, customer, or other party"
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                autoComplete="off"
+              />
+            </label>
+            {counterpartySuggestions.length > 0 && (
+              <div className="space-y-1" data-testid="legal-counterparty-suggestions">
+                {counterpartySuggestions.map((s) => (
+                  <button
+                    key={s.counterparty}
+                    type="button"
+                    data-testid={`legal-counterparty-suggestion-${s.counterparty}`}
+                    onClick={() => {
+                      setForm((f) => ({ ...f, counterparty: s.counterparty }));
+                      setCounterpartySuggestions([]);
+                    }}
+                    className="w-full text-left rounded-md border border-helm-line px-3 py-1.5 text-xs text-helm-fg hover:bg-helm-fg/[0.04]"
+                  >
+                    <span className="font-medium">{s.counterparty}</span>
+                    <span className="text-helm-muted"> · {s.matter_count} · last {s.last_matter_date || "—"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {form.matter_type === "compliance" && (
+              <label className="block space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Recurrence</span>
+                <select
+                  data-testid="legal-new-recurrence"
+                  value={form.recurrence}
+                  onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))}
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                >
+                  <option value="">One-off</option>
+                  {(data?.recurrence_options || ["annual", "quarterly", "monthly"]).map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="block space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>
               <select
