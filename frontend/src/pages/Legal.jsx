@@ -33,6 +33,18 @@ function personLabel(p) {
   return p.name || p.email || "Teammate";
 }
 
+const FILED = new Set(["filed"]);
+
+function isDueDateOverdue(dueDate, status) {
+  if (FILED.has(status)) return false;
+  const raw = (dueDate || "").trim();
+  if (!raw) return false;
+  const end = new Date(`${raw}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() < Date.now();
+}
+
+
 export default function Legal() {
   const { data, loading, error, reload } = useFetch("/legal/matters");
   const { data: membersData } = useFetch("/members");
@@ -41,7 +53,7 @@ export default function Legal() {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "" });
+  const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "" });
   const fileRef = useRef(null);
 
   const allMatters = useMemo(() => data?.matters || [], [data?.matters]);
@@ -66,6 +78,7 @@ export default function Legal() {
       assigned_to: selected.assigned_to || "",
       notes: selected.notes || "",
       status: selected.status || "draft",
+      due_date: selected.due_date || "",
     });
   }, [selected]);
 
@@ -116,11 +129,12 @@ export default function Legal() {
         title: form.title.trim(),
         matter_type: form.matter_type,
         notes: form.notes.trim(),
+        due_date: form.due_date.trim(),
       };
       if (form.assigned_to) body.assigned_to = form.assigned_to;
       const { data: res } = await api.post("/legal/matters", body);
       toast.success("Matter created");
-      setForm({ title: "", matter_type: "contract", assigned_to: "", notes: "" });
+      setForm({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "" });
       setAdding(false);
       await reload();
       if (res?.matter?.id) setSelectedId(res.matter.id);
@@ -139,6 +153,7 @@ export default function Legal() {
       body.matter_type = draft.matter_type;
       body.notes = draft.notes;
       body.status = draft.status;
+      body.due_date = (draft.due_date || "").trim();
     }
     if (isLead && draft.assigned_to !== selected.assigned_to) {
       body.assigned_to = draft.assigned_to || null;
@@ -274,11 +289,14 @@ export default function Legal() {
                 <th className="px-3 py-2 font-medium">Type</th>
                 <th className="px-3 py-2 font-medium">Assignee</th>
                 <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Due</th>
                 <th className="px-3 py-2 font-medium">Doc</th>
               </tr>
             </thead>
             <tbody>
-              {visible.map((m) => (
+              {visible.map((m) => {
+                const overdue = isDueDateOverdue(m.due_date, m.status);
+                return (
                 <tr
                   key={m.id}
                   data-testid={`legal-row-${m.id}`}
@@ -292,11 +310,21 @@ export default function Legal() {
                   <td className="px-3 py-2.5 text-helm-muted capitalize">{m.matter_type || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(m.assignee)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={m.status} /></td>
+                  <td
+                    className={cn(
+                      "px-3 py-2.5 font-mono text-xs",
+                      overdue ? "text-helm-status-negative" : "text-helm-muted",
+                    )}
+                    data-testid={`legal-due-${m.id}`}
+                  >
+                    {m.due_date ? (overdue ? `Overdue ${m.due_date}` : m.due_date) : "—"}
+                  </td>
                   <td className="px-3 py-2.5 text-helm-muted">
                     {m.has_document ? <FileText className="w-3.5 h-3.5 text-helm-gold" /> : "—"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -338,6 +366,22 @@ export default function Legal() {
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Due date</span>
+              <input
+                type="date"
+                data-testid="legal-edit-due-date"
+                disabled={!canEdit || busy}
+                value={draft.due_date || ""}
+                onChange={(e) => setDraft((d) => ({ ...d, due_date: e.target.value }))}
+                className={cn(
+                  "w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm disabled:opacity-50",
+                  isDueDateOverdue(draft.due_date, draft.status)
+                    ? "text-helm-status-negative"
+                    : "text-helm-fg",
+                )}
+              />
             </label>
             <label className="space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
@@ -496,6 +540,16 @@ export default function Legal() {
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Due date</span>
+              <input
+                type="date"
+                data-testid="legal-new-due-date"
+                value={form.due_date}
+                onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              />
             </label>
             <label className="block space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>

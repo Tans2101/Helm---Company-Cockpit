@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from money_fmt import fmt_money_plain
-from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_PRODUCTION, TYPE_PROCUREMENT
+from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_LEGAL, TYPE_PRODUCTION, TYPE_PROCUREMENT
 from department_report_drafts import SPEC_BY_TYPE
 
 
@@ -45,6 +45,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     "overdue_work_order",
     "overdue_procurement",
     "overdue_procurement_blocking_production",
+    # Past legal due dates (fact only — no advisory language).
+    "overdue_legal_deadline",
 })
 DELEGATE_SIGNAL_TYPES = frozenset({
     "overdue_task",
@@ -53,6 +55,8 @@ DELEGATE_SIGNAL_TYPES = frozenset({
     "stalled_onboarding",
     # Proactive reminder — lower urgency than stalled/missed deal signals.
     "upcoming_followup",
+    # Legal due dates within the next two weeks — reminder, not advisory.
+    "upcoming_legal_deadline",
 })
 
 
@@ -982,6 +986,80 @@ def detect_overdue_procurement_requests(requests: list, *, today: Optional[date]
 
 
 
+
+def detect_upcoming_legal_deadlines(
+    matters: list,
+    *,
+    today: Optional[date] = None,
+    within_days: int = 14,
+) -> list:
+    """Plain date comparison for open legal matters with a due_date.
+
+    Upcoming (today..today+within_days) → upcoming_legal_deadline (low).
+    Past due → overdue_legal_deadline (medium/high). Filed matters are ignored.
+    Signal text states the fact only — no assessment of what to do.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    horizon = today + timedelta(days=max(0, within_days))
+    out = []
+    for m in matters or []:
+        if (m.get("status") or "").strip().lower() == "filed":
+            continue
+        due_d = parse_task_due_date(m.get("due_date"))
+        if due_d is None:
+            continue
+        title = (m.get("title") or "").strip() or "Untitled matter"
+        mtype = (m.get("matter_type") or "other").strip().lower() or "other"
+        if mtype == "compliance":
+            label = f"Compliance renewal for {title}"
+        elif mtype == "contract":
+            label = f"Contract renewal for {title}"
+        else:
+            label = f"Legal deadline for {title}"
+        if due_d < today:
+            days_late = (today - due_d).days
+            severity = "high" if days_late >= 7 else "medium"
+            out.append(_signal(
+                "overdue_legal_deadline",
+                severity,
+                summary=f"{label} was due {due_d.isoformat()}",
+                detail=(
+                    f"{label} was due {due_d.isoformat()} "
+                    f"({days_late} day(s) ago) and is still '{m.get('status')}'."
+                ),
+                related_id=m.get("id"),
+                department_type="legal",
+                department_name="Legal",
+                item_label=title,
+                matter_type=mtype,
+                due=due_d.isoformat(),
+                days_late=days_late,
+                status=m.get("status"),
+            ))
+        elif due_d <= horizon:
+            days_until = (due_d - today).days
+            when = (
+                "today" if days_until == 0
+                else ("tomorrow" if days_until == 1 else f"in {days_until} days")
+            )
+            out.append(_signal(
+                "upcoming_legal_deadline",
+                "low",
+                summary=f"{label} is due {when}",
+                detail=f"{label} is due {due_d.isoformat()} ({when}).",
+                related_id=m.get("id"),
+                department_type="legal",
+                department_name="Legal",
+                item_label=title,
+                matter_type=mtype,
+                due=due_d.isoformat(),
+                days_until=days_until,
+                status=m.get("status"),
+            ))
+    return out
+
+
+
 def collect_department_signals(
     department_items: list | None,
     *,
@@ -1001,6 +1079,8 @@ def collect_department_signals(
             signals.extend(detect_overdue_work_orders(items, today=now.date()))
         if dtype == TYPE_PROCUREMENT:
             signals.extend(detect_overdue_procurement_requests(items, today=now.date()))
+        if dtype == TYPE_LEGAL:
+            signals.extend(detect_upcoming_legal_deadlines(items, today=now.date()))
         generic = detect_stalled_department_item(items, spec, now=now)
         if dtype == TYPE_ENGINEERING_MAINTENANCE:
             urgent = detect_urgent_maintenance(items, spec, now=now)

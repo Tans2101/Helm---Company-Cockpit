@@ -5229,6 +5229,16 @@ CALENDAR_DATE_SOURCES = [
         "open_statuses": frozenset({"ordered"}),
         "source_type": "procurement_request",
     },
+    {
+        "collection": "legal_matters",
+        "date_field": "due_date",
+        "title_field": "title",
+        "type_label": "Legal",
+        "department_type": dept_catalog.TYPE_LEGAL,
+        # Filed = deadline met — exclude from calendar + deadline signals.
+        "open_statuses": frozenset({"draft", "internal_review", "counterparty_review", "signed"}),
+        "source_type": "legal_matter",
+    },
 ]
 
 
@@ -6960,12 +6970,29 @@ async def _enrich_legal_matters(rows: list) -> list:
     return [await _enrich_legal_matter(r, users) for r in rows]
 
 
+def _normalize_optional_ymd(raw, *, field_name: str = "due_date") -> str:
+    """Optional YYYY-MM-DD (or empty). Rejects unparseable values."""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    try:
+        if "T" in s:
+            s = s.split("T", 1)[0]
+        datetime.strptime(s[:10], "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} must be YYYY-MM-DD") from exc
+    return s[:10]
+
+
 class LegalMatterCreate(BaseModel):
     title: str
     matter_type: str = "contract"
     assigned_to: Optional[str] = None
     notes: str = ""
     status: str = "draft"
+    due_date: str = ""
 
 
 class LegalMatterPatch(BaseModel):
@@ -6974,6 +7001,7 @@ class LegalMatterPatch(BaseModel):
     assigned_to: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    due_date: Optional[str] = None
 
 
 def _normalize_matter_type(raw: str) -> str:
@@ -7048,6 +7076,7 @@ async def create_legal_matter(payload: LegalMatterCreate, principal=Depends(get_
         "status": status if status in LEGAL_MEMBER_STATUSES or is_lead else "draft",
         "document_ref": None,
         "notes": (payload.notes or "").strip(),
+        "due_date": _normalize_optional_ymd(payload.due_date, field_name="due_date"),
         "created_at": now,
         "updated_at": now,
     }
@@ -7090,6 +7119,8 @@ async def patch_legal_matter(
         upd["matter_type"] = _normalize_matter_type(payload.matter_type)
     if payload.notes is not None:
         upd["notes"] = payload.notes.strip()
+    if payload.due_date is not None:
+        upd["due_date"] = _normalize_optional_ymd(payload.due_date, field_name="due_date")
 
     if payload.assigned_to is not None:
         new_assignee = (payload.assigned_to or "").strip() or None
