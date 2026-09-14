@@ -107,6 +107,9 @@ class CollStore:
 def hr_api():
     templates = CollStore()
     instances = CollStore()
+    employees = CollStore()
+    off_templates = CollStore()
+    off_instances = CollStore()
     depts = MagicMock()
     depts.find_one = AsyncMock(return_value=dict(HR_DEPT))
     members = MagicMock()
@@ -128,6 +131,9 @@ def hr_api():
     mock_db.department_members = members
     mock_db.hr_onboarding_template = templates
     mock_db.hr_onboarding_instances = instances
+    mock_db.hr_employees = employees
+    mock_db.hr_offboarding_template = off_templates
+    mock_db.hr_offboarding_instances = off_instances
     mock_db.users = users
 
     async def as_ceo():
@@ -146,7 +152,11 @@ def hr_api():
     with patch.object(server, "db", mock_db), \
          patch.object(server, "BILLING_ENFORCED", False):
         client = TestClient(server.app)
-        yield client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts
+        yield client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, {
+            "employees": employees,
+            "off_templates": off_templates,
+            "off_instances": off_instances,
+        }
     server.app.dependency_overrides.clear()
 
 
@@ -156,7 +166,7 @@ def test_hr_not_placeholder():
 
 
 def test_outsider_403(hr_api):
-    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts = hr_api
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, *_ = hr_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
     assert client.get("/api/hr/template").status_code == 403
     assert client.get("/api/hr/onboarding").status_code == 403
@@ -175,7 +185,7 @@ def test_default_template_created_on_get(hr_api):
 
 
 def test_member_cannot_edit_template_or_create(hr_api):
-    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts = hr_api
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, *_ = hr_api
     client.get("/api/hr/template")
     server.app.dependency_overrides[server.get_principal] = as_member
     r = client.patch("/api/hr/template", json={"steps": [{"name": "Only"}]})
@@ -185,7 +195,7 @@ def test_member_cannot_edit_template_or_create(hr_api):
 
 
 def test_create_copies_template_independently(hr_api):
-    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts = hr_api
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, *_ = hr_api
     client.get("/api/hr/template")
     r1 = client.post("/api/hr/onboarding", json={"hire_name": "Ada", "hire_email": "ada@x.com"})
     r2 = client.post("/api/hr/onboarding", json={"hire_name": "Bob"})
@@ -205,7 +215,7 @@ def test_create_copies_template_independently(hr_api):
 
 
 def test_assignee_updates_own_step_not_others(hr_api):
-    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts = hr_api
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, *_ = hr_api
     client.post("/api/hr/onboarding", json={"hire_name": "Ada"})
     inst = instances.rows[0]
     step0 = inst["steps"][0]
@@ -239,6 +249,96 @@ def test_overall_status_active_when_all_done(hr_api):
     assert r.json()["instance"]["overall_status"] == "active"
 
 
+def test_completing_onboarding_creates_one_employee(hr_api):
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, stores = hr_api
+    employees = stores["employees"]
+    client.post("/api/hr/onboarding", json={"hire_name": "Ada Lovelace"})
+    inst = instances.rows[0]
+    # Mid-progress — no employee yet
+    client.patch(f"/api/hr/onboarding/{inst['id']}", json={
+        "step_id": inst["steps"][0]["id"], "status": "done",
+    })
+    assert employees.rows == []
+
+    for step in inst["steps"]:
+        client.patch(f"/api/hr/onboarding/{inst['id']}", json={
+            "step_id": step["id"], "status": "done",
+        })
+    assert len(employees.rows) == 1
+    emp = employees.rows[0]
+    assert emp["name"] == "Ada Lovelace"
+    assert emp["status"] == "active"
+    assert emp["source_onboarding_instance_id"] == inst["id"]
+    # Sensitive fields must never exist on the record
+    for banned in ("salary", "compensation", "ssn", "medical", "race", "religion", "immigration"):
+        assert banned not in emp
+
+    # Completing again / re-patching must not duplicate
+    client.patch(f"/api/hr/onboarding/{inst['id']}", json={
+        "step_id": inst["steps"][0]["id"], "status": "done",
+    })
+    assert len(employees.rows) == 1
+
+    listed = client.get("/api/hr/employees")
+    assert listed.status_code == 200
+    assert len(listed.json()["employees"]) == 1
+    assert listed.json()["employees"][0]["name"] == "Ada Lovelace"
+
+    filtered = client.get("/api/hr/employees", params={"status": "active"})
+    assert len(filtered.json()["employees"]) == 1
+    empty = client.get("/api/hr/employees", params={"status": "departed"})
+    assert empty.json()["employees"] == []
+
+
+def test_offboarding_sets_departed_only_when_complete(hr_api):
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, stores = hr_api
+    employees = stores["employees"]
+    off_templates = stores["off_templates"]
+    off_instances = stores["off_instances"]
+
+    # Seed an active employee
+    client.post("/api/hr/employees", json={"name": "Grace Hopper", "role": "Engineer"})
+    assert len(employees.rows) == 1
+    emp = employees.rows[0]
+    assert emp["status"] == "active"
+
+    r = client.get("/api/hr/offboarding/template")
+    assert r.status_code == 200
+    names = [s["name"] for s in sorted(r.json()["template"]["steps"], key=lambda x: x["order"])]
+    assert names[0] == "Revoke Helm/system access"
+    assert "Update employee status to departed" in names
+    assert len(off_templates.rows) == 1
+
+    started = client.post("/api/hr/offboarding", json={"employee_id": emp["id"]})
+    assert started.status_code == 200, started.text
+    assert employees.rows[0]["status"] == "active"  # not departed yet
+    assert employees.rows[0].get("departed_at") is None
+    off = off_instances.rows[0]
+    assert off["overall_status"] == "in_progress"
+    assert off["employee_id"] == emp["id"]
+
+    # Finish all but one step — still active
+    for step in off["steps"][:-1]:
+        client.patch(f"/api/hr/offboarding/{off['id']}", json={
+            "step_id": step["id"], "status": "done",
+        })
+    assert employees.rows[0]["status"] == "active"
+    assert off_instances.rows[0]["overall_status"] == "in_progress"
+
+    # Complete last step → departed
+    last = off["steps"][-1]
+    done = client.patch(f"/api/hr/offboarding/{off['id']}", json={
+        "step_id": last["id"], "status": "done",
+    })
+    assert done.status_code == 200
+    assert off_instances.rows[0]["overall_status"] == "active"
+    assert employees.rows[0]["status"] == "departed"
+    assert employees.rows[0].get("departed_at")
+
+    listed = client.get("/api/hr/employees", params={"status": "departed"})
+    assert len(listed.json()["employees"]) == 1
+
+
 def test_independent_progress(hr_api):
     client, templates, instances, *_ = hr_api
     client.post("/api/hr/onboarding", json={"hire_name": "Ada"})
@@ -265,7 +365,7 @@ def test_sort_in_progress_first(hr_api):
 
 
 def test_delete_lead_only(hr_api):
-    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts = hr_api
+    client, templates, instances, as_ceo, as_member, as_lead, as_outsider, depts, *_ = hr_api
     client.post("/api/hr/onboarding", json={"hire_name": "Ada"})
     iid = instances.rows[0]["id"]
     server.app.dependency_overrides[server.get_principal] = as_member

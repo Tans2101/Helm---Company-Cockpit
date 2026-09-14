@@ -142,6 +142,9 @@ DEPARTMENT_FEATURE_COLLECTIONS = (
     "maintenance_tickets",
     "hr_onboarding_instances",
     "hr_onboarding_template",
+    "hr_employees",
+    "hr_offboarding_instances",
+    "hr_offboarding_template",
 )
 
 # Back-compat alias used by older call sites / tests.

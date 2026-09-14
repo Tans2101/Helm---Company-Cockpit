@@ -14,6 +14,12 @@ const STEP_STATUS_META = {
   done: { label: "Done", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
 };
 
+const EMPLOYEE_STATUS_META = {
+  active: { label: "Active", className: "text-helm-status-positive" },
+  on_leave: { label: "On leave", className: "text-helm-muted" },
+  departed: { label: "Departed", className: "text-helm-status-negative" },
+};
+
 function StepBadge({ status }) {
   const meta = STEP_STATUS_META[status] || STEP_STATUS_META.not_started;
   return (
@@ -29,16 +35,26 @@ function personLabel(p) {
 }
 
 export default function HR() {
+  const [tab, setTab] = useState("onboarding");
   const { data, loading, error, reload } = useFetch("/hr/onboarding");
   const { data: tmplData, reload: reloadTmpl } = useFetch("/hr/template");
+  const { data: empData, reload: reloadEmp } = useFetch("/hr/employees");
+  const { data: offData, reload: reloadOff } = useFetch("/hr/offboarding");
+  const { data: offTmplData, reload: reloadOffTmpl } = useFetch("/hr/offboarding/template");
   const { data: membersData } = useFetch("/members");
   const [showActive, setShowActive] = useState(false);
+  const [showCompletedOff, setShowCompletedOff] = useState(false);
+  const [empStatusFilter, setEmpStatusFilter] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedOffId, setSelectedOffId] = useState(null);
+  const [selectedEmpId, setSelectedEmpId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(false);
+  const [editingOffTemplate, setEditingOffTemplate] = useState(false);
   const [form, setForm] = useState({ hire_name: "", hire_email: "" });
   const [tmplDraft, setTmplDraft] = useState([]);
+  const [offTmplDraft, setOffTmplDraft] = useState([]);
 
   const all = useMemo(() => data?.instances || [], [data?.instances]);
   const visible = useMemo(
@@ -46,18 +62,40 @@ export default function HR() {
     [all, showActive],
   );
   const selected = all.find((i) => i.id === selectedId) || null;
+
+  const employees = useMemo(() => {
+    const rows = empData?.employees || [];
+    if (!empStatusFilter) return rows;
+    return rows.filter((e) => e.status === empStatusFilter);
+  }, [empData?.employees, empStatusFilter]);
+  const selectedEmp = (empData?.employees || []).find((e) => e.id === selectedEmpId) || null;
+
+  const offAll = useMemo(() => offData?.instances || [], [offData?.instances]);
+  const offVisible = useMemo(
+    () => (showCompletedOff ? offAll : offAll.filter((i) => i.overall_status !== "active")),
+    [offAll, showCompletedOff],
+  );
+  const selectedOff = offAll.find((i) => i.id === selectedOffId) || null;
+
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
-  const isLead = Boolean(data?.is_lead || tmplData?.can_edit_template);
+  const isLead = Boolean(data?.is_lead || tmplData?.can_edit_template || empData?.is_lead);
   const myId = data?.my_user_id;
   const templateSteps = tmplData?.template?.steps;
   const templateUpdatedAt = tmplData?.template?.updated_at;
+  const offTemplateSteps = offTmplData?.template?.steps;
+  const offTemplateUpdatedAt = offTmplData?.template?.updated_at;
 
   useEffect(() => {
     const steps = templateSteps || [];
     setTmplDraft(steps.map((s) => ({ ...s })));
   }, [templateUpdatedAt, editingTemplate, templateSteps]);
 
-  if (loading) return <LoadingScreen label="Loading HR onboarding" />;
+  useEffect(() => {
+    const steps = offTemplateSteps || [];
+    setOffTmplDraft(steps.map((s) => ({ ...s })));
+  }, [offTemplateUpdatedAt, editingOffTemplate, offTemplateSteps]);
+
+  if (loading) return <LoadingScreen label="Loading HR" />;
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {
@@ -118,8 +156,11 @@ export default function HR() {
         step_id: step.id,
         ...patch,
       });
-      await reload();
+      await Promise.all([reload(), reloadEmp()]);
       if (res?.instance?.id) setSelectedId(res.instance.id);
+      if (res?.instance?.overall_status === "active") {
+        toast.success("Onboarding complete — employee record created");
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update step");
     } finally {
@@ -164,22 +205,102 @@ export default function HR() {
     }
   };
 
-  const moveTmplStep = (idx, dir) => {
-    const next = [...tmplDraft];
+  const saveOffTemplate = async () => {
+    const steps = offTmplDraft
+      .map((s, i) => ({ id: s.id, name: (s.name || "").trim(), order: i }))
+      .filter((s) => s.name);
+    if (!steps.length) {
+      toast.error("Template needs at least one step");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.patch("/hr/offboarding/template", { steps });
+      toast.success("Offboarding template updated");
+      setEditingOffTemplate(false);
+      await reloadOffTmpl();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save template");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const moveTmplStep = (draft, setDraft, idx, dir) => {
+    const next = [...draft];
     const j = idx + dir;
     if (j < 0 || j >= next.length) return;
     [next[idx], next[j]] = [next[j], next[idx]];
-    setTmplDraft(next);
+    setDraft(next);
   };
+
+  const startOffboarding = async (employee) => {
+    if (!employee) return;
+    if (!window.confirm(`Start offboarding for “${employee.name}”? Status becomes departed only after every step is done.`)) return;
+    setBusy(true);
+    try {
+      const { data: res } = await api.post("/hr/offboarding", { employee_id: employee.id });
+      toast.success("Offboarding started");
+      await reloadOff();
+      setTab("offboarding");
+      if (res?.instance?.id) setSelectedOffId(res.instance.id);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not start offboarding");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patchOffStep = async (step, patch) => {
+    if (!selectedOff) return;
+    setBusy(true);
+    try {
+      const { data: res } = await api.patch(`/hr/offboarding/${selectedOff.id}`, {
+        step_id: step.id,
+        ...patch,
+      });
+      await Promise.all([reloadOff(), reloadEmp()]);
+      if (res?.instance?.id) setSelectedOffId(res.instance.id);
+      if (res?.instance?.overall_status === "active") {
+        toast.success("Offboarding complete — employee marked departed");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not update step");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteOffInstance = async () => {
+    if (!selectedOff) return;
+    if (!window.confirm(`Delete offboarding for “${selectedOff.employee_name}”?`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/hr/offboarding/${selectedOff.id}`);
+      toast.success("Offboarding deleted");
+      setSelectedOffId(null);
+      await reloadOff();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tabs = [
+    { id: "onboarding", label: "Onboarding" },
+    { id: "employees", label: "Employees" },
+    { id: "offboarding", label: "Offboarding" },
+  ];
 
   return (
     <div data-testid="hr-page">
       <PageHeader
         title={data?.name || "HR"}
-        subtitle="Per-hire onboarding — each new hire gets their own checklist."
+        subtitle="Onboarding, employee records, and offboarding — no sensitive employment data stored."
         action={(
           <div className="flex items-center gap-2">
-            {isLead && (
+            {isLead && tab === "onboarding" && (
               <button
                 type="button"
                 data-testid="hr-edit-template-btn"
@@ -189,7 +310,17 @@ export default function HR() {
                 Edit template
               </button>
             )}
-            {isLead && (
+            {isLead && tab === "offboarding" && (
+              <button
+                type="button"
+                data-testid="hr-edit-offboarding-template-btn"
+                onClick={() => setEditingOffTemplate(true)}
+                className="rounded-md border border-helm-fg/15 text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5"
+              >
+                Edit template
+              </button>
+            )}
+            {isLead && tab === "onboarding" && (
               <button
                 type="button"
                 data-testid="hr-add-onboarding-btn"
@@ -203,182 +334,464 @@ export default function HR() {
         )}
       />
 
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs text-helm-muted font-mono">
-          {visible.length} shown · {all.length} total
-        </p>
-        <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
-          <input
-            type="checkbox"
-            data-testid="hr-show-active"
-            checked={showActive}
-            onChange={(e) => setShowActive(e.target.checked)}
-            className="rounded border-helm-fg/20 bg-transparent"
-          />
-          Show completed (active)
-        </label>
+      <div className="flex items-center gap-1 mb-5 border-b border-helm-line" data-testid="hr-tabs">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            data-testid={`hr-tab-${t.id}`}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "px-3 py-2 text-sm border-b-2 -mb-px transition-colors",
+              tab === t.id
+                ? "border-helm-gold text-helm-fg"
+                : "border-transparent text-helm-muted hover:text-helm-fg",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {visible.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={all.length ? "No open onboardings" : "No onboardings yet"}
-          body={
-            all.length
-              ? "Turn on “Show completed” to see finished hires, or start a new one."
-              : isLead
-                ? "Start onboarding for a new hire — their checklist is copied from the template."
-                : "Ask an HR lead or the CEO to start onboarding for a new hire."
-          }
-          action={isLead ? (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
-            >
-              <Plus className="w-4 h-4" /> New hire
-            </button>
-          ) : null}
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
-          <table className="w-full text-left text-sm" data-testid="hr-table">
-            <thead>
-              <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
-                <th className="px-3 py-2 font-medium">Hire</th>
-                <th className="px-3 py-2 font-medium">Progress</th>
-                <th className="px-3 py-2 font-medium">Open steps</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((inst) => {
-                const open = (inst.steps || []).filter((s) => s.status !== "done");
-                return (
-                  <tr
-                    key={inst.id}
-                    data-testid={`hr-row-${inst.id}`}
-                    onClick={() => setSelectedId(inst.id)}
-                    className={cn(
-                      "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                      selectedId === inst.id && "bg-helm-gold/[0.06]",
-                    )}
-                  >
-                    <td className="px-3 py-2.5">
-                      <p className="text-helm-fg truncate max-w-[14rem]">{inst.hire_name}</p>
-                      {inst.hire_email && (
-                        <p className="text-[11px] text-helm-muted truncate">{inst.hire_email}</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">
-                      {inst.progress?.done || 0}/{inst.progress?.total || 0}
-                    </td>
-                    <td className="px-3 py-2.5 text-helm-muted truncate max-w-[14rem] text-xs">
-                      {open.length ? open.map((s) => s.name).join(", ") : "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={cn(
-                        "text-[10px] font-mono uppercase tracking-wide",
-                        inst.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted",
-                      )}
-                      >
-                        {inst.overall_status === "active" ? "Active" : "In progress"}
-                      </span>
-                    </td>
+      {tab === "onboarding" && (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-helm-muted font-mono">
+              {visible.length} shown · {all.length} total
+            </p>
+            <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                data-testid="hr-show-active"
+                checked={showActive}
+                onChange={(e) => setShowActive(e.target.checked)}
+                className="rounded border-helm-fg/20 bg-transparent"
+              />
+              Show completed (active)
+            </label>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={all.length ? "No open onboardings" : "No onboardings yet"}
+              body={
+                all.length
+                  ? "Turn on “Show completed” to see finished hires, or start a new one."
+                  : isLead
+                    ? "Start onboarding for a new hire — their checklist is copied from the template."
+                    : "Ask an HR lead or the CEO to start onboarding for a new hire."
+              }
+              action={isLead ? (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
+                >
+                  <Plus className="w-4 h-4" /> New hire
+                </button>
+              ) : null}
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
+              <table className="w-full text-left text-sm" data-testid="hr-table">
+                <thead>
+                  <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                    <th className="px-3 py-2 font-medium">Hire</th>
+                    <th className="px-3 py-2 font-medium">Progress</th>
+                    <th className="px-3 py-2 font-medium">Open steps</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {visible.map((inst) => {
+                    const open = (inst.steps || []).filter((s) => s.status !== "done");
+                    return (
+                      <tr
+                        key={inst.id}
+                        data-testid={`hr-row-${inst.id}`}
+                        onClick={() => setSelectedId(inst.id)}
+                        className={cn(
+                          "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                          selectedId === inst.id && "bg-helm-gold/[0.06]",
+                        )}
+                      >
+                        <td className="px-3 py-2.5">
+                          <p className="text-helm-fg truncate max-w-[14rem]">{inst.hire_name}</p>
+                          {inst.hire_email && (
+                            <p className="text-[11px] text-helm-muted truncate">{inst.hire_email}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">
+                          {inst.progress?.done || 0}/{inst.progress?.total || 0}
+                        </td>
+                        <td className="px-3 py-2.5 text-helm-muted truncate max-w-[14rem] text-xs">
+                          {open.length ? open.map((s) => s.name).join(", ") : "—"}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={cn(
+                            "text-[10px] font-mono uppercase tracking-wide",
+                            inst.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted",
+                          )}
+                          >
+                            {inst.overall_status === "active" ? "Active" : "In progress"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selected && (
+            <GlassCard className="p-5 space-y-4" data-testid="hr-detail">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <SectionLabel>Onboarding checklist</SectionLabel>
+                  <p className="text-helm-fg text-sm mt-1">{selected.hire_name}</p>
+                  {selected.hire_email && (
+                    <p className="text-xs text-helm-muted">{selected.hire_email}</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2" data-testid="hr-steps">
+                {[...(selected.steps || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).map((step) => {
+                  const canEditStep = isLead || step.assigned_to === myId;
+                  return (
+                    <div
+                      key={step.id}
+                      data-testid={`hr-step-${step.id}`}
+                      className="rounded-md border border-helm-line bg-helm-fg/[0.02] p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-sm text-helm-fg">{step.name}</p>
+                        <StepBadge status={step.status} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
+                          <select
+                            disabled={!canEditStep || busy}
+                            value={step.status}
+                            onChange={(e) => patchStep(step, { status: e.target.value })}
+                            className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
+                          >
+                            {(data?.step_statuses || ["not_started", "in_progress", "done"]).map((s) => (
+                              <option key={s} value={s}>{STEP_STATUS_META[s]?.label || s}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>
+                          <select
+                            disabled={!isLead || busy}
+                            value={step.assigned_to || ""}
+                            onChange={(e) => patchStep(step, { assigned_to: e.target.value || null })}
+                            className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
+                          >
+                            <option value="">Unassigned</option>
+                            {workspaceMembers.map((m) => (
+                              <option key={m.user_id} value={m.user_id}>{m.name || m.email}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-helm-muted">Assignee: {personLabel(step.assignee)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-helm-muted">
+                <span>
+                  Overall:{" "}
+                  <span className={selected.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted"}>
+                    {selected.overall_status === "active" ? "Active" : "In progress"}
+                  </span>
+                </span>
+                <span className="font-mono">
+                  {selected.progress?.done || 0}/{selected.progress?.total || 0} steps done
+                </span>
+                {isLead && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    data-testid="hr-delete-btn"
+                    onClick={deleteInstance}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                )}
+              </div>
+            </GlassCard>
+          )}
+        </>
       )}
 
-      {selected && (
-        <GlassCard className="p-5 space-y-4" data-testid="hr-detail">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <SectionLabel>Onboarding checklist</SectionLabel>
-              <p className="text-helm-fg text-sm mt-1">{selected.hire_name}</p>
-              {selected.hire_email && (
-                <p className="text-xs text-helm-muted">{selected.hire_email}</p>
-              )}
-            </div>
-            <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="space-y-2" data-testid="hr-steps">
-            {[...(selected.steps || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).map((step) => {
-              const canEditStep = isLead || step.assigned_to === myId;
-              return (
-                <div
-                  key={step.id}
-                  data-testid={`hr-step-${step.id}`}
-                  className="rounded-md border border-helm-line bg-helm-fg/[0.02] p-3 space-y-2"
-                >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-sm text-helm-fg">{step.name}</p>
-                    <StepBadge status={step.status} />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <label className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
-                      <select
-                        disabled={!canEditStep || busy}
-                        value={step.status}
-                        onChange={(e) => patchStep(step, { status: e.target.value })}
-                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
-                      >
-                        {(data?.step_statuses || ["not_started", "in_progress", "done"]).map((s) => (
-                          <option key={s} value={s}>{STEP_STATUS_META[s]?.label || s}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>
-                      <select
-                        disabled={!isLead || busy}
-                        value={step.assigned_to || ""}
-                        onChange={(e) => patchStep(step, { assigned_to: e.target.value || null })}
-                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
-                      >
-                        <option value="">Unassigned</option>
-                        {workspaceMembers.map((m) => (
-                          <option key={m.user_id} value={m.user_id}>{m.name || m.email}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <p className="text-[11px] text-helm-muted">Assignee: {personLabel(step.assignee)}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-helm-muted">
-            <span>
-              Overall:{" "}
-              <span className={selected.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted"}>
-                {selected.overall_status === "active" ? "Active" : "In progress"}
-              </span>
-            </span>
-            <span className="font-mono">
-              {selected.progress?.done || 0}/{selected.progress?.total || 0} steps done
-            </span>
-            {isLead && (
-              <button
-                type="button"
-                disabled={busy}
-                data-testid="hr-delete-btn"
-                onClick={deleteInstance}
-                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+      {tab === "employees" && (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-helm-muted font-mono">
+              {employees.length} shown · {(empData?.employees || []).length} total
+            </p>
+            <label className="inline-flex items-center gap-2 text-xs text-helm-muted">
+              <span className="font-mono uppercase tracking-wide text-[10px]">Status</span>
+              <select
+                data-testid="hr-employee-status-filter"
+                value={empStatusFilter}
+                onChange={(e) => setEmpStatusFilter(e.target.value)}
+                className="rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1 text-sm text-helm-fg"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </button>
-            )}
+                <option value="">All</option>
+                {(empData?.statuses || ["active", "on_leave", "departed"]).map((s) => (
+                  <option key={s} value={s}>{EMPLOYEE_STATUS_META[s]?.label || s}</option>
+                ))}
+              </select>
+            </label>
           </div>
-        </GlassCard>
+
+          {employees.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No employee records yet"
+              body="Complete an onboarding checklist — that creates the employee record automatically."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
+              <table className="w-full text-left text-sm" data-testid="hr-employees-table">
+                <thead>
+                  <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                    <th className="px-3 py-2 font-medium">Name</th>
+                    <th className="px-3 py-2 font-medium">Role</th>
+                    <th className="px-3 py-2 font-medium">Start</th>
+                    <th className="px-3 py-2 font-medium">Team(s)</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((emp) => {
+                    const meta = EMPLOYEE_STATUS_META[emp.status] || EMPLOYEE_STATUS_META.active;
+                    return (
+                      <tr
+                        key={emp.id}
+                        data-testid={`hr-employee-${emp.id}`}
+                        onClick={() => setSelectedEmpId(emp.id)}
+                        className={cn(
+                          "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                          selectedEmpId === emp.id && "bg-helm-gold/[0.06]",
+                        )}
+                      >
+                        <td className="px-3 py-2.5 text-helm-fg">{emp.name}</td>
+                        <td className="px-3 py-2.5 text-helm-muted text-xs">{emp.role || "—"}</td>
+                        <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">{emp.start_date || "—"}</td>
+                        <td className="px-3 py-2.5 text-helm-muted text-xs truncate max-w-[12rem]">{emp.department_names || "—"}</td>
+                        <td className={cn("px-3 py-2.5 text-[10px] font-mono uppercase tracking-wide", meta.className)}>
+                          {meta.label}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedEmp && (
+            <GlassCard className="p-5 space-y-3" data-testid="hr-employee-detail">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <SectionLabel>Employee</SectionLabel>
+                  <p className="text-helm-fg text-sm mt-1">{selectedEmp.name}</p>
+                  <p className="text-xs text-helm-muted mt-1">
+                    Employment record only — Helm never stores medical data, government IDs, compensation, or protected characteristics.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedEmpId(null)} className="text-helm-muted hover:text-helm-fg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Role</dt>
+                  <dd className="text-helm-fg">{selectedEmp.role || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</dt>
+                  <dd className={EMPLOYEE_STATUS_META[selectedEmp.status]?.className || ""}>
+                    {EMPLOYEE_STATUS_META[selectedEmp.status]?.label || selectedEmp.status}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Start date</dt>
+                  <dd className="text-helm-fg font-mono text-xs">{selectedEmp.start_date || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Team(s)</dt>
+                  <dd className="text-helm-fg">{selectedEmp.department_names || "—"}</dd>
+                </div>
+              </dl>
+              {isLead && selectedEmp.status !== "departed" && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  data-testid="hr-start-offboarding-btn"
+                  onClick={() => startOffboarding(selectedEmp)}
+                  className="rounded-md border border-helm-fg/15 text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5 disabled:opacity-50"
+                >
+                  Start offboarding
+                </button>
+              )}
+            </GlassCard>
+          )}
+        </>
+      )}
+
+      {tab === "offboarding" && (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-helm-muted font-mono">
+              {offVisible.length} shown · {offAll.length} total
+            </p>
+            <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                data-testid="hr-show-completed-offboarding"
+                checked={showCompletedOff}
+                onChange={(e) => setShowCompletedOff(e.target.checked)}
+                className="rounded border-helm-fg/20 bg-transparent"
+              />
+              Show completed
+            </label>
+          </div>
+
+          {offVisible.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={offAll.length ? "No open offboardings" : "No offboardings yet"}
+              body="Start offboarding from an employee record. Status becomes departed only after every step is done."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
+              <table className="w-full text-left text-sm" data-testid="hr-offboarding-table">
+                <thead>
+                  <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                    <th className="px-3 py-2 font-medium">Employee</th>
+                    <th className="px-3 py-2 font-medium">Progress</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {offVisible.map((inst) => (
+                    <tr
+                      key={inst.id}
+                      data-testid={`hr-off-row-${inst.id}`}
+                      onClick={() => setSelectedOffId(inst.id)}
+                      className={cn(
+                        "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
+                        selectedOffId === inst.id && "bg-helm-gold/[0.06]",
+                      )}
+                    >
+                      <td className="px-3 py-2.5 text-helm-fg">{inst.employee_name}</td>
+                      <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">
+                        {inst.progress?.done || 0}/{inst.progress?.total || 0}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={cn(
+                          "text-[10px] font-mono uppercase tracking-wide",
+                          inst.overall_status === "active" ? "text-helm-status-positive" : "text-helm-muted",
+                        )}
+                        >
+                          {inst.overall_status === "active" ? "Complete" : "In progress"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {selectedOff && (
+            <GlassCard className="p-5 space-y-4" data-testid="hr-offboarding-detail">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <SectionLabel>Offboarding checklist</SectionLabel>
+                  <p className="text-helm-fg text-sm mt-1">{selectedOff.employee_name}</p>
+                  <p className="text-xs text-helm-muted mt-1">
+                    Employee stays active until every step is marked done.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedOffId(null)} className="text-helm-muted hover:text-helm-fg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2" data-testid="hr-offboarding-steps">
+                {[...(selectedOff.steps || [])].sort((a, b) => (a.order || 0) - (b.order || 0)).map((step) => {
+                  const canEditStep = isLead || step.assigned_to === myId;
+                  return (
+                    <div
+                      key={step.id}
+                      className="rounded-md border border-helm-line bg-helm-fg/[0.02] p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-sm text-helm-fg">{step.name}</p>
+                        <StepBadge status={step.status} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Status</span>
+                          <select
+                            disabled={!canEditStep || busy}
+                            value={step.status}
+                            onChange={(e) => patchOffStep(step, { status: e.target.value })}
+                            className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
+                          >
+                            {(offData?.step_statuses || ["not_started", "in_progress", "done"]).map((s) => (
+                              <option key={s} value={s}>{STEP_STATUS_META[s]?.label || s}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Assignee</span>
+                          <select
+                            disabled={!isLead || busy}
+                            value={step.assigned_to || ""}
+                            onChange={(e) => patchOffStep(step, { assigned_to: e.target.value || null })}
+                            className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg disabled:opacity-50"
+                          >
+                            <option value="">Unassigned</option>
+                            {workspaceMembers.map((m) => (
+                              <option key={m.user_id} value={m.user_id}>{m.name || m.email}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isLead && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={deleteOffInstance}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              )}
+            </GlassCard>
+          )}
+        </>
       )}
 
       {adding && (
@@ -454,10 +867,10 @@ export default function HR() {
                     }}
                     className="flex-1 rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                   />
-                  <button type="button" disabled={idx === 0} onClick={() => moveTmplStep(idx, -1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
+                  <button type="button" disabled={idx === 0} onClick={() => moveTmplStep(tmplDraft, setTmplDraft, idx, -1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
                     <ChevronUp className="w-4 h-4" />
                   </button>
-                  <button type="button" disabled={idx === tmplDraft.length - 1} onClick={() => moveTmplStep(idx, 1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
+                  <button type="button" disabled={idx === tmplDraft.length - 1} onClick={() => moveTmplStep(tmplDraft, setTmplDraft, idx, 1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
                     <ChevronDown className="w-4 h-4" />
                   </button>
                   <button
@@ -485,6 +898,69 @@ export default function HR() {
                 disabled={busy}
                 data-testid="hr-template-save"
                 onClick={saveTemplate}
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
+              >
+                Save template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingOffTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setEditingOffTemplate(false)} />
+          <div className="relative w-full max-w-lg rounded-md border border-helm-line bg-helm-card p-5 space-y-3 max-h-[85vh] overflow-y-auto" data-testid="hr-offboarding-template-modal">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-helm-fg font-medium">Offboarding template</p>
+                <p className="text-[11px] text-helm-muted">Changes only affect future offboardings.</p>
+              </div>
+              <button type="button" onClick={() => setEditingOffTemplate(false)} className="text-helm-muted hover:text-helm-fg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {offTmplDraft.map((step, idx) => (
+                <div key={step.id || idx} className="flex items-center gap-2">
+                  <input
+                    value={step.name}
+                    onChange={(e) => {
+                      const next = [...offTmplDraft];
+                      next[idx] = { ...next[idx], name: e.target.value };
+                      setOffTmplDraft(next);
+                    }}
+                    className="flex-1 rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                  />
+                  <button type="button" disabled={idx === 0} onClick={() => moveTmplStep(offTmplDraft, setOffTmplDraft, idx, -1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button type="button" disabled={idx === offTmplDraft.length - 1} onClick={() => moveTmplStep(offTmplDraft, setOffTmplDraft, idx, 1)} className="p-1 text-helm-muted hover:text-helm-fg disabled:opacity-30">
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOffTmplDraft((d) => d.filter((_, i) => i !== idx))}
+                    className="p-1 text-helm-status-negative"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setOffTmplDraft((d) => [...d, { id: `hofstep_new_${Date.now()}`, name: "New step", order: d.length }])}
+              className="inline-flex items-center gap-1 text-xs text-helm-gold"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add step
+            </button>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setEditingOffTemplate(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={saveOffTemplate}
                 className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
               >
                 Save template

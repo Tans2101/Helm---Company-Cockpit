@@ -160,6 +160,24 @@ def dept_api():
     mock_db.hr_onboarding_template.insert_one = AsyncMock(side_effect=hr_insert_one)
     mock_db.hr_onboarding_instances = MagicMock()
     mock_db.hr_onboarding_instances.find_one = AsyncMock(return_value=None)
+    off_templates = []
+
+    async def off_find_one(query, projection=None):
+        for r in off_templates:
+            if all(r.get(k) == v for k, v in query.items()):
+                return dict(r)
+        return None
+
+    async def off_insert_one(doc):
+        off_templates.append(dict(doc))
+
+    mock_db.hr_offboarding_template = MagicMock()
+    mock_db.hr_offboarding_template.find_one = AsyncMock(side_effect=off_find_one)
+    mock_db.hr_offboarding_template.insert_one = AsyncMock(side_effect=off_insert_one)
+    mock_db.hr_offboarding_instances = MagicMock()
+    mock_db.hr_offboarding_instances.find_one = AsyncMock(return_value=None)
+    mock_db.hr_employees = MagicMock()
+    mock_db.hr_employees.find_one = AsyncMock(return_value=None)
 
     async def as_ceo():
         return CEO
@@ -242,6 +260,7 @@ def test_disable_clears_dependent_data(dept_api):
     for name in (
         "procurement_requests", "legal_matters", "maintenance_tickets",
         "hr_onboarding_instances", "hr_onboarding_template",
+        "hr_employees", "hr_offboarding_instances", "hr_offboarding_template",
     ):
         coll = MagicMock()
         coll.delete_many = AsyncMock(return_value=MagicMock(deleted_count=0))

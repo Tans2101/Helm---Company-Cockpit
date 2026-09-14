@@ -5795,6 +5795,9 @@ async def enable_department(payload: EnableDepartmentInput, principal=Depends(ge
         await _ensure_hr_onboarding_template(
             principal["workspace_id"], department_id,
         )
+        await _ensure_hr_offboarding_template(
+            principal["workspace_id"], department_id,
+        )
     await _product_event(
         principal["workspace_id"], principal["user_id"],
         helm_analytics.EVENT_DEPARTMENT_ENABLED,
@@ -7828,10 +7831,18 @@ async def delete_maintenance_ticket(ticket_id: str, principal=Depends(get_princi
     return {"ok": True}
 
 
-# ------------------------- HR onboarding -------------------------
+# ------------------------- HR onboarding / employees / offboarding -------------------------
 HR_DEFAULT_TEMPLATE_STEPS = ("Offer", "Paperwork", "Orientation", "Active")
+HR_DEFAULT_OFFBOARDING_STEPS = (
+    "Revoke Helm/system access",
+    "Collect company equipment",
+    "Process final pay",
+    "Conduct exit interview",
+    "Update employee status to departed",
+)
 HR_STEP_STATUSES = frozenset({"not_started", "in_progress", "done"})
 HR_OVERALL_STATUSES = frozenset({"in_progress", "active"})
+HR_EMPLOYEE_STATUSES = frozenset({"active", "on_leave", "departed"})
 
 
 async def _hr_department(principal: dict) -> dict:
@@ -7863,6 +7874,13 @@ def _default_hr_template_steps() -> list[dict]:
     ]
 
 
+def _default_hr_offboarding_steps() -> list[dict]:
+    return [
+        {"id": f"hofstep_{uuid.uuid4().hex[:8]}", "name": name, "order": i}
+        for i, name in enumerate(HR_DEFAULT_OFFBOARDING_STEPS)
+    ]
+
+
 async def _ensure_hr_onboarding_template(workspace_id: str, department_id: str) -> dict:
     """Return existing template or create the default Offer→…→Active checklist."""
     existing = await db.hr_onboarding_template.find_one(
@@ -7884,10 +7902,101 @@ async def _ensure_hr_onboarding_template(workspace_id: str, department_id: str) 
     return doc
 
 
+async def _ensure_hr_offboarding_template(workspace_id: str, department_id: str) -> dict:
+    """Return existing offboarding template or create the default checklist."""
+    existing = await db.hr_offboarding_template.find_one(
+        {"department_id": department_id},
+        {"_id": 0},
+    )
+    if existing:
+        return existing
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": f"hoftpl_{uuid.uuid4().hex[:10]}",
+        "department_id": department_id,
+        "workspace_id": workspace_id,
+        "steps": _default_hr_offboarding_steps(),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hr_offboarding_template.insert_one(dict(doc))
+    return doc
+
+
 def _derive_overall_status(steps: list) -> str:
     if steps and all((s.get("status") == "done") for s in steps):
         return "active"
     return "in_progress"
+
+
+async def _ensure_employee_from_onboarding(
+    inst: dict, principal: dict,
+) -> tuple[Optional[dict], bool]:
+    """Create at most one hr_employees row when onboarding completes (overall=active).
+
+    Duplicate-guarded by source_onboarding_instance_id (same pattern as won-deal
+    → financial_entries via source_deal_id). Never stores sensitive HR fields.
+    """
+    instance_id = inst.get("id")
+    department_id = inst.get("department_id")
+    if not instance_id or not department_id:
+        return None, False
+    existing = await db.hr_employees.find_one(
+        {
+            "department_id": department_id,
+            "source_onboarding_instance_id": instance_id,
+        },
+        {"_id": 0},
+    )
+    if existing:
+        return existing, False
+
+    now = datetime.now(timezone.utc).isoformat()
+    name = (inst.get("hire_name") or "").strip() or "Employee"
+    emp = {
+        "id": f"hremp_{uuid.uuid4().hex[:10]}",
+        "department_id": department_id,
+        "workspace_id": inst.get("workspace_id") or principal["workspace_id"],
+        "name": name[:200],
+        "role": "",
+        "start_date": now[:10],
+        "status": "active",
+        "manager_user_id": None,
+        "linked_user_id": None,
+        "department_names": "",
+        "source_onboarding_instance_id": instance_id,
+        "created_at": now,
+        "updated_at": now,
+        "departed_at": None,
+    }
+    try:
+        await db.hr_employees.insert_one(dict(emp))
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "duplicate" in msg or "e11000" in msg:
+            existing = await db.hr_employees.find_one(
+                {
+                    "department_id": department_id,
+                    "source_onboarding_instance_id": instance_id,
+                },
+                {"_id": 0},
+            )
+            return existing, False
+        raise
+    emp.pop("_id", None)
+    return emp, True
+
+
+async def _mark_employee_departed(employee_id: str, department_id: str, now: str) -> None:
+    await db.hr_employees.update_one(
+        {"id": employee_id, "department_id": department_id},
+        {"$set": {"status": "departed", "departed_at": now, "updated_at": now}},
+    )
+
+
+def _public_hr_employee(row: dict) -> dict:
+    """Strip internal Mongo id; never expose sensitive employment data (none stored)."""
+    return {k: v for k, v in row.items() if k != "_id"}
 
 
 async def _enrich_hr_instance(inst: dict, users: dict | None = None) -> dict:
@@ -8109,7 +8218,6 @@ async def patch_hr_onboarding(
     if payload.assigned_to is not None:
         new_assignee = (payload.assigned_to or "").strip() or None
         if new_assignee != step.get("assigned_to") and not is_lead:
-            # Assignees may not reassign; leads can
             raise HTTPException(status_code=403, detail="Only a lead or CEO can reassign steps")
         if is_lead:
             step["assigned_to"] = new_assignee
@@ -8131,6 +8239,8 @@ async def patch_hr_onboarding(
         {"$set": set_fields},
     )
     updated = {**inst, **set_fields}
+    if overall == "active":
+        await _ensure_employee_from_onboarding(updated, principal)
     return {"ok": True, "instance": await _enrich_hr_instance(updated)}
 
 
@@ -8147,6 +8257,377 @@ async def delete_hr_onboarding(instance_id: str, principal=Depends(get_principal
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Onboarding instance not found")
+    return {"ok": True}
+
+
+class HrEmployeeCreate(BaseModel):
+    name: str
+    role: str = ""
+    start_date: str = ""
+    status: str = "active"
+    manager_user_id: Optional[str] = None
+    linked_user_id: Optional[str] = None
+    department_names: str = ""
+
+
+class HrEmployeePatch(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    start_date: Optional[str] = None
+    status: Optional[str] = None
+    manager_user_id: Optional[str] = None
+    linked_user_id: Optional[str] = None
+    department_names: Optional[str] = None
+
+
+@api_router.get("/hr/employees")
+async def list_hr_employees(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+):
+    """Employment records — no medical, government ID, compensation, or protected characteristics."""
+    dept = await _hr_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in HR_EMPLOYEE_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    rows = await db.hr_employees.find(filt, {"_id": 0}).to_list(2000)
+    rows.sort(key=lambda r: (
+        0 if r.get("status") == "active" else 1 if r.get("status") == "on_leave" else 2,
+        (r.get("name") or "").lower(),
+    ))
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "employees": [_public_hr_employee(r) for r in rows],
+        "is_lead": is_lead,
+        "can_create": is_lead,
+        "can_edit": is_lead,
+        "my_user_id": principal["user_id"],
+        "statuses": sorted(HR_EMPLOYEE_STATUSES),
+    }
+
+
+@api_router.post("/hr/employees")
+async def create_hr_employee(payload: HrEmployeeCreate, principal=Depends(get_principal)):
+    """Manual employee record (e.g. existing staff). Prefer completing onboarding for new hires."""
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can add employees")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    st = (payload.status or "active").strip().lower()
+    if st not in HR_EMPLOYEE_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    now = datetime.now(timezone.utc).isoformat()
+    start = (payload.start_date or "").strip()[:10] or now[:10]
+    emp = {
+        "id": f"hremp_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "name": name[:200],
+        "role": (payload.role or "").strip()[:120],
+        "start_date": start,
+        "status": st,
+        "manager_user_id": (payload.manager_user_id or "").strip() or None,
+        "linked_user_id": (payload.linked_user_id or "").strip() or None,
+        "department_names": (payload.department_names or "").strip()[:200],
+        "source_onboarding_instance_id": None,
+        "created_at": now,
+        "updated_at": now,
+        "departed_at": now if st == "departed" else None,
+    }
+    await db.hr_employees.insert_one(dict(emp))
+    emp.pop("_id", None)
+    return {"ok": True, "employee": _public_hr_employee(emp)}
+
+
+@api_router.patch("/hr/employees/{employee_id}")
+async def patch_hr_employee(
+    employee_id: str,
+    payload: HrEmployeePatch,
+    principal=Depends(get_principal),
+):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can edit employees")
+    emp = await db.hr_employees.find_one(
+        {"id": employee_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    now = datetime.now(timezone.utc).isoformat()
+    upd: dict = {"updated_at": now}
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
+        upd["name"] = name[:200]
+    if payload.role is not None:
+        upd["role"] = payload.role.strip()[:120]
+    if payload.start_date is not None:
+        upd["start_date"] = (payload.start_date or "").strip()[:10]
+    if payload.department_names is not None:
+        upd["department_names"] = payload.department_names.strip()[:200]
+    if payload.manager_user_id is not None:
+        upd["manager_user_id"] = (payload.manager_user_id or "").strip() or None
+    if payload.linked_user_id is not None:
+        upd["linked_user_id"] = (payload.linked_user_id or "").strip() or None
+    if payload.status is not None:
+        st = payload.status.strip().lower()
+        if st not in HR_EMPLOYEE_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        upd["status"] = st
+        if st == "departed" and not emp.get("departed_at"):
+            upd["departed_at"] = now
+        elif st != "departed":
+            upd["departed_at"] = None
+    await db.hr_employees.update_one(
+        {"id": employee_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    return {"ok": True, "employee": _public_hr_employee({**emp, **upd})}
+
+
+class HrOffboardingCreate(BaseModel):
+    employee_id: str
+
+
+class HrOffboardingPatch(BaseModel):
+    step_id: str
+    status: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+
+@api_router.get("/hr/offboarding/template")
+async def get_hr_offboarding_template(principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    tmpl = await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "template": {k: v for k, v in tmpl.items() if k != "_id"},
+        "is_lead": is_lead,
+        "can_edit_template": is_lead,
+        "my_user_id": principal["user_id"],
+    }
+
+
+@api_router.patch("/hr/offboarding/template")
+async def patch_hr_offboarding_template(payload: HrTemplatePatch, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can edit the template")
+    tmpl = await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
+    raw_steps = payload.steps if isinstance(payload.steps, list) else []
+    cleaned = []
+    for i, raw in enumerate(raw_steps):
+        if not isinstance(raw, dict):
+            continue
+        name = (raw.get("name") or "").strip()
+        if not name:
+            continue
+        step_id = (raw.get("id") or "").strip() or f"hofstep_{uuid.uuid4().hex[:8]}"
+        cleaned.append({"id": step_id, "name": name[:120], "order": i})
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Template must have at least one step")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.hr_offboarding_template.update_one(
+        {"id": tmpl["id"], "department_id": dept["department_id"]},
+        {"$set": {"steps": cleaned, "updated_at": now}},
+    )
+    updated = {**tmpl, "steps": cleaned, "updated_at": now}
+    return {"ok": True, "template": {k: v for k, v in updated.items() if k != "_id"}}
+
+
+@api_router.get("/hr/offboarding")
+async def list_hr_offboarding(
+    principal=Depends(get_principal),
+    overall_status: Optional[str] = Query(None),
+    employee_id: Optional[str] = Query(None),
+):
+    dept = await _hr_department(principal)
+    await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
+    filt: dict = {"department_id": dept["department_id"]}
+    if overall_status is not None:
+        st = overall_status.strip().lower()
+        if st not in HR_OVERALL_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid overall_status filter")
+        filt["overall_status"] = st
+    if employee_id is not None:
+        eid = employee_id.strip()
+        if eid:
+            filt["employee_id"] = eid
+    rows = await db.hr_offboarding_instances.find(filt, {"_id": 0}).to_list(1000)
+    rows = _sort_hr_instances(rows)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    items = await _enrich_hr_instances(rows)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "instances": items,
+        "is_lead": is_lead,
+        "can_create": is_lead,
+        "can_delete": is_lead,
+        "my_user_id": principal["user_id"],
+        "step_statuses": sorted(HR_STEP_STATUSES),
+    }
+
+
+@api_router.post("/hr/offboarding")
+async def create_hr_offboarding(payload: HrOffboardingCreate, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can start offboarding")
+    employee_id = (payload.employee_id or "").strip()
+    if not employee_id:
+        raise HTTPException(status_code=400, detail="employee_id is required")
+    emp = await db.hr_employees.find_one(
+        {"id": employee_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    open_existing = await db.hr_offboarding_instances.find_one(
+        {
+            "department_id": dept["department_id"],
+            "employee_id": employee_id,
+            "overall_status": "in_progress",
+        },
+        {"_id": 0},
+    )
+    if open_existing:
+        raise HTTPException(status_code=409, detail="Offboarding already in progress for this employee")
+    tmpl = await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
+    steps = []
+    for s in sorted(tmpl.get("steps") or [], key=lambda x: x.get("order", 0)):
+        steps.append({
+            "id": f"hoistep_{uuid.uuid4().hex[:8]}",
+            "name": s.get("name") or "Step",
+            "order": int(s.get("order") or 0),
+            "status": "not_started",
+            "assigned_to": None,
+        })
+    if not steps:
+        raise HTTPException(status_code=400, detail="Template has no steps — edit the template first")
+    now = datetime.now(timezone.utc).isoformat()
+    inst = {
+        "id": f"hroff_{uuid.uuid4().hex[:10]}",
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "employee_id": employee_id,
+        "employee_name": emp.get("name") or "",
+        "steps": steps,
+        "overall_status": "in_progress",
+        "created_by": principal["user_id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hr_offboarding_instances.insert_one(dict(inst))
+    # Employee status stays as-is until all offboarding steps are done.
+    return {"ok": True, "instance": await _enrich_hr_instance(inst)}
+
+
+@api_router.patch("/hr/offboarding/{instance_id}")
+async def patch_hr_offboarding(
+    instance_id: str,
+    payload: HrOffboardingPatch,
+    principal=Depends(get_principal),
+):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    inst = await db.hr_offboarding_instances.find_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not inst:
+        raise HTTPException(status_code=404, detail="Offboarding instance not found")
+
+    steps = [dict(s) for s in (inst.get("steps") or [])]
+    step_id = (payload.step_id or "").strip()
+    step = next((s for s in steps if s.get("id") == step_id), None)
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+
+    is_assignee = step.get("assigned_to") == principal["user_id"]
+    if not is_lead and not is_assignee:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only update steps assigned to you",
+        )
+
+    if payload.assigned_to is not None:
+        new_assignee = (payload.assigned_to or "").strip() or None
+        if new_assignee != step.get("assigned_to") and not is_lead:
+            raise HTTPException(status_code=403, detail="Only a lead or CEO can reassign steps")
+        if is_lead:
+            step["assigned_to"] = new_assignee
+
+    if payload.status is not None:
+        st = payload.status.strip().lower()
+        if st not in HR_STEP_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid step status")
+        step["status"] = st
+
+    overall = _derive_overall_status(steps)
+    now = datetime.now(timezone.utc).isoformat()
+    set_fields = {"steps": steps, "overall_status": overall, "updated_at": now}
+    helm_dept_drafts.apply_status_completion(
+        inst, set_fields, done_status="active", status_key="overall_status", now_iso=now,
+    )
+    await db.hr_offboarding_instances.update_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+        {"$set": set_fields},
+    )
+    if overall == "active" and inst.get("employee_id"):
+        await _mark_employee_departed(inst["employee_id"], dept["department_id"], now)
+    updated = {**inst, **set_fields}
+    return {"ok": True, "instance": await _enrich_hr_instance(updated)}
+
+
+@api_router.delete("/hr/offboarding/{instance_id}")
+async def delete_hr_offboarding(instance_id: str, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can delete offboarding")
+    result = await db.hr_offboarding_instances.delete_one(
+        {"id": instance_id, "department_id": dept["department_id"]},
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Offboarding instance not found")
     return {"ok": True}
 
 
@@ -9540,6 +10021,7 @@ _WORKSPACE_COLLECTIONS = (
     "production_work_orders",
     "procurement_requests", "legal_matters",
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
+    "hr_employees", "hr_offboarding_template", "hr_offboarding_instances",
     "department_report_drafts",
 )
 
@@ -10073,6 +10555,16 @@ async def _ensure_indexes():
         (db.hr_onboarding_instances, [("id", 1)], {"unique": True}),
         (db.hr_onboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
         (db.hr_onboarding_instances, [("workspace_id", 1)], {}),
+        (db.hr_employees, [("id", 1)], {"unique": True}),
+        (db.hr_employees, [("department_id", 1), ("status", 1)], {}),
+        (db.hr_employees, [("workspace_id", 1)], {}),
+        (db.hr_employees, [("source_onboarding_instance_id", 1)], {"unique": True, "sparse": True}),
+        (db.hr_offboarding_template, [("department_id", 1)], {"unique": True}),
+        (db.hr_offboarding_template, [("id", 1)], {"unique": True}),
+        (db.hr_offboarding_instances, [("id", 1)], {"unique": True}),
+        (db.hr_offboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
+        (db.hr_offboarding_instances, [("department_id", 1), ("employee_id", 1)], {}),
+        (db.hr_offboarding_instances, [("workspace_id", 1)], {}),
         (db.department_report_drafts, [("id", 1)], {"unique": True}),
         (db.department_report_drafts, [("workspace_id", 1), ("status", 1)], {}),
         (db.department_report_drafts, [("workspace_id", 1), ("department_type", 1), ("week_start", 1)], {"unique": True}),
