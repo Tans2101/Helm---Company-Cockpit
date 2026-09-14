@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Plus, ChevronUp, ChevronDown, Trash2, X, User, ArrowRight, Settings2, Factory,
+  List, Columns3,
 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
@@ -117,10 +118,154 @@ function formatAverageStageTime(seconds) {
   return `${mins}m`;
 }
 
+/** Live duration from current_progress.entered_at — no history needed. */
+function formatTimeInStage(enteredAt, stageName, nowMs = Date.now()) {
+  if (!enteredAt) return null;
+  const start = new Date(enteredAt).getTime();
+  if (Number.isNaN(start)) return null;
+  const seconds = Math.max(0, Math.floor((nowMs - start) / 1000));
+  let duration;
+  if (seconds < 60) duration = "just now";
+  else if (seconds < 3600) {
+    const m = Math.round(seconds / 60);
+    duration = m === 1 ? "1 minute" : `${m} minutes`;
+  } else if (seconds < 86400) {
+    const h = Math.round(seconds / 3600);
+    duration = h === 1 ? "1 hour" : `${h} hours`;
+  } else {
+    const d = Math.round(seconds / 86400);
+    duration = d === 1 ? "1 day" : `${d} days`;
+  }
+  if (!stageName) return duration === "just now" ? "Just entered stage" : duration;
+  if (duration === "just now") return `Just entered ${stageName}`;
+  return `${duration} in ${stageName}`;
+}
+
+function isDueDateOverdue(dueDate, nowMs = Date.now()) {
+  const raw = (dueDate || "").trim();
+  if (!raw) return false;
+  // YYYY-MM-DD → end of that local day
+  const end = new Date(`${raw}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() < nowMs;
+}
+
+const STAGE_PRESETS = [
+  {
+    id: "fabrication",
+    label: "Fabrication",
+    description: "Fabrication → Finishing → Inspection → Shipping",
+    stages: ["Fabrication", "Finishing", "Inspection", "Shipping"],
+  },
+  {
+    id: "assembly",
+    label: "Assembly",
+    description: "Cutting → Assembly → QA → Packaging",
+    stages: ["Cutting", "Assembly", "QA", "Packaging"],
+  },
+  {
+    id: "simple",
+    label: "Simple flow",
+    description: "Prep → In Progress → Review → Done",
+    stages: ["Prep", "In Progress", "Review", "Done"],
+  },
+];
+
+function StageStepper({ stages, currentStageId }) {
+  const idx = stages.findIndex((s) => s.id === currentStageId);
+  const currentName = idx >= 0 ? stages[idx].name : null;
+  return (
+    <div
+      className="flex items-center gap-0.5 min-w-0"
+      data-testid="stage-stepper"
+      title={currentName ? `Stage: ${currentName}` : "Stage progress"}
+    >
+      {stages.map((stage, i) => {
+        const filled = idx >= 0 && i <= idx;
+        const current = i === idx;
+        return (
+          <div key={stage.id} className="flex items-center gap-0.5">
+            <span
+              data-testid={`stepper-dot-${stage.id}`}
+              title={stage.name}
+              className={cn(
+                "block h-2 w-2 rounded-full shrink-0",
+                filled ? "bg-helm-gold" : "bg-helm-muted/30",
+                current && "ring-2 ring-helm-gold/35 ring-offset-1 ring-offset-helm-card",
+              )}
+            />
+            {i < stages.length - 1 && (
+              <span
+                className={cn(
+                  "block h-px w-2.5 sm:w-3.5 shrink-0",
+                  idx >= 0 && i < idx ? "bg-helm-gold/55" : "bg-helm-muted/25",
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PriorityBadge({ priority }) {
+  if (!priority || priority === "normal") return null;
+  const high = priority === "high";
+  return (
+    <span
+      data-testid={`priority-badge-${priority}`}
+      className={cn(
+        "shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border",
+        high
+          ? "border-helm-gold/50 bg-helm-gold/15 text-helm-gold"
+          : "border-helm-line bg-helm-fg/[0.03] text-helm-muted",
+      )}
+    >
+      {priority}
+    </span>
+  );
+}
+
+function StagePresetsPanel({ onApply, onScratch, busy }) {
+  return (
+    <div className="w-full max-w-xl mx-auto space-y-4" data-testid="stage-presets">
+      <div className="space-y-2">
+        {STAGE_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            data-testid={`stage-preset-${preset.id}`}
+            disabled={busy}
+            onClick={() => onApply(preset)}
+            className="w-full text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/40 transition-colors disabled:opacity-50"
+          >
+            <p className="text-sm text-helm-fg font-medium">{preset.label}</p>
+            <p className="text-xs text-helm-muted mt-0.5">{preset.description}</p>
+          </button>
+        ))}
+      </div>
+      {onScratch && (
+        <button
+          type="button"
+          data-testid="stage-preset-scratch"
+          disabled={busy}
+          onClick={onScratch}
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line bg-helm-fg/[0.03] text-sm text-helm-fg px-4 py-2.5 hover:border-helm-gold/40 disabled:opacity-50"
+        >
+          <Plus className="w-4 h-4" /> Start from scratch
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Production() {
   const { data, loading, error, reload, setData } = useFetch("/production/work-orders");
   const { data: membersData } = useFetch("/members");
-  const [view, setView] = useState("board"); // board | stages
+  const [view, setView] = useState("list"); // list | board | stages
+  const [lastWorkView, setLastWorkView] = useState("list"); // list | board
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -136,6 +281,11 @@ export default function Production() {
     due_date: "",
   });
   const [procRequests, setProcRequests] = useState([]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   const stages = useMemo(
     () => [...(data?.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -380,6 +530,34 @@ export default function Production() {
     }
   };
 
+  const applyStagePreset = async (preset) => {
+    if (!preset?.stages?.length) return;
+    setBusy(true);
+    try {
+      for (const name of preset.stages) {
+        await api.post("/production/stages", { name });
+      }
+      toast.success(`Added “${preset.label}” stages — edit anytime`);
+      setAddingStage(false);
+      await reload();
+      setView(lastWorkView || "list");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not apply stage preset");
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openStagesEditor = () => {
+    if (view === "list" || view === "board") setLastWorkView(view);
+    setView("stages");
+  };
+
+  const leaveStagesEditor = () => {
+    setView(lastWorkView || "list");
+  };
+
   const renameStage = async (stage, name) => {
     const trimmed = (name || "").trim();
     if (!trimmed || trimmed === stage.name) return;
@@ -446,20 +624,57 @@ export default function Production() {
     });
   };
 
+  const stageById = useMemo(() => {
+    const map = {};
+    for (const s of stages) map[s.id] = s;
+    return map;
+  }, [stages]);
+
+  const sortedWorkOrders = useMemo(
+    () => [...workOrders].sort(compareWorkOrders),
+    [workOrders],
+  );
+
   const headerAction = (
     <div className="flex items-center gap-2 flex-wrap justify-end">
+      {stages.length > 0 && view !== "stages" && (
+        <div className="inline-flex rounded-md border border-helm-line overflow-hidden" data-testid="production-view-toggle">
+          <button
+            type="button"
+            data-testid="production-view-list"
+            onClick={() => { setView("list"); setLastWorkView("list"); }}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-2 text-sm",
+              view === "list" ? "bg-helm-fg/[0.08] text-helm-fg" : "bg-helm-fg/[0.02] text-helm-muted hover:text-helm-fg",
+            )}
+          >
+            <List className="w-4 h-4" /> List
+          </button>
+          <button
+            type="button"
+            data-testid="production-view-board"
+            onClick={() => { setView("board"); setLastWorkView("board"); }}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-2 text-sm border-l border-helm-line",
+              view === "board" ? "bg-helm-fg/[0.08] text-helm-fg" : "bg-helm-fg/[0.02] text-helm-muted hover:text-helm-fg",
+            )}
+          >
+            <Columns3 className="w-4 h-4" /> Board
+          </button>
+        </div>
+      )}
       {canStructure && (
         <button
           type="button"
           data-testid="edit-production-stages-btn"
-          onClick={() => setView((v) => (v === "stages" ? "board" : "stages"))}
+          onClick={() => (view === "stages" ? leaveStagesEditor() : openStagesEditor())}
           className="inline-flex items-center gap-1.5 rounded-md border border-helm-line bg-helm-fg/[0.03] text-helm-fg text-sm px-3 py-2 hover:border-helm-gold/40"
         >
           <Settings2 className="w-4 h-4" />
-          {view === "stages" ? "Back to board" : "Edit stages"}
+          {view === "stages" ? "Back to work orders" : "Edit stages"}
         </button>
       )}
-      {view === "board" && stages.length > 0 && (
+      {(view === "list" || view === "board") && stages.length > 0 && (
         <button
           type="button"
           data-testid="add-work-order-btn"
@@ -469,7 +684,7 @@ export default function Production() {
           <Plus className="w-4 h-4" /> New work order
         </button>
       )}
-      {view === "stages" && canStructure && (
+      {view === "stages" && canStructure && stages.length > 0 && (
         <button
           type="button"
           data-testid="add-production-stage-btn"
@@ -488,8 +703,10 @@ export default function Production() {
         title={data?.name || "Production"}
         subtitle={
           view === "stages"
-            ? "Define the stage sequence for work orders. This is setup — daily work happens on the board."
-            : "Work orders move across stage columns. Advance a card when its stage is finished."
+            ? "Define the stage sequence for work orders. Start from a preset or build your own — you can edit anytime."
+            : view === "board"
+              ? "Board view — empty stages stay collapsed. Switch to List for a denser view of a few jobs."
+              : "Each row is a work order: stage progress, time in the current stage, and Advance when ready."
         }
         action={headerAction}
       />
@@ -497,20 +714,30 @@ export default function Production() {
       {view === "stages" ? (
         <div data-testid="production-stages-editor">
           {stages.length === 0 ? (
-            <EmptyState
-              icon={Factory}
-              title="No stages yet"
-              body={canStructure ? "Add the first stage to define your production sequence." : "Ask a Production lead or the CEO to set up the sequence."}
-              action={canStructure ? (
-                <button
-                  type="button"
-                  onClick={() => setAddingStage(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
-                >
-                  <Plus className="w-4 h-4" /> Add first stage
-                </button>
-              ) : null}
-            />
+            canStructure ? (
+              <div className="py-8">
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-helm-navy/5 border border-helm-line flex items-center justify-center mb-5 mx-auto">
+                    <Factory className="w-6 h-6 text-helm-gold" />
+                  </div>
+                  <h3 className="font-display text-xl text-helm-fg font-medium tracking-tight">Choose a starting sequence</h3>
+                  <p className="text-sm text-helm-muted mt-2 max-w-sm mx-auto leading-relaxed">
+                    One click sets up stages you can rename, reorder, or delete afterward.
+                  </p>
+                </div>
+                <StagePresetsPanel
+                  busy={busy}
+                  onApply={applyStagePreset}
+                  onScratch={() => setAddingStage(true)}
+                />
+              </div>
+            ) : (
+              <EmptyState
+                icon={Factory}
+                title="No stages yet"
+                body="Ask a Production lead or the CEO to set up the sequence."
+              />
+            )
           ) : (
             <div className="space-y-3 mb-6">
               {stages.map((stage, index) => (
@@ -570,30 +797,35 @@ export default function Production() {
           )}
         </div>
       ) : stages.length === 0 ? (
-        <EmptyState
-          icon={Factory}
-          title="Define your production sequence"
-          body={
-            canStructure
-              ? "Add stage templates first — then create work orders that move across them."
-              : "Ask a Production lead or the CEO to define the stage sequence before work can start."
-          }
-          action={canStructure ? (
-            <button
-              type="button"
-              data-testid="open-edit-stages-empty"
-              onClick={() => { setView("stages"); setAddingStage(true); }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
-            >
-              <Settings2 className="w-4 h-4" /> Edit stages
-            </button>
-          ) : null}
-        />
+        canStructure ? (
+          <div className="py-8" data-testid="production-empty-presets">
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-helm-navy/5 border border-helm-line flex items-center justify-center mb-5 mx-auto">
+                <Factory className="w-6 h-6 text-helm-gold" />
+              </div>
+              <h3 className="font-display text-xl text-helm-fg font-medium tracking-tight">Set up your production sequence</h3>
+              <p className="text-sm text-helm-muted mt-2 max-w-sm mx-auto leading-relaxed">
+                Pick a common flow to start — fully editable after — or build stages one by one.
+              </p>
+            </div>
+            <StagePresetsPanel
+              busy={busy}
+              onApply={applyStagePreset}
+              onScratch={() => { openStagesEditor(); setAddingStage(true); }}
+            />
+          </div>
+        ) : (
+          <EmptyState
+            icon={Factory}
+            title="Define your production sequence"
+            body="Ask a Production lead or the CEO to define the stage sequence before work can start."
+          />
+        )
       ) : workOrders.length === 0 ? (
         <EmptyState
           icon={Factory}
           title="No work orders yet"
-          body="Create a work order to place it on the first stage of the board."
+          body="Create a work order to track it through your stage sequence."
           action={(
             <button
               type="button"
@@ -605,9 +837,89 @@ export default function Production() {
             </button>
           )}
         />
+      ) : view === "list" ? (
+        <div className="space-y-2" data-testid="production-list">
+          {sortedWorkOrders.map((order) => {
+            const progress = order.current_progress || {};
+            const stage = stageById[order.current_stage_id];
+            const stageName = stage?.name || "current stage";
+            const timeLabel = formatTimeInStage(progress.entered_at, stageName, nowMs);
+            const overdue = isDueDateOverdue(order.due_date, nowMs);
+            const blocked = progress.status === "blocked" ? progress.blocked_reason : null;
+            return (
+              <GlassCard
+                key={order.id}
+                data-testid={`work-order-row-${order.id}`}
+                className={cn(
+                  "p-3 sm:p-4 cursor-pointer transition-colors hover:border-helm-gold/35",
+                  selectedId === order.id && "border-helm-gold/45 bg-helm-gold/[0.04]",
+                )}
+                onClick={() => setSelectedId(order.id)}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <p className="text-sm text-helm-fg font-medium leading-snug truncate">
+                        {order.reference}
+                      </p>
+                      <PriorityBadge priority={order.priority} />
+                      <StatusBadge status={progress.status} blockedReason={progress.blocked_reason} />
+                    </div>
+                    {(order.product || order.quantity != null || order.customer) && (
+                      <p className="text-xs text-helm-muted truncate">
+                        {[
+                          order.product || null,
+                          order.quantity != null ? `× ${order.quantity}` : null,
+                          order.customer ? `· ${order.customer}` : null,
+                        ].filter(Boolean).join(" ")}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                      {timeLabel && (
+                        <span className="font-mono text-helm-fg/80" data-testid={`time-in-stage-${order.id}`}>
+                          {timeLabel}
+                        </span>
+                      )}
+                      {order.due_date && (
+                        <span
+                          data-testid={`due-date-${order.id}`}
+                          className={cn(
+                            "font-mono",
+                            overdue ? "text-helm-status-negative" : "text-helm-muted",
+                          )}
+                        >
+                          {overdue ? "Overdue " : "Due "}{order.due_date}
+                        </span>
+                      )}
+                      {blocked && (
+                        <span className="text-helm-status-negative truncate" data-testid={`blocked-reason-${order.id}`}>
+                          Blocked
+                          {blocked.category ? ` · ${CATEGORY_LABELS[blocked.category] || blocked.category}` : ""}
+                          {blocked.detail ? ` — ${blocked.detail}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 lg:shrink-0">
+                    <StageStepper stages={stages} currentStageId={order.current_stage_id} />
+                    <button
+                      type="button"
+                      data-testid={`advance-work-order-${order.id}`}
+                      disabled={busy}
+                      onClick={(e) => advanceWorkOrder(order, e)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line bg-helm-fg/[0.03] text-xs text-helm-fg px-2.5 py-1.5 hover:border-helm-gold/40 disabled:opacity-50 shrink-0"
+                    >
+                      Advance <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </GlassCard>
+            );
+          })}
+        </div>
       ) : (
         <>
-        {view === "board" && stageTimeAverages.length > 0 && (
+        {stageTimeAverages.length > 0 && (
           <p
             className="mb-3 text-xs text-helm-muted"
             data-testid="stage-time-averages"
@@ -633,25 +945,54 @@ export default function Production() {
         >
           {stages.map((stage) => {
             const cards = ordersByStage[stage.id] || [];
+            const empty = cards.length === 0;
             return (
               <div
                 key={stage.id}
                 data-testid={`production-column-${stage.id}`}
-                className="min-w-[260px] w-[280px] shrink-0 flex flex-col"
+                data-empty={empty ? "true" : "false"}
+                className={cn(
+                  "shrink-0 flex flex-col transition-all",
+                  empty ? "min-w-[4.5rem] w-[4.5rem]" : "min-w-[260px] w-[280px]",
+                )}
               >
-                <div className="flex items-center justify-between mb-2 px-1">
+                <div className={cn("flex items-center justify-between mb-2 px-1", empty && "justify-center")}>
                   <div className="min-w-0">
-                    <p className="text-sm text-helm-fg truncate font-medium">{stage.name}</p>
-                    <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">
-                      {cards.length} {cards.length === 1 ? "order" : "orders"}
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        empty ? "text-helm-muted text-[11px] truncate max-h-28" : "text-helm-fg truncate",
+                      )}
+                      style={empty ? { writingMode: "vertical-rl", transform: "rotate(180deg)" } : undefined}
+                      title={stage.name}
+                    >
+                      {stage.name}
                     </p>
+                    {!empty && (
+                      <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                        {cards.length} {cards.length === 1 ? "order" : "orders"}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="flex-1 space-y-2 rounded-xl border border-helm-line/70 bg-helm-fg/[0.015] p-2 min-h-[12rem]">
+                <div
+                  className={cn(
+                    "flex-1 space-y-2 rounded-xl border p-2",
+                    empty
+                      ? "border-helm-line/40 bg-helm-fg/[0.01] min-h-[8rem] opacity-45"
+                      : "border-helm-line/70 bg-helm-fg/[0.015] min-h-[12rem]",
+                  )}
+                >
                   {cards.map((order) => {
                     const progress = order.current_progress || {};
                     const linkedId = progress.linked_procurement_request_id;
                     const linked = linkedId ? procById[linkedId] : null;
+                    const timeLabel = formatTimeInStage(
+                      progress.entered_at,
+                      stage.name,
+                      nowMs,
+                    );
+                    const overdue = isDueDateOverdue(order.due_date, nowMs);
                     return (
                       <GlassCard
                         key={order.id}
@@ -667,14 +1008,7 @@ export default function Production() {
                             <p className="text-sm text-helm-fg font-medium leading-snug truncate">
                               {order.reference}
                             </p>
-                            {order.priority === "high" && (
-                              <span
-                                data-testid={`priority-high-${order.id}`}
-                                className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/50 bg-helm-gold/15 text-helm-gold"
-                              >
-                                High
-                              </span>
-                            )}
+                            <PriorityBadge priority={order.priority} />
                           </div>
                           {(order.product || order.quantity != null) && (
                             <p className="text-xs text-helm-muted truncate">
@@ -683,8 +1017,15 @@ export default function Production() {
                                 .join(" ")}
                             </p>
                           )}
+                          {timeLabel && (
+                            <p className="text-[11px] font-mono text-helm-fg/75" data-testid={`time-in-stage-${order.id}`}>
+                              {timeLabel}
+                            </p>
+                          )}
                           {order.due_date && (
-                            <p className="text-[11px] font-mono text-helm-muted">Due {order.due_date}</p>
+                            <p className={cn("text-[11px] font-mono", overdue ? "text-helm-status-negative" : "text-helm-muted")}>
+                              {overdue ? "Overdue " : "Due "}{order.due_date}
+                            </p>
                           )}
                           <StatusBadge status={progress.status} blockedReason={progress.blocked_reason} />
                           {linked && (
@@ -714,7 +1055,7 @@ export default function Production() {
         </>
       )}
 
-      {selected && draft && view === "board" && (
+      {selected && draft && (view === "board" || view === "list") && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setSelectedId(null)} />
           <GlassCard className="relative w-full sm:max-w-lg max-h-[90vh] overflow-y-auto m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="work-order-panel">
