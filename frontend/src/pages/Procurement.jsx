@@ -4,7 +4,7 @@ import { Plus, Trash2, X, Package } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,7 @@ export default function Procurement() {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "" });
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
@@ -199,11 +200,11 @@ export default function Procurement() {
 
   const deleteRequest = async () => {
     if (!selected) return;
-    if (!window.confirm(`Delete request “${selected.item}”?`)) return;
     setBusy(true);
     try {
       await api.delete(`/procurement/requests/${selected.id}`);
       toast.success("Request deleted");
+      setConfirmDelete(false);
       setSelectedId(null);
       await reload();
     } catch (e) {
@@ -437,7 +438,7 @@ export default function Procurement() {
                 type="button"
                 disabled={busy}
                 data-testid="procurement-delete-btn"
-                onClick={deleteRequest}
+                onClick={() => setConfirmDelete(true)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -446,6 +447,17 @@ export default function Procurement() {
           </div>
         </GlassCard>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete && Boolean(selected)}
+        title={`Delete request “${selected?.item || ""}”?`}
+        description="This permanently removes the purchase request. This can’t be undone."
+        confirmLabel="Delete request"
+        busy={busy}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={deleteRequest}
+        testId="delete-procurement-confirm"
+      />
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -5884,6 +5884,21 @@ async def patch_production_work_order(
     return {"ok": True, "work_order": await _enrich_work_order({**order, **upd})}
 
 
+@api_router.delete("/production/work-orders/{work_order_id}")
+async def delete_production_work_order(work_order_id: str, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_update_production_order(principal, membership, order):
+        raise HTTPException(status_code=403, detail="You are not assigned to this work order")
+    await db.production_work_orders.delete_one(
+        {"id": work_order_id, "department_id": dept["department_id"]},
+    )
+    return {"ok": True}
+
+
 # ------------------------- Procurement request queue -------------------------
 PROCUREMENT_STATUSES = frozenset({
     "requested", "approved", "ordered", "delivered", "rejected",

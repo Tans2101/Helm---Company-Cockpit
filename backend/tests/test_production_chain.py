@@ -323,3 +323,36 @@ def test_list_filter_by_status(prod_api):
     done = client.get("/api/production/work-orders?status=completed").json()["work_orders"]
     assert len(done) == 1
     assert done[0]["reference"] == "B"
+
+
+def test_delete_work_order(prod_api):
+    client, orders, _procurement, as_ceo, as_outsider, as_member = prod_api
+    wo = client.post("/api/production/work-orders", json={"reference": "Drop me"}).json()["work_order"]
+    wid = wo["id"]
+
+    server.app.dependency_overrides[server.get_principal] = as_outsider
+    denied = client.delete(f"/api/production/work-orders/{wid}")
+    assert denied.status_code in (403, 404)
+
+    server.app.dependency_overrides[server.get_principal] = as_member
+    # Unassigned → members can update/delete
+    ok_member = client.delete(f"/api/production/work-orders/{wid}")
+    assert ok_member.status_code == 200, ok_member.text
+    assert ok_member.json()["ok"] is True
+    assert not any(o.get("id") == wid for o in orders.rows)
+
+    server.app.dependency_overrides[server.get_principal] = as_ceo
+    missing = client.delete(f"/api/production/work-orders/{wid}")
+    assert missing.status_code == 404
+
+    wo2 = client.post(
+        "/api/production/work-orders",
+        json={"reference": "Assigned", "assigned_user_ids": ["u_ceo"]},
+    ).json()["work_order"]
+    server.app.dependency_overrides[server.get_principal] = as_member
+    blocked = client.delete(f"/api/production/work-orders/{wo2['id']}")
+    assert blocked.status_code == 403
+
+    server.app.dependency_overrides[server.get_principal] = as_ceo
+    ok_ceo = client.delete(f"/api/production/work-orders/{wo2['id']}")
+    assert ok_ceo.status_code == 200, ok_ceo.text

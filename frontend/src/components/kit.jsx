@@ -107,3 +107,61 @@ export function EmptyState({ icon: Icon, title, body, action }) {
     </div>
   );
 }
+
+/** In-app confirm — replaces native window.confirm so dialogs match Helm. */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Delete",
+  cancelLabel = "Cancel",
+  destructive = true,
+  busy = false,
+  onConfirm,
+  onCancel,
+  testId = "confirm-dialog",
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid={testId} role="alertdialog" aria-modal="true">
+      <div
+        className="absolute inset-0 bg-helm-ink/70"
+        onClick={() => !busy && onCancel?.()}
+        aria-hidden="true"
+      />
+      <div className="relative w-full max-w-sm rounded-md border border-helm-line bg-helm-card p-5 space-y-3 shadow-xl">
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium text-helm-fg">{title}</p>
+          {description ? (
+            <p className="text-sm text-helm-muted leading-relaxed">{description}</p>
+          ) : null}
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            disabled={busy}
+            data-testid={`${testId}-cancel`}
+            onClick={() => onCancel?.()}
+            className="rounded-md border border-helm-line text-sm px-3 py-2 text-helm-fg hover:bg-helm-fg/[0.04] disabled:opacity-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            data-testid={`${testId}-confirm`}
+            onClick={() => onConfirm?.()}
+            className={cn(
+              "rounded-md text-sm font-medium px-3 py-2 disabled:opacity-50",
+              destructive
+                ? "border border-helm-status-negative/40 bg-helm-status-negative/15 text-helm-status-negative hover:bg-helm-status-negative/25"
+                : "bg-helm-gold text-helm-navy hover:bg-helm-gold-hover",
+            )}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

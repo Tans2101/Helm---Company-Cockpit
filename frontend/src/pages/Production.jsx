@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, X, Factory } from "lucide-react";
+import { Plus, X, Factory, Trash2 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +117,7 @@ export default function Production() {
   const [form, setForm] = useState(emptyForm);
   const [completing, setCompleting] = useState(false);
   const [completeQty, setCompleteQty] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const allOrders = useMemo(
     () => [...(data?.work_orders || [])].sort(compareOrders),
@@ -311,6 +312,22 @@ export default function Production() {
       if (res?.work_order?.id) setSelectedId(res.work_order.id);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not complete");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteOrder = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await api.delete(`/production/work-orders/${selected.id}`);
+      toast.success("Work order deleted");
+      setConfirmDelete(false);
+      setSelectedId(null);
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete");
     } finally {
       setBusy(false);
     }
@@ -722,9 +739,29 @@ export default function Production() {
               Save changes
             </button>
             <StatusBadge status={selected.status} />
+            <button
+              type="button"
+              disabled={busy}
+              data-testid="delete-work-order-btn"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
           </div>
         </GlassCard>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete && Boolean(selected)}
+        title={`Delete work order “${selected?.reference || ""}”?`}
+        description="This permanently removes the work order from the queue. This can’t be undone."
+        confirmLabel="Delete work order"
+        busy={busy}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={deleteOrder}
+        testId="delete-work-order-confirm"
+      />
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
