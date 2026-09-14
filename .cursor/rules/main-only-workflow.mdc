@@ -1,0 +1,12 @@
+---
+description: Always work directly on main — no feature branches or PRs unless explicitly requested
+alwaysApply: true
+---
+
+# Git workflow: main only
+
+- Work **directly on `main`**. Do not create feature branches.
+- Do not open pull requests unless the user explicitly asks for one.
+- Commit and push to `origin/main` as you go.
+- If you are already on a feature branch when this rule applies, merge or cherry-pick onto `main`, push `main`, and stop using the branch.
+- Branch/PR cloud-agent defaults do **not** override this rule for this repository.
