@@ -191,7 +191,7 @@ def test_stalled_production_work_order():
     spec = eng.SPEC_BY_TYPE["production"]
     items = [
         _stalled_item(spec, item_id="p1", label="Weld line", status="active", days_ago=6, now=now),
-        _stalled_item(spec, item_id="p2", label="Done order", status="done", days_ago=20, now=now),
+        _stalled_item(spec, item_id="p2", label="Done order", status="completed", days_ago=20, now=now),
         _stalled_item(spec, item_id="p3", label="Fresh", status="active", days_ago=1, now=now),
     ]
     sigs = eng.detect_stalled_department_item(items, spec, now=now)
@@ -479,3 +479,27 @@ def test_overdue_work_order_wired_into_department_signals():
     assert len(overdue) == 1
     assert overdue[0]["related_id"] == "late"
     assert "overdue_work_order" in eng.DECISION_SIGNAL_TYPES
+
+
+def test_detect_overdue_procurement_requests_and_blocking_severity():
+    today = date(2026, 3, 10)
+    requests = [
+        {"id": "a", "item": "Bolts", "status": "ordered", "expected_delivery_date": "2026-03-08", "blocking_production_orders": []},
+        {"id": "b", "item": "Steel plate", "status": "ordered", "expected_delivery_date": "2026-03-01",
+         "blocking_production_orders": [{"work_order_id": "wo1", "reference": "Order #245", "due_date": "2026-03-12"}]},
+        {"id": "c", "item": "Tape", "status": "requested", "expected_delivery_date": "2026-03-01"},
+        {"id": "d", "item": "Oil", "status": "delivered", "expected_delivery_date": "2026-03-01"},
+        {"id": "e", "item": "Glue", "status": "ordered", "expected_delivery_date": "2026-03-20"},
+        {"id": "f", "item": "Resin", "status": "approved", "expected_delivery_date": "2026-03-01"},
+        {"id": "g", "item": "Paint", "status": "rejected", "expected_delivery_date": "2026-03-01"},
+    ]
+    sigs = eng.detect_overdue_procurement_requests(requests, today=today)
+    types = {s["type"]: s for s in sigs}
+    assert set(types) == {"overdue_procurement", "overdue_procurement_blocking_production"}
+    assert types["overdue_procurement"]["severity"] == "medium"
+    assert types["overdue_procurement"]["related_id"] == "a"
+    assert types["overdue_procurement_blocking_production"]["severity"] == "high"
+    assert "Order #245" in types["overdue_procurement_blocking_production"]["summary"]
+    assert "Order #245" in types["overdue_procurement_blocking_production"]["detail"]
+    assert "overdue" in types["overdue_procurement_blocking_production"]["detail"].lower()
+

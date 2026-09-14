@@ -2774,6 +2774,12 @@ async def _department_signal_inputs(workspace_id: str) -> list:
         if coll is None:
             continue
         items = await coll.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
+        if spec.get("type") == dept_catalog.TYPE_PROCUREMENT and items:
+            blocking = await _blocking_production_orders_by_request(
+                workspace_id, [i.get("id") for i in items if i.get("id")],
+            )
+            for item in items:
+                item["blocking_production_orders"] = list(blocking.get(item.get("id")) or [])
         out.append({"spec": spec, "items": items})
     return out
 
@@ -6029,12 +6035,30 @@ async def _enrich_procurement_requests(rows: list, workspace_id: str | None = No
     ]
 
 
+
+def _normalize_expected_delivery_date(raw) -> str:
+    """Optional YYYY-MM-DD (or empty). Rejects unparseable values."""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    # Accept date-only or ISO datetime; store as YYYY-MM-DD.
+    try:
+        if "T" in s:
+            s = s.split("T", 1)[0]
+        datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="expected_delivery_date must be YYYY-MM-DD")
+    return s[:10]
+
 class ProcurementRequestCreate(BaseModel):
     item: str
     quantity: float = 1
     vendor_name: str = ""
     cost: Optional[float] = None
     notes: str = ""
+    expected_delivery_date: str = ""
 
 
 class ProcurementRequestPatch(BaseModel):
@@ -6044,6 +6068,7 @@ class ProcurementRequestPatch(BaseModel):
     cost: Optional[float] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    expected_delivery_date: Optional[str] = None
 
 
 @api_router.get("/procurement/requests")
@@ -6118,6 +6143,7 @@ async def create_procurement_request(
         "approved_by": None,
         "status": "requested",
         "notes": (payload.notes or "").strip(),
+        "expected_delivery_date": _normalize_expected_delivery_date(payload.expected_delivery_date),
         "created_at": now,
         "updated_at": now,
     }
@@ -6180,6 +6206,15 @@ async def patch_procurement_request(
     if payload.notes is not None:
         content_touched = True
         upd["notes"] = payload.notes.strip()
+    if payload.expected_delivery_date is not None:
+        # Delivery date is operational — leads can always set it; members may set
+        # it while they still own the request (or alongside a status move below).
+        upd["expected_delivery_date"] = _normalize_expected_delivery_date(payload.expected_delivery_date)
+        if not can_edit_content and payload.status is None:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only edit expected delivery date on your own open requests",
+            )
 
     if content_touched and not can_edit_content:
         raise HTTPException(

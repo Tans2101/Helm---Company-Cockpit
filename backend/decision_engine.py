@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 from money_fmt import fmt_money_plain
-from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_PRODUCTION
+from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_PRODUCTION, TYPE_PROCUREMENT
 from department_report_drafts import SPEC_BY_TYPE
 
 
@@ -37,6 +37,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     "urgent_maintenance",
     # Past-due production work orders (fact check, not a forecast).
     "overdue_work_order",
+    "overdue_procurement",
+    "overdue_procurement_blocking_production",
 })
 DELEGATE_SIGNAL_TYPES = frozenset({
     "overdue_task",
@@ -552,6 +554,68 @@ def compute_average_cycle_time(work_orders: list, *, min_samples: int = 3) -> Op
     }
 
 
+
+def detect_overdue_procurement_requests(requests: list, *, today: Optional[date] = None) -> list:
+    """Flag procurement requests that are still ordered past expected_delivery_date.
+
+    Plain calendar-date comparison only — no projection. Combined high-severity
+    signal when the late request also blocks production work orders.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    out = []
+    for req in requests or []:
+        if req.get("status") != "ordered":
+            continue
+        due_d = parse_task_due_date(req.get("expected_delivery_date"))
+        if due_d is None or due_d >= today:
+            continue
+        days_late = (today - due_d).days
+        item = (req.get("item") or "").strip() or "Untitled request"
+        blocking = list(req.get("blocking_production_orders") or [])
+        if blocking:
+            wo = blocking[0]
+            ref = (wo.get("reference") or "").strip() or "a work order"
+            wo_due = (wo.get("due_date") or "").strip()
+            due_bit = f" (due {wo_due})" if wo_due else ""
+            out.append(_signal(
+                "overdue_procurement_blocking_production",
+                "high",
+                summary=f"Late material holding up {ref}",
+                detail=(
+                    f"The part for {ref}{due_bit} is {days_late} day(s) overdue from the vendor "
+                    f"({item})."
+                ),
+                related_id=req.get("id"),
+                department_type="procurement",
+                department_name="Procurement",
+                item_label=item,
+                due=due_d.isoformat(),
+                days_late=days_late,
+                status=req.get("status"),
+                blocking_references=[(b.get("reference") or "") for b in blocking],
+            ))
+        else:
+            severity = "high" if days_late >= 7 else "medium"
+            out.append(_signal(
+                "overdue_procurement",
+                severity,
+                summary=f"Overdue procurement: {item}",
+                detail=(
+                    f"Purchase request '{item}' was expected {due_d.isoformat()} "
+                    f"({days_late} day(s) late) and is still ordered."
+                ),
+                related_id=req.get("id"),
+                department_type="procurement",
+                department_name="Procurement",
+                item_label=item,
+                due=due_d.isoformat(),
+                days_late=days_late,
+                status=req.get("status"),
+            ))
+    return out
+
+
+
 def collect_department_signals(
     department_items: list | None,
     *,
@@ -569,6 +633,8 @@ def collect_department_signals(
             continue
         if dtype == TYPE_PRODUCTION:
             signals.extend(detect_overdue_work_orders(items, today=now.date()))
+        if dtype == TYPE_PROCUREMENT:
+            signals.extend(detect_overdue_procurement_requests(items, today=now.date()))
         generic = detect_stalled_department_item(items, spec, now=now)
         if dtype == TYPE_ENGINEERING_MAINTENANCE:
             urgent = detect_urgent_maintenance(items, spec, now=now)

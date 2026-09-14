@@ -395,3 +395,29 @@ def test_blocking_badge_clears_when_link_removed_or_completed(proc_api):
     widget = next(r for r in final if r["id"] == rid)
     assert widget["blocking_production_orders"] == []
 
+
+
+def test_expected_delivery_date_create_and_patch(proc_api):
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    r = client.post("/api/procurement/requests", json={
+        "item": "Bearings",
+        "quantity": 4,
+        "expected_delivery_date": "2026-04-01",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()["request"]
+    assert body["expected_delivery_date"] == "2026-04-01"
+    rid = body["id"]
+
+    bad = client.patch(f"/api/procurement/requests/{rid}", json={"expected_delivery_date": "not-a-date"})
+    assert bad.status_code == 400
+
+    server.app.dependency_overrides[server.get_principal] = as_lead
+    ok = client.patch(f"/api/procurement/requests/{rid}", json={
+        "status": "ordered",
+        "expected_delivery_date": "2026-04-15",
+    })
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["request"]["status"] == "ordered"
+    assert ok.json()["request"]["expected_delivery_date"] == "2026-04-15"
+    assert store.rows[0]["expected_delivery_date"] == "2026-04-15"

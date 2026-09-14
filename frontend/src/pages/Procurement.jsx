@@ -18,6 +18,15 @@ const STATUS_META = {
 
 const CLOSED = new Set(["delivered", "rejected"]);
 
+function isExpectedDeliveryOverdue(dateStr, status) {
+  if (CLOSED.has(status)) return false;
+  const raw = (dateStr || "").trim();
+  if (!raw) return false;
+  const end = new Date(`${raw}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() < Date.now();
+}
+
 function StatusBadge({ status }) {
   const meta = STATUS_META[status] || STATUS_META.requested;
   return (
@@ -63,7 +72,8 @@ export default function Procurement() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "" });
+  const [orderDatePrompt, setOrderDatePrompt] = useState(null);
+  const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "" });
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
   const visible = useMemo(() => {
@@ -91,6 +101,7 @@ export default function Procurement() {
       vendor_name: selected.vendor_name || "",
       cost: selected.cost == null ? "" : String(selected.cost),
       notes: selected.notes || "",
+      expected_delivery_date: selected.expected_delivery_date || "",
       status: selected.status || "requested",
     });
   }, [selected]);
@@ -161,9 +172,10 @@ export default function Procurement() {
         vendor_name: form.vendor_name.trim(),
         cost,
         notes: form.notes.trim(),
+        expected_delivery_date: form.expected_delivery_date.trim(),
       });
       toast.success("Request submitted");
-      setForm({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "" });
+      setForm({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "" });
       setAdding(false);
       await reload();
       if (res?.request?.id) setSelectedId(res.request.id);
@@ -198,6 +210,9 @@ export default function Procurement() {
         body.cost = cost;
       }
     }
+    if (canEditContent || canApprove) {
+      body.expected_delivery_date = (draft.expected_delivery_date || "").trim();
+    }
     if (!Object.keys(body).length) return;
     setBusy(true);
     try {
@@ -212,10 +227,10 @@ export default function Procurement() {
     }
   };
 
-  const setStatus = async (status) => {
+  const applyStatus = async (status, extra = {}) => {
     setBusy(true);
     try {
-      const { data: res } = await api.patch(`/procurement/requests/${selected.id}`, { status });
+      const { data: res } = await api.patch(`/procurement/requests/${selected.id}`, { status, ...extra });
       toast.success(`Marked ${STATUS_META[status]?.label || status}`);
       await reload();
       if (res?.request?.id) setSelectedId(res.request.id);
@@ -224,6 +239,30 @@ export default function Procurement() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const setStatus = async (status) => {
+    if (
+      status === "ordered"
+      && !(draft?.expected_delivery_date || selected?.expected_delivery_date || "").trim()
+    ) {
+      setOrderDatePrompt({ status, date: "" });
+      return;
+    }
+    await applyStatus(status);
+  };
+
+  const confirmOrderDatePrompt = async ({ skip } = {}) => {
+    if (!orderDatePrompt) return;
+    const { status } = orderDatePrompt;
+    const date = (orderDatePrompt.date || "").trim();
+    setOrderDatePrompt(null);
+    if (skip || !date) {
+      await applyStatus(status);
+      return;
+    }
+    setDraft((d) => (d ? { ...d, expected_delivery_date: date } : d));
+    await applyStatus(status, { expected_delivery_date: date });
   };
 
   const deleteRequest = async () => {
@@ -305,6 +344,7 @@ export default function Procurement() {
                 <th className="px-3 py-2 font-medium">Qty</th>
                 <th className="px-3 py-2 font-medium">Vendor</th>
                 <th className="px-3 py-2 font-medium">Requester</th>
+                <th className="px-3 py-2 font-medium">Expected</th>
                 <th className="px-3 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -331,6 +371,20 @@ export default function Procurement() {
                   <td className="px-3 py-2.5 text-helm-fg font-mono text-xs">{req.quantity}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{req.vendor_name || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(req.requester)}</td>
+                  <td
+                    className={cn(
+                      "px-3 py-2.5 font-mono text-xs",
+                      isExpectedDeliveryOverdue(req.expected_delivery_date, req.status)
+                        ? "text-helm-status-negative"
+                        : "text-helm-muted",
+                    )}
+                  >
+                    {req.expected_delivery_date
+                      ? (isExpectedDeliveryOverdue(req.expected_delivery_date, req.status)
+                        ? `Overdue ${req.expected_delivery_date}`
+                        : req.expected_delivery_date)
+                      : "—"}
+                  </td>
                   <td className="px-3 py-2.5"><StatusBadge status={req.status} /></td>
                 </tr>
               ))}
@@ -401,6 +455,22 @@ export default function Procurement() {
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected delivery</span>
+              <input
+                data-testid="procurement-edit-expected-delivery"
+                type="date"
+                disabled={busy || !(canEditContent || canApprove)}
+                value={draft.expected_delivery_date || ""}
+                onChange={(e) => setDraft((d) => ({ ...d, expected_delivery_date: e.target.value }))}
+                className={cn(
+                  "w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm disabled:opacity-50",
+                  isExpectedDeliveryOverdue(draft.expected_delivery_date, selected.status)
+                    ? "text-helm-status-negative"
+                    : "text-helm-fg",
+                )}
+              />
+            </label>
           </div>
 
           <label className="block space-y-1">
@@ -422,7 +492,7 @@ export default function Procurement() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {canEditContent && (
+            {(canEditContent || canApprove) && (
               <button
                 type="button"
                 disabled={busy}
@@ -492,6 +562,45 @@ export default function Procurement() {
         </GlassCard>
       )}
 
+      {orderDatePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="order-date-prompt">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setOrderDatePrompt(null)} />
+          <div className="relative w-full max-w-sm rounded-md border border-helm-line bg-helm-card p-5 space-y-3">
+            <p className="text-sm font-medium text-helm-fg">Expected delivery date?</p>
+            <p className="text-sm text-helm-muted leading-relaxed">
+              Optional — add a vendor delivery date so Helm can flag this request if it runs late.
+            </p>
+            <input
+              type="date"
+              data-testid="order-date-prompt-input"
+              value={orderDatePrompt.date}
+              onChange={(e) => setOrderDatePrompt((s) => ({ ...s, date: e.target.value }))}
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={busy}
+                data-testid="order-date-prompt-skip"
+                onClick={() => confirmOrderDatePrompt({ skip: true })}
+                className="rounded-md border border-helm-line text-sm px-3 py-2 text-helm-fg"
+              >
+                Skip
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                data-testid="order-date-prompt-confirm"
+                onClick={() => confirmOrderDatePrompt()}
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover"
+              >
+                Save &amp; mark ordered
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={confirmDelete && Boolean(selected)}
         title={`Delete request “${selected?.item || ""}”?`}
@@ -550,6 +659,16 @@ export default function Procurement() {
                 data-testid="procurement-new-vendor"
                 value={form.vendor_name}
                 onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected delivery</span>
+              <input
+                data-testid="procurement-new-expected-delivery"
+                type="date"
+                value={form.expected_delivery_date}
+                onChange={(e) => setForm((f) => ({ ...f, expected_delivery_date: e.target.value }))}
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
             </label>
