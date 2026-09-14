@@ -5930,7 +5930,65 @@ def _can_lead_procurement(principal: dict, membership: dict | None) -> bool:
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_procurement_request(req: dict, users: dict | None = None) -> dict:
+def _blocking_production_order_entry(wo: dict) -> dict:
+    return {
+        "work_order_id": wo.get("id"),
+        "reference": wo.get("reference") or "",
+        "due_date": wo.get("due_date") or "",
+    }
+
+
+def _production_order_blocks_procurement(wo: dict) -> bool:
+    """True when a work order is actively waiting on / blocked by materials."""
+    if wo.get("status") == "awaiting_materials":
+        return True
+    return bool(wo.get("blocked"))
+
+
+async def _blocking_production_orders_by_request(
+    workspace_id: str,
+    request_ids: list[str],
+) -> dict[str, list]:
+    """Live lookup: procurement request id → blocking production work orders."""
+    ids = [rid for rid in request_ids if rid]
+    if not ids or not workspace_id:
+        return {}
+    rows = await db.production_work_orders.find(
+        {
+            "workspace_id": workspace_id,
+            "linked_procurement_request_id": {"$in": ids},
+            "$or": [
+                {"status": "awaiting_materials"},
+                {"blocked": True},
+            ],
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "reference": 1,
+            "due_date": 1,
+            "linked_procurement_request_id": 1,
+            "status": 1,
+            "blocked": 1,
+        },
+    ).to_list(2000)
+    by_request: dict[str, list] = {}
+    for wo in rows:
+        if not _production_order_blocks_procurement(wo):
+            continue
+        rid = wo.get("linked_procurement_request_id")
+        if not rid:
+            continue
+        by_request.setdefault(rid, []).append(_blocking_production_order_entry(wo))
+    return by_request
+
+
+async def _enrich_procurement_request(
+    req: dict,
+    users: dict | None = None,
+    *,
+    blocking_by_request: dict | None = None,
+) -> dict:
     out = {k: v for k, v in req.items() if k != "_id"}
     uids = [out.get("requested_by"), out.get("approved_by")]
     lookup = users if users is not None else await _users_by_ids(uids)
@@ -5940,16 +5998,35 @@ async def _enrich_procurement_request(req: dict, users: dict | None = None) -> d
         if uid:
             info = _user_card(uid, lookup.get(uid))
         out[label] = info
+    rid = out.get("id")
+    if blocking_by_request is not None:
+        out["blocking_production_orders"] = list(blocking_by_request.get(rid) or [])
+    else:
+        ws = out.get("workspace_id")
+        if ws and rid:
+            mapping = await _blocking_production_orders_by_request(ws, [rid])
+            out["blocking_production_orders"] = list(mapping.get(rid) or [])
+        else:
+            out["blocking_production_orders"] = []
     return out
 
 
-async def _enrich_procurement_requests(rows: list) -> list:
+async def _enrich_procurement_requests(rows: list, workspace_id: str | None = None) -> list:
     ids = []
     for r in rows:
         ids.append(r.get("requested_by"))
         ids.append(r.get("approved_by"))
     users = await _users_by_ids(ids)
-    return [await _enrich_procurement_request(r, users) for r in rows]
+    ws = workspace_id or (rows[0].get("workspace_id") if rows else None)
+    blocking = {}
+    if ws:
+        blocking = await _blocking_production_orders_by_request(
+            ws, [r.get("id") for r in rows if r.get("id")],
+        )
+    return [
+        await _enrich_procurement_request(r, users, blocking_by_request=blocking)
+        for r in rows
+    ]
 
 
 class ProcurementRequestCreate(BaseModel):
@@ -5986,7 +6063,13 @@ async def list_procurement_requests(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_procurement(principal, membership)
-    items = await _enrich_procurement_requests(rows)
+    items = await _enrich_procurement_requests(
+        rows, workspace_id=principal["workspace_id"],
+    )
+    # Blocking production impact always sorts above every other signal.
+    items.sort(
+        key=lambda r: (0 if r.get("blocking_production_orders") else 1),
+    )
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Procurement",

@@ -32,6 +32,29 @@ function personLabel(p) {
   return p.name || p.email || "Teammate";
 }
 
+function formatBlockingOrders(orders) {
+  if (!orders?.length) return "";
+  return orders.map((o) => {
+    const ref = o.reference || o.work_order_id || "work order";
+    const due = o.due_date || "";
+    return due ? `${ref} (due ${due})` : ref;
+  }).join(", ");
+}
+
+function BlockingProductionBadge({ orders, requestId }) {
+  if (!orders?.length) return null;
+  const label = formatBlockingOrders(orders);
+  return (
+    <span
+      data-testid={`blocking-production-badge-${requestId}`}
+      title={label}
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+    >
+      Blocking: {label}
+    </span>
+  );
+}
+
 export default function Procurement() {
   const { data, loading, error, reload } = useFetch("/procurement/requests");
   const [showClosed, setShowClosed] = useState(false);
@@ -43,10 +66,15 @@ export default function Procurement() {
   const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "" });
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
-  const visible = useMemo(
-    () => (showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status))),
-    [allRequests, showClosed],
-  );
+  const visible = useMemo(() => {
+    const base = showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status));
+    // Blocking production impact always sorts first.
+    return [...base].sort((a, b) => {
+      const ab = (a.blocking_production_orders || []).length ? 0 : 1;
+      const bb = (b.blocking_production_orders || []).length ? 0 : 1;
+      return ab - bb;
+    });
+  }, [allRequests, showClosed]);
   const selected = useMemo(
     () => allRequests.find((r) => r.id === selectedId) || null,
     [allRequests, selectedId],
@@ -291,7 +319,15 @@ export default function Procurement() {
                     selectedId === req.id && "bg-helm-gold/[0.06]",
                   )}
                 >
-                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[14rem]">{req.item}</td>
+                  <td className="px-3 py-2.5 text-helm-fg max-w-[14rem]">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="truncate">{req.item}</span>
+                      <BlockingProductionBadge
+                        orders={req.blocking_production_orders}
+                        requestId={req.id}
+                      />
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5 text-helm-fg font-mono text-xs">{req.quantity}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{req.vendor_name || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(req.requester)}</td>
@@ -309,6 +345,14 @@ export default function Procurement() {
             <div>
               <SectionLabel>Request detail</SectionLabel>
               <p className="text-helm-fg text-sm mt-1">{selected.item}</p>
+              {(selected.blocking_production_orders || []).length > 0 && (
+                <div className="mt-2">
+                  <BlockingProductionBadge
+                    orders={selected.blocking_production_orders}
+                    requestId={selected.id}
+                  />
+                </div>
+              )}
             </div>
             <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />

@@ -71,12 +71,12 @@ class RequestStore:
 
     async def find_one(self, query, projection=None):
         for r in self.rows:
-            if all(r.get(k) == v for k, v in query.items()):
+            if _match_query(r, query):
                 return {k: v for k, v in r.items() if k != "_id"}
         return None
 
     def find(self, query, projection=None):
-        matched = [dict(r) for r in self.rows if all(r.get(k) == v for k, v in query.items())]
+        matched = [dict(r) for r in self.rows if _match_query(r, query or {})]
         state = {"sort": None}
 
         class C:
@@ -101,20 +101,41 @@ class RequestStore:
 
     async def update_one(self, query, update):
         for r in self.rows:
-            if all(r.get(k) == v for k, v in query.items()):
+            if _match_query(r, query):
                 r.update(update.get("$set") or {})
                 return MagicMock(matched_count=1)
         return MagicMock(matched_count=0)
 
     async def delete_one(self, query):
         before = len(self.rows)
-        self.rows = [r for r in self.rows if not all(r.get(k) == v for k, v in query.items())]
+        self.rows = [r for r in self.rows if not _match_query(r, query)]
         return MagicMock(deleted_count=before - len(self.rows))
+
+
+def _match_query(doc: dict, query: dict) -> bool:
+    if not query:
+        return True
+    for k, v in query.items():
+        if k == "$or":
+            if not any(_match_query(doc, clause) for clause in v):
+                return False
+            continue
+        actual = doc.get(k)
+        if isinstance(v, dict):
+            if "$in" in v:
+                if actual not in v["$in"]:
+                    return False
+            else:
+                return False
+        elif actual != v:
+            return False
+    return True
 
 
 @pytest.fixture
 def proc_api():
     store = RequestStore()
+    work_orders = RequestStore()
     depts = MagicMock()
     depts.find_one = AsyncMock(return_value=dict(PROC_DEPT))
     members = MagicMock()
@@ -138,6 +159,7 @@ def proc_api():
     mock_db.departments = depts
     mock_db.department_members = members
     mock_db.procurement_requests = store
+    mock_db.production_work_orders = work_orders
     mock_db.users = users
 
     async def as_ceo():
@@ -156,7 +178,7 @@ def proc_api():
     with patch.object(server, "db", mock_db), \
          patch.object(server, "BILLING_ENFORCED", False):
         client = TestClient(server.app)
-        yield client, store, as_ceo, as_member, as_lead, as_outsider, depts
+        yield client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts
     server.app.dependency_overrides.clear()
 
 
@@ -165,14 +187,14 @@ def test_procurement_not_placeholder():
 
 
 def test_outsider_gets_403(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
     assert client.get("/api/procurement/requests").status_code == 403
     assert client.post("/api/procurement/requests", json={"item": "Bolts", "quantity": 10}).status_code == 403
 
 
 def test_member_creates_with_server_requested_by(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     r = client.post("/api/procurement/requests", json={
         "item": "Steel plate",
         "quantity": 4,
@@ -188,7 +210,7 @@ def test_member_creates_with_server_requested_by(proc_api):
 
 
 def test_member_cannot_approve(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Widget", "quantity": 1})
     rid = store.rows[0]["id"]
     r = client.patch(f"/api/procurement/requests/{rid}", json={"status": "approved"})
@@ -197,7 +219,7 @@ def test_member_cannot_approve(proc_api):
 
 
 def test_member_can_edit_own_requested(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Widget", "quantity": 1})
     rid = store.rows[0]["id"]
     r = client.patch(f"/api/procurement/requests/{rid}", json={
@@ -209,7 +231,7 @@ def test_member_can_edit_own_requested(proc_api):
 
 
 def test_lead_approves_sets_approved_by(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Cable", "quantity": 2})
     rid = store.rows[0]["id"]
     server.app.dependency_overrides[server.get_principal] = as_lead
@@ -220,7 +242,7 @@ def test_lead_approves_sets_approved_by(proc_api):
 
 
 def test_ceo_can_reject(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Cable", "quantity": 2})
     rid = store.rows[0]["id"]
     server.app.dependency_overrides[server.get_principal] = as_ceo
@@ -230,7 +252,7 @@ def test_ceo_can_reject(proc_api):
 
 
 def test_independent_statuses(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "A", "quantity": 1})
     client.post("/api/procurement/requests", json={"item": "B", "quantity": 1})
     a, b = store.rows[0]["id"], store.rows[1]["id"]
@@ -241,7 +263,7 @@ def test_independent_statuses(proc_api):
 
 
 def test_list_filter_by_status(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "A", "quantity": 1})
     client.post("/api/procurement/requests", json={"item": "B", "quantity": 1})
     store.rows[0]["status"] = "delivered"
@@ -252,7 +274,7 @@ def test_list_filter_by_status(proc_api):
 
 
 def test_member_delete_own_requested(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Temp", "quantity": 1})
     rid = store.rows[0]["id"]
     r = client.delete(f"/api/procurement/requests/{rid}")
@@ -261,7 +283,7 @@ def test_member_delete_own_requested(proc_api):
 
 
 def test_member_cannot_delete_after_approve(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     client.post("/api/procurement/requests", json={"item": "Temp", "quantity": 1})
     rid = store.rows[0]["id"]
     store.rows[0]["status"] = "approved"
@@ -271,6 +293,105 @@ def test_member_cannot_delete_after_approve(proc_api):
 
 
 def test_dept_disabled_404(proc_api):
-    client, store, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
     depts.find_one = AsyncMock(return_value=None)
     assert client.get("/api/procurement/requests").status_code == 404
+
+
+def test_blocking_production_orders_enrichment_and_sort(proc_api):
+    """Requests linked to awaiting/blocked work orders float to the top with badges."""
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    # Create three requests; the middle one will be linked as blocking.
+    for item in ("Restock A", "Steel for WO", "Restock B"):
+        r = client.post("/api/procurement/requests", json={"item": item, "quantity": 1})
+        assert r.status_code == 200, r.text
+    ids = [row["id"] for row in store.rows]
+    assert len(ids) == 3
+    blocking_req_id = ids[1]
+
+    work_orders.rows.append({
+        "id": "pwo_block1",
+        "workspace_id": "ws_test",
+        "reference": "Order #245",
+        "due_date": "2026-09-20",
+        "status": "awaiting_materials",
+        "blocked": False,
+        "linked_procurement_request_id": blocking_req_id,
+    })
+    # Completed linked order must NOT appear as blocking.
+    work_orders.rows.append({
+        "id": "pwo_done",
+        "workspace_id": "ws_test",
+        "reference": "Order #100",
+        "due_date": "2026-01-01",
+        "status": "completed",
+        "blocked": False,
+        "linked_procurement_request_id": ids[0],
+    })
+    # Blocked (any status) still counts.
+    work_orders.rows.append({
+        "id": "pwo_blocked",
+        "workspace_id": "ws_test",
+        "reference": "Order #300",
+        "due_date": "",
+        "status": "in_production",
+        "blocked": True,
+        "linked_procurement_request_id": blocking_req_id,
+    })
+
+    listed = client.get("/api/procurement/requests")
+    assert listed.status_code == 200, listed.text
+    requests = listed.json()["requests"]
+    assert [r["item"] for r in requests][0] == "Steel for WO"
+    assert all(r["item"] != "Steel for WO" or i == 0 for i, r in enumerate(requests))
+
+    steel = requests[0]
+    assert len(steel["blocking_production_orders"]) == 2
+    refs = {e["reference"] for e in steel["blocking_production_orders"]}
+    assert refs == {"Order #245", "Order #300"}
+    by_ref = {e["reference"]: e for e in steel["blocking_production_orders"]}
+    assert by_ref["Order #245"]["work_order_id"] == "pwo_block1"
+    assert by_ref["Order #245"]["due_date"] == "2026-09-20"
+    assert by_ref["Order #300"]["due_date"] == ""
+
+    # Non-blocking requests get an empty array (live field always present).
+    for r in requests[1:]:
+        assert r["blocking_production_orders"] == []
+
+
+def test_blocking_badge_clears_when_link_removed_or_completed(proc_api):
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    client.post("/api/procurement/requests", json={"item": "Widget", "quantity": 2})
+    client.post("/api/procurement/requests", json={"item": "Other", "quantity": 1})
+    rid = store.rows[0]["id"]
+    work_orders.rows.append({
+        "id": "pwo_live",
+        "workspace_id": "ws_test",
+        "reference": "WO-9",
+        "due_date": "2026-10-01",
+        "status": "awaiting_materials",
+        "blocked": False,
+        "linked_procurement_request_id": rid,
+    })
+    first = client.get("/api/procurement/requests").json()["requests"]
+    assert first[0]["id"] == rid
+    assert first[0]["blocking_production_orders"][0]["reference"] == "WO-9"
+
+    # Completing the work order clears the badge on next fetch.
+    work_orders.rows[0]["status"] = "completed"
+    mid = client.get("/api/procurement/requests").json()["requests"]
+    widget = next(r for r in mid if r["id"] == rid)
+    assert widget["blocking_production_orders"] == []
+
+    # Re-block via blocked flag, then unlink — badge disappears again.
+    work_orders.rows[0]["status"] = "in_production"
+    work_orders.rows[0]["blocked"] = True
+    again = client.get("/api/procurement/requests").json()["requests"]
+    assert again[0]["id"] == rid
+    assert again[0]["blocking_production_orders"][0]["reference"] == "WO-9"
+
+    work_orders.rows[0]["linked_procurement_request_id"] = None
+    final = client.get("/api/procurement/requests").json()["requests"]
+    widget = next(r for r in final if r["id"] == rid)
+    assert widget["blocking_production_orders"] == []
+
