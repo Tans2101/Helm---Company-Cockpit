@@ -4869,10 +4869,81 @@ def _normalize_seed_events(meetings: list[dict], day) -> list[dict]:
     return out
 
 
+# Extensible registry of department date fields → Helm Calendar.
+# Add a row here when a new department ships a date field; the collector below
+# picks it up automatically (no changes needed in GET /calendar).
+CALENDAR_DATE_SOURCES = [
+    {
+        "collection": "production_work_orders",
+        "date_field": "due_date",
+        "title_field": "reference",
+        "type_label": "Production",
+        "department_type": dept_catalog.TYPE_PRODUCTION,
+        "open_statuses": frozenset({"awaiting_materials", "in_production", "quality_check"}),
+        "source_type": "production_work_order",
+    },
+    {
+        "collection": "procurement_requests",
+        "date_field": "expected_delivery_date",
+        "title_field": "item",
+        "type_label": "Procurement",
+        "department_type": dept_catalog.TYPE_PROCUREMENT,
+        "open_statuses": frozenset({"ordered"}),
+        "source_type": "procurement_request",
+    },
+]
+
+
+async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
+    """Load open department dates from CALENDAR_DATE_SOURCES for this workspace."""
+    out: list[dict] = []
+    for src in CALENDAR_DATE_SOURCES:
+        enabled = await dept_migrate.get_enabled_department(
+            db, workspace_id, src["department_type"],
+        )
+        if not enabled:
+            continue
+        coll = getattr(db, src["collection"], None)
+        if coll is None:
+            continue
+        date_field = src["date_field"]
+        rows = await coll.find(
+            {
+                "workspace_id": workspace_id,
+                "status": {"$in": list(src["open_statuses"])},
+                date_field: {"$exists": True, "$nin": [None, ""]},
+            },
+            {"_id": 0},
+        ).to_list(1000)
+        for row in rows:
+            raw = str(row.get(date_field) or "").strip()
+            if not raw:
+                continue
+            day = raw[:10]
+            try:
+                datetime.strptime(day, "%Y-%m-%d")
+            except ValueError:
+                continue
+            rid = row.get("id")
+            if not rid:
+                continue
+            title = (row.get(src["title_field"]) or "").strip() or src["type_label"]
+            out.append({
+                "id": rid,
+                "title": title,
+                "date": day,
+                "type": src["type_label"],
+                "meta": "",
+                "source_type": src["source_type"],
+                "source_id": rid,
+            })
+    return out
+
+
 def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
     events = []
     for u in upcoming:
-        events.append({
+        ev = {
             "id": f"deadline_{u['id']}",
             "title": u["title"],
             "time": "",
@@ -4886,7 +4957,12 @@ def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
             "start_at": f"{u['date']}T00:00:00+00:00",
             "end_at": f"{u['date']}T23:59:59+00:00",
             "all_day": True,
-        })
+        }
+        if u.get("source_type"):
+            ev["source_type"] = u["source_type"]
+        if u.get("source_id"):
+            ev["source_id"] = u["source_id"]
+        events.append(ev)
     return events
 
 
@@ -4935,6 +5011,7 @@ async def calendar(
         if t.get("column") != "done" and (not t.get("assignee_user_id") or t.get("assignee_user_id") == principal["user_id"]):
             upcoming.append({"id": t["id"], "title": t["title"], "date": due,
                              "type": "Task", "meta": t.get("tag", "")})
+    upcoming.extend(await _department_calendar_upcoming(principal["workspace_id"]))
     upcoming.sort(key=lambda x: x["date"])
     data["upcoming"] = upcoming
     week_end = (week_anchor + timedelta(days=6)).strftime("%Y-%m-%d")
