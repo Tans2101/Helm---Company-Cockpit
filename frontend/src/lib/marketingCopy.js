@@ -78,8 +78,19 @@ export const FEATURE_CATEGORIES = [
   {
     id: "finance",
     label: "Finance & growth",
-    intro: "Revenue, cash, and pipeline — always current when someone asks.",
-    modules: ["Pipeline & Financials", "Telemetry"],
+    intro: "Pipeline and financials are connected — won deals land as revenue, not a spreadsheet chase.",
+    modules: ["Won deals become revenue", "Deal ownership & follow-ups", "Telemetry"],
+  },
+  {
+    id: "operations",
+    label: "Production, procurement & maintenance",
+    intro: "Not three separate trackers. When production is blocked, Helm shows you exactly why — and jumps that item to the top of whichever queue is holding it up.",
+    modules: [
+      "Work order tracking",
+      "Vendor memory",
+      "Equipment reliability alerts",
+      "Cross-department blocking",
+    ],
   },
   {
     id: "people",
@@ -260,10 +271,16 @@ export const FEATURE_MODULES = [
     example: "Six pending approvals. Helm recommends the $40K reservation first — 4.2-month payback.",
   },
   {
-    title: "Pipeline & Financials",
-    ceoValue: "Cash and revenue at a glance when leadership asks.",
-    body: "Revenue, expenses, and deal stages — live, not buried in a spreadsheet you update monthly.",
-    example: "Two deals in negotiation. Expenses logged this month. Cash position visible without opening the finance sheet.",
+    title: "Won deals become revenue",
+    ceoValue: "Close the deal once — financials and production follow.",
+    body: "Moving a deal to won logs the revenue automatically and offers a production work order from the same deal — pipeline and financials stay linked.",
+    example: "Acme Enterprise closes at $25k. Revenue appears in Financials; Helm asks if you want a work order started.",
+  },
+  {
+    title: "Deal ownership & follow-ups",
+    ceoValue: "Real owners, planned next steps — not free-text ghosts.",
+    body: "Deals link to Sales teammates, with next-step and follow-up dates so quiet deals surface before they stall.",
+    example: "Riley owns the negotiation. Call-back Thursday is on the card — Helm reminds before it slips.",
   },
   {
     title: "Telemetry",
@@ -282,6 +299,36 @@ export const FEATURE_MODULES = [
     ceoValue: "Weekly synthesis in one click.",
     body: "A plain-English update covering what happened, what needs attention, and what to do next — ready for your leadership team.",
     example: "Financial snapshot, team updates, and open decisions — formatted to forward, not rebuilt in slides.",
+  },
+  {
+    title: "Gmail thread surfacing + AI draft replies",
+    ceoValue: "Inbox signal without living in email.",
+    body: "Surfaces important Gmail threads in the cockpit and drafts replies you can send — grounded in company context, not a blank compose box.",
+    example: "A customer thread needs a decision. Helm drafts the reply; you edit and send.",
+  },
+  {
+    title: "Work order tracking",
+    ceoValue: "Production status without a separate system.",
+    body: "Work orders move through a fixed flow — Awaiting Materials, In Production, Quality Check, Completed — with overdue detection and average cycle time.",
+    example: "Three orders awaiting materials. One past due. Average cycle time visible without a spreadsheet.",
+  },
+  {
+    title: "Vendor memory",
+    ceoValue: "Re-order without starting from scratch.",
+    body: "Procurement remembers past vendors and prices per item, tracks expected delivery, and flags overdue requests by priority.",
+    example: "Same bracket as last quarter — Helm recalls the vendor and last price when you raise the request.",
+  },
+  {
+    title: "Equipment reliability alerts",
+    ceoValue: "Notice the machine that keeps coming back.",
+    body: "Maintenance tickets for equipment issues, plus reliability alerts when the same machine repeats — and ticket-open downtime totals.",
+    example: "Press #3 logged three tickets in 90 days. Helm flags it before the next breakdown.",
+  },
+  {
+    title: "Cross-department blocking",
+    ceoValue: "See why production is stuck — in one place.",
+    body: "A blocked work order shows the part still in transit or the machine still in repair, and that item jumps to the top of its queue automatically.",
+    example: "WO-441 blocked on a bearing order and a mill repair — both sit at the top of Procurement and Maintenance.",
   },
   {
     title: "Integrations",
