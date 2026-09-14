@@ -30,6 +30,7 @@ import rate_limit as doc_rate_limit
 import storage as doc_storage
 import quickbooks as qb_sync
 import xero as xero_sync
+import sap_b1 as sap_b1_sync
 import hubspot as hubspot_sync
 import google_oauth as gcal
 import google_document_ai as gcp_docai
@@ -2510,7 +2511,7 @@ class TemplateInput(BaseModel):
 
 
 _PRESERVE_WS_FIELDS = frozenset({
-    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens",
+    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens", "sap_b1_credentials",
     "plan", "billing_provider", "paddle_subscription_id", "paddle_customer_id",
     "paddle_last_event_at", "billing_status", "subscription_status", "canceled_at",
     "workspace_id", "owner_user_id", "created_at",
@@ -9127,12 +9128,14 @@ async def integrations(principal=Depends(get_principal)):
         "quickbooks": c.get("quickbooks_tokens_connected_by"),
         "xero": c.get("xero_tokens_connected_by"),
         "hubspot": c.get("hubspot_tokens_connected_by"),
+        "sap_b1": c.get("sap_b1_credentials_connected_by"),
     }
     can_use = {
         "google": _can_use_integration_tokens(principal, c, "google_tokens"),
         "quickbooks": _can_use_integration_tokens(principal, c, "quickbooks_tokens"),
         "xero": _can_use_integration_tokens(principal, c, "xero_tokens"),
         "hubspot": _can_use_integration_tokens(principal, c, "hubspot_tokens"),
+        "sap_b1": _can_use_integration_tokens(principal, c, "sap_b1_credentials"),
     }
     return {
         "integrations": ints,
@@ -9411,6 +9414,7 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
         "quickbooks": "quickbooks_tokens",
         "xero": "xero_tokens",
         "hubspot": "hubspot_tokens",
+        "sap_b1": "sap_b1_credentials",
     }.get(provider)
     if not field:
         raise HTTPException(status_code=404, detail="Unknown provider")
@@ -9421,12 +9425,100 @@ async def integration_disconnect(provider: str, principal=Depends(require_pro_pe
         unset = {"xero_last_synced_at": ""}
     elif provider == "hubspot":
         unset = {"hubspot_last_synced_at": ""}
+    elif provider == "sap_b1":
+        unset = {"sap_b1_last_synced_at": ""}
     await _store_integration_tokens(principal["workspace_id"], field, None, extra_unset=unset)
     return {"ok": True}
 
 
 class XeroTenantInput(BaseModel):
     tenant_id: str
+
+
+
+class SapB1ConnectInput(BaseModel):
+    service_layer_url: str
+    company_db: str
+    username: str
+    password: str
+
+
+@api_router.post("/integrations/sap_b1/connect")
+async def sap_b1_connect(payload: SapB1ConnectInput, principal=Depends(require_pro_perm("integrations:manage"))):
+    """Validate Service Layer login and store sealed credentials on the workspace."""
+    ws_id = principal["workspace_id"]
+    try:
+        creds = await sap_b1_sync.login(
+            service_layer_url=payload.service_layer_url,
+            company_db=payload.company_db,
+            username=payload.username,
+            password=payload.password,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except sap_b1_sync.SapB1AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc) or "SAP Business One login rejected") from exc
+    except sap_b1_sync.SapB1Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc) or "SAP Business One connection failed") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not reach SAP Service Layer") from exc
+
+    await _store_integration_tokens(
+        ws_id, "sap_b1_credentials", creds, connected_by_user_id=principal["user_id"],
+    )
+    await log_activity(
+        principal, "integrations", "sap_b1.connect",
+        f"Connected SAP Business One ({creds.get('company_db')})",
+        {"company_db": creds.get("company_db")},
+    )
+    return {"ok": True, "company_db": creds.get("company_db"), "service_layer_url": creds.get("service_layer_url")}
+
+
+async def _run_sap_b1_sync_for_workspace(c: dict, principal: dict, *, source: str = "sap_b1_sync") -> dict:
+    ws_id = c["workspace_id"]
+    creds = _integration_tokens(c, "sap_b1_credentials")
+    if not creds:
+        raise HTTPException(status_code=400, detail="SAP Business One is not connected — connect it in Integrations first.")
+    try:
+        live = await sap_b1_sync.ensure_session(creds)
+    except sap_b1_sync.SapB1AuthError as exc:
+        await _store_integration_tokens(ws_id, "sap_b1_credentials", None, extra_unset={"sap_b1_last_synced_at": ""})
+        raise HTTPException(status_code=401, detail="SAP Business One session expired — reconnect in Integrations.") from exc
+    await _store_integration_tokens(ws_id, "sap_b1_credentials", live)
+    since = c.get("sap_b1_last_synced_at")
+    txns = await sap_b1_sync.fetch_sap_transactions(live, since)
+    synced_count = await _upsert_accounting_sync_entries(
+        ws_id=ws_id, principal=principal, txns=txns, source=source,
+    )
+    last_synced_at = datetime.now(timezone.utc).isoformat()
+    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"sap_b1_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
+
+
+@api_router.post("/integrations/sap_b1/sync")
+async def sap_b1_sync_endpoint(principal=Depends(require_pro_perm("integrations:manage"))):
+    ws_id = principal["workspace_id"]
+    c = await get_ws(ws_id)
+    _require_integration_token_use(principal, c, "sap_b1_credentials")
+    try:
+        result = await _run_sap_b1_sync_for_workspace(c, principal, source="sap_b1_sync")
+        await log_activity(
+            principal, "integrations", "sap_b1.sync",
+            f"Synced {result['synced_count']} transaction{'s' if result['synced_count'] != 1 else ''} from SAP Business One",
+            {"synced_count": result["synced_count"]},
+        )
+        return result
+    except sap_b1_sync.SapB1AuthError as exc:
+        await _store_integration_tokens(ws_id, "sap_b1_credentials", None, extra_unset={"sap_b1_last_synced_at": ""})
+        raise HTTPException(
+            status_code=401,
+            detail="SAP Business One connection expired — please reconnect in Integrations.",
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("SAP B1 sync failed for %s", ws_id)
+        raise HTTPException(status_code=502, detail="SAP Business One sync failed — try again shortly.") from exc
 
 
 @api_router.post("/integrations/xero/select-tenant")
@@ -9489,6 +9581,7 @@ async def _upsert_accounting_sync_entries(
     for txn in txns:
         txn.pop("_qb_raw_type", None)
         txn.pop("_xero_raw_type", None)
+        txn.pop("_sap_raw_type", None)
         qb_txn_id = txn.pop("qb_txn_id")
         existing = existing_by_id.get(qb_txn_id)
         fields = {
@@ -9638,6 +9731,7 @@ async def run_accounting_auto_sync() -> dict:
             "$or": [
                 {"quickbooks_tokens": {"$exists": True, "$ne": None}},
                 {"xero_tokens": {"$exists": True, "$ne": None}},
+                {"sap_b1_credentials": {"$exists": True, "$ne": None}},
             ],
         },
         {"_id": 0},
@@ -9653,6 +9747,10 @@ async def run_accounting_auto_sync() -> dict:
         "xero_skipped": 0,
         "xero_auth_errors": 0,
         "xero_errors": 0,
+        "sap_b1_ok": 0,
+        "sap_b1_skipped": 0,
+        "sap_b1_auth_errors": 0,
+        "sap_b1_errors": 0,
         "transactions_synced": 0,
     }
     for c in workspaces:
@@ -9704,6 +9802,30 @@ async def run_accounting_auto_sync() -> dict:
             except Exception:
                 stats["xero_errors"] += 1
                 logger.exception("Xero auto-sync failed for %s", ws_id)
+
+
+        if cred_crypto.credentials_present(c.get("sap_b1_credentials")):
+            try:
+                principal = _system_accounting_principal(c, "sap_b1_credentials")
+                result = await _run_sap_b1_sync_for_workspace(
+                    c, principal, source="sap_b1_auto_sync",
+                )
+                stats["sap_b1_ok"] += 1
+                stats["transactions_synced"] += int(result.get("synced_count") or 0)
+            except HTTPException as exc:
+                if exc.status_code == 400:
+                    stats["sap_b1_skipped"] += 1
+                else:
+                    stats["sap_b1_errors"] += 1
+                    logger.warning("SAP B1 auto-sync skipped for %s: %s", ws_id, exc.detail)
+            except sap_b1_sync.SapB1AuthError as exc:
+                stats["sap_b1_auth_errors"] += 1
+                logger.warning("SAP B1 auto-sync auth failed for %s: %s", ws_id, exc)
+                await _store_integration_tokens(ws_id, "sap_b1_credentials", None, extra_unset={"sap_b1_last_synced_at": ""})
+            except Exception:
+                stats["sap_b1_errors"] += 1
+                logger.exception("SAP B1 auto-sync failed for %s", ws_id)
+
     return stats
 
 
@@ -10291,12 +10413,14 @@ _INTEGRATION_CONNECTED_BY = {
     "quickbooks_tokens": "quickbooks_tokens_connected_by",
     "xero_tokens": "xero_tokens_connected_by",
     "hubspot_tokens": "hubspot_tokens_connected_by",
+    "sap_b1_credentials": "sap_b1_credentials_connected_by",
 }
 _INTEGRATION_CONNECTED_AT = {
     "google_tokens": "google_tokens_connected_at",
     "quickbooks_tokens": "quickbooks_tokens_connected_at",
     "xero_tokens": "xero_tokens_connected_at",
     "hubspot_tokens": "hubspot_tokens_connected_at",
+    "sap_b1_credentials": "sap_b1_credentials_connected_at",
 }
 
 _EXPORT_ROW_CAP = 5000
@@ -10307,7 +10431,7 @@ def _strip_sensitive(doc: dict) -> dict:
         return doc
     out = {k: v for k, v in doc.items() if k not in (
         "password", "password_hash", "oauth_session_token_enc",
-        "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens",
+        "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens", "sap_b1_credentials",
     )}
     return out
 

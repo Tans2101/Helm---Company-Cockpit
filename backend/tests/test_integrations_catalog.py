@@ -99,6 +99,11 @@ def test_coming_soon_integrations():
     assert hubspot["kind"] == "oauth"
     assert hubspot["provider"] == "hubspot"
     assert hubspot.get("sync_action") is True
+    sap = next(i for i in ints if i["id"] == "sap_b1")
+    assert sap["kind"] == "credentials"
+    assert sap["provider"] == "sap_b1"
+    assert sap.get("sync_action") is True
+    assert sap["status"] == "not_connected"
     assert not any(i["id"] == "salesforce" for i in ints)
     assert not any(i["id"] == "slack" for i in ints)
 

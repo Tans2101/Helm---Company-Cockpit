@@ -83,6 +83,14 @@ If the user can access multiple Xero organisations, Helm asks them to pick one a
 
 Workspaces typically connect **either** QuickBooks **or** Xero; both can coexist without interfering.
 
+**SAP Business One (Service Layer)** — no platform OAuth app. Workspace owners enter:
+
+- Service Layer URL (e.g. `https://host:50000/b1s/v1`)
+- Company database name
+- Username / password
+
+Credentials are encrypted at rest (`INTEGRATION_ENCRYPTION_KEY`). After Connect, click **Sync to Financials** to pull A/R invoices and A/P purchase invoices into the same ledger shape as QuickBooks/Xero.
+
 **HubSpot Developer → your app → Redirect URL**
 
 ```
@@ -105,9 +113,10 @@ Look under `integrations` / `oauth_redirect_uris` — `configured: true` means t
 
 1. Redeploy the Render API (or wait for auto-deploy).
 2. Sign in as a workspace **owner**.
-3. Open **Integrations** → Connect Google / QuickBooks or Xero / HubSpot.
+3. Open **Integrations** → Connect Google / QuickBooks or Xero / SAP Business One / HubSpot.
 4. If Google was connected before Gmail shipped, click **Enable Gmail** once to re-consent.
 5. Accounting: after Connect (and org pick for Xero if needed), click **Sync to Financials**.
+   SAP B1: enter Service Layer URL + company login in the Connect modal, then Sync.
 6. HubSpot: after Connect, click **Sync to Pipeline**.
 7. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
 

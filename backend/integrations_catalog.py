@@ -9,7 +9,7 @@ from typing import Any
 
 import credential_crypto as cred_crypto
 
-# kind: oauth | coming_soon
+# kind: oauth | credentials | coming_soon
 USER_INTEGRATIONS: list[dict[str, Any]] = [
     {
         "id": "google_calendar",
@@ -67,6 +67,21 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "cta_route": "/app/financials",
         "cta_label": "View financials",
         "connect_label": "Connect Xero",
+        "sync_action": True,
+    },
+    {
+        "id": "sap_b1",
+        "name": "SAP Business One",
+        "category": "Finance",
+        "provider": "sap_b1",
+        "kind": "credentials",
+        "oauth": False,
+        "pro": True,
+        "description": "Pull A/R invoices and A/P purchase invoices from SAP Business One Service Layer into Financials.",
+        "value": "ERP invoices land in the same burn, runway, and Decision Engine pipeline as QuickBooks and Xero.",
+        "cta_route": "/app/financials",
+        "cta_label": "View financials",
+        "connect_label": "Connect SAP B1",
         "sync_action": True,
     },
     {
@@ -135,6 +150,14 @@ def merge_integrations(
     xero_last_synced = workspace.get("xero_last_synced_at")
     hubspot_connected = cred_crypto.credentials_present(workspace.get("hubspot_tokens"))
     hubspot_last_synced = workspace.get("hubspot_last_synced_at")
+    sap_creds = None
+    if cred_crypto.credentials_present(workspace.get("sap_b1_credentials")):
+        try:
+            sap_creds = cred_crypto.unseal_credentials(workspace.get("sap_b1_credentials"))
+        except cred_crypto.CredentialCryptoError:
+            sap_creds = None
+    sap_connected = bool(sap_creds and sap_creds.get("service_layer_url") and sap_creds.get("company_db"))
+    sap_last_synced = workspace.get("sap_b1_last_synced_at")
     google_tokens = None
     if google_connected:
         try:
@@ -186,6 +209,14 @@ def merge_integrations(
             elif provider == "hubspot":
                 item["connected"] = hubspot_connected
                 item["last_synced_at"] = hubspot_last_synced
+        elif kind == "credentials":
+            # Per-workspace secrets (e.g. SAP B1) — no host OAuth app required.
+            item["configured"] = True
+            if item.get("provider") == "sap_b1":
+                item["connected"] = sap_connected
+                item["last_synced_at"] = sap_last_synced
+                if sap_creds and sap_creds.get("company_db"):
+                    item["tenant_name"] = sap_creds.get("company_db")
         elif kind == "coming_soon":
             item["configured"] = False
             item["connected"] = False
@@ -203,6 +234,8 @@ def merge_integrations(
                 item["status"] = "unavailable"
             else:
                 item["status"] = "not_connected"
+        elif kind == "credentials":
+            item["status"] = "connected" if item.get("connected") else "not_connected"
         else:
             item["status"] = "not_connected"
 

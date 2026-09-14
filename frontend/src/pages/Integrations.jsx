@@ -15,6 +15,7 @@ const ICONS = {
   gmail: Mail,
   quickbooks: Building2,
   xero: Building2,
+  sap_b1: Building2,
   hubspot: Cloud,
   github: Github,
   slack: MessageSquare,
@@ -58,11 +59,12 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
   const isComingSoon = it.coming_soon || status === "coming_soon";
   const isUnavailable = status === "unavailable";
   const isOAuth = it.kind === "oauth" && it.oauth;
+  const isCredentials = it.kind === "credentials";
   const syncBusy = syncingProvider === it.provider;
 
   const handleConnect = () => {
     if (isComingSoon || isUnavailable) return;
-    if (isOAuth) {
+    if (isOAuth || isCredentials) {
       it.connected ? onDisconnect(it.provider) : onConnect(it.provider);
     } else if (it.cta_route) {
       onNavigate(it.cta_route);
@@ -88,7 +90,8 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
 
       {it.connected && it.tenant_name && (
         <p className="text-xs text-helm-muted mt-2" data-testid={`${it.id}-tenant-name`}>
-          Organisation: <span className="text-helm-fg">{it.tenant_name}</span>
+          {it.provider === "sap_b1" ? "Company DB" : "Organisation"}:{" "}
+          <span className="text-helm-fg">{it.tenant_name}</span>
         </p>
       )}
 
@@ -183,6 +186,14 @@ export default function Integrations() {
   const [slackUrl, setSlackUrl] = useState("");
   const [slackBusy, setSlackBusy] = useState(false);
   const [xeroTenantBusy, setXeroTenantBusy] = useState(false);
+  const [sapModalOpen, setSapModalOpen] = useState(false);
+  const [sapBusy, setSapBusy] = useState(false);
+  const [sapForm, setSapForm] = useState({
+    service_layer_url: "",
+    company_db: "",
+    username: "",
+    password: "",
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -243,6 +254,11 @@ export default function Integrations() {
 
   const oauthConnect = async (provider) => {
     if (!gate()) return;
+    if (provider === "sap_b1") {
+      setSapForm({ service_layer_url: "", company_db: "", username: "", password: "" });
+      setSapModalOpen(true);
+      return;
+    }
     try {
       const { data: res } = await api.get(`/integrations/${provider}/connect`);
       if (res.configured && res.authorization_url) {
@@ -252,6 +268,31 @@ export default function Integrations() {
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start connection");
+    }
+  };
+
+  const connectSapB1 = async () => {
+    if (!gate()) return;
+    if (!sapForm.service_layer_url.trim() || !sapForm.company_db.trim() || !sapForm.username.trim() || !sapForm.password) {
+      toast.error("Service Layer URL, company database, username, and password are required");
+      return;
+    }
+    setSapBusy(true);
+    try {
+      await api.post("/integrations/sap_b1/connect", {
+        service_layer_url: sapForm.service_layer_url.trim(),
+        company_db: sapForm.company_db.trim(),
+        username: sapForm.username.trim(),
+        password: sapForm.password,
+      });
+      toast.success("SAP Business One connected");
+      setSapModalOpen(false);
+      setSapForm({ service_layer_url: "", company_db: "", username: "", password: "" });
+      reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not connect SAP Business One");
+    } finally {
+      setSapBusy(false);
     }
   };
 
@@ -271,7 +312,7 @@ export default function Integrations() {
     setSyncingProvider(provider);
     try {
       const { data: res } = await api.post(`/integrations/${provider}/sync`, {}, { timeout: 120000 });
-      const label = provider === "xero" ? "Xero" : provider === "hubspot" ? "HubSpot" : "QuickBooks";
+      const label = provider === "xero" ? "Xero" : provider === "hubspot" ? "HubSpot" : provider === "sap_b1" ? "SAP Business One" : "QuickBooks";
       const unit = provider === "hubspot" ? "deal" : "transaction";
       toast.success(`Synced ${res.synced_count} ${unit}${res.synced_count === 1 ? "" : "s"} from ${label}`);
       reload();
@@ -311,7 +352,7 @@ export default function Integrations() {
     }
   };
 
-  const connectable = data.integrations.filter((i) => i.kind === "oauth" && !i.coming_soon);
+  const connectable = data.integrations.filter((i) => (i.kind === "oauth" || i.kind === "credentials") && !i.coming_soon);
   const roadmap = data.integrations.filter((i) => i.coming_soon);
   const connectedCount = connectable.filter((i) => i.connected).length;
 
@@ -324,8 +365,8 @@ export default function Integrations() {
 
       <GlassCard className="p-4 mb-8 fade-up border-helm-line">
         <p className="text-sm text-helm-muted leading-relaxed">
-          Each connection is <span className="text-helm-fg">per company workspace</span> and uses secure OAuth —
-          Helm never sees your passwords. Owners connect accounts here; teammates see the results in Calendar and Financials.
+          Each connection is <span className="text-helm-fg">per company workspace</span>. OAuth apps never share passwords;
+          SAP Business One stores Service Layer credentials encrypted at rest. Owners connect accounts here; teammates see the results in Calendar and Financials.
           {connectedCount > 0 && (
             <span className="text-helm-status-positive/90"> {connectedCount} connected.</span>
           )}
@@ -432,6 +473,77 @@ export default function Integrations() {
             ))}
           </div>
         </>
+      )}
+
+      {sapModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" data-testid="sap-b1-connect-modal">
+          <GlassCard className="w-full max-w-md p-5">
+            <h3 className="text-helm-fg font-medium text-lg">Connect SAP Business One</h3>
+            <p className="text-sm text-helm-muted mt-1 leading-relaxed">
+              Enter your Service Layer URL and company login. Helm encrypts these credentials and syncs A/R + A/P invoices into Financials.
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-mono uppercase tracking-wide text-helm-muted">
+                Service Layer URL
+                <input
+                  data-testid="sap-b1-url"
+                  value={sapForm.service_layer_url}
+                  onChange={(e) => setSapForm((f) => ({ ...f, service_layer_url: e.target.value }))}
+                  placeholder="https://host:50000/b1s/v1"
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
+              </label>
+              <label className="block text-xs font-mono uppercase tracking-wide text-helm-muted">
+                Company database
+                <input
+                  data-testid="sap-b1-company-db"
+                  value={sapForm.company_db}
+                  onChange={(e) => setSapForm((f) => ({ ...f, company_db: e.target.value }))}
+                  placeholder="SBODEMOUS"
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
+              </label>
+              <label className="block text-xs font-mono uppercase tracking-wide text-helm-muted">
+                Username
+                <input
+                  data-testid="sap-b1-username"
+                  value={sapForm.username}
+                  onChange={(e) => setSapForm((f) => ({ ...f, username: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
+              </label>
+              <label className="block text-xs font-mono uppercase tracking-wide text-helm-muted">
+                Password
+                <input
+                  type="password"
+                  data-testid="sap-b1-password"
+                  value={sapForm.password}
+                  onChange={(e) => setSapForm((f) => ({ ...f, password: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                data-testid="sap-b1-cancel"
+                onClick={() => setSapModalOpen(false)}
+                className="rounded-md border border-helm-line text-helm-muted text-sm px-3 py-2 hover:bg-helm-fg/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="sap-b1-submit"
+                disabled={sapBusy}
+                onClick={connectSapB1}
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover disabled:opacity-60"
+              >
+                {sapBusy ? "Connecting…" : "Connect"}
+              </button>
+            </div>
+          </GlassCard>
+        </div>
       )}
     </div>
   );
