@@ -421,3 +421,88 @@ def test_expected_delivery_date_create_and_patch(proc_api):
     assert ok.json()["request"]["status"] == "ordered"
     assert ok.json()["request"]["expected_delivery_date"] == "2026-04-15"
     assert store.rows[0]["expected_delivery_date"] == "2026-04-15"
+
+
+def test_vendor_suggestions_and_price_change_flag(proc_api):
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    # Stable price history
+    for i, cost in enumerate((10.0, 10.5, 10.2)):
+        store.rows.append({
+            "id": f"preq_stable_{i}",
+            "department_id": "dept_proc",
+            "workspace_id": "ws_test",
+            "item": "Steel plate",
+            "vendor_name": "Acme Metals",
+            "cost": cost,
+            "status": "delivered",
+            "created_at": f"2026-01-0{i+1}T00:00:00+00:00",
+        })
+    # Volatile vendor
+    for i, cost in enumerate((20.0, 21.0, 30.0)):
+        store.rows.append({
+            "id": f"preq_vol_{i}",
+            "department_id": "dept_proc",
+            "workspace_id": "ws_test",
+            "item": "Steel plate",
+            "vendor_name": "Volatile Co",
+            "cost": cost,
+            "status": "delivered",
+            "created_at": f"2026-02-0{i+1}T00:00:00+00:00",
+        })
+    r = client.get("/api/procurement/vendor-suggestions", params={"item": "steel"})
+    assert r.status_code == 200, r.text
+    suggestions = r.json()["suggestions"]
+    by_vendor = {s["vendor_name"]: s for s in suggestions}
+    assert "Acme Metals" in by_vendor
+    assert "Volatile Co" in by_vendor
+    assert by_vendor["Acme Metals"]["times_used"] == 3
+    assert by_vendor["Acme Metals"]["price_changed"] is False
+    assert by_vendor["Volatile Co"]["price_changed"] is True
+    assert by_vendor["Volatile Co"]["last_cost"] == 30.0
+    # Sort: more used first; both 3 so most recent vendor first
+    assert suggestions[0]["times_used"] >= suggestions[1]["times_used"]
+
+    empty = client.get("/api/procurement/vendor-suggestions", params={"item": "zzzz-nope"})
+    assert empty.status_code == 200
+    assert empty.json()["suggestions"] == []
+
+
+def test_priority_and_unified_queue_sort(proc_api):
+    client, store, work_orders, as_ceo, as_member, as_lead, as_outsider, depts = proc_api
+    # Create four requests with explicit created_at ordering
+    specs = [
+        ("plain", "normal", None, False),
+        ("high only", "high", None, False),
+        ("blocking only", "normal", "awaiting_materials", False),
+        ("blocking overdue", "low", "awaiting_materials", True),
+    ]
+    ids = []
+    for i, (item, priority, wo_status, overdue) in enumerate(specs):
+        r = client.post("/api/procurement/requests", json={
+            "item": item,
+            "quantity": 1,
+            "priority": priority,
+            "expected_delivery_date": "2020-01-01" if overdue else "",
+        })
+        assert r.status_code == 200, r.text
+        rid = r.json()["request"]["id"]
+        ids.append(rid)
+        store.rows[-1]["created_at"] = f"2026-05-0{i+1}T12:00:00+00:00"
+        if overdue:
+            store.rows[-1]["status"] = "ordered"
+            store.rows[-1]["expected_delivery_date"] = "2020-01-01"
+        if wo_status:
+            work_orders.rows.append({
+                "id": f"pwo_sort_{i}",
+                "workspace_id": "ws_test",
+                "reference": f"WO-{i}",
+                "due_date": "2026-06-01",
+                "status": wo_status,
+                "blocked": False,
+                "linked_procurement_request_id": rid,
+            })
+    listed = client.get("/api/procurement/requests")
+    assert listed.status_code == 200, listed.text
+    items = [r["item"] for r in listed.json()["requests"]]
+    # blocking+overdue, blocking only, high only, plain
+    assert items[:4] == ["blocking overdue", "blocking only", "high only", "plain"]

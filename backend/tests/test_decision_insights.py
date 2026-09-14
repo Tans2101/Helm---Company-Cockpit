@@ -486,6 +486,7 @@ def test_detect_overdue_procurement_requests_and_blocking_severity():
     requests = [
         {"id": "a", "item": "Bolts", "status": "ordered", "expected_delivery_date": "2026-03-08", "blocking_production_orders": []},
         {"id": "b", "item": "Steel plate", "status": "ordered", "expected_delivery_date": "2026-03-01",
+         "priority": "high",
          "blocking_production_orders": [{"work_order_id": "wo1", "reference": "Order #245", "due_date": "2026-03-12"}]},
         {"id": "c", "item": "Tape", "status": "requested", "expected_delivery_date": "2026-03-01"},
         {"id": "d", "item": "Oil", "status": "delivered", "expected_delivery_date": "2026-03-01"},
@@ -502,4 +503,5 @@ def test_detect_overdue_procurement_requests_and_blocking_severity():
     assert "Order #245" in types["overdue_procurement_blocking_production"]["summary"]
     assert "Order #245" in types["overdue_procurement_blocking_production"]["detail"]
     assert "overdue" in types["overdue_procurement_blocking_production"]["detail"].lower()
+    assert "High-priority" in types["overdue_procurement_blocking_production"]["detail"]
 

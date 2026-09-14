@@ -584,6 +584,11 @@ def detect_overdue_procurement_requests(requests: list, *, today: Optional[date]
                 detail=(
                     f"The part for {ref}{due_bit} is {days_late} day(s) overdue from the vendor "
                     f"({item})."
+                    + (
+                        " High-priority request."
+                        if (req.get("priority") or "").strip().lower() == "high"
+                        else ""
+                    )
                 ),
                 related_id=req.get("id"),
                 department_type="procurement",

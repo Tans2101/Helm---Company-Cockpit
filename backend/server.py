@@ -5911,6 +5911,7 @@ PROCUREMENT_STATUSES = frozenset({
 })
 PROCUREMENT_CLOSED_STATUSES = frozenset({"delivered", "rejected"})
 PROCUREMENT_APPROVAL_STATUSES = frozenset({"approved", "rejected"})
+PROCUREMENT_PRIORITIES = frozenset({"low", "normal", "high"})
 
 
 async def _procurement_department(principal: dict) -> dict:
@@ -6036,6 +6037,34 @@ async def _enrich_procurement_requests(rows: list, workspace_id: str | None = No
 
 
 
+
+def _procurement_queue_sort_key(req: dict) -> tuple:
+    """Single source of truth for Procurement queue ordering.
+
+    Precedence: blocking production → overdue → priority → oldest first.
+    """
+    blocking = 0 if req.get("blocking_production_orders") else 1
+    overdue = 0 if _procurement_request_is_overdue(req) else 1
+    priority_rank = {"high": 0, "normal": 1, "low": 2}
+    pr = priority_rank.get((req.get("priority") or "normal"), 1)
+    created = req.get("created_at") or ""
+    return (blocking, overdue, pr, created)
+
+
+def _procurement_request_is_overdue(req: dict, *, today=None) -> bool:
+    if req.get("status") != "ordered":
+        return False
+    raw = (req.get("expected_delivery_date") or "").strip()
+    if not raw:
+        return False
+    try:
+        due = datetime.strptime(raw[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    today = today or datetime.now(timezone.utc).date()
+    return due < today
+
+
 def _normalize_expected_delivery_date(raw) -> str:
     """Optional YYYY-MM-DD (or empty). Rejects unparseable values."""
     if raw is None:
@@ -6059,6 +6088,7 @@ class ProcurementRequestCreate(BaseModel):
     cost: Optional[float] = None
     notes: str = ""
     expected_delivery_date: str = ""
+    priority: str = "normal"
 
 
 class ProcurementRequestPatch(BaseModel):
@@ -6069,6 +6099,66 @@ class ProcurementRequestPatch(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     expected_delivery_date: Optional[str] = None
+    priority: Optional[str] = None
+
+
+
+
+@api_router.get("/procurement/vendor-suggestions")
+async def procurement_vendor_suggestions(
+    item: str = Query("", min_length=0),
+    principal=Depends(get_principal),
+):
+    """Historical vendor memory for an item — no vendor entity, just past requests."""
+    dept = await _procurement_department(principal)
+    needle = (item or "").strip().lower()
+    if len(needle) < 2:
+        return {"suggestions": []}
+    rows = await db.procurement_requests.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "item": 1, "vendor_name": 1, "cost": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(2000)
+    groups: dict[str, list] = {}
+    for r in rows:
+        it = str(r.get("item") or "").lower()
+        if needle not in it:
+            continue
+        vendor = (r.get("vendor_name") or "").strip()
+        if not vendor:
+            continue
+        groups.setdefault(vendor, []).append(r)
+    suggestions = []
+    for vendor, hist in groups.items():
+        hist_sorted = sorted(hist, key=lambda x: x.get("created_at") or "", reverse=True)
+        costs = []
+        for h in hist_sorted:
+            if h.get("cost") is not None:
+                try:
+                    costs.append(float(h["cost"]))
+                except (TypeError, ValueError):
+                    pass
+        last = hist_sorted[0]
+        last_cost = None
+        if last.get("cost") is not None:
+            try:
+                last_cost = float(last["cost"])
+            except (TypeError, ValueError):
+                last_cost = None
+        price_changed = False
+        recent_costs = costs[:3]
+        if last_cost is not None and len(recent_costs) >= 2:
+            avg = sum(recent_costs) / len(recent_costs)
+            if avg > 0 and abs(last_cost - avg) / avg > 0.15:
+                price_changed = True
+        suggestions.append({
+            "vendor_name": vendor,
+            "last_cost": last_cost,
+            "last_ordered_at": last.get("created_at") or "",
+            "times_used": len(hist_sorted),
+            "price_changed": price_changed,
+        })
+    suggestions.sort(key=lambda s: (s["times_used"], s.get("last_ordered_at") or ""), reverse=True)
+    return {"suggestions": suggestions[:10]}
 
 
 @api_router.get("/procurement/requests")
@@ -6091,15 +6181,14 @@ async def list_procurement_requests(
     items = await _enrich_procurement_requests(
         rows, workspace_id=principal["workspace_id"],
     )
-    # Blocking production impact always sorts above every other signal.
-    items.sort(
-        key=lambda r: (0 if r.get("blocking_production_orders") else 1),
-    )
+    items.sort(key=_procurement_queue_sort_key)
+
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Procurement",
         "requests": items,
         "statuses": ["requested", "approved", "ordered", "delivered", "rejected"],
+        "priorities": ["low", "normal", "high"],
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_approve": is_lead,
@@ -6130,6 +6219,9 @@ async def create_procurement_request(
             raise HTTPException(status_code=400, detail="Cost must be a number")
         if cost < 0:
             raise HTTPException(status_code=400, detail="Cost must be non-negative")
+    priority = (payload.priority or "normal").strip().lower() or "normal"
+    if priority not in PROCUREMENT_PRIORITIES:
+        raise HTTPException(status_code=400, detail="Invalid priority")
     now = datetime.now(timezone.utc).isoformat()
     req = {
         "id": f"preq_{uuid.uuid4().hex[:10]}",
@@ -6144,6 +6236,7 @@ async def create_procurement_request(
         "status": "requested",
         "notes": (payload.notes or "").strip(),
         "expected_delivery_date": _normalize_expected_delivery_date(payload.expected_delivery_date),
+        "priority": priority,
         "created_at": now,
         "updated_at": now,
     }
@@ -6206,6 +6299,12 @@ async def patch_procurement_request(
     if payload.notes is not None:
         content_touched = True
         upd["notes"] = payload.notes.strip()
+    if payload.priority is not None:
+        content_touched = True
+        pr = (payload.priority or "").strip().lower()
+        if pr not in PROCUREMENT_PRIORITIES:
+            raise HTTPException(status_code=400, detail="Invalid priority")
+        upd["priority"] = pr
     if payload.expected_delivery_date is not None:
         # Delivery date is operational — leads can always set it; members may set
         # it while they still own the request (or alongside a status move below).
@@ -9105,8 +9204,10 @@ async def _ensure_indexes():
         (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),
         (db.department_members, [("user_id", 1)], {}),
         (db.production_work_orders, [("id", 1)], {"unique": True}),
-        (db.production_work_orders, [("department_id", 1), ("status", 1), ("created_at", -1)], {}),
+        (db.production_work_orders, [("department_id", 1), ("created_at", -1)], {}),
+        (db.production_work_orders, [("department_id", 1), ("status", 1)], {}),
         (db.production_work_orders, [("workspace_id", 1)], {}),
+        (db.production_work_orders, [("department_id", 1), ("due_date", 1)], {}),
         (db.procurement_requests, [("id", 1)], {"unique": True}),
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),

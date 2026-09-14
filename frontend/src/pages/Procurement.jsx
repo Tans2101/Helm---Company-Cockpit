@@ -27,6 +27,21 @@ function isExpectedDeliveryOverdue(dateStr, status) {
   return end.getTime() < Date.now();
 }
 
+function PriorityBadge({ priority }) {
+  const p = priority || "normal";
+  if (p !== "high") {
+    return <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted capitalize">{p}</span>;
+  }
+  return (
+    <span
+      data-testid="priority-high-badge"
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+    >
+      High
+    </span>
+  );
+}
+
 function StatusBadge({ status }) {
   const meta = STATUS_META[status] || STATUS_META.requested;
   return (
@@ -73,22 +88,46 @@ export default function Procurement() {
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [orderDatePrompt, setOrderDatePrompt] = useState(null);
-  const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "" });
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [vendorNote, setVendorNote] = useState("");
+  const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "", priority: "normal" });
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
   const visible = useMemo(() => {
-    const base = showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status));
-    // Blocking production impact always sorts first.
-    return [...base].sort((a, b) => {
-      const ab = (a.blocking_production_orders || []).length ? 0 : 1;
-      const bb = (b.blocking_production_orders || []).length ? 0 : 1;
-      return ab - bb;
-    });
+    // Backend owns queue order; only filter closed locally.
+    return showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status));
   }, [allRequests, showClosed]);
   const selected = useMemo(
     () => allRequests.find((r) => r.id === selectedId) || null,
     [allRequests, selectedId],
   );
+
+  useEffect(() => {
+    if (!adding) {
+      setVendorSuggestions([]);
+      setVendorNote("");
+      return undefined;
+    }
+    const q = (form.item || "").trim();
+    if (q.length < 2) {
+      setVendorSuggestions([]);
+      setVendorNote("");
+      return undefined;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const { data: res } = await api.get("/procurement/vendor-suggestions", { params: { item: q } });
+        if (!cancelled) setVendorSuggestions(res?.suggestions || []);
+      } catch {
+        if (!cancelled) setVendorSuggestions([]);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [adding, form.item]);
 
   useEffect(() => {
     if (!selected) {
@@ -102,6 +141,7 @@ export default function Procurement() {
       cost: selected.cost == null ? "" : String(selected.cost),
       notes: selected.notes || "",
       expected_delivery_date: selected.expected_delivery_date || "",
+      priority: selected.priority || "normal",
       status: selected.status || "requested",
     });
   }, [selected]);
@@ -173,9 +213,10 @@ export default function Procurement() {
         cost,
         notes: form.notes.trim(),
         expected_delivery_date: form.expected_delivery_date.trim(),
+        priority: form.priority || "normal",
       });
       toast.success("Request submitted");
-      setForm({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "" });
+      setForm({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "", priority: "normal" });
       setAdding(false);
       await reload();
       if (res?.request?.id) setSelectedId(res.request.id);
@@ -212,6 +253,7 @@ export default function Procurement() {
     }
     if (canEditContent || canApprove) {
       body.expected_delivery_date = (draft.expected_delivery_date || "").trim();
+      body.priority = draft.priority || "normal";
     }
     if (!Object.keys(body).length) return;
     setBusy(true);
@@ -345,6 +387,7 @@ export default function Procurement() {
                 <th className="px-3 py-2 font-medium">Vendor</th>
                 <th className="px-3 py-2 font-medium">Requester</th>
                 <th className="px-3 py-2 font-medium">Expected</th>
+                <th className="px-3 py-2 font-medium">Priority</th>
                 <th className="px-3 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -385,6 +428,7 @@ export default function Procurement() {
                         : req.expected_delivery_date)
                       : "—"}
                   </td>
+                  <td className="px-3 py-2.5"><PriorityBadge priority={req.priority} /></td>
                   <td className="px-3 py-2.5"><StatusBadge status={req.status} /></td>
                 </tr>
               ))}
@@ -454,6 +498,20 @@ export default function Procurement() {
                 placeholder="Optional"
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Priority</span>
+              <select
+                data-testid="procurement-edit-priority"
+                disabled={busy || !(canEditContent || canApprove)}
+                value={draft.priority || "normal"}
+                onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
             </label>
             <label className="space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected delivery</span>
@@ -661,6 +719,52 @@ export default function Procurement() {
                 onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))}
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
               />
+            </label>
+
+            {vendorSuggestions.length > 0 && (
+              <div className="space-y-1" data-testid="vendor-suggestions">
+                <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Suggested from history</p>
+                {vendorSuggestions.map((s) => (
+                  <button
+                    key={s.vendor_name}
+                    type="button"
+                    data-testid={`vendor-suggestion-${s.vendor_name}`}
+                    onClick={() => {
+                      setForm((f) => ({
+                        ...f,
+                        vendor_name: s.vendor_name,
+                        cost: s.last_cost == null ? f.cost : String(s.last_cost),
+                      }));
+                      setVendorNote(s.price_changed ? "Price has changed since last order" : "");
+                    }}
+                    className="w-full text-left rounded-md border border-helm-line px-3 py-2 text-xs text-helm-fg hover:border-helm-gold/40 hover:bg-helm-gold/[0.06]"
+                  >
+                    <span className="font-medium">{s.vendor_name}</span>
+                    <span className="text-helm-muted">
+                      {" — "}
+                      {s.last_cost != null ? `last paid $${Number(s.last_cost).toFixed(2)}` : "no cost on file"}
+                      {`, ordered ${s.times_used}x`}
+                      {s.last_ordered_at ? `, most recently ${String(s.last_ordered_at).slice(0, 10)}` : ""}
+                    </span>
+                  </button>
+                ))}
+                {vendorNote ? (
+                  <p className="text-[11px] text-helm-status-warning" data-testid="vendor-price-changed-note">{vendorNote}</p>
+                ) : null}
+              </div>
+            )}
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Priority</span>
+              <select
+                data-testid="procurement-new-priority"
+                value={form.priority || "normal"}
+                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+              </select>
             </label>
             <label className="block space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected delivery</span>
