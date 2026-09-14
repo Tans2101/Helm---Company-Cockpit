@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-# Canonical plan ids. Legacy "pro" migrates to Starter (conscious choice — see DEPLOY.md).
+# Canonical plan ids. Legacy "pro" migrates to Starter (conscious choice — see README.md).
 PLAN_FREE = "free"
 PLAN_STARTER = "starter"
 PLAN_GROWTH = "growth"
@@ -163,7 +163,7 @@ ACTION_FEATURES: dict[str, Optional[str]] = {
 def normalize_plan(plan: str | None) -> str:
     """Map legacy/unknown plans to a canonical id.
 
-    Existing paying workspaces stored as plan=\"pro\" become Starter — see DEPLOY.md.
+    Existing paying workspaces stored as plan=\"pro\" become Starter — see README.md.
     """
     if not plan:
         return PLAN_FREE

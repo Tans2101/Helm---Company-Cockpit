@@ -32,9 +32,9 @@ Production fix in this codebase:
 
 ## Deploy (Render + Vercel)
 
-**Follow [DEPLOY.md](./DEPLOY.md)** — the exact checklist of what you must configure in Atlas, Google Cloud, Render, Vercel, Anthropic, and Paddle.
+Use this checklist plus [INTEGRATIONS.md](./INTEGRATIONS.md) and [GOOGLE_WORKSPACE_AND_CLOUD.txt](./GOOGLE_WORKSPACE_AND_CLOUD.txt) for Google/Workspace setup.
 
-Quick pointers:
+### 1. MongoDB Atlas
 
 Create a cluster, database user, and network access (allow Render IPs or `0.0.0.0/0` carefully). Copy the `mongodb+srv://…` URI.
 
