@@ -24,8 +24,7 @@ export default function Refunds() {
               <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>) through{" "}
               <span className="text-helm-cream">Paddle</span> (merchant of record).
               Contact:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· BGC, Taguig, Philippines.
+              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>.
             </p>
           </section>
 
@@ -105,7 +104,7 @@ export default function Refunds() {
             <p>
               Billing questions:{" "}
               <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· Helm Control · BGC, Taguig, Philippines.
+              {" "}· Helm Control.
             </p>
           </section>
         </div>
