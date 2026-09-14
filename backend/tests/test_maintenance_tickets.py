@@ -1,5 +1,6 @@
 """Engineering & Maintenance ticket queue API tests."""
 import os
+import re
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -133,6 +134,10 @@ def _match_query(doc: dict, query: dict) -> bool:
         if isinstance(v, dict):
             if "$in" in v:
                 if actual not in v["$in"]:
+                    return False
+            elif "$regex" in v:
+                flags = re.IGNORECASE if "i" in str(v.get("$options") or "") else 0
+                if not re.search(str(v["$regex"]), str(actual or ""), flags):
                     return False
             else:
                 return False

@@ -7678,8 +7678,15 @@ async def maintenance_equipment_history(
     needle = (equipment_name or "").strip()
     if not needle:
         return decision_engine.build_equipment_history([], "")
+    # Filter in Mongo so live typeahead does not scan the whole department.
     rows = await db.maintenance_tickets.find(
-        {"department_id": dept["department_id"]},
+        {
+            "department_id": dept["department_id"],
+            "equipment_name": {
+                "$regex": f"^{re.escape(needle)}$",
+                "$options": "i",
+            },
+        },
         {
             "_id": 0,
             "id": 1,
@@ -10045,14 +10052,18 @@ async def _ensure_indexes():
         (db.production_work_orders, [("department_id", 1), ("status", 1)], {}),
         (db.production_work_orders, [("workspace_id", 1)], {}),
         (db.production_work_orders, [("department_id", 1), ("due_date", 1)], {}),
+        (db.production_work_orders, [("linked_procurement_request_id", 1)], {}),
+        (db.production_work_orders, [("linked_maintenance_ticket_id", 1)], {}),
         (db.procurement_requests, [("id", 1)], {"unique": True}),
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),
         (db.procurement_requests, [("workspace_id", 1)], {}),
+        (db.procurement_requests, [("department_id", 1), ("expected_delivery_date", 1)], {}),
         (db.legal_matters, [("id", 1)], {"unique": True}),
         (db.legal_matters, [("department_id", 1), ("created_at", -1)], {}),
         (db.legal_matters, [("department_id", 1), ("status", 1)], {}),
         (db.legal_matters, [("workspace_id", 1)], {}),
+        (db.legal_matters, [("department_id", 1), ("due_date", 1)], {}),
         (db.maintenance_tickets, [("id", 1)], {"unique": True}),
         (db.maintenance_tickets, [("department_id", 1), ("status", 1)], {}),
         (db.maintenance_tickets, [("department_id", 1), ("priority", 1)], {}),
