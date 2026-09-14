@@ -325,6 +325,15 @@ export default function Production() {
     }
     return map;
   }, [stages, workOrders]);
+  const stageById = useMemo(() => {
+    const map = {};
+    for (const s of stages) map[s.id] = s;
+    return map;
+  }, [stages]);
+  const sortedWorkOrders = useMemo(
+    () => [...workOrders].sort(compareWorkOrders),
+    [workOrders],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -623,17 +632,6 @@ export default function Production() {
       };
     });
   };
-
-  const stageById = useMemo(() => {
-    const map = {};
-    for (const s of stages) map[s.id] = s;
-    return map;
-  }, [stages]);
-
-  const sortedWorkOrders = useMemo(
-    () => [...workOrders].sort(compareWorkOrders),
-    [workOrders],
-  );
 
   const headerAction = (
     <div className="flex items-center gap-2 flex-wrap justify-end">
