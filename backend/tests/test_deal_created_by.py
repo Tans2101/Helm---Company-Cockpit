@@ -74,6 +74,15 @@ def client_and_store():
         "name": "Sales",
         "enabled": True,
     })
+    mock_db.department_members = MagicMock()
+    mock_db.department_members.find_one = AsyncMock(return_value=None)
+    mock_db.department_members.find = MagicMock(return_value=MagicMock(
+        to_list=AsyncMock(return_value=[]),
+    ))
+    mock_db.users = MagicMock()
+    mock_db.users.find = MagicMock(return_value=MagicMock(
+        to_list=AsyncMock(return_value=[]),
+    ))
 
     async def mock_principal():
         return PRINCIPAL

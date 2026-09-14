@@ -3305,7 +3305,188 @@ class DealInput(BaseModel):
     value: float = 0
     stage: str = "lead"
     owner_name: str = ""
+    owner_user_id: Optional[str] = None
     close_date: str = ""
+    next_step: str = ""
+    next_step_date: str = ""
+
+
+def _can_lead_sales(principal: dict, membership: dict | None) -> bool:
+    if dept_access.is_workspace_ceo(principal):
+        return True
+    return bool(membership) and membership.get("role") == "lead"
+
+
+async def _sales_department_row(workspace_id: str) -> dict | None:
+    return await dept_migrate.get_enabled_department(db, workspace_id, dept_catalog.TYPE_SALES)
+
+
+async def _sales_member_rows(workspace_id: str) -> list[dict]:
+    dept = await _sales_department_row(workspace_id)
+    if not dept:
+        return []
+    rows = await db.department_members.find(
+        {"department_id": dept["department_id"]},
+        {"_id": 0, "user_id": 1, "role": 1},
+    ).to_list(500)
+    users = await _users_by_ids([r.get("user_id") for r in rows])
+    out = []
+    for r in rows:
+        uid = r.get("user_id")
+        if not uid:
+            continue
+        card = _user_card(uid, users.get(uid))
+        out.append({
+            "user_id": uid,
+            "role": r.get("role") or "member",
+            "name": card.get("name"),
+            "email": card.get("email"),
+            "picture": card.get("picture"),
+        })
+    out.sort(key=lambda x: ((x.get("name") or x.get("email") or "").lower(), x["user_id"]))
+    return out
+
+
+async def _validate_sales_owner(workspace_id: str, user_id: str) -> dict:
+    """Ensure user_id is a Sales department member; return member card."""
+    members = await _sales_member_rows(workspace_id)
+    for m in members:
+        if m["user_id"] == user_id:
+            return m
+    raise HTTPException(
+        status_code=400,
+        detail="owner_user_id must be a member of the Sales department",
+    )
+
+
+def _owner_display_name(member: dict | None, fallback: str = "") -> str:
+    if not member:
+        return (fallback or "").strip()
+    return (member.get("name") or member.get("email") or fallback or "").strip()
+
+
+async def _migrate_deal_owner_user_ids(workspace_id: str, deals: list[dict]) -> None:
+    """Best-effort: link legacy owner_name to a unique Sales member display name.
+
+    Ambiguous names (multiple members share the same name) are left alone.
+    """
+    need = [d for d in deals if not d.get("owner_user_id") and (d.get("owner_name") or "").strip()]
+    if not need:
+        return
+    members = await _sales_member_rows(workspace_id)
+    by_name: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for m in members:
+        key = (m.get("name") or "").strip().lower()
+        if not key:
+            continue
+        if key in ambiguous:
+            continue
+        if key in by_name and by_name[key] != m["user_id"]:
+            ambiguous.add(key)
+            by_name.pop(key, None)
+            continue
+        by_name[key] = m["user_id"]
+    for deal in need:
+        key = (deal.get("owner_name") or "").strip().lower()
+        uid = by_name.get(key)
+        if not uid:
+            continue
+        # Match by id only — avoid $in/null operators so FakeMongo/tests stay simple.
+        await db.deals.update_one(
+            {"id": deal["id"], "workspace_id": workspace_id},
+            {"$set": {"owner_user_id": uid}},
+        )
+        deal["owner_user_id"] = uid
+
+
+async def _enrich_deals(deals: list[dict]) -> list[dict]:
+    owner_ids = [d.get("owner_user_id") for d in deals if d.get("owner_user_id")]
+    users = await _users_by_ids(owner_ids)
+    out = []
+    for deal in deals:
+        row = {k: v for k, v in deal.items() if k != "_id"}
+        uid = row.get("owner_user_id") or None
+        if uid:
+            card = _user_card(uid, users.get(uid))
+            row["owner"] = card
+            # Derived display name — keep legacy free-text when user lookup misses.
+            derived = _owner_display_name(card, row.get("owner_name") or "")
+            if derived:
+                row["owner_name"] = derived
+        else:
+            row["owner"] = None
+        out.append(row)
+    return out
+
+
+async def _apply_deal_owner_assignment(
+    *,
+    principal: dict,
+    workspace_id: str,
+    existing: dict,
+    requested_owner_user_id: Optional[str],
+    owner_name_fallback: str,
+    is_create: bool = False,
+) -> tuple[Optional[str], str]:
+    """Resolve owner_user_id + display owner_name with lead/CEO reassignment rules.
+
+    Returns (owner_user_id, owner_name).
+    """
+    sales_dept = await _sales_department_row(workspace_id)
+    membership = None
+    if sales_dept:
+        membership = await dept_access.get_department_membership(
+            db, sales_dept["department_id"], principal["user_id"],
+        )
+    is_lead = _can_lead_sales(principal, membership)
+
+    current_uid = (existing.get("owner_user_id") or "").strip() or None
+    current_name = (existing.get("owner_name") or "").strip()
+
+    if requested_owner_user_id is None and not is_create:
+        # Patch omitted owner_user_id — keep existing ownership; refresh display from link.
+        if current_uid:
+            try:
+                member = await _validate_sales_owner(workspace_id, current_uid)
+                return current_uid, _owner_display_name(member, current_name or owner_name_fallback)
+            except HTTPException:
+                # Owner left Sales — keep the link and legacy display name.
+                return current_uid, current_name or owner_name_fallback
+        return None, owner_name_fallback or current_name
+
+    raw = "" if requested_owner_user_id is None else str(requested_owner_user_id).strip()
+    if requested_owner_user_id is None and is_create:
+        # Default new deals to the creator when they are on Sales.
+        raw = principal["user_id"] if membership else ""
+
+    new_uid = raw or None
+    if new_uid != current_uid:
+        assigning_other = bool(new_uid) and new_uid != principal["user_id"]
+        clearing = current_uid is not None and new_uid is None
+        taking_over = (
+            bool(current_uid)
+            and current_uid != principal["user_id"]
+            and new_uid == principal["user_id"]
+        )
+        if not is_lead and (assigning_other or clearing or taking_over):
+            raise HTTPException(
+                status_code=403,
+                detail="Only a Sales lead or the CEO can reassign deal ownership",
+            )
+        if not is_lead and new_uid and new_uid != principal["user_id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Only a Sales lead or the CEO can assign a deal to someone else",
+            )
+
+    member = None
+    if new_uid:
+        member = await _validate_sales_owner(workspace_id, new_uid)
+    display = _owner_display_name(member, owner_name_fallback or current_name)
+    if not display and not new_uid:
+        display = owner_name_fallback or current_name
+    return new_uid, display
 
 
 def _deal_revenue_month(close_date: str, *, now: Optional[datetime] = None) -> str:
@@ -3387,16 +3568,33 @@ async def list_deals(
     principal=Depends(get_principal),
     limit: int = Query(50, ge=1),
     before: Optional[str] = None,
+    owner_user_id: Optional[str] = Query(None),
 ):
     page_limit = clamp_limit(limit)
     ws = principal["workspace_id"]
     dept_ids = await dept_access.accessible_department_ids(db, principal, dept_catalog.TYPE_SALES)
     base = dept_access.apply_department_filter({"workspace_id": ws}, dept_ids)
+    if owner_user_id is not None:
+        raw = owner_user_id.strip()
+        if raw == "me":
+            base = {**base, "owner_user_id": principal["user_id"]}
+        elif raw:
+            base = {**base, "owner_user_id": raw}
     filt = apply_before_filter(base, "updated_at", before, id_field="id")
     deals = await db.deals.find(filt, {"_id": 0}).sort([("updated_at", -1), ("id", -1)]).limit(page_limit).to_list(page_limit)
+    await _migrate_deal_owner_user_ids(ws, deals)
+    deals = await _enrich_deals(deals)
     metrics = await _deal_metrics_for_workspace(ws, department_ids=dept_ids)
     cursor = next_cursor(deals, "updated_at", page_limit, id_field="id")
     currency = await _workspace_currency(ws)
+    sales_dept = await _sales_department_row(ws)
+    membership = None
+    if sales_dept:
+        membership = await dept_access.get_department_membership(
+            db, sales_dept["department_id"], principal["user_id"],
+        )
+    is_lead = _can_lead_sales(principal, membership)
+    sales_owners = await _sales_member_rows(ws)
     await _product_event(
         ws, principal["user_id"], helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
         {"department": dept_catalog.TYPE_SALES},
@@ -3406,6 +3604,10 @@ async def list_deals(
         "deals": deals,
         "next_cursor": cursor,
         "can_write": await can_section_write(principal, "sales", "sales:write"),
+        "can_reassign_owner": is_lead,
+        "is_lead": is_lead,
+        "my_user_id": principal["user_id"],
+        "sales_owners": sales_owners,
         "metrics": metrics,
         "currency": currency,
         "currency_symbol": currency_symbol(currency),
@@ -3422,6 +3624,14 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
     currency = await _workspace_currency(principal["workspace_id"])
     creator_name = (principal.get("name") or principal.get("email") or "").strip()
     sales_dept_id = await dept_migrate.sales_department_id(db, principal["workspace_id"])
+    owner_uid, owner_name = await _apply_deal_owner_assignment(
+        principal=principal,
+        workspace_id=principal["workspace_id"],
+        existing={},
+        requested_owner_user_id=payload.owner_user_id,
+        owner_name_fallback=payload.owner_name.strip() or creator_name,
+        is_create=True,
+    )
     deal = {
         "id": f"deal_{uuid.uuid4().hex[:8]}",
         "workspace_id": principal["workspace_id"],
@@ -3430,18 +3640,22 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
         "company": payload.company.strip(),
         "value": round(payload.value, 2),
         "stage": stage,
-        "owner_name": payload.owner_name.strip() or creator_name,
+        "owner_user_id": owner_uid,
+        "owner_name": owner_name or creator_name,
         "created_by_user_id": principal["user_id"],
         "created_by_name": creator_name,
         "close_date": payload.close_date.strip(),
+        "next_step": (payload.next_step or "").strip()[:280],
+        "next_step_date": (payload.next_step_date or "").strip()[:10],
         "created_at": now,
         "updated_at": now,
     }
     await db.deals.insert_one(dict(deal))
+    enriched = (await _enrich_deals([deal]))[0]
     await log_activity(principal, "sales", "deal.create",
                        f"New deal: {deal['name']} · {fmt_money(deal['value'], currency)} ({STAGE_LABEL[stage]})",
                        {"value": deal["value"], "stage": stage})
-    return {"ok": True, "deal": deal}
+    return {"ok": True, "deal": enriched}
 
 
 @api_router.patch("/deals/{deal_id}")
@@ -3450,13 +3664,31 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
     if not d:
         raise HTTPException(status_code=404, detail="Deal not found")
     stage = payload.stage if payload.stage in DEAL_STAGES else d["stage"]
-    # created_by_* are set once at creation and never edited here
-    upd = {"name": payload.name.strip() or d["name"], "company": payload.company.strip(),
-           "value": round(payload.value, 2), "stage": stage,
-           "owner_name": payload.owner_name.strip() or d.get("owner_name", ""),
-           "close_date": payload.close_date.strip(), "updated_at": datetime.now(timezone.utc).isoformat()}
+    owner_uid, owner_name = await _apply_deal_owner_assignment(
+        principal=principal,
+        workspace_id=principal["workspace_id"],
+        existing=d,
+        requested_owner_user_id=payload.owner_user_id,
+        owner_name_fallback=payload.owner_name.strip() or d.get("owner_name", ""),
+        is_create=False,
+    )
+    # created_by_* are set once at creation and never edited here.
+    # next_step / next_step_date updates bump updated_at so stalled-deal clocks reset.
+    upd = {
+        "name": payload.name.strip() or d["name"],
+        "company": payload.company.strip(),
+        "value": round(payload.value, 2),
+        "stage": stage,
+        "owner_user_id": owner_uid,
+        "owner_name": owner_name or d.get("owner_name", ""),
+        "close_date": payload.close_date.strip(),
+        "next_step": (payload.next_step or "").strip()[:280],
+        "next_step_date": (payload.next_step_date or "").strip()[:10],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
     await db.deals.update_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
     updated = {**d, **upd}
+    enriched = (await _enrich_deals([updated]))[0]
     financial_entry = None
     production_prompt = False
     production_prefill = None
@@ -3495,7 +3727,7 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
         await log_activity(principal, "sales", "deal.stage", summary, {"stage": stage})
     return {
         "ok": True,
-        "deal": updated,
+        "deal": enriched,
         "financial_entry": financial_entry,
         "production_prompt": production_prompt,
         "production_prefill": production_prefill,

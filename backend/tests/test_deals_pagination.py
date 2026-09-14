@@ -176,9 +176,22 @@ def deals_client():
         "user_id": MOCK_PRINCIPAL["user_id"], "workspace_id": "ws_pagination",
         "status": "active", "pack": "owner", "role": "owner", "section_grants": {},
     })
+    mock_db.departments = type("D", (), {})()
+    mock_db.departments.find_one = AsyncMock(return_value={
+        "department_id": "dept_sales",
+        "workspace_id": "ws_pagination",
+        "type": "sales",
+        "enabled": True,
+    })
+    mock_db.department_members = type("DM", (), {})()
+    mock_db.department_members.find_one = AsyncMock(return_value=None)
+    mock_db.department_members.find = lambda *a, **k: FakeCursor([], "user_id")
+    mock_db.users = type("U", (), {})()
+    mock_db.users.find = lambda *a, **k: FakeCursor([], "user_id")
 
     with patch.object(server, "db", mock_db), \
-         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)), \
+         patch.object(server, "_product_event", new=AsyncMock(return_value=None)):
         yield TestClient(server.app), deals
     server.app.dependency_overrides.clear()
 
@@ -216,12 +229,7 @@ def test_deals_pagination_returns_all_sixty_without_duplicates(deals_client):
     assert body["metrics"]["open_count"] == 60
 
 
-def test_deals_limit_capped_at_200():
-    async def mock_principal():
-        return MOCK_PRINCIPAL
-
-    server.app.dependency_overrides[server.get_principal] = mock_principal
-    deals = _make_deals(5)
+def _pagination_db(deals):
     mock_db = type("DB", (), {})()
     mock_db.deals = FakeCollection(deals, "updated_at")
     mock_db.activities = FakeCollection([], "created_at", id_field="activity_id")
@@ -230,9 +238,37 @@ def test_deals_limit_capped_at_200():
         "workspace_id": "ws_pagination",
         "financial_settings": {"currency": "usd"},
     })
+    mock_db.memberships = type("M", (), {})()
+    mock_db.memberships.find_one = AsyncMock(return_value={
+        "user_id": MOCK_PRINCIPAL["user_id"], "workspace_id": "ws_pagination",
+        "status": "active", "pack": "owner", "role": "owner", "section_grants": {},
+    })
+    mock_db.departments = type("D", (), {})()
+    mock_db.departments.find_one = AsyncMock(return_value={
+        "department_id": "dept_sales",
+        "workspace_id": "ws_pagination",
+        "type": "sales",
+        "enabled": True,
+    })
+    mock_db.department_members = type("DM", (), {})()
+    mock_db.department_members.find_one = AsyncMock(return_value=None)
+    mock_db.department_members.find = lambda *a, **k: FakeCursor([], "user_id")
+    mock_db.users = type("U", (), {})()
+    mock_db.users.find = lambda *a, **k: FakeCursor([], "user_id")
+    return mock_db
+
+
+def test_deals_limit_capped_at_200():
+    async def mock_principal():
+        return MOCK_PRINCIPAL
+
+    server.app.dependency_overrides[server.get_principal] = mock_principal
+    deals = _make_deals(5)
+    mock_db = _pagination_db(deals)
 
     with patch.object(server, "db", mock_db), \
-         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)), \
+         patch.object(server, "_product_event", new=AsyncMock(return_value=None)):
         client = TestClient(server.app)
         r = client.get("/api/deals", params={"limit": 500})
         assert r.status_code == 200
@@ -253,16 +289,11 @@ def test_tied_timestamps_not_skipped():
          "close_date": "", "created_at": ts, "updated_at": ts}
         for i in range(5)
     ]
-    mock_db = type("DB", (), {})()
-    mock_db.deals = FakeCollection(deals, "updated_at")
-    mock_db.activities = FakeCollection([], "created_at", id_field="activity_id")
-    mock_db.workspaces = type("W", (), {})()
-    mock_db.workspaces.find_one = AsyncMock(return_value={
-        "workspace_id": "ws_pagination", "financial_settings": {"currency": "usd"},
-    })
+    mock_db = _pagination_db(deals)
 
     with patch.object(server, "db", mock_db), \
-         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)):
+         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)), \
+         patch.object(server, "_product_event", new=AsyncMock(return_value=None)):
         client = TestClient(server.app)
         r1 = client.get("/api/deals", params={"limit": 2})
         assert r1.status_code == 200

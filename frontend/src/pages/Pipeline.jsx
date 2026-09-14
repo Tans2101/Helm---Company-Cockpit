@@ -17,8 +17,24 @@ const stageStyle = {
   lost: "text-helm-status-negative bg-helm-status-negative/10",
 };
 const money = (n, sym = "$") => sym + (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n);
-const emptyForm = () => ({ name: "", company: "", value: "", stage: "lead", owner_name: "", close_date: "" });
+const emptyForm = (defaults = {}) => ({
+  name: "",
+  company: "",
+  value: "",
+  stage: "lead",
+  owner_name: "",
+  owner_user_id: "",
+  close_date: "",
+  next_step: "",
+  next_step_date: "",
+  ...defaults,
+});
 const PAGE_LIMIT = 200;
+
+function ownerLabel(owner) {
+  if (!owner) return "";
+  return owner.name || owner.email || "Teammate";
+}
 
 export default function Pipeline() {
   const [deals, setDeals] = useState([]);
@@ -27,6 +43,7 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [mineOnly, setMineOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -34,14 +51,19 @@ export default function Pipeline() {
   const [productionPrompt, setProductionPrompt] = useState(null);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
 
-  const fetchPage = useCallback(async (before = null, append = false) => {
+  const fetchPage = useCallback(async (before = null, append = false, mine = mineOnly) => {
     const params = { limit: PAGE_LIMIT };
     if (before) params.before = before;
+    if (mine) params.owner_user_id = "me";
     const { data } = await api.get("/deals", { params });
     const page = data.items || data.deals || [];
     setDeals((prev) => (append ? [...prev, ...page] : page));
     setMeta({
       can_write: data.can_write,
+      can_reassign_owner: Boolean(data.can_reassign_owner || data.is_lead),
+      is_lead: Boolean(data.is_lead || data.can_reassign_owner),
+      my_user_id: data.my_user_id || null,
+      sales_owners: data.sales_owners || [],
       metrics: data.metrics,
       stages: data.stages,
       currency: data.currency || "usd",
@@ -49,20 +71,20 @@ export default function Pipeline() {
     });
     setNextCursor(data.next_cursor ?? null);
     return data;
-  }, []);
+  }, [mineOnly]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      await fetchPage();
+      await fetchPage(null, false, mineOnly);
     } catch (e) {
       setLoadError(e);
       toast.error(fetchErrorMessage(e, "Could not load pipeline"));
     } finally {
       setLoading(false);
     }
-  }, [fetchPage]);
+  }, [fetchPage, mineOnly]);
 
   useEffect(() => {
     reload();
@@ -72,7 +94,7 @@ export default function Pipeline() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      await fetchPage(nextCursor, true);
+      await fetchPage(nextCursor, true, mineOnly);
     } catch {
       toast.error("Could not load more deals");
     } finally {
@@ -91,6 +113,9 @@ export default function Pipeline() {
     );
   }
   const canWrite = meta.can_write;
+  const canReassign = meta.can_reassign_owner;
+  const myId = meta.my_user_id;
+  const salesOwners = meta.sales_owners || [];
   const m = meta.metrics;
   const sym = meta.currency_symbol || "$";
 
@@ -100,17 +125,46 @@ export default function Pipeline() {
     }
   };
 
-  const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
+  const dealPayload = (base) => ({
+    name: base.name,
+    company: base.company || "",
+    value: typeof base.value === "number" ? base.value : (parseFloat(base.value) || 0),
+    stage: base.stage,
+    owner_name: base.owner_name || "",
+    owner_user_id: base.owner_user_id || null,
+    close_date: base.close_date || "",
+    next_step: base.next_step || "",
+    next_step_date: base.next_step_date || "",
+  });
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(emptyForm({
+      owner_user_id: canReassign ? "" : (myId || ""),
+      owner_name: canReassign ? "" : (salesOwners.find((o) => o.user_id === myId)?.name || ""),
+    }));
+    setShowForm(true);
+  };
   const openEdit = (d) => {
     setEditing(d.id);
-    setForm({ name: d.name, company: d.company || "", value: d.value, stage: d.stage, owner_name: d.owner_name || "", close_date: d.close_date || "" });
+    setForm({
+      name: d.name,
+      company: d.company || "",
+      value: d.value,
+      stage: d.stage,
+      owner_name: d.owner_name || "",
+      owner_user_id: d.owner_user_id || "",
+      close_date: d.close_date || "",
+      next_step: d.next_step || "",
+      next_step_date: d.next_step_date || "",
+    });
     setShowForm(true);
   };
 
   const save = async () => {
     if (!form.name.trim()) { toast.error("Deal name required"); return; }
     setBusy(true);
-    const payload = { ...form, value: parseFloat(form.value) || 0 };
+    const payload = dealPayload(form);
     try {
       if (editing) {
         const { data: res } = await api.patch(`/deals/${editing}`, payload);
@@ -127,18 +181,11 @@ export default function Pipeline() {
 
   const changeStage = async (d, stage) => {
     try {
-      const { data: res } = await api.patch(`/deals/${d.id}`, {
-        name: d.name,
-        company: d.company,
-        value: d.value,
-        stage,
-        owner_name: d.owner_name,
-        close_date: d.close_date,
-      });
+      const { data: res } = await api.patch(`/deals/${d.id}`, dealPayload({ ...d, stage }));
       maybeOfferProduction(res);
       reload();
     } catch (e) {
-      toast.error("Could not update stage");
+      toast.error(e?.response?.data?.detail || "Could not update stage");
     }
   };
   const del = async (d) => {
@@ -175,9 +222,25 @@ export default function Pipeline() {
     <div>
       <PageHeader title="Sales Pipeline" subtitle="Log deals and stages — pipeline signals roll straight into the CEO Briefing." action={action} />
 
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          data-testid="filter-my-deals"
+          onClick={() => setMineOnly((v) => !v)}
+          className={cn(
+            "rounded-md border px-3 py-1.5 text-sm transition-colors",
+            mineOnly
+              ? "border-helm-gold/40 bg-helm-gold/10 text-helm-fg"
+              : "border-helm-line bg-helm-fg/5 text-helm-muted hover:text-helm-fg",
+          )}
+        >
+          {mineOnly ? "Showing my deals" : "My deals"}
+        </button>
+      </div>
+
       {deals.length === 0 ? (
-        <EmptyState icon={TrendingUp} title="No deals yet" body="Add your first deal — as it moves through stages, the CEO sees it in the morning briefing."
-          action={canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
+        <EmptyState icon={TrendingUp} title={mineOnly ? "No deals assigned to you" : "No deals yet"} body={mineOnly ? "Deals you own will show up here. Ask a Sales lead to assign one, or clear the filter." : "Add your first deal — as it moves through stages, the CEO sees it in the morning briefing."}
+          action={!mineOnly && canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
       ) : (
         <>
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -203,6 +266,12 @@ export default function Pipeline() {
                           {d.owner_name ? ` · Owner ${d.owner_name}` : ""}
                           {d.close_date ? ` · close ${d.close_date}` : ""}
                         </p>
+                        {(d.next_step || d.next_step_date) ? (
+                          <p className="text-[11px] text-helm-gold mt-0.5 truncate" data-testid={`deal-next-step-${d.id}`}>
+                            Next: {d.next_step || "Follow up"}
+                            {d.next_step_date ? ` · ${d.next_step_date}` : ""}
+                          </p>
+                        ) : null}
                         {d.created_by_name ? (
                           <p className="text-[11px] text-helm-muted mt-0.5" data-testid={`deal-added-by-${d.id}`}>
                             Added by {d.created_by_name}
@@ -271,7 +340,52 @@ export default function Pipeline() {
                 <input data-testid="deal-close" type="date" value={form.close_date} onChange={(e) => setForm((f) => ({ ...f, close_date: e.target.value }))} className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
               </label>
               <label className="text-xs text-helm-muted col-span-2">Owner
-                <input data-testid="deal-owner" value={form.owner_name} onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))} placeholder="Rep name" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
+                {canReassign && salesOwners.length > 0 ? (
+                  <select
+                    data-testid="deal-owner"
+                    value={form.owner_user_id || ""}
+                    onChange={(e) => {
+                      const uid = e.target.value;
+                      const match = salesOwners.find((o) => o.user_id === uid);
+                      setForm((f) => ({
+                        ...f,
+                        owner_user_id: uid,
+                        owner_name: ownerLabel(match) || f.owner_name,
+                      }));
+                    }}
+                    className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                  >
+                    <option value="">Unassigned</option>
+                    {salesOwners.map((o) => (
+                      <option key={o.user_id} value={o.user_id}>{ownerLabel(o)}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    data-testid="deal-owner"
+                    value={form.owner_name || (salesOwners.find((o) => o.user_id === (form.owner_user_id || myId))?.name) || "You"}
+                    readOnly
+                    className="mt-1 w-full rounded-md border border-helm-line bg-helm-card/60 text-helm-muted text-sm px-3 py-2"
+                  />
+                )}
+              </label>
+              <label className="text-xs text-helm-muted col-span-2">Next step
+                <input
+                  data-testid="deal-next-step"
+                  value={form.next_step}
+                  onChange={(e) => setForm((f) => ({ ...f, next_step: e.target.value }))}
+                  placeholder="Call back Thursday"
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
+              </label>
+              <label className="text-xs text-helm-muted col-span-2">Follow-up date
+                <input
+                  data-testid="deal-next-step-date"
+                  type="date"
+                  value={form.next_step_date}
+                  onChange={(e) => setForm((f) => ({ ...f, next_step_date: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                />
               </label>
             </div>
             <button data-testid="save-deal-btn" onClick={save} disabled={busy} className="mt-5 w-full rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm transition-colors hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save changes" : "Add deal"}</button>

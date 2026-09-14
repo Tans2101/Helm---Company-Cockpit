@@ -34,6 +34,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     "burn_increase",
     "expense_spike",
     "stalled_deal",
+    # Planned follow-up date passed without progress — distinct from general stall.
+    "missed_followup",
     # Unresolved high-priority equipment tickets may need CEO-level escalation
     # (downtime), unlike generic department stall nudges.
     "urgent_maintenance",
@@ -49,6 +51,8 @@ DELEGATE_SIGNAL_TYPES = frozenset({
     "recurring_blocker",
     "stalled_department_item",
     "stalled_onboarding",
+    # Proactive reminder — lower urgency than stalled/missed deal signals.
+    "upcoming_followup",
 })
 
 
@@ -243,6 +247,81 @@ def detect_stalled_deals(
             value=value,
             idle_days=idle_days,
             owner_name=d.get("owner_name") or "",
+        ))
+    return out
+
+
+def detect_upcoming_followups(
+    deals: list,
+    *,
+    today: Optional[date] = None,
+    within_days: int = 2,
+) -> list:
+    """Reminder for open deals with next_step_date within the next `within_days` (incl. today)."""
+    today = today or datetime.now(timezone.utc).date()
+    end = today + timedelta(days=max(0, within_days))
+    out = []
+    for d in deals or []:
+        stage = d.get("stage")
+        if stage in ("won", "lost"):
+            continue
+        due = parse_task_due_date(d.get("next_step_date"))
+        if due is None or due < today or due > end:
+            continue
+        name = d.get("name") or "Untitled deal"
+        step = (d.get("next_step") or "").strip() or "Follow up"
+        when = "today" if due == today else ("tomorrow" if due == today + timedelta(days=1) else due.isoformat())
+        out.append(_signal(
+            "upcoming_followup",
+            "low",
+            summary=f"Follow-up {when}: {name}",
+            detail=f"{name}: {step} (due {due.isoformat()}).",
+            related_id=d.get("id"),
+            deal_name=name,
+            stage=stage,
+            next_step=step,
+            next_step_date=due.isoformat(),
+            owner_name=d.get("owner_name") or "",
+            owner_user_id=d.get("owner_user_id"),
+        ))
+    return out
+
+
+def detect_missed_followups(
+    deals: list,
+    *,
+    today: Optional[date] = None,
+) -> list:
+    """Open deals whose planned next_step_date has already passed."""
+    today = today or datetime.now(timezone.utc).date()
+    out = []
+    for d in deals or []:
+        stage = d.get("stage")
+        if stage in ("won", "lost"):
+            continue
+        due = parse_task_due_date(d.get("next_step_date"))
+        if due is None or due >= today:
+            continue
+        days_late = (today - due).days
+        name = d.get("name") or "Untitled deal"
+        step = (d.get("next_step") or "").strip() or "Follow up"
+        severity = "high" if days_late >= 7 else "medium"
+        out.append(_signal(
+            "missed_followup",
+            severity,
+            summary=f"Missed follow-up: {name}",
+            detail=(
+                f"{name}: planned '{step}' was due {due.isoformat()} "
+                f"({days_late} day(s) late), still in '{stage}'."
+            ),
+            related_id=d.get("id"),
+            deal_name=name,
+            stage=stage,
+            next_step=step,
+            next_step_date=due.isoformat(),
+            days_late=days_late,
+            owner_name=d.get("owner_name") or "",
+            owner_user_id=d.get("owner_user_id"),
         ))
     return out
 
@@ -951,6 +1030,9 @@ def collect_signals(
         signals.append(runway)
     signals.extend(detect_expense_spike(expense_by_month, currency=currency))
     signals.extend(detect_stalled_deals(deals, currency=currency, now=now))
+    today = (now or datetime.now(timezone.utc)).date()
+    signals.extend(detect_upcoming_followups(deals, today=today))
+    signals.extend(detect_missed_followups(deals, today=today))
     signals.extend(detect_overdue_tasks(tasks))
     signals.extend(detect_recurring_blockers(updates))
     signals.extend(collect_department_signals(department_items, now=now))

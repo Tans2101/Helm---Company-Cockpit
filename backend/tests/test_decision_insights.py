@@ -126,6 +126,55 @@ def test_stalled_deals_fires_for_old_open_deal():
     assert stalled[0]["idle_days"] == 20
 
 
+def test_upcoming_and_missed_followups():
+    today = date(2026, 9, 14)
+    deals = [
+        {
+            "id": "soon",
+            "name": "Call soon",
+            "stage": "negotiation",
+            "next_step": "Call back Thursday",
+            "next_step_date": "2026-09-15",
+            "owner_name": "Sam",
+        },
+        {
+            "id": "missed",
+            "name": "Missed call",
+            "stage": "proposal",
+            "next_step": "Send proposal",
+            "next_step_date": "2026-09-10",
+        },
+        {
+            "id": "won",
+            "name": "Already won",
+            "stage": "won",
+            "next_step": "Ignore",
+            "next_step_date": "2026-09-10",
+        },
+        {
+            "id": "far",
+            "name": "Later",
+            "stage": "lead",
+            "next_step": "Quarterly check",
+            "next_step_date": "2026-10-01",
+        },
+    ]
+    upcoming = eng.detect_upcoming_followups(deals, today=today, within_days=2)
+    assert len(upcoming) == 1
+    assert upcoming[0]["type"] == "upcoming_followup"
+    assert upcoming[0]["severity"] == "low"
+    assert upcoming[0]["related_id"] == "soon"
+
+    missed = eng.detect_missed_followups(deals, today=today)
+    assert len(missed) == 1
+    assert missed[0]["type"] == "missed_followup"
+    assert missed[0]["related_id"] == "missed"
+    assert "Send proposal" in missed[0]["detail"]
+
+    assert "upcoming_followup" in eng.DELEGATE_SIGNAL_TYPES
+    assert "missed_followup" in eng.DECISION_SIGNAL_TYPES
+
+
 def test_overdue_tasks_uses_parseable_dates_only():
     today = date(2026, 9, 4)
     tasks = [
