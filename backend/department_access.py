@@ -136,9 +136,7 @@ def apply_department_filter(base_filter: dict, department_ids: Optional[list[str
 # Do NOT include deals / financial_entries: those are core workspace data that keep
 # their department_id but must not permanently block disable.
 DEPARTMENT_FEATURE_COLLECTIONS = (
-    "production_stage_templates",
     "production_work_orders",
-    "production_stage_progress",
     "procurement_requests",
     "legal_matters",
     "maintenance_tickets",

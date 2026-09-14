@@ -491,14 +491,15 @@ def detect_stalled_onboarding(
 
 
 def detect_overdue_work_orders(work_orders: list, *, today: Optional[date] = None) -> list:
-    """Flag work orders whose due_date has passed and status is not done.
+    """Flag work orders whose due_date has passed and status is not done/completed.
 
     Straightforward date comparison only — no projection or estimation.
+    Accepts legacy status \"done\" and the fixed-queue status \"completed\".
     """
     today = today or datetime.now(timezone.utc).date()
     out = []
     for wo in work_orders or []:
-        if wo.get("status") == "done":
+        if wo.get("status") in ("done", "completed"):
             continue
         due_d = parse_task_due_date(wo.get("due_date"))
         if due_d is None or due_d >= today:
@@ -525,35 +526,30 @@ def detect_overdue_work_orders(work_orders: list, *, today: Optional[date] = Non
     return out
 
 
-def compute_average_stage_time(progress_records: list) -> list:
-    """Average exited_at - entered_at per stage for completed progress records.
+def compute_average_cycle_time(work_orders: list, *, min_samples: int = 3) -> Optional[dict]:
+    """Average completed_at - created_at across completed work orders.
 
-    Stages with zero completed records are omitted — never a fabricated 0.
+    Returns None when there are fewer than min_samples completed orders —
+    never a fabricated 0 from empty history.
     """
-    buckets: dict = {}
-    for row in progress_records or []:
-        stage_id = row.get("stage_id")
-        if not stage_id:
+    durations = []
+    for wo in work_orders or []:
+        if wo.get("status") not in ("completed", "done"):
             continue
-        entered = _parse_iso_dt(row.get("entered_at"))
-        exited = _parse_iso_dt(row.get("exited_at"))
-        if entered is None or exited is None:
+        created = _parse_iso_dt(wo.get("created_at"))
+        completed = _parse_iso_dt(wo.get("completed_at"))
+        if created is None or completed is None:
             continue
-        if exited < entered:
+        if completed < created:
             continue
-        buckets.setdefault(stage_id, []).append((exited - entered).total_seconds())
-
-    out = []
-    for stage_id, durations in buckets.items():
-        if not durations:
-            continue
-        avg = sum(durations) / len(durations)
-        out.append({
-            "stage_id": stage_id,
-            "average_seconds": round(avg, 3),
-            "sample_count": len(durations),
-        })
-    return out
+        durations.append((completed - created).total_seconds())
+    if len(durations) < min_samples:
+        return None
+    avg = sum(durations) / len(durations)
+    return {
+        "average_seconds": round(avg, 3),
+        "sample_count": len(durations),
+    }
 
 
 def collect_department_signals(

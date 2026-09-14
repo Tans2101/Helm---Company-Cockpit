@@ -1,11 +1,9 @@
 """Fixed department catalog — not stored per workspace.
 
 Future department-specific feature collections (when built) should follow a
-stable per-department naming pattern. Production owns three collections:
+stable per-department naming pattern. Production owns a flat work-order queue:
 
-  - production_stage_templates     (sequence definition)
-  - production_work_orders         (jobs moving through the sequence)
-  - production_stage_progress      (per work-order × stage status)
+  - production_work_orders         (fixed-status job queue)
   - procurement_requests           (exists — Procurement request queue)
   - procurement_stages             (unused; Procurement uses a request queue, not a chain)
   - legal_matters                  (exists — Legal matter queue)

@@ -431,32 +431,40 @@ def test_overdue_work_orders_is_plain_date_check():
     assert "WO-100" in sigs[0]["summary"]
 
 
-def test_average_stage_time_omits_stages_without_completions():
+def test_average_cycle_time_requires_min_samples():
     t0 = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
-    records = [
+    orders = [
         {
-            "stage_id": "cut",
-            "entered_at": t0.isoformat(),
-            "exited_at": (t0 + timedelta(days=2)).isoformat(),
+            "id": "a",
+            "status": "completed",
+            "created_at": t0.isoformat(),
+            "completed_at": (t0 + timedelta(days=2)).isoformat(),
         },
         {
-            "stage_id": "cut",
-            "entered_at": t0.isoformat(),
-            "exited_at": (t0 + timedelta(days=4)).isoformat(),
+            "id": "b",
+            "status": "completed",
+            "created_at": t0.isoformat(),
+            "completed_at": (t0 + timedelta(days=4)).isoformat(),
         },
         {
-            "stage_id": "pack",
-            "entered_at": t0.isoformat(),
-            "exited_at": None,
+            "id": "c",
+            "status": "in_production",
+            "created_at": t0.isoformat(),
+            "completed_at": None,
         },
     ]
-    rows = eng.compute_average_stage_time(records)
-    assert len(rows) == 1
-    assert rows[0]["stage_id"] == "cut"
-    assert rows[0]["sample_count"] == 2
-    assert rows[0]["average_seconds"] == pytest.approx(3 * 86400)
-    # Stage with only incomplete records must not appear as a zero average
-    assert all(r["stage_id"] != "pack" for r in rows)
+    # Only 2 completed — below default min_samples=3
+    assert eng.compute_average_cycle_time(orders) is None
+    orders.append({
+        "id": "d",
+        "status": "completed",
+        "created_at": t0.isoformat(),
+        "completed_at": (t0 + timedelta(days=6)).isoformat(),
+    })
+    row = eng.compute_average_cycle_time(orders)
+    assert row is not None
+    assert row["sample_count"] == 3
+    assert row["average_seconds"] == pytest.approx(4 * 86400)
 
 
 def test_overdue_work_order_wired_into_department_signals():

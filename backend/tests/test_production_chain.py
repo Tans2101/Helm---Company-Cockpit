@@ -1,4 +1,4 @@
-"""Production work-order API tests."""
+"""Production work-order queue API tests (fixed statuses, no stages)."""
 import os
 import sys
 from pathlib import Path
@@ -124,9 +124,7 @@ class DocStore:
 
 @pytest.fixture
 def prod_api():
-    templates = DocStore()
     orders = DocStore()
-    progress = DocStore()
     procurement = DocStore()
     dept_members = [
         {"department_id": "dept_prod", "user_id": "u_mem", "role": "member"},
@@ -148,9 +146,7 @@ def prod_api():
     mock_db = MagicMock()
     mock_db.departments.find_one = AsyncMock(side_effect=dept_find_one)
     mock_db.department_members.find_one = AsyncMock(side_effect=mem_find_one)
-    mock_db.production_stage_templates = templates
     mock_db.production_work_orders = orders
-    mock_db.production_stage_progress = progress
     mock_db.procurement_requests = procurement
     mock_db.users.find_one = AsyncMock(
         return_value={"name": "Mem", "email": "mem@acme.com", "picture": None},
@@ -169,156 +165,133 @@ def prod_api():
     server.app.dependency_overrides[server.get_principal] = as_ceo
     with patch.object(server, "db", mock_db):
         client = TestClient(server.app)
-        yield client, templates, orders, progress, as_ceo, as_outsider, as_member
+        yield client, orders, procurement, as_ceo, as_outsider, as_member
     server.app.dependency_overrides.clear()
 
 
-def _seed_two_stages(client):
-    a = client.post("/api/production/stages", json={"name": "Prep"}).json()["stage"]
-    b = client.post("/api/production/stages", json={"name": "Assemble"}).json()["stage"]
-    return a, b
-
-
 def test_outsider_gets_403(prod_api):
-    client, templates, orders, progress, as_ceo, as_outsider, as_member = prod_api
+    client, orders, procurement, as_ceo, as_outsider, as_member = prod_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
-    assert client.get("/api/production/stages").status_code == 403
-    assert client.post("/api/production/stages", json={"name": "Cut"}).status_code == 403
     assert client.get("/api/production/work-orders").status_code == 403
+    assert client.post("/api/production/work-orders", json={"reference": "X"}).status_code == 403
 
 
-def test_ceo_create_list_reorder_delete_templates(prod_api):
-    client, templates, orders, progress, *_ = prod_api
-    r = client.post("/api/production/stages", json={"name": "Prep"})
+def test_create_work_order_without_setup(prod_api):
+    client, *_ = prod_api
+    r = client.post("/api/production/work-orders", json={"reference": "WO-1", "product": "Frame"})
     assert r.status_code == 200, r.text
-    sid1 = r.json()["stage"]["id"]
-    assert "status" not in r.json()["stage"]
-    assert "default_assigned_user_ids" in r.json()["stage"]
-    sid2 = client.post("/api/production/stages", json={"name": "Assemble"}).json()["stage"]["id"]
-
-    listed = client.get("/api/production/stages").json()["stages"]
-    assert [s["name"] for s in listed] == ["Prep", "Assemble"]
-
-    rr = client.patch("/api/production/stages/reorder", json={"stage_ids": [sid2, sid1]})
-    assert rr.status_code == 200, rr.text
-    listed2 = client.get("/api/production/stages").json()["stages"]
-    assert [s["name"] for s in listed2] == ["Assemble", "Prep"]
-
-    assert client.delete(f"/api/production/stages/{sid2}").status_code == 200
-    left = client.get("/api/production/stages").json()["stages"]
-    assert [s["name"] for s in left] == ["Prep"]
-    assert left[0]["order"] == 0
+    wo = r.json()["work_order"]
+    assert wo["reference"] == "WO-1"
+    assert wo["status"] == "in_production"
+    assert wo["blocked"] is False
+    assert wo["quantity_produced"] is None
+    assert "current_stage_id" not in wo
+    assert "current_progress" not in wo
 
 
-def test_member_cannot_edit_templates_but_can_update_progress(prod_api):
-    client, templates, orders, progress, as_ceo, as_outsider, as_member = prod_api
-    a, _b = _seed_two_stages(client)
-    wo = client.post(
+def test_create_with_open_procurement_sets_awaiting_materials(prod_api):
+    client, orders, procurement, *_ = prod_api
+    procurement.rows.append({
+        "id": "preq_1",
+        "workspace_id": "ws_test",
+        "item": "Steel",
+        "status": "ordered",
+        "quantity": 5,
+    })
+    r = client.post(
         "/api/production/work-orders",
-        json={"reference": "Order #1"},
-    ).json()["work_order"]
+        json={"reference": "WO-mat", "linked_procurement_request_id": "preq_1"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["work_order"]["status"] == "awaiting_materials"
+    assert r.json()["work_order"]["linked_procurement_request_id"] == "preq_1"
+
+
+def test_stages_endpoints_removed(prod_api):
+    client, *_ = prod_api
+    assert client.get("/api/production/stages").status_code == 404
+    assert client.post("/api/production/stages", json={"name": "Cut"}).status_code == 404
+
+
+def test_member_can_update_status_and_notes(prod_api):
+    client, orders, procurement, as_ceo, as_outsider, as_member = prod_api
+    wo = client.post("/api/production/work-orders", json={"reference": "Order #1"}).json()["work_order"]
 
     server.app.dependency_overrides[server.get_principal] = as_member
-    assert client.post("/api/production/stages", json={"name": "X"}).status_code == 403
-    assert client.patch(f"/api/production/stages/{a['id']}", json={"name": "Renamed"}).status_code == 403
-    assert client.delete(f"/api/production/stages/{a['id']}").status_code == 403
-
     ok = client.patch(
-        f"/api/production/work-orders/{wo['id']}/stage",
-        json={"status": "in_progress", "assigned_user_ids": ["u_mem"]},
+        f"/api/production/work-orders/{wo['id']}",
+        json={"status": "quality_check", "notes": "Ready for QC"},
     )
     assert ok.status_code == 200, ok.text
-    assert ok.json()["work_order"]["current_progress"]["status"] == "in_progress"
-    assert "u_mem" in ok.json()["work_order"]["current_progress"]["assigned_user_ids"]
+    body = ok.json()["work_order"]
+    assert body["status"] == "quality_check"
+    assert body["notes"] == "Ready for QC"
 
 
-def test_two_work_orders_advance_independently(prod_api):
-    client, templates, orders, progress, *_ = prod_api
-    a, b = _seed_two_stages(client)
-
-    wo1 = client.post("/api/production/work-orders", json={"reference": "Order #1"}).json()["work_order"]
-    wo2 = client.post("/api/production/work-orders", json={"reference": "Order #2"}).json()["work_order"]
-    assert wo1["current_stage_id"] == a["id"]
-    assert wo2["current_stage_id"] == a["id"]
-    assert wo1["current_progress"]["status"] == "not_started"
-    assert wo1["current_progress"]["entered_at"]
-    assert wo1["current_progress"]["exited_at"] is None
-
-    adv1 = client.patch(f"/api/production/work-orders/{wo1['id']}/advance")
-    assert adv1.status_code == 200, adv1.text
-    moved = adv1.json()["work_order"]
-    assert moved["current_stage_id"] == b["id"]
-    assert moved["status"] == "active"
-    assert moved["current_progress"]["stage_id"] == b["id"]
-    assert moved["current_progress"]["status"] == "in_progress"
-    assert moved["current_progress"]["entered_at"]
-    assert moved["current_progress"]["exited_at"] is None
-
-    closed = next(
-        p for p in progress.rows
-        if p["work_order_id"] == wo1["id"] and p["stage_id"] == a["id"]
-    )
-    assert closed["status"] == "done"
-    assert closed["exited_at"]
-
-    listed = client.get("/api/production/work-orders").json()["work_orders"]
-    by_id = {o["id"]: o for o in listed}
-    assert by_id[wo2["id"]]["current_stage_id"] == a["id"]
-    assert by_id[wo1["id"]]["current_stage_id"] == b["id"]
-
-
-def test_advance_past_last_stage_marks_done(prod_api):
-    client, templates, orders, progress, *_ = prod_api
-    _seed_two_stages(client)
-    wo = client.post("/api/production/work-orders", json={"reference": "Final"}).json()["work_order"]
-
-    client.patch(f"/api/production/work-orders/{wo['id']}/advance")
-    done = client.patch(f"/api/production/work-orders/{wo['id']}/advance")
-    assert done.status_code == 200, done.text
-    body = done.json()["work_order"]
-    assert body["status"] == "done"
-    assert body["completed_at"]
-    assert body["current_progress"]["status"] == "done"
-    assert body["current_progress"]["exited_at"]
-
-    again = client.patch(f"/api/production/work-orders/{wo['id']}/advance")
-    assert again.status_code == 400
+def test_status_only_fixed_values(prod_api):
+    client, *_ = prod_api
+    wo = client.post("/api/production/work-orders", json={"reference": "S"}).json()["work_order"]
+    bad = client.patch(f"/api/production/work-orders/{wo['id']}", json={"status": "assembly"})
+    assert bad.status_code == 400
+    for st in ("awaiting_materials", "in_production", "quality_check"):
+        r = client.patch(f"/api/production/work-orders/{wo['id']}", json={"status": st})
+        assert r.status_code == 200, r.text
+        assert r.json()["work_order"]["status"] == st
 
 
 def test_blocked_requires_category(prod_api):
     client, *_ = prod_api
-    _seed_two_stages(client)
     wo = client.post("/api/production/work-orders", json={"reference": "Block me"}).json()["work_order"]
 
-    bad = client.patch(
-        f"/api/production/work-orders/{wo['id']}/stage",
-        json={"status": "blocked"},
-    )
+    bad = client.patch(f"/api/production/work-orders/{wo['id']}", json={"blocked": True})
     assert bad.status_code == 400
     assert "blocked_reason" in bad.json()["detail"]
 
     bad2 = client.patch(
-        f"/api/production/work-orders/{wo['id']}/stage",
-        json={"status": "blocked", "blocked_reason": {"detail": "no parts"}},
+        f"/api/production/work-orders/{wo['id']}",
+        json={"blocked": True, "blocked_reason": {"detail": "no parts"}},
     )
     assert bad2.status_code == 400
 
     ok = client.patch(
-        f"/api/production/work-orders/{wo['id']}/stage",
+        f"/api/production/work-orders/{wo['id']}",
         json={
-            "status": "blocked",
+            "blocked": True,
             "blocked_reason": {"category": "material", "detail": "Waiting on steel"},
+            "status": "in_production",
         },
     )
     assert ok.status_code == 200, ok.text
-    reason = ok.json()["work_order"]["current_progress"]["blocked_reason"]
-    assert reason["category"] == "material"
-    assert "steel" in reason["detail"]
+    body = ok.json()["work_order"]
+    assert body["blocked"] is True
+    assert body["status"] == "in_production"
+    assert body["blocked_reason"]["category"] == "material"
+
+
+def test_complete_requires_quantity_produced(prod_api):
+    client, *_ = prod_api
+    wo = client.post(
+        "/api/production/work-orders",
+        json={"reference": "Finish", "quantity_planned": 10},
+    ).json()["work_order"]
+
+    bad = client.patch(f"/api/production/work-orders/{wo['id']}", json={"status": "completed"})
+    assert bad.status_code == 400
+    assert "quantity_produced" in bad.json()["detail"]
+
+    ok = client.patch(
+        f"/api/production/work-orders/{wo['id']}",
+        json={"status": "completed", "quantity_produced": 9},
+    )
+    assert ok.status_code == 200, ok.text
+    body = ok.json()["work_order"]
+    assert body["status"] == "completed"
+    assert body["quantity_produced"] == 9
+    assert body["completed_at"]
 
 
 def test_patch_work_order_fields(prod_api):
     client, *_ = prod_api
-    _seed_two_stages(client)
     wo = client.post(
         "/api/production/work-orders",
         json={"reference": "Order #9", "priority": "high", "customer": "Acme"},
@@ -327,24 +300,26 @@ def test_patch_work_order_fields(prod_api):
 
     patched = client.patch(
         f"/api/production/work-orders/{wo['id']}",
-        json={"product": "Widget", "quantity": 12, "due_date": "2026-10-01"},
+        json={"product": "Widget", "quantity_planned": 12, "due_date": "2026-10-01"},
     )
     assert patched.status_code == 200, patched.text
     body = patched.json()["work_order"]
     assert body["product"] == "Widget"
-    assert body["quantity"] == 12
+    assert body["quantity_planned"] == 12
     assert body["due_date"] == "2026-10-01"
 
 
-def test_cannot_create_work_order_without_stages(prod_api):
+def test_list_filter_by_status(prod_api):
     client, *_ = prod_api
-    r = client.post("/api/production/work-orders", json={"reference": "Orphan"})
-    assert r.status_code == 400
-
-
-def test_cannot_delete_stage_with_active_work_order(prod_api):
-    client, *_ = prod_api
-    a, _b = _seed_two_stages(client)
-    client.post("/api/production/work-orders", json={"reference": "Hold"})
-    denied = client.delete(f"/api/production/stages/{a['id']}")
-    assert denied.status_code == 400
+    client.post("/api/production/work-orders", json={"reference": "A"})
+    b = client.post("/api/production/work-orders", json={"reference": "B"}).json()["work_order"]
+    client.patch(
+        f"/api/production/work-orders/{b['id']}",
+        json={"status": "completed", "quantity_produced": 1},
+    )
+    open_list = client.get("/api/production/work-orders?status=in_production").json()["work_orders"]
+    assert len(open_list) == 1
+    assert open_list[0]["reference"] == "A"
+    done = client.get("/api/production/work-orders?status=completed").json()["work_orders"]
+    assert len(done) == 1
+    assert done[0]["reference"] == "B"

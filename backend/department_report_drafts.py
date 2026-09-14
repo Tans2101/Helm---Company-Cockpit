@@ -32,7 +32,7 @@ DEPT_SPECS = (
         "name": "Production",
         "collection": "production_work_orders",
         "status_field": "status",
-        "done_value": "done",
+        "done_value": "completed",
         "label_field": "reference",
         "metric_label": "Work orders finished",
         "noun": "work order",
