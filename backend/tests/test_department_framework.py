@@ -261,6 +261,7 @@ def test_disable_clears_dependent_data(dept_api):
         "procurement_requests", "legal_matters", "maintenance_tickets",
         "hr_onboarding_instances", "hr_onboarding_template",
         "hr_employees", "hr_offboarding_instances", "hr_offboarding_template",
+        "hr_leave_requests",
     ):
         coll = MagicMock()
         coll.delete_many = AsyncMock(return_value=MagicMock(deleted_count=0))

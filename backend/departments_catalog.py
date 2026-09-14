@@ -15,6 +15,7 @@ stable per-department naming pattern. Production owns a flat work-order queue:
   - hr_employees                   (exists — employment records; no sensitive fields)
   - hr_offboarding_template        (exists — HR offboarding template)
   - hr_offboarding_instances       (exists — per-employee offboarding instances)
+  - hr_leave_requests              (exists — leave / time-off requests)
   - hr_stages                      (unused; HR uses onboarding templates, not a chain)
   - sales_stages                   (future, if needed beyond Pipeline)
   - accounting_finance_stages      (future, if needed beyond Financials)

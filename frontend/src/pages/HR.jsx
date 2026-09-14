@@ -41,18 +41,24 @@ export default function HR() {
   const { data: empData, reload: reloadEmp } = useFetch("/hr/employees");
   const { data: offData, reload: reloadOff } = useFetch("/hr/offboarding");
   const { data: offTmplData, reload: reloadOffTmpl } = useFetch("/hr/offboarding/template");
+  const { data: leaveData, reload: reloadLeave } = useFetch("/hr/leave-requests");
   const { data: membersData } = useFetch("/members");
   const [showActive, setShowActive] = useState(false);
   const [showCompletedOff, setShowCompletedOff] = useState(false);
   const [empStatusFilter, setEmpStatusFilter] = useState("");
+  const [leaveStatusFilter, setLeaveStatusFilter] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [selectedOffId, setSelectedOffId] = useState(null);
   const [selectedEmpId, setSelectedEmpId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [addingLeave, setAddingLeave] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(false);
   const [editingOffTemplate, setEditingOffTemplate] = useState(false);
   const [form, setForm] = useState({ hire_name: "", hire_email: "" });
+  const [leaveForm, setLeaveForm] = useState({
+    employee_id: "", type: "vacation", start_date: "", end_date: "", note: "",
+  });
   const [tmplDraft, setTmplDraft] = useState([]);
   const [offTmplDraft, setOffTmplDraft] = useState([]);
 
@@ -78,8 +84,21 @@ export default function HR() {
   const selectedOff = offAll.find((i) => i.id === selectedOffId) || null;
 
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
-  const isLead = Boolean(data?.is_lead || tmplData?.can_edit_template || empData?.is_lead);
-  const myId = data?.my_user_id;
+  const isLead = Boolean(data?.is_lead || tmplData?.can_edit_template || empData?.is_lead || leaveData?.is_lead);
+  const myId = data?.my_user_id || leaveData?.my_user_id;
+
+  const leaveRequests = useMemo(() => {
+    const rows = leaveData?.requests || [];
+    if (!leaveStatusFilter) return rows;
+    return rows.filter((r) => r.status === leaveStatusFilter);
+  }, [leaveData?.requests, leaveStatusFilter]);
+
+  const myLinkedEmployees = useMemo(() => {
+    const rows = empData?.employees || [];
+    if (isLead) return rows.filter((e) => e.status !== "departed");
+    return rows.filter((e) => e.linked_user_id === myId && e.status !== "departed");
+  }, [empData?.employees, isLead, myId]);
+
   const templateSteps = tmplData?.template?.steps;
   const templateUpdatedAt = tmplData?.template?.updated_at;
   const offTemplateSteps = offTmplData?.template?.steps;
@@ -287,9 +306,52 @@ export default function HR() {
     }
   };
 
+  const createLeave = async () => {
+    if (!leaveForm.employee_id) {
+      toast.error("Select an employee");
+      return;
+    }
+    if (!leaveForm.start_date || !leaveForm.end_date) {
+      toast.error("Start and end dates are required");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.post("/hr/leave-requests", {
+        employee_id: leaveForm.employee_id,
+        type: leaveForm.type,
+        start_date: leaveForm.start_date,
+        end_date: leaveForm.end_date,
+        note: leaveForm.note.trim(),
+      });
+      toast.success("Leave request submitted");
+      setLeaveForm({ employee_id: "", type: "vacation", start_date: "", end_date: "", note: "" });
+      setAddingLeave(false);
+      await reloadLeave();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not submit leave request");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decideLeave = async (req, status) => {
+    setBusy(true);
+    try {
+      await api.patch(`/hr/leave-requests/${req.id}`, { status });
+      toast.success(status === "approved" ? "Leave approved" : "Leave denied");
+      await reloadLeave();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not update leave request");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const tabs = [
     { id: "onboarding", label: "Onboarding" },
     { id: "employees", label: "Employees" },
+    { id: "leave", label: "Leave" },
     { id: "offboarding", label: "Offboarding" },
   ];
 
@@ -318,6 +380,16 @@ export default function HR() {
                 className="rounded-md border border-helm-fg/15 text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5"
               >
                 Edit template
+              </button>
+            )}
+            {tab === "leave" && myLinkedEmployees.length > 0 && (
+              <button
+                type="button"
+                data-testid="hr-add-leave-btn"
+                onClick={() => setAddingLeave(true)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover"
+              >
+                <Plus className="w-4 h-4" /> Request leave
               </button>
             )}
             {isLead && tab === "onboarding" && (
@@ -653,6 +725,110 @@ export default function HR() {
         </>
       )}
 
+      {tab === "leave" && (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-helm-muted font-mono">
+              {leaveRequests.length} shown · {(leaveData?.requests || []).length} total
+            </p>
+            <label className="inline-flex items-center gap-2 text-xs text-helm-muted">
+              <span className="font-mono uppercase tracking-wide text-[10px]">Status</span>
+              <select
+                data-testid="hr-leave-status-filter"
+                value={leaveStatusFilter}
+                onChange={(e) => setLeaveStatusFilter(e.target.value)}
+                className="rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1 text-sm text-helm-fg"
+              >
+                <option value="">All</option>
+                {(leaveData?.statuses || ["pending", "approved", "denied"]).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {leaveRequests.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No leave requests"
+              body={
+                myLinkedEmployees.length
+                  ? "Submit a leave request — approved dates appear on the Calendar."
+                  : isLead
+                    ? "Link an employee to a Helm user (or create records via onboarding) before requesting leave."
+                    : "Ask an HR lead to link your account to an employee record, then you can request leave."
+              }
+              action={myLinkedEmployees.length ? (
+                <button
+                  type="button"
+                  onClick={() => setAddingLeave(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"
+                >
+                  <Plus className="w-4 h-4" /> Request leave
+                </button>
+              ) : null}
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
+              <table className="w-full text-left text-sm" data-testid="hr-leave-table">
+                <thead>
+                  <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                    <th className="px-3 py-2 font-medium">Employee</th>
+                    <th className="px-3 py-2 font-medium">Type</th>
+                    <th className="px-3 py-2 font-medium">Dates</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 font-medium"> </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaveRequests.map((req) => (
+                    <tr
+                      key={req.id}
+                      data-testid={`hr-leave-${req.id}`}
+                      className="border-b border-helm-line"
+                    >
+                      <td className="px-3 py-2.5 text-helm-fg">{req.employee_name || req.title}</td>
+                      <td className="px-3 py-2.5 text-helm-muted text-xs capitalize">{req.type}</td>
+                      <td className="px-3 py-2.5 text-helm-muted font-mono text-xs">
+                        {req.start_date}
+                        {req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ""}
+                      </td>
+                      <td className="px-3 py-2.5 text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                        {req.status}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {isLead && req.status === "pending" && (
+                          <span className="inline-flex gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              data-testid={`hr-leave-approve-${req.id}`}
+                              onClick={() => decideLeave(req, "approved")}
+                              className="text-xs text-helm-status-positive hover:underline disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              data-testid={`hr-leave-deny-${req.id}`}
+                              onClick={() => decideLeave(req, "denied")}
+                              className="text-xs text-helm-status-negative hover:underline disabled:opacity-50"
+                            >
+                              Deny
+                            </button>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
       {tab === "offboarding" && (
         <>
           <div className="flex items-center justify-between gap-3 mb-4">
@@ -792,6 +968,93 @@ export default function HR() {
             </GlassCard>
           )}
         </>
+      )}
+
+      {addingLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-helm-ink/70" onClick={() => !busy && setAddingLeave(false)} />
+          <div className="relative w-full max-w-md rounded-md border border-helm-line bg-helm-card p-5 space-y-3" data-testid="hr-leave-modal">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-helm-fg font-medium">Request leave</p>
+              <button type="button" onClick={() => setAddingLeave(false)} className="text-helm-muted hover:text-helm-fg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Employee</span>
+              <select
+                data-testid="hr-leave-employee"
+                value={leaveForm.employee_id}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              >
+                <option value="">Select…</option>
+                {myLinkedEmployees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Type</span>
+              <select
+                data-testid="hr-leave-type"
+                value={leaveForm.type}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, type: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              >
+                {(leaveData?.types || ["vacation", "sick", "personal", "other"]).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Start</span>
+                <input
+                  type="date"
+                  data-testid="hr-leave-start"
+                  value={leaveForm.start_date}
+                  onChange={(e) => setLeaveForm((f) => ({ ...f, start_date: e.target.value }))}
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">End</span>
+                <input
+                  type="date"
+                  data-testid="hr-leave-end"
+                  value={leaveForm.end_date}
+                  onChange={(e) => setLeaveForm((f) => ({ ...f, end_date: e.target.value }))}
+                  className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                />
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Note</span>
+              <input
+                data-testid="hr-leave-note"
+                value={leaveForm.note}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              />
+            </label>
+            <p className="text-[11px] text-helm-muted">
+              Approved leave appears on the Calendar for the full date range. No leave balances are tracked yet.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setAddingLeave(false)} className="text-sm text-helm-muted px-3 py-2">Cancel</button>
+              <button
+                type="button"
+                disabled={busy}
+                data-testid="hr-leave-submit"
+                onClick={createLeave}
+                className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
+              >
+                Submit request
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {adding && (

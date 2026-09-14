@@ -24,6 +24,8 @@ const typeBlock = {
   Deadline: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
   Production: "bg-helm-gold/20 border-helm-gold/35 text-helm-gold",
   Procurement: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
+  Legal: "bg-helm-fg/15 border-helm-fg/30 text-helm-fg",
+  Leave: "bg-helm-status-positive/15 border-helm-status-positive/30 text-helm-status-positive",
 };
 
 const typeDot = {
@@ -36,6 +38,8 @@ const typeDot = {
   Deadline: "bg-helm-status-warning",
   Production: "bg-helm-gold",
   Procurement: "bg-helm-status-warning",
+  Legal: "bg-helm-fg",
+  Leave: "bg-helm-status-positive",
 };
 
 function isEditableHelmEvent(ev) {
@@ -72,6 +76,30 @@ function parseEventStart(ev) {
   if (ev.date && ev.time) return new Date(`${ev.date}T${ev.time}:00`);
   if (ev.date) return new Date(`${ev.date}T00:00:00`);
   return null;
+}
+
+function parseEventEndDay(ev) {
+  if (ev.end_at) {
+    const end = new Date(ev.end_at);
+    return new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  }
+  if (ev.end_date) {
+    const [y, m, d] = String(ev.end_date).slice(0, 10).split("-").map(Number);
+    if (y && m && d) return new Date(y, m - 1, d);
+  }
+  const start = parseEventStart(ev);
+  if (!start) return null;
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate());
+}
+
+/** True when an event covers a calendar day (inclusive start–end for multi-day leave). */
+function eventCoversDay(ev, day) {
+  const start = parseEventStart(ev);
+  if (!start) return false;
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = parseEventEndDay(ev) || startDay;
+  const t = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  return t >= startDay && t <= endDay;
 }
 
 function weekNumber(d) {
@@ -153,8 +181,10 @@ function AgendaSidebar({ events, weekDays, selectedDay, onSelectDay }) {
     const map = new Map();
     weekDays.forEach((d) => map.set(toIsoDate(d), []));
     events.forEach((ev) => {
-      const key = ev.date || (ev.start_at ? toIsoDate(new Date(ev.start_at)) : null);
-      if (key && map.has(key)) map.get(key).push(ev);
+      weekDays.forEach((d) => {
+        const key = toIsoDate(d);
+        if (eventCoversDay(ev, d) && map.has(key)) map.get(key).push(ev);
+      });
     });
     for (const [, list] of map) {
       list.sort((a, b) => {
@@ -220,12 +250,11 @@ function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
   const byDay = useMemo(() => {
     const map = weekDays.map((d) => ({ day: d, timed: [], allDay: [] }));
     events.forEach((ev) => {
-      const start = parseEventStart(ev);
-      if (!start) return;
-      const idx = weekDays.findIndex((d) => sameDay(d, start));
-      if (idx < 0) return;
-      if (ev.all_day) map[idx].allDay.push(ev);
-      else map[idx].timed.push(ev);
+      weekDays.forEach((d, idx) => {
+        if (!eventCoversDay(ev, d)) return;
+        if (ev.all_day) map[idx].allDay.push(ev);
+        else if (sameDay(d, parseEventStart(ev))) map[idx].timed.push(ev);
+      });
     });
     return map;
   }, [events, weekDays]);
@@ -614,10 +643,7 @@ export default function CalendarPage() {
             <WeekGrid weekDays={weekDays} events={events} selectedDay={selectedDay} onEventClick={openEdit} />
           )}
           {view === "day" && (
-            <WeekGrid weekDays={[selectedDay]} events={events.filter((ev) => {
-              const s = parseEventStart(ev);
-              return s && sameDay(s, selectedDay);
-            })} selectedDay={selectedDay} onEventClick={openEdit} />
+            <WeekGrid weekDays={[selectedDay]} events={events.filter((ev) => eventCoversDay(ev, selectedDay))} selectedDay={selectedDay} onEventClick={openEdit} />
           )}
           {view === "month" && (
             <div className="p-4 flex-1 overflow-auto">

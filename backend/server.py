@@ -5239,11 +5239,36 @@ CALENDAR_DATE_SOURCES = [
         "open_statuses": frozenset({"draft", "internal_review", "counterparty_review", "signed"}),
         "source_type": "legal_matter",
     },
+    {
+        "collection": "hr_leave_requests",
+        "date_field": "start_date",
+        "end_date_field": "end_date",
+        "title_field": "title",
+        "type_label": "Leave",
+        "department_type": dept_catalog.TYPE_HR,
+        "open_statuses": frozenset({"approved"}),
+        "source_type": "hr_leave_request",
+    },
 ]
 
 
+def _parse_calendar_day(raw) -> Optional[str]:
+    day = str(raw or "").strip()[:10]
+    if not day:
+        return None
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return day
+
+
 async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
-    """Load open department dates from CALENDAR_DATE_SOURCES for this workspace."""
+    """Load open department dates from CALENDAR_DATE_SOURCES for this workspace.
+
+    Sources may set optional ``end_date_field`` for inclusive date ranges
+    (e.g. approved leave). Without it, behavior stays single-day.
+    """
     out: list[dict] = []
     for src in CALENDAR_DATE_SOURCES:
         enabled = await dept_migrate.get_enabled_department(
@@ -5255,29 +5280,31 @@ async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
         if coll is None:
             continue
         date_field = src["date_field"]
-        rows = await coll.find(
-            {
-                "workspace_id": workspace_id,
-                "department_id": enabled["department_id"],
-                "status": {"$in": list(src["open_statuses"])},
-                date_field: {"$exists": True, "$nin": [None, ""]},
-            },
-            {"_id": 0},
-        ).to_list(1000)
+        end_date_field = src.get("end_date_field")
+        filt: dict = {
+            "workspace_id": workspace_id,
+            "department_id": enabled["department_id"],
+            "status": {"$in": list(src["open_statuses"])},
+            date_field: {"$exists": True, "$nin": [None, ""]},
+        }
+        if end_date_field:
+            filt[end_date_field] = {"$exists": True, "$nin": [None, ""]}
+        rows = await coll.find(filt, {"_id": 0}).to_list(1000)
         for row in rows:
-            raw = str(row.get(date_field) or "").strip()
-            if not raw:
+            day = _parse_calendar_day(row.get(date_field))
+            if not day:
                 continue
-            day = raw[:10]
-            try:
-                datetime.strptime(day, "%Y-%m-%d")
-            except ValueError:
-                continue
+            end_day = day
+            if end_date_field:
+                parsed_end = _parse_calendar_day(row.get(end_date_field))
+                if not parsed_end:
+                    continue
+                end_day = parsed_end if parsed_end >= day else day
             rid = row.get("id")
             if not rid:
                 continue
             title = (row.get(src["title_field"]) or "").strip() or src["type_label"]
-            out.append({
+            item = {
                 "id": rid,
                 "title": title,
                 "date": day,
@@ -5285,7 +5312,12 @@ async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
                 "meta": "",
                 "source_type": src["source_type"],
                 "source_id": rid,
-            })
+            }
+            if end_date_field and end_day != day:
+                item["end_date"] = end_day
+            elif end_date_field:
+                item["end_date"] = end_day
+            out.append(item)
     return out
 
 
@@ -5294,9 +5326,12 @@ def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
 
     Uses source=\"deadline\" (not \"helm\") so the UI does not treat them as
     editable helm_events — PATCH/DELETE only apply to user-created helm rows.
+    Range sources (leave) set end_at from end_date when present.
     """
     events = []
     for u in upcoming:
+        start_day = u["date"]
+        end_day = u.get("end_date") or start_day
         ev = {
             "id": f"deadline_{u['id']}",
             "title": u["title"],
@@ -5307,17 +5342,28 @@ def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
             "prep": None,
             "importance": "medium",
             "source": "deadline",
-            "date": u["date"],
-            "start_at": f"{u['date']}T00:00:00+00:00",
-            "end_at": f"{u['date']}T23:59:59+00:00",
+            "date": start_day,
+            "start_at": f"{start_day}T00:00:00+00:00",
+            "end_at": f"{end_day}T23:59:59+00:00",
             "all_day": True,
         }
+        if u.get("end_date"):
+            ev["end_date"] = u["end_date"]
         if u.get("source_type"):
             ev["source_type"] = u["source_type"]
         if u.get("source_id"):
             ev["source_id"] = u["source_id"]
         events.append(ev)
     return events
+
+
+def _upcoming_overlaps_week(item: dict, week_start_s: str, week_end_s: str) -> bool:
+    """True when item's date (or start–end range) overlaps the week inclusive."""
+    start = item.get("date") or ""
+    end = item.get("end_date") or start
+    if not start:
+        return False
+    return start <= week_end_s and end >= week_start_s
 
 
 @api_router.get("/calendar")
@@ -5370,7 +5416,9 @@ async def calendar(
     data["upcoming"] = upcoming
     week_end = (week_anchor + timedelta(days=6)).strftime("%Y-%m-%d")
     week_start_s = week_anchor.strftime("%Y-%m-%d")
-    in_week_deadlines = [u for u in upcoming if week_start_s <= u["date"] <= week_end]
+    in_week_deadlines = [
+        u for u in upcoming if _upcoming_overlaps_week(u, week_start_s, week_end)
+    ]
     events = list(data.get("events") or data.get("meetings") or [])
     if not data.get("events"):
         events = _normalize_seed_events(events, datetime.now(timezone.utc).date())
@@ -8631,6 +8679,178 @@ async def delete_hr_offboarding(instance_id: str, principal=Depends(get_principa
     return {"ok": True}
 
 
+HR_LEAVE_TYPES = frozenset({"vacation", "sick", "personal", "other"})
+HR_LEAVE_STATUSES = frozenset({"pending", "approved", "denied"})
+HR_LEAVE_TYPE_LABELS = {
+    "vacation": "Vacation",
+    "sick": "Sick",
+    "personal": "Personal",
+    "other": "Other",
+}
+
+
+class HrLeaveCreate(BaseModel):
+    employee_id: str
+    type: str = "vacation"
+    start_date: str
+    end_date: str
+    note: str = ""
+
+
+class HrLeavePatch(BaseModel):
+    status: str
+
+
+def _leave_title(employee_name: str, leave_type: str) -> str:
+    label = HR_LEAVE_TYPE_LABELS.get(leave_type, leave_type or "Leave")
+    name = (employee_name or "").strip() or "Employee"
+    return f"{name} — {label}"
+
+
+async def _hr_employee_for_leave(employee_id: str, department_id: str) -> dict:
+    emp = await db.hr_employees.find_one(
+        {"id": employee_id, "department_id": department_id},
+        {"_id": 0},
+    )
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return emp
+
+
+def _can_request_leave_for_employee(
+    principal: dict, membership: dict | None, emp: dict,
+) -> bool:
+    if _can_lead_hr(principal, membership):
+        return True
+    linked = (emp.get("linked_user_id") or "").strip()
+    return bool(linked) and linked == principal["user_id"]
+
+
+@api_router.get("/hr/leave-requests")
+async def list_hr_leave_requests(
+    principal=Depends(get_principal),
+    status: Optional[str] = Query(None),
+    employee_id: Optional[str] = Query(None),
+):
+    dept = await _hr_department(principal)
+    filt: dict = {"department_id": dept["department_id"]}
+    if status is not None:
+        st = status.strip().lower()
+        if st not in HR_LEAVE_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        filt["status"] = st
+    if employee_id is not None:
+        eid = employee_id.strip()
+        if eid:
+            filt["employee_id"] = eid
+    rows = await db.hr_leave_requests.find(filt, {"_id": 0}).to_list(2000)
+    # Pending first, then by start_date ascending within group
+    rows.sort(key=lambda r: (
+        0 if r.get("status") == "pending" else 1,
+        r.get("start_date") or "",
+        r.get("created_at") or "",
+    ))
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_hr(principal, membership)
+    return {
+        "department_id": dept["department_id"],
+        "name": dept.get("name") or "HR",
+        "requests": [{k: v for k, v in r.items() if k != "_id"} for r in rows],
+        "is_lead": is_lead,
+        "can_approve": is_lead,
+        "my_user_id": principal["user_id"],
+        "types": sorted(HR_LEAVE_TYPES),
+        "statuses": sorted(HR_LEAVE_STATUSES),
+    }
+
+
+@api_router.post("/hr/leave-requests")
+async def create_hr_leave_request(payload: HrLeaveCreate, principal=Depends(get_principal)):
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    # Any HR member can create (for self / linked employee); leads may create for anyone.
+    if not membership and not dept_access.is_workspace_ceo(principal):
+        raise HTTPException(status_code=403, detail="You do not have access to HR")
+    employee_id = (payload.employee_id or "").strip()
+    if not employee_id:
+        raise HTTPException(status_code=400, detail="employee_id is required")
+    emp = await _hr_employee_for_leave(employee_id, dept["department_id"])
+    if not _can_request_leave_for_employee(principal, membership, emp):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only request leave for an employee linked to your account",
+        )
+    leave_type = (payload.type or "vacation").strip().lower()
+    if leave_type not in HR_LEAVE_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid leave type")
+    start = _parse_calendar_day(payload.start_date)
+    end = _parse_calendar_day(payload.end_date)
+    if not start or not end:
+        raise HTTPException(status_code=400, detail="start_date and end_date must be YYYY-MM-DD")
+    if end < start:
+        raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": f"hrleave_{uuid.uuid4().hex[:10]}",
+        "employee_id": employee_id,
+        "employee_name": (emp.get("name") or "").strip(),
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "type": leave_type,
+        "start_date": start,
+        "end_date": end,
+        "note": (payload.note or "").strip()[:500],
+        "status": "pending",
+        "requested_by": principal["user_id"],
+        "decided_by": None,
+        "title": _leave_title(emp.get("name") or "", leave_type),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.hr_leave_requests.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return {"ok": True, "request": doc}
+
+
+@api_router.patch("/hr/leave-requests/{request_id}")
+async def patch_hr_leave_request(
+    request_id: str,
+    payload: HrLeavePatch,
+    principal=Depends(get_principal),
+):
+    """Approve or deny a leave request — HR lead / CEO only."""
+    dept = await _hr_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_hr(principal, membership):
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can approve or deny leave")
+    row = await db.hr_leave_requests.find_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+        {"_id": 0},
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    st = (payload.status or "").strip().lower()
+    if st not in ("approved", "denied"):
+        raise HTTPException(status_code=400, detail="status must be approved or denied")
+    now = datetime.now(timezone.utc).isoformat()
+    upd = {
+        "status": st,
+        "decided_by": principal["user_id"],
+        "updated_at": now,
+    }
+    await db.hr_leave_requests.update_one(
+        {"id": request_id, "department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    return {"ok": True, "request": {**row, **upd}}
+
+
 # ------------------------- Ask Helm -------------------------
 class AskInput(BaseModel):
     message: str
@@ -10022,6 +10242,7 @@ _WORKSPACE_COLLECTIONS = (
     "procurement_requests", "legal_matters",
     "maintenance_tickets", "hr_onboarding_template", "hr_onboarding_instances",
     "hr_employees", "hr_offboarding_template", "hr_offboarding_instances",
+    "hr_leave_requests",
     "department_report_drafts",
 )
 
@@ -10565,6 +10786,11 @@ async def _ensure_indexes():
         (db.hr_offboarding_instances, [("department_id", 1), ("overall_status", 1)], {}),
         (db.hr_offboarding_instances, [("department_id", 1), ("employee_id", 1)], {}),
         (db.hr_offboarding_instances, [("workspace_id", 1)], {}),
+        (db.hr_leave_requests, [("id", 1)], {"unique": True}),
+        (db.hr_leave_requests, [("department_id", 1), ("status", 1)], {}),
+        (db.hr_leave_requests, [("department_id", 1), ("employee_id", 1)], {}),
+        (db.hr_leave_requests, [("workspace_id", 1)], {}),
+        (db.hr_leave_requests, [("department_id", 1), ("start_date", 1)], {}),
         (db.department_report_drafts, [("id", 1)], {"unique": True}),
         (db.department_report_drafts, [("workspace_id", 1), ("status", 1)], {}),
         (db.department_report_drafts, [("workspace_id", 1), ("department_type", 1), ("week_start", 1)], {"unique": True}),

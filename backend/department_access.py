@@ -145,6 +145,7 @@ DEPARTMENT_FEATURE_COLLECTIONS = (
     "hr_employees",
     "hr_offboarding_instances",
     "hr_offboarding_template",
+    "hr_leave_requests",
 )
 
 # Back-compat alias used by older call sites / tests.
