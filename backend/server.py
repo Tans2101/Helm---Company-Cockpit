@@ -3308,6 +3308,80 @@ class DealInput(BaseModel):
     close_date: str = ""
 
 
+def _deal_revenue_month(close_date: str, *, now: Optional[datetime] = None) -> str:
+    """YYYY-MM from close_date when parseable, else current UTC month."""
+    now = now or datetime.now(timezone.utc)
+    raw = (close_date or "").strip()
+    if raw:
+        try:
+            if "T" in raw:
+                raw = raw.split("T", 1)[0]
+            datetime.strptime(raw[:10], "%Y-%m-%d")
+            return raw[:7]
+        except ValueError:
+            pass
+    return now.strftime("%Y-%m")
+
+
+async def _ensure_deal_won_revenue_entry(deal: dict, principal: dict) -> tuple[Optional[dict], bool]:
+    """Create at most one revenue financial_entries row for a won deal.
+
+    Returns (entry, created). Uses source_deal_id uniqueness (same idea as
+    ai_upload's one-commit-per-document guard).
+    """
+    ws = principal["workspace_id"]
+    deal_id = deal.get("id")
+    if not deal_id:
+        return None, False
+    existing = await db.financial_entries.find_one(
+        {"workspace_id": ws, "source_deal_id": deal_id},
+        {"_id": 0},
+    )
+    if existing:
+        return existing, False
+
+    try:
+        entry_name = require_entry_name(deal.get("name") or "Won deal")
+    except ValueError:
+        entry_name = "Won deal"
+    amount = round(float(deal.get("value") or 0), 2)
+    if amount < 0:
+        amount = 0.0
+    month = _deal_revenue_month(deal.get("close_date") or "")
+    finance_dept_id = await dept_migrate.finance_department_id(db, ws)
+    entry = {
+        "id": f"fe_{uuid.uuid4().hex[:10]}",
+        "workspace_id": ws,
+        "department_id": finance_dept_id,
+        "type": "revenue",
+        "category": "Sales",
+        "name": entry_name,
+        "amount": amount,
+        "month": month,
+        "recurring": False,
+        "recurrence": None,
+        "note": f"Auto-created from won deal {deal_id}",
+        "source": "deal",
+        "source_deal_id": deal_id,
+        "created_by": principal["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await db.financial_entries.insert_one(dict(entry))
+    except Exception as exc:
+        # Duplicate key / concurrent win — treat as already created.
+        msg = str(exc).lower()
+        if "duplicate" in msg or "e11000" in msg:
+            existing = await db.financial_entries.find_one(
+                {"workspace_id": ws, "source_deal_id": deal_id},
+                {"_id": 0},
+            )
+            return existing, False
+        raise
+    entry.pop("_id", None)
+    return entry, True
+
+
 @api_router.get("/deals")
 async def list_deals(
     principal=Depends(get_principal),
@@ -3382,18 +3456,50 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
            "owner_name": payload.owner_name.strip() or d.get("owner_name", ""),
            "close_date": payload.close_date.strip(), "updated_at": datetime.now(timezone.utc).isoformat()}
     await db.deals.update_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
+    updated = {**d, **upd}
+    financial_entry = None
+    production_prompt = False
+    production_prefill = None
     if stage != d["stage"]:
         currency = await _workspace_currency(principal["workspace_id"])
         if stage == "won":
             summary = f"Won {upd['name']} · {fmt_money(upd['value'], currency)}"
+            financial_entry, _created = await _ensure_deal_won_revenue_entry(updated, principal)
+            if financial_entry:
+                await log_activity(
+                    principal, "financials", "entry.add",
+                    f"Logged revenue from won deal · {financial_entry['name']} "
+                    f"{fmt_money(financial_entry['amount'], currency)} ({financial_entry['month']})",
+                    {
+                        "type": "revenue",
+                        "amount": financial_entry["amount"],
+                        "month": financial_entry["month"],
+                        "source": "deal",
+                        "source_deal_id": deal_id,
+                    },
+                )
+            prod_dept = await dept_migrate.get_enabled_department(
+                db, principal["workspace_id"], dept_catalog.TYPE_PRODUCTION,
+            )
+            if prod_dept:
+                production_prompt = True
+                production_prefill = {
+                    "reference": (updated.get("name") or "").strip()[:200],
+                    "customer": (updated.get("company") or "").strip()[:200],
+                    "source_deal_id": deal_id,
+                }
         elif stage == "lost":
             summary = f"Lost {upd['name']}"
         else:
             summary = f"{upd['name']} moved to {STAGE_LABEL[stage]}"
         await log_activity(principal, "sales", "deal.stage", summary, {"stage": stage})
-    # Return updated deal including immutable created_by fields
-    updated = {**d, **upd}
-    return {"ok": True, "deal": updated}
+    return {
+        "ok": True,
+        "deal": updated,
+        "financial_entry": financial_entry,
+        "production_prompt": production_prompt,
+        "production_prefill": production_prefill,
+    }
 
 
 @api_router.delete("/deals/{deal_id}")
@@ -5783,6 +5889,7 @@ class ProductionWorkOrderCreate(BaseModel):
     due_date: str = ""
     linked_procurement_request_id: Optional[str] = None
     linked_maintenance_ticket_id: Optional[str] = None
+    source_deal_id: Optional[str] = None
     assigned_user_ids: list[str] = []
     notes: str = ""
     blocked: bool = False
@@ -5802,6 +5909,7 @@ class ProductionWorkOrderPatch(BaseModel):
     blocked_reason: Optional[dict] = None
     linked_procurement_request_id: Optional[str] = None
     linked_maintenance_ticket_id: Optional[str] = None
+    source_deal_id: Optional[str] = None
     assigned_user_ids: Optional[list[str]] = None
     notes: Optional[str] = None
 
@@ -5928,6 +6036,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "blocked_reason": blocked_reason,
         "linked_procurement_request_id": linked,
         "linked_maintenance_ticket_id": linked_mt,
+        "source_deal_id": (payload.source_deal_id or "").strip() or None,
         "assigned_user_ids": [u for u in (payload.assigned_user_ids or []) if u],
         "notes": (payload.notes or "").strip()[:2000],
         "created_at": now,
@@ -6003,6 +6112,9 @@ async def patch_production_work_order(
             upd["linked_maintenance_ticket_id"] = mt
         else:
             upd["linked_maintenance_ticket_id"] = None
+    if payload.source_deal_id is not None:
+        sid = payload.source_deal_id.strip()
+        upd["source_deal_id"] = sid or None
 
     next_status = order.get("status")
     if payload.status is not None:
@@ -9455,6 +9567,7 @@ async def _ensure_indexes():
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1), ("month", -1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
+        (db.financial_entries, [("workspace_id", 1), ("source_deal_id", 1)], {"unique": True, "sparse": True}),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
         (db.documents, [("status", 1), ("uploaded_at", 1)], {}),

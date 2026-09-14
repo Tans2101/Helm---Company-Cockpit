@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import {
+  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
+} from "@/components/kit";
 import { fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,8 @@ export default function Pipeline() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
+  const [productionPrompt, setProductionPrompt] = useState(null);
+  const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
 
   const fetchPage = useCallback(async (before = null, append = false) => {
     const params = { limit: PAGE_LIMIT };
@@ -90,6 +94,12 @@ export default function Pipeline() {
   const m = meta.metrics;
   const sym = meta.currency_symbol || "$";
 
+  const maybeOfferProduction = (res) => {
+    if (res?.production_prompt && res?.production_prefill) {
+      setProductionPrompt(res.production_prefill);
+    }
+  };
+
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
     setEditing(d.id);
@@ -102,21 +112,57 @@ export default function Pipeline() {
     setBusy(true);
     const payload = { ...form, value: parseFloat(form.value) || 0 };
     try {
-      if (editing) { await api.patch(`/deals/${editing}`, payload); toast.success("Deal updated"); }
-      else { await api.post("/deals", payload); toast.success("Deal added to pipeline"); }
+      if (editing) {
+        const { data: res } = await api.patch(`/deals/${editing}`, payload);
+        toast.success("Deal updated");
+        maybeOfferProduction(res);
+      } else {
+        await api.post("/deals", payload);
+        toast.success("Deal added to pipeline");
+      }
       setShowForm(false); reload();
     } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
     finally { setBusy(false); }
   };
 
   const changeStage = async (d, stage) => {
-    try { await api.patch(`/deals/${d.id}`, { name: d.name, company: d.company, value: d.value, stage, owner_name: d.owner_name, close_date: d.close_date }); reload(); }
-    catch (e) { toast.error("Could not update stage"); }
+    try {
+      const { data: res } = await api.patch(`/deals/${d.id}`, {
+        name: d.name,
+        company: d.company,
+        value: d.value,
+        stage,
+        owner_name: d.owner_name,
+        close_date: d.close_date,
+      });
+      maybeOfferProduction(res);
+      reload();
+    } catch (e) {
+      toast.error("Could not update stage");
+    }
   };
   const del = async (d) => {
     if (!window.confirm(`Delete ${d.name}?`)) return;
     try { await api.delete(`/deals/${d.id}`); reload(); toast.success("Deal removed"); }
     catch (e) { toast.error("Could not delete"); }
+  };
+
+  const confirmCreateWorkOrder = async () => {
+    if (!productionPrompt) return;
+    setCreatingWorkOrder(true);
+    try {
+      await api.post("/production/work-orders", {
+        reference: productionPrompt.reference || "Won deal",
+        customer: productionPrompt.customer || "",
+        source_deal_id: productionPrompt.source_deal_id || null,
+      });
+      toast.success("Production work order created");
+      setProductionPrompt(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not create work order");
+    } finally {
+      setCreatingWorkOrder(false);
+    }
   };
 
   const action = canWrite ? (
@@ -232,6 +278,25 @@ export default function Pipeline() {
           </GlassCard>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(productionPrompt)}
+        title="Create a Production work order for this?"
+        description={
+          productionPrompt
+            ? `Pre-fill reference “${productionPrompt.reference || "Won deal"}”`
+              + (productionPrompt.customer ? ` for ${productionPrompt.customer}` : "")
+              + ". Decline leaves the revenue entry in place with no Production work order."
+            : ""
+        }
+        confirmLabel="Create work order"
+        cancelLabel="Not now"
+        destructive={false}
+        busy={creatingWorkOrder}
+        onConfirm={confirmCreateWorkOrder}
+        onCancel={() => setProductionPrompt(null)}
+        testId="won-deal-production-prompt"
+      />
     </div>
   );
 }
