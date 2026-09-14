@@ -470,9 +470,10 @@ def _ticket_open_interval(
         return None, None
     status = str(ticket.get("status") or "").strip().lower()
     if status == "resolved":
+        # Prefer updated_at (set when marked resolved); completed_at is an equivalent stamp.
         end = (
-            _parse_iso_dt(ticket.get("completed_at"))
-            or _parse_iso_dt(ticket.get("updated_at"))
+            _parse_iso_dt(ticket.get("updated_at"))
+            or _parse_iso_dt(ticket.get("completed_at"))
             or now
         )
     else:
@@ -491,7 +492,7 @@ def compute_downtime(
 ) -> dict:
     """Ticket-open duration totals (not confirmed machine-down time).
 
-    Resolved tickets: completed_at/updated_at − created_at.
+    Resolved tickets: updated_at/completed_at − created_at.
     Open tickets: now − created_at.
     When period_start/period_end are set, only the overlapping portion counts.
     """

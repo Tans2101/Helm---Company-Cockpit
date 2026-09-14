@@ -291,18 +291,37 @@ export default function Maintenance() {
       </div>
 
       {downtimeSummary && (
-        <p
-          className="text-xs text-helm-muted mb-4"
-          data-testid="maintenance-downtime-summary"
-          title={downtimeSummary.metric_label || "time ticket was open"}
-        >
-          Ticket-open time this month ({downtimeSummary.period_label || downtimeSummary.period || "this month"}):{" "}
-          <span className="text-helm-fg font-mono">
-            {formatTicketOpenHours(downtimeSummary.total_seconds)}
-          </span>
-          {" "}across {downtimeSummary.ticket_count || 0} ticket{(downtimeSummary.ticket_count || 0) === 1 ? "" : "s"}
-          {" "}(not confirmed machine-down time)
-        </p>
+        <div className="mb-4 space-y-1.5" data-testid="maintenance-downtime-summary">
+          <p
+            className="text-xs text-helm-muted"
+            title={downtimeSummary.metric_label || "time ticket was open"}
+          >
+            Total ticket-open time this month
+            {downtimeSummary.period_label ? ` (${downtimeSummary.period_label})` : ""}:{" "}
+            <span className="text-helm-fg font-mono">
+              {formatTicketOpenHours(downtimeSummary.total_seconds)}
+            </span>
+            {" "}across {downtimeSummary.ticket_count || 0} ticket
+            {(downtimeSummary.ticket_count || 0) === 1 ? "" : "s"}
+            {" — "}time tickets were open, not confirmed machine-down time
+          </p>
+          {(downtimeSummary.by_equipment || []).length > 0 && (
+            <ul
+              className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono text-helm-muted"
+              data-testid="maintenance-downtime-by-equipment"
+            >
+              {downtimeSummary.by_equipment.slice(0, 8).map((row) => (
+                <li key={row.equipment_name}>
+                  <span className="text-helm-fg">{row.equipment_name}</span>
+                  {": "}
+                  {formatTicketOpenHours(row.total_seconds)}
+                  {" / "}
+                  {row.ticket_count} ticket{row.ticket_count === 1 ? "" : "s"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {visible.length === 0 ? (

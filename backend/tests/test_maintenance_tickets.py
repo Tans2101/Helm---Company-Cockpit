@@ -409,7 +409,14 @@ def test_equipment_history_and_chronic_badge_on_list(maint_api):
     assert listed.status_code == 200
     payload = listed.json()
     assert "downtime_summary" in payload
-    assert payload["downtime_summary"]["metric_label"]
+    summary = payload["downtime_summary"]
+    assert summary["metric_label"]
+    assert "open" in summary["metric_label"].lower()
+    assert "machine-down" not in summary["metric_label"].lower()
+    assert "by_equipment" in summary
+    by_name = {r["equipment_name"]: r for r in summary["by_equipment"]}
+    assert "CNC Mill #3" in by_name
+    assert by_name["CNC Mill #3"]["ticket_count"] >= 3
     cnc = [t for t in payload["tickets"] if t["equipment_name"] == "CNC Mill #3"]
     assert cnc
     assert cnc[0]["is_chronic_equipment"] is True
