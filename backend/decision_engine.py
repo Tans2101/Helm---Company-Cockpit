@@ -47,6 +47,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     "overdue_procurement_blocking_production",
     # Past legal due dates (fact only — no advisory language).
     "overdue_legal_deadline",
+    # Leave request awaiting approval longer than the stale threshold.
+    "pending_leave_request",
 })
 DELEGATE_SIGNAL_TYPES = frozenset({
     "overdue_task",
@@ -856,6 +858,46 @@ def detect_stalled_onboarding(
     return out
 
 
+def detect_pending_leave_requests(
+    requests: list,
+    *,
+    stale_days: int = 3,
+    now: Optional[datetime] = None,
+) -> list:
+    """Flag `pending` leave requests with no update for more than `stale_days`.
+
+    Fact-only text — someone is waiting on an approve/deny decision.
+    Does not touch confidential HR records; leave requests only.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=max(0, stale_days))
+    out = []
+    for req in requests or []:
+        if (req.get("status") or "").strip().lower() != "pending":
+            continue
+        updated = _item_last_activity(req)
+        if updated is None or updated >= cutoff:
+            continue
+        pending_days = (now - updated).days
+        name = (req.get("employee_name") or "").strip() or "an employee"
+        out.append(_signal(
+            "pending_leave_request",
+            "medium",
+            summary=f"Leave request from {name} has been pending {pending_days} days.",
+            detail=(
+                f"Leave request from {name} has been pending {pending_days} days "
+                f"(last update {updated.date().isoformat()})."
+            ),
+            related_id=req.get("id"),
+            department_type=TYPE_HR,
+            department_name="HR",
+            item_label=name,
+            status="pending",
+            pending_days=pending_days,
+            employee_id=req.get("employee_id"),
+        ))
+    return out
+
 
 def detect_overdue_work_orders(work_orders: list, *, today: Optional[date] = None) -> list:
     """Flag work orders whose due_date has passed and status is not done/completed.
@@ -1074,6 +1116,8 @@ def collect_department_signals(
         dtype = spec.get("type")
         if dtype == TYPE_HR:
             signals.extend(detect_stalled_onboarding(items, spec, now=now))
+            leave_requests = bundle.get("leave_requests") or []
+            signals.extend(detect_pending_leave_requests(leave_requests, now=now))
             continue
         if dtype == TYPE_PRODUCTION:
             signals.extend(detect_overdue_work_orders(items, today=now.date()))

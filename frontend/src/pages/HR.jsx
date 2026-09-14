@@ -42,6 +42,7 @@ export default function HR() {
   const { data: offData, reload: reloadOff } = useFetch("/hr/offboarding");
   const { data: offTmplData, reload: reloadOffTmpl } = useFetch("/hr/offboarding/template");
   const { data: leaveData, reload: reloadLeave } = useFetch("/hr/leave-requests");
+  const { data: summaryData, reload: reloadSummary } = useFetch("/hr/summary");
   const { data: membersData } = useFetch("/members");
   const [showActive, setShowActive] = useState(false);
   const [showCompletedOff, setShowCompletedOff] = useState(false);
@@ -175,7 +176,7 @@ export default function HR() {
         step_id: step.id,
         ...patch,
       });
-      await Promise.all([reload(), reloadEmp()]);
+      await Promise.all([reload(), reloadEmp(), reloadSummary()]);
       if (res?.instance?.id) setSelectedId(res.instance.id);
       if (res?.instance?.overall_status === "active") {
         toast.success("Onboarding complete — employee record created");
@@ -278,7 +279,7 @@ export default function HR() {
         step_id: step.id,
         ...patch,
       });
-      await Promise.all([reloadOff(), reloadEmp()]);
+      await Promise.all([reloadOff(), reloadEmp(), reloadSummary()]);
       if (res?.instance?.id) setSelectedOffId(res.instance.id);
       if (res?.instance?.overall_status === "active") {
         toast.success("Offboarding complete — employee marked departed");
@@ -328,6 +329,7 @@ export default function HR() {
       setLeaveForm({ employee_id: "", type: "vacation", start_date: "", end_date: "", note: "" });
       setAddingLeave(false);
       await reloadLeave();
+      await reloadSummary();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not submit leave request");
     } finally {
@@ -341,6 +343,7 @@ export default function HR() {
       await api.patch(`/hr/leave-requests/${req.id}`, { status });
       toast.success(status === "approved" ? "Leave approved" : "Leave denied");
       await reloadLeave();
+      await reloadSummary();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update leave request");
     } finally {
@@ -405,6 +408,40 @@ export default function HR() {
           </div>
         )}
       />
+
+      {summaryData?.headcount && (
+        <div
+          className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5"
+          data-testid="hr-summary-stats"
+        >
+          {[
+            { key: "active", label: "Active", value: summaryData.headcount.active ?? 0 },
+            { key: "on_leave", label: "On leave", value: summaryData.headcount.on_leave ?? 0 },
+            { key: "departed", label: "Departed", value: summaryData.headcount.departed ?? 0 },
+            {
+              key: "pending_leave",
+              label: "Pending leave",
+              value: summaryData.pending_leave_requests ?? 0,
+            },
+            {
+              key: "departed_90d",
+              label: "Departed (90d)",
+              value: summaryData.departed_last_90_days ?? 0,
+            },
+          ].map((s) => (
+            <div
+              key={s.key}
+              className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5"
+              data-testid={`hr-summary-${s.key}`}
+            >
+              <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">
+                {s.label}
+              </p>
+              <p className="font-mono text-xl text-helm-fg mt-1">{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-1 mb-5 border-b border-helm-line" data-testid="hr-tabs">
         {tabs.map((t) => (

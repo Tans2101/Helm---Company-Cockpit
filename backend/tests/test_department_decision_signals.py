@@ -57,6 +57,7 @@ async def test_department_signal_inputs_skips_disabled_types():
     mock_db.procurement_requests = Coll([])
     mock_db.maintenance_tickets = Coll([])
     mock_db.hr_onboarding_instances = Coll([])
+    mock_db.hr_leave_requests = Coll([])
 
     async def enabled(_db, workspace_id, dept_type):
         if dept_type == "production":

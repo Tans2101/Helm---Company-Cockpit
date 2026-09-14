@@ -2780,7 +2780,14 @@ async def _department_signal_inputs(workspace_id: str) -> list:
             )
             for item in items:
                 item["blocking_production_orders"] = list(blocking.get(item.get("id")) or [])
-        out.append({"spec": spec, "items": items})
+        bundle = {"spec": spec, "items": items}
+        if spec.get("type") == dept_catalog.TYPE_HR:
+            # Leave requests are separate from onboarding instances (DEPT_SPECS).
+            leaves = await db.hr_leave_requests.find(
+                {"workspace_id": workspace_id}, {"_id": 0},
+            ).to_list(500)
+            bundle["leave_requests"] = leaves
+        out.append(bundle)
     return out
 
 
@@ -8359,6 +8366,38 @@ async def list_hr_employees(
         "can_edit": is_lead,
         "my_user_id": principal["user_id"],
         "statuses": sorted(HR_EMPLOYEE_STATUSES),
+    }
+
+
+@api_router.get("/hr/summary")
+async def hr_summary(principal=Depends(get_principal)):
+    """Headcount and leave backlog for the HR page — no confidential hr_records."""
+    dept = await _hr_department(principal)
+    dept_id = dept["department_id"]
+    employees = await db.hr_employees.find(
+        {"department_id": dept_id}, {"_id": 0},
+    ).to_list(5000)
+    headcount = {"active": 0, "on_leave": 0, "departed": 0}
+    now = datetime.now(timezone.utc)
+    cutoff_90 = now - timedelta(days=90)
+    departed_last_90_days = 0
+    for emp in employees:
+        st = (emp.get("status") or "").strip().lower()
+        if st in headcount:
+            headcount[st] += 1
+        if st == "departed":
+            departed_at = _parse_iso_dt(emp.get("departed_at"))
+            if departed_at is not None and departed_at >= cutoff_90:
+                departed_last_90_days += 1
+    leave_rows = await db.hr_leave_requests.find(
+        {"department_id": dept_id, "status": "pending"}, {"_id": 0},
+    ).to_list(5000)
+    return {
+        "department_id": dept_id,
+        "name": dept.get("name") or "HR",
+        "headcount": headcount,
+        "pending_leave_requests": len(leave_rows),
+        "departed_last_90_days": departed_last_90_days,
     }
 
 
