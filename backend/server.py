@@ -6979,6 +6979,7 @@ async def _enrich_maintenance_ticket(
     users: dict | None = None,
     *,
     blocking_by_ticket: dict | None = None,
+    reliability_by_name: dict | None = None,
 ) -> dict:
     out = {k: v for k, v in ticket.items() if k != "_id"}
     uids = [out.get("reported_by"), out.get("assigned_technician")]
@@ -6999,6 +7000,10 @@ async def _enrich_maintenance_ticket(
             out["blocking_production_orders"] = list(mapping.get(tid) or [])
         else:
             out["blocking_production_orders"] = []
+    eq_key = decision_engine._equipment_name_key(out.get("equipment_name"))
+    rel = (reliability_by_name or {}).get(eq_key) if eq_key else None
+    out["recent_repairs_90d"] = int(rel["ticket_count_90d"]) if rel else 0
+    out["is_chronic_equipment"] = bool(rel["is_chronic"]) if rel else False
     return out
 
 
@@ -7014,8 +7019,11 @@ async def _enrich_maintenance_tickets(rows: list, workspace_id: str | None = Non
         blocking = await _blocking_production_orders_by_maintenance_ticket(
             ws, [r.get("id") for r in rows if r.get("id")],
         )
+    reliability = decision_engine.equipment_reliability_by_name(rows)
     return [
-        await _enrich_maintenance_ticket(r, users, blocking_by_ticket=blocking)
+        await _enrich_maintenance_ticket(
+            r, users, blocking_by_ticket=blocking, reliability_by_name=reliability,
+        )
         for r in rows
     ]
 
@@ -7076,18 +7084,54 @@ async def list_maintenance_tickets(
         rows, workspace_id=principal["workspace_id"],
     )
     items = _sort_maintenance_tickets(items)
+    month_start, month_end = decision_engine.month_period_bounds()
+    downtime = decision_engine.compute_downtime(
+        rows, period_start=month_start, period_end=month_end,
+    )
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Engineering & Maintenance",
         "tickets": items,
         "statuses": ["reported", "diagnosed", "in_repair", "resolved"],
         "priorities": ["low", "medium", "high"],
+        "downtime_summary": {
+            **downtime,
+            "period": month_start.strftime("%Y-%m"),
+            "period_label": month_start.strftime("%B %Y"),
+        },
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_assign": is_lead,
         "can_delete": is_lead,
         "my_user_id": principal["user_id"],
     }
+
+
+@api_router.get("/maintenance/equipment-history")
+async def maintenance_equipment_history(
+    equipment_name: str = Query(""),
+    principal=Depends(get_principal),
+):
+    """Exact-match (case-insensitive) repair history for one equipment name."""
+    dept = await _maintenance_department(principal)
+    needle = (equipment_name or "").strip()
+    if not needle:
+        return decision_engine.build_equipment_history([], "")
+    rows = await db.maintenance_tickets.find(
+        {"department_id": dept["department_id"]},
+        {
+            "_id": 0,
+            "id": 1,
+            "equipment_name": 1,
+            "description": 1,
+            "status": 1,
+            "priority": 1,
+            "created_at": 1,
+            "updated_at": 1,
+            "completed_at": 1,
+        },
+    ).to_list(2000)
+    return decision_engine.build_equipment_history(rows, needle)
 
 
 @api_router.post("/maintenance/tickets")

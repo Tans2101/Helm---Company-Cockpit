@@ -286,9 +286,106 @@ def test_collect_signals_skips_departments_not_passed_in():
 
 def test_department_signal_type_buckets():
     assert "urgent_maintenance" in eng.DECISION_SIGNAL_TYPES
+    assert "chronic_equipment_failure" in eng.DECISION_SIGNAL_TYPES
     assert "stalled_department_item" in eng.DELEGATE_SIGNAL_TYPES
     assert "stalled_onboarding" in eng.DELEGATE_SIGNAL_TYPES
     assert "stalled_department_item" not in eng.DECISION_SIGNAL_TYPES
+
+
+def test_chronic_equipment_failure_threshold_and_text():
+    now = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    spec = eng.SPEC_BY_TYPE["engineering_maintenance"]
+    tickets = []
+    for i, days_ago in enumerate((5, 20, 40)):
+        tickets.append({
+            "id": f"mt{i}",
+            "equipment_name": "CNC Mill #3",
+            "status": "resolved" if i < 2 else "reported",
+            "description": f"Issue {i}",
+            "created_at": (now - timedelta(days=days_ago)).isoformat(),
+            "updated_at": (now - timedelta(days=days_ago - 1)).isoformat(),
+            "completed_at": (now - timedelta(days=days_ago - 1)).isoformat() if i < 2 else None,
+        })
+    # Only 2 tickets → no signal
+    assert eng.detect_chronic_equipment_failure(tickets[:2], spec, now=now) == []
+    # 3 tickets → fires, names equipment + count
+    sigs = eng.detect_chronic_equipment_failure(tickets, spec, now=now)
+    assert len(sigs) == 1
+    assert sigs[0]["type"] == "chronic_equipment_failure"
+    assert sigs[0]["severity"] == "high"
+    assert "CNC Mill #3" in sigs[0]["summary"]
+    assert "3 times" in sigs[0]["summary"] or "3" in sigs[0]["summary"]
+    assert "replacing" in sigs[0]["summary"].lower() or "replace" in sigs[0]["summary"].lower()
+    assert sigs[0]["ticket_count"] == 3
+    # Downtime hours folded into summary when available
+    assert "hour" in sigs[0]["summary"].lower()
+    # Below min_count with different equipment names must not merge
+    mixed = [
+        {**tickets[0], "equipment_name": "A"},
+        {**tickets[1], "equipment_name": "B"},
+        {**tickets[2], "equipment_name": "C"},
+    ]
+    assert eng.detect_chronic_equipment_failure(mixed, spec, now=now) == []
+
+
+def test_compute_downtime_resolved_and_open():
+    now = datetime(2026, 9, 15, 12, tzinfo=timezone.utc)
+    tickets = [
+        {
+            "id": "1",
+            "equipment_name": "Lathe",
+            "status": "resolved",
+            "created_at": "2026-09-10T00:00:00+00:00",
+            "completed_at": "2026-09-12T00:00:00+00:00",
+        },
+        {
+            "id": "2",
+            "equipment_name": "Lathe",
+            "status": "reported",
+            "created_at": "2026-09-14T00:00:00+00:00",
+        },
+        {
+            "id": "3",
+            "equipment_name": "Press",
+            "status": "resolved",
+            "created_at": "2026-08-01T00:00:00+00:00",
+            "updated_at": "2026-08-02T00:00:00+00:00",
+        },
+    ]
+    full = eng.compute_downtime(tickets, now=now)
+    # Lathe: 2 days resolved + 1.5 days open = 3.5 days; Press: 1 day
+    assert full["ticket_count"] == 3
+    assert full["total_seconds"] == (2 * 86400) + (1.5 * 86400) + 86400
+    by_name = {r["equipment_name"]: r for r in full["by_equipment"]}
+    assert by_name["Lathe"]["ticket_count"] == 2
+    assert "time ticket was open" in (full.get("metric_label") or "")
+
+    month_start, month_end = eng.month_period_bounds(now)
+    month = eng.compute_downtime(
+        tickets, now=now, period_start=month_start, period_end=month_end,
+    )
+    # August press ticket falls outside September
+    assert month["ticket_count"] == 2
+    assert month["total_seconds"] == (2 * 86400) + (1.5 * 86400)
+
+
+def test_build_equipment_history_case_insensitive_exact():
+    now = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    tickets = [
+        {"id": "a", "equipment_name": "CNC #1", "description": "Belt", "status": "resolved",
+         "created_at": (now - timedelta(days=10)).isoformat()},
+        {"id": "b", "equipment_name": "cnc #1", "description": "Bearing", "status": "reported",
+         "created_at": (now - timedelta(days=2)).isoformat()},
+        {"id": "c", "equipment_name": "CNC #1 Extra", "description": "Other", "status": "reported",
+         "created_at": (now - timedelta(days=1)).isoformat()},
+        {"id": "d", "equipment_name": "CNC #1", "description": "Old", "status": "resolved",
+         "created_at": (now - timedelta(days=120)).isoformat()},
+    ]
+    hist = eng.build_equipment_history(tickets, "CNC #1", now=now)
+    assert hist["ticket_count"] == 3  # exact match only, not "CNC #1 Extra"
+    assert hist["ticket_count_90d"] == 2
+    assert hist["last_ticket_date"] == "2026-09-12"
+    assert [t["id"] for t in hist["recent_tickets"]][:2] == ["b", "a"]
 
 
 # ---- LLM draft validation ----

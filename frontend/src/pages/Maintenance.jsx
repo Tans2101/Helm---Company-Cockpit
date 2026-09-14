@@ -58,6 +58,28 @@ function BlockingProductionBadge({ orders, ticketId }) {
   );
 }
 
+function ChronicEquipmentBadge({ ticket }) {
+  if (!ticket?.is_chronic_equipment) return null;
+  const n = ticket.recent_repairs_90d || 0;
+  return (
+    <span
+      data-testid={`chronic-equipment-badge-${ticket.id}`}
+      title={`${n} repairs in the last 90 days`}
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-status-warning/40 bg-helm-status-warning/10 text-helm-status-warning"
+    >
+      {n}× in 90d
+    </span>
+  );
+}
+
+function formatTicketOpenHours(seconds) {
+  const s = Number(seconds) || 0;
+  if (s <= 0) return "0h";
+  const h = s / 3600;
+  if (h < 10) return `${h.toFixed(1)}h`;
+  return `${Math.round(h)}h`;
+}
+
 export default function Maintenance() {
   const { data, loading, error, reload } = useFetch("/maintenance/tickets");
   const { data: membersData } = useFetch("/members");
@@ -66,6 +88,7 @@ export default function Maintenance() {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [equipmentHistory, setEquipmentHistory] = useState(null);
   const [form, setForm] = useState({
     equipment_name: "",
     description: "",
@@ -83,7 +106,35 @@ export default function Maintenance() {
     () => allTickets.find((t) => t.id === selectedId) || null,
     [allTickets, selectedId],
   );
+  const downtimeSummary = data?.downtime_summary;
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
+
+  useEffect(() => {
+    if (!adding) {
+      setEquipmentHistory(null);
+      return undefined;
+    }
+    const name = (form.equipment_name || "").trim();
+    if (name.length < 2) {
+      setEquipmentHistory(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const { data: hist } = await api.get("/maintenance/equipment-history", {
+          params: { equipment_name: name },
+        });
+        if (!cancelled) setEquipmentHistory(hist);
+      } catch {
+        if (!cancelled) setEquipmentHistory(null);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [adding, form.equipment_name]);
 
   useEffect(() => {
     if (!selected) {
@@ -154,6 +205,7 @@ export default function Maintenance() {
       const { data: res } = await api.post("/maintenance/tickets", body);
       toast.success("Ticket reported");
       setForm({ equipment_name: "", description: "", priority: "medium", notes: "", assigned_technician: "" });
+      setEquipmentHistory(null);
       setAdding(false);
       await reload();
       if (res?.ticket?.id) setSelectedId(res.ticket.id);
@@ -238,6 +290,21 @@ export default function Maintenance() {
         </label>
       </div>
 
+      {downtimeSummary && (
+        <p
+          className="text-xs text-helm-muted mb-4"
+          data-testid="maintenance-downtime-summary"
+          title={downtimeSummary.metric_label || "time ticket was open"}
+        >
+          Ticket-open time this month ({downtimeSummary.period_label || downtimeSummary.period || "this month"}):{" "}
+          <span className="text-helm-fg font-mono">
+            {formatTicketOpenHours(downtimeSummary.total_seconds)}
+          </span>
+          {" "}across {downtimeSummary.ticket_count || 0} ticket{(downtimeSummary.ticket_count || 0) === 1 ? "" : "s"}
+          {" "}(not confirmed machine-down time)
+        </p>
+      )}
+
       {visible.length === 0 ? (
         <EmptyState
           icon={Wrench}
@@ -282,10 +349,13 @@ export default function Maintenance() {
                   <td className="px-3 py-2.5 text-helm-fg max-w-[16rem]">
                     <div className="flex flex-col gap-1 min-w-0">
                       <span className="truncate">{t.equipment_name}</span>
-                      <BlockingProductionBadge
-                        orders={t.blocking_production_orders}
-                        ticketId={t.id}
-                      />
+                      <div className="flex flex-wrap gap-1">
+                        <BlockingProductionBadge
+                          orders={t.blocking_production_orders}
+                          ticketId={t.id}
+                        />
+                        <ChronicEquipmentBadge ticket={t} />
+                      </div>
                     </div>
                   </td>
                   <td className={cn("px-3 py-2.5 text-xs font-mono uppercase", PRIORITY_META[t.priority]?.className)}>
@@ -308,14 +378,13 @@ export default function Maintenance() {
             <div>
               <SectionLabel>Ticket detail</SectionLabel>
               <p className="text-helm-fg text-sm mt-1">{selected.equipment_name}</p>
-              {(selected.blocking_production_orders || []).length > 0 && (
-                <div className="mt-2">
-                  <BlockingProductionBadge
-                    orders={selected.blocking_production_orders}
-                    ticketId={selected.id}
-                  />
-                </div>
-              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <BlockingProductionBadge
+                  orders={selected.blocking_production_orders}
+                  ticketId={selected.id}
+                />
+                <ChronicEquipmentBadge ticket={selected} />
+              </div>
             </div>
             <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />
@@ -457,6 +526,15 @@ export default function Maintenance() {
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 autoFocus
               />
+              {equipmentHistory && (equipmentHistory.ticket_count_90d || 0) >= 3 && (
+                <p
+                  data-testid="equipment-repeat-warning"
+                  className="text-xs text-helm-status-warning mt-1.5"
+                >
+                  This is the {(equipmentHistory.ticket_count_90d || 0) + 1}th repair for{" "}
+                  {equipmentHistory.equipment_name || form.equipment_name.trim()} in the last 90 days
+                </p>
+              )}
             </label>
             <label className="block space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Priority</span>

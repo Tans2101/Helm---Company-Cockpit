@@ -382,3 +382,38 @@ def test_lead_can_assign_on_create(maint_api):
     assert r.status_code == 200
     assert store.rows[0]["assigned_technician"] == "u_tech"
     assert store.rows[0]["reported_by"] == "u_lead"
+
+
+def test_equipment_history_and_chronic_badge_on_list(maint_api):
+    client, store, work_orders, *_ = maint_api
+    now = __import__("datetime").datetime(2026, 9, 14, tzinfo=__import__("datetime").timezone.utc)
+    for i in range(3):
+        r = client.post("/api/maintenance/tickets", json={
+            "equipment_name": "CNC Mill #3",
+            "description": f"Failure {i}",
+            "priority": "medium",
+        })
+        assert r.status_code == 200, r.text
+        store.rows[-1]["created_at"] = (now - __import__("datetime").timedelta(days=10 - i)).isoformat()
+    # Different equipment should not inflate the count
+    client.post("/api/maintenance/tickets", json={"equipment_name": "Lathe", "priority": "low"})
+
+    hist = client.get("/api/maintenance/equipment-history", params={"equipment_name": "cnc mill #3"})
+    assert hist.status_code == 200, hist.text
+    body = hist.json()
+    assert body["ticket_count"] == 3
+    assert body["ticket_count_90d"] == 3
+    assert body["equipment_name"].lower() == "cnc mill #3"
+
+    listed = client.get("/api/maintenance/tickets")
+    assert listed.status_code == 200
+    payload = listed.json()
+    assert "downtime_summary" in payload
+    assert payload["downtime_summary"]["metric_label"]
+    cnc = [t for t in payload["tickets"] if t["equipment_name"] == "CNC Mill #3"]
+    assert cnc
+    assert cnc[0]["is_chronic_equipment"] is True
+    assert cnc[0]["recent_repairs_90d"] == 3
+    lathe = next(t for t in payload["tickets"] if t["equipment_name"] == "Lathe")
+    assert lathe["is_chronic_equipment"] is False
+    assert lathe["recent_repairs_90d"] == 1

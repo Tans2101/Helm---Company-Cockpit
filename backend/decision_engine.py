@@ -17,6 +17,8 @@ SEVERITIES = ("high", "medium", "low")
 STALLED_DEAL_DAYS = 14
 STALLED_DEPARTMENT_DAYS = 5
 URGENT_MAINTENANCE_DAYS = 2
+CHRONIC_EQUIPMENT_WINDOW_DAYS = 90
+CHRONIC_EQUIPMENT_MIN_COUNT = 3
 RUNWAY_MONTHS_THRESHOLD = 6
 BURN_INCREASE_PCT = 0.20
 EXPENSE_SPIKE_PCT = 0.25
@@ -35,6 +37,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     # Unresolved high-priority equipment tickets may need CEO-level escalation
     # (downtime), unlike generic department stall nudges.
     "urgent_maintenance",
+    # Repeat failures on the same equipment — replace vs keep repairing.
+    "chronic_equipment_failure",
     # Past-due production work orders (fact check, not a forecast).
     "overdue_work_order",
     "overdue_procurement",
@@ -451,6 +455,283 @@ def detect_urgent_maintenance(
     return out
 
 
+def _equipment_name_key(name) -> str:
+    return (str(name) if name is not None else "").strip().lower()
+
+
+def _ticket_open_interval(
+    ticket: dict,
+    *,
+    now: datetime,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Return (created_at, end_at) for ticket-open duration (proxy for downtime)."""
+    created = _parse_iso_dt(ticket.get("created_at"))
+    if created is None:
+        return None, None
+    status = str(ticket.get("status") or "").strip().lower()
+    if status == "resolved":
+        end = (
+            _parse_iso_dt(ticket.get("completed_at"))
+            or _parse_iso_dt(ticket.get("updated_at"))
+            or now
+        )
+    else:
+        end = now
+    if end < created:
+        end = created
+    return created, end
+
+
+def compute_downtime(
+    tickets: list,
+    *,
+    now: Optional[datetime] = None,
+    period_start: Optional[datetime] = None,
+    period_end: Optional[datetime] = None,
+) -> dict:
+    """Ticket-open duration totals (not confirmed machine-down time).
+
+    Resolved tickets: completed_at/updated_at − created_at.
+    Open tickets: now − created_at.
+    When period_start/period_end are set, only the overlapping portion counts.
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    by_equipment: dict[str, dict] = {}
+    total_seconds = 0.0
+    ticket_count = 0
+    for ticket in tickets or []:
+        created, end = _ticket_open_interval(ticket, now=now)
+        if created is None or end is None:
+            continue
+        start_c = created
+        end_c = end
+        if period_start is not None:
+            start_c = max(start_c, period_start)
+        if period_end is not None:
+            end_c = min(end_c, period_end)
+        end_c = min(end_c, now)
+        if end_c <= start_c:
+            continue
+        secs = (end_c - start_c).total_seconds()
+        if secs <= 0:
+            continue
+        name = (ticket.get("equipment_name") or "").strip() or "Unknown equipment"
+        key = _equipment_name_key(name)
+        bucket = by_equipment.setdefault(
+            key,
+            {
+                "equipment_name": name,
+                "total_seconds": 0.0,
+                "ticket_count": 0,
+            },
+        )
+        bucket["total_seconds"] += secs
+        bucket["ticket_count"] += 1
+        # Prefer the most recently used display casing.
+        if (ticket.get("created_at") or "") >= (bucket.get("_sort") or ""):
+            bucket["equipment_name"] = name
+            bucket["_sort"] = ticket.get("created_at") or ""
+        total_seconds += secs
+        ticket_count += 1
+    equipment_rows = []
+    for bucket in by_equipment.values():
+        bucket.pop("_sort", None)
+        equipment_rows.append(bucket)
+    equipment_rows.sort(key=lambda r: (-r["total_seconds"], r["equipment_name"].lower()))
+    return {
+        "total_seconds": total_seconds,
+        "ticket_count": ticket_count,
+        "by_equipment": equipment_rows,
+        "metric_label": "time ticket was open",
+    }
+
+
+def build_equipment_history(
+    tickets: list,
+    equipment_name: str,
+    *,
+    now: Optional[datetime] = None,
+    window_days: int = CHRONIC_EQUIPMENT_WINDOW_DAYS,
+    history_limit: int = 8,
+) -> dict:
+    """Case-insensitive exact-match history for one equipment name."""
+    now = now or datetime.now(timezone.utc)
+    needle = _equipment_name_key(equipment_name)
+    empty = {
+        "equipment_name": (equipment_name or "").strip(),
+        "ticket_count": 0,
+        "ticket_count_90d": 0,
+        "last_ticket_date": None,
+        "recent_tickets": [],
+    }
+    if not needle:
+        return empty
+    matched = []
+    for ticket in tickets or []:
+        if _equipment_name_key(ticket.get("equipment_name")) != needle:
+            continue
+        matched.append(ticket)
+    matched.sort(key=lambda t: t.get("created_at") or "", reverse=True)
+    display = (matched[0].get("equipment_name") or "").strip() if matched else (equipment_name or "").strip()
+    cutoff = now - timedelta(days=window_days)
+    recent = []
+    for ticket in matched:
+        created = _parse_iso_dt(ticket.get("created_at"))
+        if created is not None and created >= cutoff:
+            recent.append(ticket)
+    last_date = None
+    if matched:
+        created = _parse_iso_dt(matched[0].get("created_at"))
+        last_date = created.date().isoformat() if created else (str(matched[0].get("created_at") or "")[:10] or None)
+    recent_tickets = []
+    for ticket in matched[:history_limit]:
+        recent_tickets.append({
+            "id": ticket.get("id"),
+            "description": (ticket.get("description") or "").strip(),
+            "status": ticket.get("status"),
+            "priority": ticket.get("priority"),
+            "created_at": ticket.get("created_at"),
+        })
+    return {
+        "equipment_name": display,
+        "ticket_count": len(matched),
+        "ticket_count_90d": len(recent),
+        "last_ticket_date": last_date,
+        "recent_tickets": recent_tickets,
+    }
+
+
+def detect_chronic_equipment_failure(
+    tickets: list,
+    spec: dict | None = None,
+    *,
+    window_days: int = CHRONIC_EQUIPMENT_WINDOW_DAYS,
+    min_count: int = CHRONIC_EQUIPMENT_MIN_COUNT,
+    now: Optional[datetime] = None,
+) -> list:
+    """Flag equipment with min_count+ tickets inside window_days (pattern, not one slow ticket)."""
+    spec = spec or SPEC_BY_TYPE[TYPE_ENGINEERING_MAINTENANCE]
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=window_days)
+    groups: dict[str, dict] = {}
+    for ticket in tickets or []:
+        name = (ticket.get("equipment_name") or "").strip()
+        if not name:
+            continue
+        created = _parse_iso_dt(ticket.get("created_at"))
+        if created is None or created < cutoff:
+            continue
+        key = _equipment_name_key(name)
+        bucket = groups.setdefault(
+            key,
+            {"equipment_name": name, "tickets": [], "_latest_created": ""},
+        )
+        bucket["tickets"].append(ticket)
+        created_s = ticket.get("created_at") or ""
+        if created_s >= (bucket.get("_latest_created") or ""):
+            bucket["equipment_name"] = name
+            bucket["_latest_created"] = created_s
+
+    out = []
+    for bucket in groups.values():
+        bucket.pop("_latest_created", None)
+        cluster = bucket["tickets"]
+        count = len(cluster)
+        if count < min_count:
+            continue
+        times = sorted(
+            t for t in (_parse_iso_dt(x.get("created_at")) for x in cluster) if t is not None
+        )
+        if not times:
+            continue
+        span_days = max((now - times[0]).days, (times[-1] - times[0]).days, 1)
+        equipment = bucket["equipment_name"]
+        downtime = compute_downtime(cluster, now=now)
+        downtime_hours = int(round(downtime["total_seconds"] / 3600.0))
+        downtime_clause = ""
+        if downtime["total_seconds"] > 0:
+            downtime_clause = (
+                f", totaling {downtime_hours} hour"
+                f"{'' if downtime_hours == 1 else 's'} of ticket-open time"
+            )
+        summary = (
+            f"The {equipment} has needed repair {count} times in {span_days} days"
+            f"{downtime_clause} — may be worth replacing rather than continuing to repair."
+        )
+        detail = (
+            f"'{equipment}' has {count} maintenance tickets in the last {window_days} days "
+            f"(first in-window ticket {times[0].date().isoformat()}). "
+            f"This is a repeat-failure pattern, not a single stalled ticket. "
+            f"Consider replace-vs-repair. "
+            f"Downtime figure is time tickets were open, not confirmed machine-down time."
+        )
+        # related_id: most recent ticket id for deep-link convenience
+        latest = max(cluster, key=lambda t: t.get("created_at") or "")
+        out.append(_signal(
+            "chronic_equipment_failure",
+            "high",
+            summary=summary,
+            detail=detail,
+            related_id=latest.get("id"),
+            department_type=spec.get("type"),
+            department_name=spec.get("name") or "Engineering & Maintenance",
+            item_label=equipment,
+            equipment_name=equipment,
+            ticket_count=count,
+            window_days=window_days,
+            span_days=span_days,
+            downtime_seconds=downtime["total_seconds"],
+            downtime_hours=downtime_hours,
+        ))
+    out.sort(key=lambda s: (-(s.get("ticket_count") or 0), s.get("equipment_name") or ""))
+    return out
+
+
+def month_period_bounds(now: Optional[datetime] = None) -> tuple[datetime, datetime]:
+    """UTC calendar month [start, next_month_start)."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    if now.month == 12:
+        end = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+    return start, end
+
+
+def equipment_reliability_by_name(
+    tickets: list,
+    *,
+    now: Optional[datetime] = None,
+    window_days: int = CHRONIC_EQUIPMENT_WINDOW_DAYS,
+    min_count: int = CHRONIC_EQUIPMENT_MIN_COUNT,
+) -> dict[str, dict]:
+    """Map lowercased equipment name → recent repair stats for UI badges."""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=window_days)
+    counts: dict[str, dict] = {}
+    for ticket in tickets or []:
+        name = (ticket.get("equipment_name") or "").strip()
+        if not name:
+            continue
+        created = _parse_iso_dt(ticket.get("created_at"))
+        if created is None or created < cutoff:
+            continue
+        key = _equipment_name_key(name)
+        bucket = counts.setdefault(
+            key,
+            {"equipment_name": name, "ticket_count_90d": 0, "is_chronic": False},
+        )
+        bucket["ticket_count_90d"] += 1
+        bucket["equipment_name"] = name
+    for bucket in counts.values():
+        bucket["is_chronic"] = bucket["ticket_count_90d"] >= min_count
+    return counts
+
+
 def detect_stalled_onboarding(
     items: list,
     spec: dict | None = None,
@@ -646,6 +927,7 @@ def collect_department_signals(
             urgent_ids = {s.get("related_id") for s in urgent}
             generic = [s for s in generic if s.get("related_id") not in urgent_ids]
             signals.extend(urgent)
+            signals.extend(detect_chronic_equipment_failure(items, spec, now=now))
         signals.extend(generic)
     return signals
 
