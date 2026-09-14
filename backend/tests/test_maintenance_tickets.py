@@ -80,19 +80,28 @@ class TicketStore:
 
     async def find_one(self, query, projection=None):
         for r in self.rows:
-            if all(r.get(k) == v for k, v in query.items()):
+            if _match_query(r, query):
                 return {k: v for k, v in r.items() if k != "_id"}
         return None
 
     def find(self, query, projection=None):
-        matched = [dict(r) for r in self.rows if all(r.get(k) == v for k, v in query.items())]
+        matched = [dict(r) for r in self.rows if _match_query(r, query or {})]
+        state = {"sort": None}
 
         class C:
-            async def to_list(self, n):
-                return matched[:n]
-
-            def sort(self, *a, **k):
+            def sort(self, field, direction=1):
+                state["sort"] = (field, direction)
                 return self
+
+            async def to_list(self, n):
+                items = list(matched)
+                if state["sort"]:
+                    field, direction = state["sort"]
+                    items.sort(
+                        key=lambda x: x.get(field) or "",
+                        reverse=direction == -1,
+                    )
+                return items[:n]
 
         return C()
 
@@ -101,20 +110,41 @@ class TicketStore:
 
     async def update_one(self, query, update):
         for r in self.rows:
-            if all(r.get(k) == v for k, v in query.items()):
+            if _match_query(r, query):
                 r.update(update.get("$set") or {})
                 return MagicMock(matched_count=1)
         return MagicMock(matched_count=0)
 
     async def delete_one(self, query):
         before = len(self.rows)
-        self.rows = [r for r in self.rows if not all(r.get(k) == v for k, v in query.items())]
+        self.rows = [r for r in self.rows if not _match_query(r, query)]
         return MagicMock(deleted_count=before - len(self.rows))
+
+
+def _match_query(doc: dict, query: dict) -> bool:
+    if not query:
+        return True
+    for k, v in query.items():
+        if k == "$or":
+            if not any(_match_query(doc, clause) for clause in v):
+                return False
+            continue
+        actual = doc.get(k)
+        if isinstance(v, dict):
+            if "$in" in v:
+                if actual not in v["$in"]:
+                    return False
+            else:
+                return False
+        elif actual != v:
+            return False
+    return True
 
 
 @pytest.fixture
 def maint_api():
     store = TicketStore()
+    work_orders = TicketStore()
     depts = MagicMock()
     depts.find_one = AsyncMock(return_value=dict(MAINT_DEPT))
     members = MagicMock()
@@ -135,6 +165,7 @@ def maint_api():
     mock_db.departments = depts
     mock_db.department_members = members
     mock_db.maintenance_tickets = store
+    mock_db.production_work_orders = work_orders
     mock_db.users = users
 
     async def as_ceo():
@@ -156,7 +187,7 @@ def maint_api():
     with patch.object(server, "db", mock_db), \
          patch.object(server, "BILLING_ENFORCED", False):
         client = TestClient(server.app)
-        yield client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts
+        yield client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts
     server.app.dependency_overrides.clear()
 
 
@@ -165,7 +196,7 @@ def test_maint_not_placeholder():
 
 
 def test_outsider_403(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
     assert client.get("/api/maintenance/tickets").status_code == 403
     assert client.post("/api/maintenance/tickets", json={"equipment_name": "Pump"}).status_code == 403
@@ -186,10 +217,11 @@ def test_create_sets_reported_by_unassigned(maint_api):
     assert body["assigned_technician"] is None
     assert body["status"] == "reported"
     assert body["priority"] == "high"
+    assert body["blocking_production_orders"] == []
 
 
 def test_member_cannot_assign(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     client.post("/api/maintenance/tickets", json={"equipment_name": "Lathe"})
     tid = store.rows[0]["id"]
     r = client.patch(f"/api/maintenance/tickets/{tid}", json={"assigned_technician": "u_tech"})
@@ -197,7 +229,7 @@ def test_member_cannot_assign(maint_api):
 
 
 def test_lead_assigns_then_tech_updates(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     client.post("/api/maintenance/tickets", json={"equipment_name": "Lathe", "priority": "medium"})
     tid = store.rows[0]["id"]
     server.app.dependency_overrides[server.get_principal] = as_lead
@@ -216,7 +248,7 @@ def test_lead_assigns_then_tech_updates(maint_api):
 
 
 def test_non_assignee_cannot_update(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     client.post("/api/maintenance/tickets", json={"equipment_name": "Lathe"})
     store.rows[0]["assigned_technician"] = "u_tech"
     tid = store.rows[0]["id"]
@@ -227,13 +259,13 @@ def test_non_assignee_cannot_update(maint_api):
 def test_sort_open_high_first(maint_api):
     client, store, *_ = maint_api
     store.rows = [
-        {"id": "1", "department_id": "dept_maint", "equipment_name": "A", "priority": "low",
+        {"id": "1", "department_id": "dept_maint", "workspace_id": "ws_test", "equipment_name": "A", "priority": "low",
          "status": "reported", "created_at": "2026-01-03"},
-        {"id": "2", "department_id": "dept_maint", "equipment_name": "B", "priority": "high",
+        {"id": "2", "department_id": "dept_maint", "workspace_id": "ws_test", "equipment_name": "B", "priority": "high",
          "status": "resolved", "created_at": "2026-01-04"},
-        {"id": "3", "department_id": "dept_maint", "equipment_name": "C", "priority": "high",
+        {"id": "3", "department_id": "dept_maint", "workspace_id": "ws_test", "equipment_name": "C", "priority": "high",
          "status": "reported", "created_at": "2026-01-01"},
-        {"id": "4", "department_id": "dept_maint", "equipment_name": "D", "priority": "medium",
+        {"id": "4", "department_id": "dept_maint", "workspace_id": "ws_test", "equipment_name": "D", "priority": "medium",
          "status": "diagnosed", "created_at": "2026-01-02"},
     ]
     r = client.get("/api/maintenance/tickets")
@@ -241,6 +273,70 @@ def test_sort_open_high_first(maint_api):
     names = [t["equipment_name"] for t in r.json()["tickets"]]
     # unresolved first: C (high), D (medium), A (low), then resolved B
     assert names == ["C", "D", "A", "B"]
+
+
+def test_blocking_production_orders_enrichment_and_sort(maint_api):
+    """Tickets linked to blocked work orders float to the top with badges."""
+    client, store, work_orders, *_ = maint_api
+    for name, pri, created in (
+        ("Pump A", "high", "2026-01-01T00:00:00+00:00"),
+        ("CNC Mill", "low", "2026-01-02T00:00:00+00:00"),
+        ("Conveyor", "medium", "2026-01-03T00:00:00+00:00"),
+    ):
+        r = client.post("/api/maintenance/tickets", json={
+            "equipment_name": name,
+            "priority": pri,
+        })
+        assert r.status_code == 200, r.text
+        store.rows[-1]["created_at"] = created
+    ids = [row["id"] for row in store.rows]
+    blocking_id = ids[1]
+
+    work_orders.rows.append({
+        "id": "pwo_block1",
+        "workspace_id": "ws_test",
+        "reference": "Order #245",
+        "due_date": "2026-09-20",
+        "status": "in_production",
+        "blocked": True,
+        "linked_maintenance_ticket_id": blocking_id,
+    })
+    # Linked but not blocked must NOT appear.
+    work_orders.rows.append({
+        "id": "pwo_ok",
+        "workspace_id": "ws_test",
+        "reference": "Order #100",
+        "due_date": "2026-01-01",
+        "status": "in_production",
+        "blocked": False,
+        "linked_maintenance_ticket_id": ids[0],
+    })
+    work_orders.rows.append({
+        "id": "pwo_block2",
+        "workspace_id": "ws_test",
+        "reference": "Order #300",
+        "due_date": "",
+        "status": "quality_check",
+        "blocked": True,
+        "linked_maintenance_ticket_id": blocking_id,
+    })
+
+    listed = client.get("/api/maintenance/tickets")
+    assert listed.status_code == 200, listed.text
+    tickets = listed.json()["tickets"]
+    assert tickets[0]["equipment_name"] == "CNC Mill"
+    assert tickets[0]["id"] == blocking_id
+
+    cnc = tickets[0]
+    assert len(cnc["blocking_production_orders"]) == 2
+    refs = {e["reference"] for e in cnc["blocking_production_orders"]}
+    assert refs == {"Order #245", "Order #300"}
+    by_ref = {e["reference"]: e for e in cnc["blocking_production_orders"]}
+    assert by_ref["Order #245"]["work_order_id"] == "pwo_block1"
+    assert by_ref["Order #245"]["due_date"] == "2026-09-20"
+
+    for t in tickets[1:]:
+        assert t["blocking_production_orders"] == []
 
 
 def test_filter_status_priority(maint_api):
@@ -255,7 +351,7 @@ def test_filter_status_priority(maint_api):
 
 
 def test_independent_tickets(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     client.post("/api/maintenance/tickets", json={"equipment_name": "A"})
     client.post("/api/maintenance/tickets", json={"equipment_name": "B"})
     store.rows[0]["assigned_technician"] = "u_mem"
@@ -267,7 +363,7 @@ def test_independent_tickets(maint_api):
 
 
 def test_delete_lead_only(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     client.post("/api/maintenance/tickets", json={"equipment_name": "A"})
     tid = store.rows[0]["id"]
     assert client.delete(f"/api/maintenance/tickets/{tid}").status_code == 403
@@ -277,7 +373,7 @@ def test_delete_lead_only(maint_api):
 
 
 def test_lead_can_assign_on_create(maint_api):
-    client, store, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
+    client, store, work_orders, as_ceo, as_member, as_tech, as_lead, as_outsider, depts = maint_api
     server.app.dependency_overrides[server.get_principal] = as_lead
     r = client.post("/api/maintenance/tickets", json={
         "equipment_name": "Press",

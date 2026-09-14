@@ -46,6 +46,13 @@ const PROC_STATUS_LABELS = {
   rejected: "Rejected",
 };
 
+const MAINT_STATUS_LABELS = {
+  reported: "Reported",
+  diagnosed: "Diagnosed",
+  in_repair: "In repair",
+  resolved: "Resolved",
+};
+
 const PRIORITY_RANK = { high: 0, normal: 1, low: 2 };
 
 function StatusBadge({ status }) {
@@ -103,6 +110,7 @@ const emptyForm = () => ({
   priority: "normal",
   due_date: "",
   linked_procurement_request_id: "",
+  linked_maintenance_ticket_id: "",
   notes: "",
 });
 
@@ -132,6 +140,7 @@ export default function Production() {
     [allOrders, selectedId],
   );
   const openProcurement = data?.open_procurement_requests || [];
+  const openMaintenance = data?.open_maintenance_tickets || [];
   const priorities = data?.priorities || ["low", "normal", "high"];
   const blockedCategories = data?.blocked_categories || Object.keys(CATEGORY_LABELS);
   const statuses = data?.statuses || STATUS_ORDER;
@@ -159,6 +168,7 @@ export default function Production() {
       blocked_category: selected.blocked_reason?.category || "",
       blocked_detail: selected.blocked_reason?.detail || "",
       linked_procurement_request_id: selected.linked_procurement_request_id || "",
+      linked_maintenance_ticket_id: selected.linked_maintenance_ticket_id || "",
       assigned_user_ids: [...(selected.assigned_user_ids || [])],
       notes: selected.notes || "",
     });
@@ -208,6 +218,7 @@ export default function Production() {
       due_date: form.due_date.trim(),
       notes: form.notes.trim(),
       linked_procurement_request_id: form.linked_procurement_request_id || null,
+      linked_maintenance_ticket_id: form.linked_maintenance_ticket_id || null,
     };
     if (form.quantity_planned !== "") {
       const q = Number(form.quantity_planned);
@@ -243,6 +254,7 @@ export default function Production() {
     body.notes = draft.notes;
     body.assigned_user_ids = draft.assigned_user_ids;
     body.linked_procurement_request_id = draft.linked_procurement_request_id || "";
+    body.linked_maintenance_ticket_id = draft.linked_maintenance_ticket_id || "";
     body.blocked = Boolean(draft.blocked);
     if (draft.blocked) {
       body.blocked_reason = {
@@ -473,6 +485,13 @@ export default function Production() {
                             {PROC_STATUS_LABELS[order.linked_procurement.status] || order.linked_procurement.status}
                           </span>
                         )}
+                        {order.linked_maintenance && (
+                          <span className="text-[10px] text-helm-muted truncate max-w-[9rem]" data-testid={`linked-maint-${order.id}`}>
+                            Maint: {order.linked_maintenance.equipment_name || order.linked_maintenance.id}
+                            {" · "}
+                            {MAINT_STATUS_LABELS[order.linked_maintenance.status] || order.linked_maintenance.status}
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -650,6 +669,34 @@ export default function Production() {
                     className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                   />
                 </label>
+                {(draft.blocked_category === "machine" || draft.linked_maintenance_ticket_id) && (
+                  <label className="space-y-1 md:col-span-2">
+                    <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Linked maintenance ticket</span>
+                    <select
+                      data-testid="wo-linked-maintenance"
+                      disabled={busy}
+                      value={draft.linked_maintenance_ticket_id}
+                      onChange={(e) => setDraft((d) => ({ ...d, linked_maintenance_ticket_id: e.target.value }))}
+                      className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+                    >
+                      <option value="">None</option>
+                      {openMaintenance.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {(t.equipment_name || t.id)} · {MAINT_STATUS_LABELS[t.status] || t.status}
+                        </option>
+                      ))}
+                      {draft.linked_maintenance_ticket_id
+                        && !openMaintenance.some((t) => t.id === draft.linked_maintenance_ticket_id)
+                        && selected.linked_maintenance && (
+                          <option value={draft.linked_maintenance_ticket_id}>
+                            {selected.linked_maintenance.equipment_name || draft.linked_maintenance_ticket_id}
+                            {" · "}
+                            {MAINT_STATUS_LABELS[selected.linked_maintenance.status] || selected.linked_maintenance.status}
+                          </option>
+                      )}
+                    </select>
+                  </label>
+                )}
               </div>
             )}
           </div>

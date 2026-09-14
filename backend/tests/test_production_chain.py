@@ -126,6 +126,7 @@ class DocStore:
 def prod_api():
     orders = DocStore()
     procurement = DocStore()
+    maintenance = DocStore()
     dept_members = [
         {"department_id": "dept_prod", "user_id": "u_mem", "role": "member"},
         {"department_id": "dept_prod", "user_id": "u_lead", "role": "lead"},
@@ -148,6 +149,7 @@ def prod_api():
     mock_db.department_members.find_one = AsyncMock(side_effect=mem_find_one)
     mock_db.production_work_orders = orders
     mock_db.procurement_requests = procurement
+    mock_db.maintenance_tickets = maintenance
     mock_db.users.find_one = AsyncMock(
         return_value={"name": "Mem", "email": "mem@acme.com", "picture": None},
     )
@@ -165,12 +167,12 @@ def prod_api():
     server.app.dependency_overrides[server.get_principal] = as_ceo
     with patch.object(server, "db", mock_db):
         client = TestClient(server.app)
-        yield client, orders, procurement, as_ceo, as_outsider, as_member
+        yield client, orders, procurement, maintenance, as_ceo, as_outsider, as_member
     server.app.dependency_overrides.clear()
 
 
 def test_outsider_gets_403(prod_api):
-    client, orders, procurement, as_ceo, as_outsider, as_member = prod_api
+    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member = prod_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
     assert client.get("/api/production/work-orders").status_code == 403
     assert client.post("/api/production/work-orders", json={"reference": "X"}).status_code == 403
@@ -214,7 +216,7 @@ def test_stages_endpoints_removed(prod_api):
 
 
 def test_member_can_update_status_and_notes(prod_api):
-    client, orders, procurement, as_ceo, as_outsider, as_member = prod_api
+    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member = prod_api
     wo = client.post("/api/production/work-orders", json={"reference": "Order #1"}).json()["work_order"]
 
     server.app.dependency_overrides[server.get_principal] = as_member
@@ -326,7 +328,7 @@ def test_list_filter_by_status(prod_api):
 
 
 def test_delete_work_order(prod_api):
-    client, orders, _procurement, as_ceo, as_outsider, as_member = prod_api
+    client, orders, _procurement, _maintenance, as_ceo, as_outsider, as_member = prod_api
     wo = client.post("/api/production/work-orders", json={"reference": "Drop me"}).json()["work_order"]
     wid = wo["id"]
 
@@ -409,3 +411,56 @@ def test_cannot_link_delivered_or_rejected_procurement(prod_api):
         json={"linked_procurement_request_id": "preq_done"},
     )
     assert bad_patch.status_code == 400
+
+
+def test_link_open_maintenance_ticket_and_list_open(prod_api):
+    client, orders, procurement, maintenance, *_ = prod_api
+    maintenance.rows.append({
+        "id": "mtkt_open",
+        "workspace_id": "ws_test",
+        "equipment_name": "CNC #3",
+        "status": "in_repair",
+        "priority": "high",
+    })
+    maintenance.rows.append({
+        "id": "mtkt_done",
+        "workspace_id": "ws_test",
+        "equipment_name": "Lathe",
+        "status": "resolved",
+        "priority": "low",
+    })
+
+    listed = client.get("/api/production/work-orders")
+    assert listed.status_code == 200
+    open_ids = {t["id"] for t in listed.json()["open_maintenance_tickets"]}
+    assert "mtkt_open" in open_ids
+    assert "mtkt_done" not in open_ids
+
+    wo = client.post(
+        "/api/production/work-orders",
+        json={
+            "reference": "Order #245",
+            "blocked": True,
+            "blocked_reason": {"category": "machine", "detail": "Spindle down"},
+            "linked_maintenance_ticket_id": "mtkt_open",
+        },
+    )
+    assert wo.status_code == 200, wo.text
+    body = wo.json()["work_order"]
+    assert body["linked_maintenance_ticket_id"] == "mtkt_open"
+    assert body["linked_maintenance"]["equipment_name"] == "CNC #3"
+    assert body["blocked"] is True
+
+    cleared = client.patch(
+        f"/api/production/work-orders/{body['id']}",
+        json={"linked_maintenance_ticket_id": ""},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["work_order"]["linked_maintenance_ticket_id"] in (None, "")
+    assert cleared.json()["work_order"]["linked_maintenance"] is None
+
+    bad = client.patch(
+        f"/api/production/work-orders/{body['id']}",
+        json={"linked_maintenance_ticket_id": "mtkt_done"},
+    )
+    assert bad.status_code == 400

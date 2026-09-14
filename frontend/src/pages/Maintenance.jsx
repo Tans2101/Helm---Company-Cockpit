@@ -35,6 +35,29 @@ function personLabel(p) {
   return p.name || p.email || "Teammate";
 }
 
+function formatBlockingOrders(orders) {
+  if (!orders?.length) return "";
+  return orders.map((o) => {
+    const ref = o.reference || o.work_order_id || "work order";
+    const due = o.due_date || "";
+    return due ? `${ref} (due ${due})` : ref;
+  }).join(", ");
+}
+
+function BlockingProductionBadge({ orders, ticketId }) {
+  if (!orders?.length) return null;
+  const label = formatBlockingOrders(orders);
+  return (
+    <span
+      data-testid={`blocking-production-badge-${ticketId}`}
+      title={label}
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+    >
+      Blocking: {label}
+    </span>
+  );
+}
+
 export default function Maintenance() {
   const { data, loading, error, reload } = useFetch("/maintenance/tickets");
   const { data: membersData } = useFetch("/members");
@@ -52,10 +75,10 @@ export default function Maintenance() {
   });
 
   const allTickets = useMemo(() => data?.tickets || [], [data?.tickets]);
-  const visible = useMemo(
-    () => (showResolved ? allTickets : allTickets.filter((t) => t.status !== "resolved")),
-    [allTickets, showResolved],
-  );
+  const visible = useMemo(() => {
+    // Backend owns queue order; only filter resolved locally.
+    return showResolved ? allTickets : allTickets.filter((t) => t.status !== "resolved");
+  }, [allTickets, showResolved]);
   const selected = useMemo(
     () => allTickets.find((t) => t.id === selectedId) || null,
     [allTickets, selectedId],
@@ -201,7 +224,7 @@ export default function Maintenance() {
 
       <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-xs text-helm-muted font-mono">
-          {visible.length} shown · {allTickets.length} total · open high-priority first
+          {visible.length} shown · {allTickets.length} total · blocking / open high-priority first
         </p>
         <label className="inline-flex items-center gap-2 text-xs text-helm-muted cursor-pointer select-none">
           <input
@@ -256,7 +279,15 @@ export default function Maintenance() {
                     selectedId === t.id && "bg-helm-gold/[0.06]",
                   )}
                 >
-                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">{t.equipment_name}</td>
+                  <td className="px-3 py-2.5 text-helm-fg max-w-[16rem]">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="truncate">{t.equipment_name}</span>
+                      <BlockingProductionBadge
+                        orders={t.blocking_production_orders}
+                        ticketId={t.id}
+                      />
+                    </div>
+                  </td>
                   <td className={cn("px-3 py-2.5 text-xs font-mono uppercase", PRIORITY_META[t.priority]?.className)}>
                     {PRIORITY_META[t.priority]?.label || t.priority}
                   </td>
@@ -277,6 +308,14 @@ export default function Maintenance() {
             <div>
               <SectionLabel>Ticket detail</SectionLabel>
               <p className="text-helm-fg text-sm mt-1">{selected.equipment_name}</p>
+              {(selected.blocking_production_orders || []).length > 0 && (
+                <div className="mt-2">
+                  <BlockingProductionBadge
+                    orders={selected.blocking_production_orders}
+                    ticketId={selected.id}
+                  />
+                </div>
+              )}
             </div>
             <button type="button" onClick={() => setSelectedId(null)} className="text-helm-muted hover:text-helm-fg">
               <X className="w-4 h-4" />

@@ -5618,6 +5618,7 @@ PRODUCTION_OPEN_STATUSES = frozenset({
 PRODUCTION_PRIORITIES = frozenset({"low", "normal", "high"})
 PRODUCTION_BLOCKED_CATEGORIES = frozenset({"material", "labor", "machine", "quality", "other"})
 PROCUREMENT_OPEN_FOR_LINK = frozenset({"requested", "approved", "ordered"})
+MAINTENANCE_OPEN_FOR_LINK = frozenset({"reported", "diagnosed", "in_repair"})
 
 
 async def _production_department(principal: dict) -> dict:
@@ -5699,6 +5700,7 @@ async def _enrich_work_order(
     order: dict,
     users: dict | None = None,
     procurement_by_id: dict | None = None,
+    maintenance_by_id: dict | None = None,
 ) -> dict:
     out = {k: v for k, v in order.items() if k != "_id"}
     out["assignees"] = await _enrich_assignee_ids(out.get("assigned_user_ids") or [], users)
@@ -5718,6 +5720,27 @@ async def _enrich_work_order(
         )
     else:
         out["linked_procurement"] = None
+    mt_link = out.get("linked_maintenance_ticket_id")
+    if mt_link:
+        ticket = None
+        if maintenance_by_id is not None:
+            ticket = maintenance_by_id.get(mt_link)
+        else:
+            ticket = await db.maintenance_tickets.find_one(
+                {"id": mt_link, "workspace_id": out.get("workspace_id")},
+                {"_id": 0, "id": 1, "equipment_name": 1, "status": 1, "priority": 1},
+            )
+        out["linked_maintenance"] = (
+            {
+                "id": ticket["id"],
+                "equipment_name": ticket.get("equipment_name") or "",
+                "status": ticket.get("status"),
+                "priority": ticket.get("priority"),
+            }
+            if ticket else None
+        )
+    else:
+        out["linked_maintenance"] = None
     return out
 
 
@@ -5736,6 +5759,21 @@ async def _validate_procurement_link(workspace_id: str, request_id: str) -> dict
     return req
 
 
+async def _validate_maintenance_link(workspace_id: str, ticket_id: str) -> dict:
+    ticket = await db.maintenance_tickets.find_one(
+        {"id": ticket_id, "workspace_id": workspace_id},
+        {"_id": 0},
+    )
+    if not ticket:
+        raise HTTPException(status_code=400, detail="Maintenance ticket not found in this workspace")
+    if ticket.get("status") not in MAINTENANCE_OPEN_FOR_LINK:
+        raise HTTPException(
+            status_code=400,
+            detail="Can only link open maintenance tickets (reported, diagnosed, or in_repair)",
+        )
+    return ticket
+
+
 class ProductionWorkOrderCreate(BaseModel):
     reference: str
     product: str = ""
@@ -5744,6 +5782,7 @@ class ProductionWorkOrderCreate(BaseModel):
     priority: str = "normal"
     due_date: str = ""
     linked_procurement_request_id: Optional[str] = None
+    linked_maintenance_ticket_id: Optional[str] = None
     assigned_user_ids: list[str] = []
     notes: str = ""
     blocked: bool = False
@@ -5762,6 +5801,7 @@ class ProductionWorkOrderPatch(BaseModel):
     blocked: Optional[bool] = None
     blocked_reason: Optional[dict] = None
     linked_procurement_request_id: Optional[str] = None
+    linked_maintenance_ticket_id: Optional[str] = None
     assigned_user_ids: Optional[list[str]] = None
     notes: Optional[str] = None
 
@@ -5781,10 +5821,13 @@ async def list_production_work_orders(
     rows = await db.production_work_orders.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
     assignee_ids = []
     link_ids = []
+    maint_ids = []
     for r in rows:
         assignee_ids.extend(r.get("assigned_user_ids") or [])
         if r.get("linked_procurement_request_id"):
             link_ids.append(r["linked_procurement_request_id"])
+        if r.get("linked_maintenance_ticket_id"):
+            maint_ids.append(r["linked_maintenance_ticket_id"])
     users = await _users_by_ids(assignee_ids)
     procurement_by_id = {}
     if link_ids:
@@ -5793,21 +5836,35 @@ async def list_production_work_orders(
             {"_id": 0, "id": 1, "item": 1, "status": 1, "quantity": 1},
         ).to_list(1000)
         procurement_by_id = {p["id"]: p for p in proc_rows}
+    maintenance_by_id = {}
+    if maint_ids:
+        mt_rows = await db.maintenance_tickets.find(
+            {"id": {"$in": list(set(maint_ids))}, "workspace_id": principal["workspace_id"]},
+            {"_id": 0, "id": 1, "equipment_name": 1, "status": 1, "priority": 1},
+        ).to_list(1000)
+        maintenance_by_id = {t["id"]: t for t in mt_rows}
     orders = [
-        await _enrich_work_order(r, users, procurement_by_id) for r in rows
+        await _enrich_work_order(r, users, procurement_by_id, maintenance_by_id) for r in rows
     ]
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_production(principal, membership)
     cycle = decision_engine.compute_average_cycle_time(rows)
-    # Open procurement requests for linking in the UI
+    # Open procurement / maintenance for linking in the UI
     open_proc = await db.procurement_requests.find(
         {
             "workspace_id": principal["workspace_id"],
             "status": {"$in": list(PROCUREMENT_OPEN_FOR_LINK)},
         },
         {"_id": 0, "id": 1, "item": 1, "status": 1, "quantity": 1},
+    ).sort("created_at", -1).to_list(500)
+    open_maint = await db.maintenance_tickets.find(
+        {
+            "workspace_id": principal["workspace_id"],
+            "status": {"$in": list(MAINTENANCE_OPEN_FOR_LINK)},
+        },
+        {"_id": 0, "id": 1, "equipment_name": 1, "status": 1, "priority": 1},
     ).sort("created_at", -1).to_list(500)
     return {
         "department_id": dept["department_id"],
@@ -5817,6 +5874,7 @@ async def list_production_work_orders(
         "priorities": sorted(PRODUCTION_PRIORITIES),
         "blocked_categories": sorted(PRODUCTION_BLOCKED_CATEGORIES),
         "open_procurement_requests": open_proc,
+        "open_maintenance_tickets": open_maint,
         "average_cycle_time": cycle,
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
@@ -5837,6 +5895,9 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
     linked_req = None
     if linked:
         linked_req = await _validate_procurement_link(principal["workspace_id"], linked)
+    linked_mt = (payload.linked_maintenance_ticket_id or "").strip() or None
+    if linked_mt:
+        await _validate_maintenance_link(principal["workspace_id"], linked_mt)
     status = "in_production"
     if linked_req and linked_req.get("status") not in ("delivered", "rejected"):
         status = "awaiting_materials"
@@ -5866,6 +5927,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "blocked": blocked,
         "blocked_reason": blocked_reason,
         "linked_procurement_request_id": linked,
+        "linked_maintenance_ticket_id": linked_mt,
         "assigned_user_ids": [u for u in (payload.assigned_user_ids or []) if u],
         "notes": (payload.notes or "").strip()[:2000],
         "created_at": now,
@@ -5934,6 +5996,13 @@ async def patch_production_work_order(
         else:
             upd["linked_procurement_request_id"] = None
             link_cleared = True
+    if payload.linked_maintenance_ticket_id is not None:
+        mt = payload.linked_maintenance_ticket_id.strip()
+        if mt:
+            await _validate_maintenance_link(principal["workspace_id"], mt)
+            upd["linked_maintenance_ticket_id"] = mt
+        else:
+            upd["linked_maintenance_ticket_id"] = None
 
     next_status = order.get("status")
     if payload.status is not None:
@@ -6871,7 +6940,46 @@ def _can_lead_maintenance(principal: dict, membership: dict | None) -> bool:
     return bool(membership) and membership.get("role") == "lead"
 
 
-async def _enrich_maintenance_ticket(ticket: dict, users: dict | None = None) -> dict:
+async def _blocking_production_orders_by_maintenance_ticket(
+    workspace_id: str,
+    ticket_ids: list[str],
+) -> dict[str, list]:
+    """Live lookup: maintenance ticket id → blocked production work orders."""
+    ids = [tid for tid in ticket_ids if tid]
+    if not ids or not workspace_id:
+        return {}
+    rows = await db.production_work_orders.find(
+        {
+            "workspace_id": workspace_id,
+            "linked_maintenance_ticket_id": {"$in": ids},
+            "blocked": True,
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "reference": 1,
+            "due_date": 1,
+            "linked_maintenance_ticket_id": 1,
+            "blocked": 1,
+        },
+    ).to_list(2000)
+    by_ticket: dict[str, list] = {}
+    for wo in rows:
+        if not wo.get("blocked"):
+            continue
+        tid = wo.get("linked_maintenance_ticket_id")
+        if not tid:
+            continue
+        by_ticket.setdefault(tid, []).append(_blocking_production_order_entry(wo))
+    return by_ticket
+
+
+async def _enrich_maintenance_ticket(
+    ticket: dict,
+    users: dict | None = None,
+    *,
+    blocking_by_ticket: dict | None = None,
+) -> dict:
     out = {k: v for k, v in ticket.items() if k != "_id"}
     uids = [out.get("reported_by"), out.get("assigned_technician")]
     lookup = users if users is not None else await _users_by_ids(uids)
@@ -6881,25 +6989,45 @@ async def _enrich_maintenance_ticket(ticket: dict, users: dict | None = None) ->
         if uid:
             info = _user_card(uid, lookup.get(uid))
         out[label] = info
+    tid = out.get("id")
+    if blocking_by_ticket is not None:
+        out["blocking_production_orders"] = list(blocking_by_ticket.get(tid) or [])
+    else:
+        ws = out.get("workspace_id")
+        if ws and tid:
+            mapping = await _blocking_production_orders_by_maintenance_ticket(ws, [tid])
+            out["blocking_production_orders"] = list(mapping.get(tid) or [])
+        else:
+            out["blocking_production_orders"] = []
     return out
 
 
-async def _enrich_maintenance_tickets(rows: list) -> list:
+async def _enrich_maintenance_tickets(rows: list, workspace_id: str | None = None) -> list:
     ids = []
     for r in rows:
         ids.append(r.get("reported_by"))
         ids.append(r.get("assigned_technician"))
     users = await _users_by_ids(ids)
-    return [await _enrich_maintenance_ticket(r, users) for r in rows]
+    ws = workspace_id or (rows[0].get("workspace_id") if rows else None)
+    blocking = {}
+    if ws:
+        blocking = await _blocking_production_orders_by_maintenance_ticket(
+            ws, [r.get("id") for r in rows if r.get("id")],
+        )
+    return [
+        await _enrich_maintenance_ticket(r, users, blocking_by_ticket=blocking)
+        for r in rows
+    ]
 
 
 def _sort_maintenance_tickets(rows: list) -> list:
-    """Unresolved first, then high → medium → low priority, then newest."""
+    """Blocking production first, then unresolved, then high → medium → low, then oldest."""
     def key(t):
+        blocking = 0 if t.get("blocking_production_orders") else 1
         resolved = 1 if t.get("status") == "resolved" else 0
         pri = _MAINT_PRIORITY_RANK.get(t.get("priority") or "medium", 9)
         created = t.get("created_at") or ""
-        return (resolved, pri, created)
+        return (blocking, resolved, pri, created)
 
     return sorted(rows, key=key)
 
@@ -6940,12 +7068,14 @@ async def list_maintenance_tickets(
             raise HTTPException(status_code=400, detail="Invalid priority filter")
         filt["priority"] = pr
     rows = await db.maintenance_tickets.find(filt, {"_id": 0}).to_list(1000)
-    rows = _sort_maintenance_tickets(rows)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_maintenance(principal, membership)
-    items = await _enrich_maintenance_tickets(rows)
+    items = await _enrich_maintenance_tickets(
+        rows, workspace_id=principal["workspace_id"],
+    )
+    items = _sort_maintenance_tickets(items)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Engineering & Maintenance",
