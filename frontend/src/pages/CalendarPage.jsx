@@ -22,6 +22,8 @@ const typeBlock = {
   Decision: "bg-helm-status-negative/15 border-helm-status-negative/30 text-helm-status-negative",
   Task: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
   Deadline: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
+  Production: "bg-helm-gold/20 border-helm-gold/35 text-helm-gold",
+  Procurement: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
 };
 
 const typeDot = {
@@ -32,7 +34,13 @@ const typeDot = {
   Decision: "bg-helm-status-negative",
   Task: "bg-helm-status-warning",
   Deadline: "bg-helm-status-warning",
+  Production: "bg-helm-gold",
+  Procurement: "bg-helm-status-warning",
 };
+
+function isEditableHelmEvent(ev) {
+  return ev?.source === "helm" && !String(ev?.id || "").startsWith("deadline_");
+}
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -265,7 +273,7 @@ function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
                 key={ev.id}
                 type="button"
                 onClick={() => onEventClick?.(ev)}
-                className={cn("rounded px-1.5 py-0.5 text-[10px] truncate border text-left w-full", typeBlock[ev.type] || "bg-helm-fg/10 border-helm-line text-helm-fg", ev.source === "helm" && "cursor-pointer hover:brightness-110")}
+                className={cn("rounded px-1.5 py-0.5 text-[10px] truncate border text-left w-full", typeBlock[ev.type] || "bg-helm-fg/10 border-helm-line text-helm-fg", isEditableHelmEvent(ev) && "cursor-pointer hover:brightness-110")}
                 title={ev.title}
               >
                 {ev.title}
@@ -337,7 +345,7 @@ function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
                       className={cn(
                         "absolute left-1 right-1 z-10 rounded-md border px-1.5 py-1 overflow-hidden text-left shadow-sm",
                         typeBlock[ev.type] || "bg-helm-fg/10 border-helm-fg/15 text-helm-fg",
-                        ev.source === "helm" && "cursor-pointer hover:brightness-110",
+                        isEditableHelmEvent(ev) && "cursor-pointer hover:brightness-110",
                       )}
                       style={{ top: top + 1, height }}
                       title={ev.title}
@@ -406,7 +414,7 @@ export default function CalendarPage() {
   };
 
   const openEdit = (ev) => {
-    if (ev.source !== "helm") return;
+    if (!isEditableHelmEvent(ev)) return;
     setEditing(ev.id);
     setForm({
       title: ev.title,
@@ -472,7 +480,7 @@ export default function CalendarPage() {
     );
   }
 
-  const hasEvents = events.length > 0 || (data.upcoming || []).length > 0;
+  const hasEvents = events.length > 0;
   const canWrite = data.can_write !== false;
   const googleConnected = data.google_connected || data.live || data.source === "google_calendar";
   const googleAvailable = data.google_available !== false;

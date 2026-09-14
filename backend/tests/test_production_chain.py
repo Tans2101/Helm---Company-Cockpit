@@ -356,3 +356,56 @@ def test_delete_work_order(prod_api):
     server.app.dependency_overrides[server.get_principal] = as_ceo
     ok_ceo = client.delete(f"/api/production/work-orders/{wo2['id']}")
     assert ok_ceo.status_code == 200, ok_ceo.text
+
+
+def test_patch_link_sets_awaiting_materials_and_unlink_resumes(prod_api):
+    client, orders, procurement, *_ = prod_api
+    procurement.rows.append({
+        "id": "preq_open",
+        "workspace_id": "ws_test",
+        "item": "Bolts",
+        "status": "approved",
+        "quantity": 2,
+    })
+    wo = client.post("/api/production/work-orders", json={"reference": "Link later"}).json()["work_order"]
+    assert wo["status"] == "in_production"
+
+    linked = client.patch(
+        f"/api/production/work-orders/{wo['id']}",
+        json={"linked_procurement_request_id": "preq_open"},
+    )
+    assert linked.status_code == 200, linked.text
+    body = linked.json()["work_order"]
+    assert body["linked_procurement_request_id"] == "preq_open"
+    assert body["status"] == "awaiting_materials"
+
+    cleared = client.patch(
+        f"/api/production/work-orders/{wo['id']}",
+        json={"linked_procurement_request_id": ""},
+    )
+    assert cleared.status_code == 200, cleared.text
+    body = cleared.json()["work_order"]
+    assert body["linked_procurement_request_id"] in (None, "")
+    assert body["status"] == "in_production"
+
+
+def test_cannot_link_delivered_or_rejected_procurement(prod_api):
+    client, orders, procurement, *_ = prod_api
+    procurement.rows.append({
+        "id": "preq_done",
+        "workspace_id": "ws_test",
+        "item": "Done",
+        "status": "delivered",
+    })
+    bad_create = client.post(
+        "/api/production/work-orders",
+        json={"reference": "Bad link", "linked_procurement_request_id": "preq_done"},
+    )
+    assert bad_create.status_code == 400
+
+    wo = client.post("/api/production/work-orders", json={"reference": "Ok"}).json()["work_order"]
+    bad_patch = client.patch(
+        f"/api/production/work-orders/{wo['id']}",
+        json={"linked_procurement_request_id": "preq_done"},
+    )
+    assert bad_patch.status_code == 400

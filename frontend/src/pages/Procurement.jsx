@@ -19,7 +19,8 @@ const STATUS_META = {
 const CLOSED = new Set(["delivered", "rejected"]);
 
 function isExpectedDeliveryOverdue(dateStr, status) {
-  if (CLOSED.has(status)) return false;
+  // Match Decision Center / backend: only ordered requests with a past date are overdue.
+  if (status !== "ordered") return false;
   const raw = (dateStr || "").trim();
   if (!raw) return false;
   const end = new Date(`${raw}T23:59:59`);

@@ -108,6 +108,7 @@ async def test_department_upcoming_includes_open_dated_rows(cal_db):
         {
             "id": "pwo_1",
             "workspace_id": "ws_cal",
+            "department_id": "dept_prod",
             "reference": "Order #245",
             "due_date": "2026-09-16",
             "status": "awaiting_materials",
@@ -115,15 +116,26 @@ async def test_department_upcoming_includes_open_dated_rows(cal_db):
         {
             "id": "pwo_done",
             "workspace_id": "ws_cal",
+            "department_id": "dept_prod",
             "reference": "Finished job",
             "due_date": "2026-09-16",
             "status": "completed",
+        },
+        {
+            # Orphan from a previous department id — must not appear.
+            "id": "pwo_orphan",
+            "workspace_id": "ws_cal",
+            "department_id": "dept_prod_old",
+            "reference": "Orphan",
+            "due_date": "2026-09-16",
+            "status": "in_production",
         },
     ])
     procurement.rows.extend([
         {
             "id": "preq_1",
             "workspace_id": "ws_cal",
+            "department_id": "dept_proc",
             "item": "Steel plate",
             "expected_delivery_date": "2026-09-17",
             "status": "ordered",
@@ -131,6 +143,7 @@ async def test_department_upcoming_includes_open_dated_rows(cal_db):
         {
             "id": "preq_delivered",
             "workspace_id": "ws_cal",
+            "department_id": "dept_proc",
             "item": "Old bolts",
             "expected_delivery_date": "2026-09-17",
             "status": "delivered",
@@ -138,6 +151,7 @@ async def test_department_upcoming_includes_open_dated_rows(cal_db):
         {
             "id": "preq_rejected",
             "workspace_id": "ws_cal",
+            "department_id": "dept_proc",
             "item": "Bad lot",
             "expected_delivery_date": "2026-09-17",
             "status": "rejected",
@@ -161,6 +175,7 @@ async def test_department_upcoming_includes_open_dated_rows(cal_db):
     assert by_id["preq_1"]["source_type"] == "procurement_request"
 
     assert "pwo_done" not in by_id
+    assert "pwo_orphan" not in by_id
     assert "preq_delivered" not in by_id
     assert "preq_rejected" not in by_id
 
@@ -177,6 +192,7 @@ async def test_skips_disabled_department(cal_db):
     production.rows.append({
         "id": "pwo_1",
         "workspace_id": "ws_cal",
+        "department_id": "dept_prod",
         "reference": "Hidden",
         "due_date": "2026-09-16",
         "status": "in_production",
@@ -184,6 +200,7 @@ async def test_skips_disabled_department(cal_db):
     procurement.rows.append({
         "id": "preq_1",
         "workspace_id": "ws_cal",
+        "department_id": "dept_proc",
         "item": "Visible",
         "expected_delivery_date": "2026-09-16",
         "status": "ordered",
@@ -200,6 +217,7 @@ async def test_registry_entry_alone_surfaces_new_source(cal_db):
     mock_db.legal_matters = DocStore([{
         "id": "mat_1",
         "workspace_id": "ws_cal",
+        "department_id": "dept_legal",
         "title": "Contract renewal",
         "deadline": "2026-09-18",
         "status": "open",
@@ -239,6 +257,7 @@ def test_deadlines_as_events_preserves_source_refs():
     }])
     assert len(events) == 1
     assert events[0]["type"] == "Production"
+    assert events[0]["source"] == "deadline"
     assert events[0]["source_type"] == "production_work_order"
     assert events[0]["source_id"] == "pwo_1"
     assert events[0]["all_day"] is True
@@ -249,6 +268,7 @@ def test_calendar_endpoint_merges_department_and_legacy_deadlines(cal_db):
     production.rows.append({
         "id": "pwo_1",
         "workspace_id": "ws_cal",
+        "department_id": "dept_prod",
         "reference": "Order #245",
         "due_date": "2026-09-16",
         "status": "quality_check",
@@ -256,6 +276,7 @@ def test_calendar_endpoint_merges_department_and_legacy_deadlines(cal_db):
     procurement.rows.append({
         "id": "preq_1",
         "workspace_id": "ws_cal",
+        "department_id": "dept_proc",
         "item": "Steel plate",
         "expected_delivery_date": "2026-09-16",
         "status": "ordered",
@@ -309,5 +330,6 @@ def test_calendar_endpoint_merges_department_and_legacy_deadlines(cal_db):
 
     prod_ev = next(e for e in body["events"] if e.get("source_id") == "pwo_1")
     assert prod_ev["type"] == "Production"
+    assert prod_ev["source"] == "deadline"
     assert prod_ev["source_type"] == "production_work_order"
     assert prod_ev["all_day"] is True

@@ -4910,6 +4910,7 @@ async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
         rows = await coll.find(
             {
                 "workspace_id": workspace_id,
+                "department_id": enabled["department_id"],
                 "status": {"$in": list(src["open_statuses"])},
                 date_field: {"$exists": True, "$nin": [None, ""]},
             },
@@ -4941,6 +4942,11 @@ async def _department_calendar_upcoming(workspace_id: str) -> list[dict]:
 
 
 def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
+    """Turn upcoming deadline rows into calendar events.
+
+    Uses source=\"deadline\" (not \"helm\") so the UI does not treat them as
+    editable helm_events — PATCH/DELETE only apply to user-created helm rows.
+    """
     events = []
     for u in upcoming:
         ev = {
@@ -4952,7 +4958,7 @@ def _deadlines_as_events(upcoming: list[dict]) -> list[dict]:
             "type": u.get("type", "Deadline"),
             "prep": None,
             "importance": "medium",
-            "source": "helm",
+            "source": "deadline",
             "date": u["date"],
             "start_at": f"{u['date']}T00:00:00+00:00",
             "end_at": f"{u['date']}T23:59:59+00:00",
@@ -5722,6 +5728,11 @@ async def _validate_procurement_link(workspace_id: str, request_id: str) -> dict
     )
     if not req:
         raise HTTPException(status_code=400, detail="Procurement request not found in this workspace")
+    if req.get("status") not in PROCUREMENT_OPEN_FOR_LINK:
+        raise HTTPException(
+            status_code=400,
+            detail="Can only link open procurement requests (requested, approved, or ordered)",
+        )
     return req
 
 
@@ -5913,13 +5924,16 @@ async def patch_production_work_order(
             # Members may update assignees only if already allowed to edit the order
             pass
         upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
+    linked_req = None
+    link_cleared = False
     if payload.linked_procurement_request_id is not None:
         link = payload.linked_procurement_request_id.strip()
         if link:
-            await _validate_procurement_link(principal["workspace_id"], link)
+            linked_req = await _validate_procurement_link(principal["workspace_id"], link)
             upd["linked_procurement_request_id"] = link
         else:
             upd["linked_procurement_request_id"] = None
+            link_cleared = True
 
     next_status = order.get("status")
     if payload.status is not None:
@@ -5928,6 +5942,15 @@ async def patch_production_work_order(
             raise HTTPException(status_code=400, detail="Invalid status")
         upd["status"] = st
         next_status = st
+    elif linked_req is not None and next_status != "completed":
+        # Linking an open procurement request means we're waiting on materials —
+        # match create_production_work_order so the Procurement blocking badge appears.
+        upd["status"] = "awaiting_materials"
+        next_status = "awaiting_materials"
+    elif link_cleared and next_status == "awaiting_materials":
+        # Dropping the link while still marked awaiting materials → resume production.
+        upd["status"] = "in_production"
+        next_status = "in_production"
 
     next_blocked = bool(order.get("blocked", False))
     if payload.blocked is not None:
@@ -6222,9 +6245,10 @@ async def procurement_vendor_suggestions(
             except (TypeError, ValueError):
                 last_cost = None
         price_changed = False
-        recent_costs = costs[:3]
-        if last_cost is not None and len(recent_costs) >= 2:
-            avg = sum(recent_costs) / len(recent_costs)
+        # Compare latest cost to the average of up to 3 prior orders (exclude last).
+        prior_costs = costs[1:4]
+        if last_cost is not None and prior_costs:
+            avg = sum(prior_costs) / len(prior_costs)
             if avg > 0 and abs(last_cost - avg) / avg > 0.15:
                 price_changed = True
         suggestions.append({
