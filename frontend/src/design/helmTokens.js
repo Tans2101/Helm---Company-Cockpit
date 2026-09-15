@@ -13,9 +13,9 @@
  *   status* — meaning colors for deltas/errors, not brand
  *
  * Opacity conventions (Tailwind suffixes on helm-gold / helm-muted / helm-status-*):
- *   /12  — light background tint (badges, chips, highlighted rows): bg-helm-*/12
- *   /35  — border on a tinted element (or matching outline control): border-helm-*/35
- *   /10  — hover wash on outline controls only: hover:bg-helm-*/10
+ *   /12  — light background tint (badges, chips, highlighted rows): bg-helm-{token}/12
+ *   /35  — border on a tinted element (or matching outline control): border-helm-{token}/35
+ *   /10  — hover wash on outline controls only: hover:bg-helm-{token}/10
  *   /40  — focus ring on inputs only: focus:border-helm-gold/40
  *   (no suffix) — full-strength text and solid accents: text-helm-gold, bg-helm-gold
  *
