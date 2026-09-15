@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { Send, CheckCircle2, Circle, AlertTriangle, Plus, Users, Lock, PenLine, Trash2 } from "lucide-react";
+import { Send, CheckCircle2, Circle, AlertTriangle, Plus, Users, Lock, PenLine, Trash2, Briefcase } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { useDecisionActions, buildDelegateOptions } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import DecisionCard from "@/components/DecisionCard";
 import SuggestionCard from "@/components/SuggestionCard";
+import { departmentIcon } from "@/lib/departmentIcons";
 import { cn } from "@/lib/utils";
 
 /* Sticky-note chips keep a distinct paper palette so notes stay scannable; not brand fills. */
@@ -40,6 +41,7 @@ export default function MyDay() {
   const canActDecisions = !!decisionsData?.can_act;
   const { data: membersData } = useFetch(canActDecisions ? "/members" : null);
   const { busy: decisionBusy, act, approveSuggestion, dismissSuggestion } = useDecisionActions(reloadDecisions);
+  const { data: workData, loading: lWork, error: eWork, reload: reloadWork } = useFetch("/me/work-items");
 
   const [teamText, setTeamText] = useState("");
   const [blocker, setBlocker] = useState(false);
@@ -55,14 +57,14 @@ export default function MyDay() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [showNoteComposer, setShowNoteComposer] = useState(false);
 
-  if (l0 || l1 || l2 || l3 || lDec) return <LoadingScreen label="Assembling your day" />;
-  const dayError = e0 || e1 || e2 || e3;
-  if (dayError || !notesData || !mine || !tasks || !today) {
+  if (l0 || l1 || l2 || l3 || lDec || lWork) return <LoadingScreen label="Assembling your day" />;
+  const dayError = e0 || e1 || e2 || e3 || eWork;
+  if (dayError || !notesData || !mine || !tasks || !today || !workData) {
     return (
       <ErrorScreen
         label="Could not load your day"
         message={fetchErrorMessage(dayError, "Your day view is unavailable right now.")}
-        onRetry={() => { reloadNotes(); reloadMine(); reloadTasks(); reloadToday(); reloadDecisions(); }}
+        onRetry={() => { reloadNotes(); reloadMine(); reloadTasks(); reloadToday(); reloadDecisions(); reloadWork(); }}
       />
     );
   }
@@ -74,6 +76,7 @@ export default function MyDay() {
   const pendingDecisions = (decisionsData?.decisions || []).filter((d) => d.status === "pending");
   const { selfMember, delegateMembers, selfLabel } = buildDelegateOptions(membersData);
   const needsCallEmpty = suggestions.length === 0 && pendingDecisions.length === 0;
+  const workItems = workData?.items || [];
 
   const saveNote = async () => {
     if (!noteText.trim()) { toast.error("Write something first"); return; }
@@ -202,6 +205,54 @@ export default function MyDay() {
           )}
         </div>
       )}
+
+      <div className="mb-8 fade-up" data-testid="my-work-feed">
+        <div className="flex items-center gap-2 mb-4">
+          <Briefcase className="w-3.5 h-3.5 text-helm-gold" />
+          <SectionLabel>My Work</SectionLabel>
+        </div>
+        {workItems.length === 0 ? (
+          <GlassCard className="p-5">
+            <p className="text-sm text-helm-fg">Nothing assigned to you right now</p>
+            <p className="text-xs text-helm-muted mt-1">When Production, Legal, Sales, and other departments assign you work, it will show up here.</p>
+          </GlassCard>
+        ) : (
+          <div className="space-y-2">
+            {workItems.map((item) => {
+              const Icon = departmentIcon(item.icon);
+              const dueLabel = item.due_date || "No due date";
+              return (
+                <Link
+                  key={item.id}
+                  to={item.url}
+                  data-testid={`work-item-${item.id}`}
+                  className="flex items-center gap-3 rounded-lg border border-helm-line bg-helm-card px-4 py-3 hover:border-helm-gold/40 transition-colors"
+                >
+                  <span className="shrink-0 text-helm-gold"><Icon className="w-4 h-4" /></span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-helm-fg truncate">{item.title}</p>
+                    <p className="text-[11px] text-helm-muted mt-0.5">
+                      {item.department_name || item.department_type}
+                      {item.relationship === "requested_by_me" ? " · Requested by you" : ""}
+                      {item.status ? ` · ${String(item.status).replace(/_/g, " ")}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    {item.overdue && (
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-negative bg-helm-status-negative/12 border border-helm-status-negative/35 rounded px-1.5 py-0.5">
+                        Overdue
+                      </span>
+                    )}
+                    <span className={cn("text-[11px] font-mono", item.overdue ? "text-helm-status-negative" : "text-helm-muted")}>
+                      {dueLabel}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">

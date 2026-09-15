@@ -4701,6 +4701,226 @@ async def delete_note(note_id: str, principal=Depends(get_principal)):
     return {"ok": True}
 
 
+# ------------------------- My Work (cross-department feed) -------------------------
+# Deep-link query params are not wired on department pages yet — URLs point at the
+# department page itself (known limitation; Tasks is the only page with ?task= today).
+_ME_WORK_URLS = {
+    dept_catalog.TYPE_PRODUCTION: "/app/departments/production",
+    dept_catalog.TYPE_PROCUREMENT: "/app/departments/procurement",
+    dept_catalog.TYPE_LEGAL: "/app/departments/legal",
+    dept_catalog.TYPE_ENGINEERING_MAINTENANCE: "/app/departments/engineering_maintenance",
+    dept_catalog.TYPE_HR: "/app/departments/hr",
+    dept_catalog.TYPE_SALES: "/app/sales",
+}
+
+
+def _me_work_due(raw, today: date) -> tuple[Optional[str], bool]:
+    """Normalize a due date string and flag overdue (past calendar day, UTC)."""
+    due = (str(raw).strip()[:10] if raw else "") or None
+    if not due:
+        return None, False
+    try:
+        d = date.fromisoformat(due)
+    except ValueError:
+        return due, False
+    return due, d < today
+
+
+def _me_work_row(
+    *,
+    item_id: str,
+    department_type: str,
+    title: str,
+    due_raw,
+    status: str,
+    today: date,
+    relationship: str = "assigned_to_me",
+) -> dict:
+    due, overdue = _me_work_due(due_raw, today)
+    entry = dept_catalog.catalog_entry(department_type) or {}
+    return {
+        "id": item_id,
+        "department_type": department_type,
+        "title": (title or item_id).strip() or item_id,
+        "due_date": due,
+        "status": status or "",
+        "url": _ME_WORK_URLS.get(department_type) or f"/app/departments/{department_type}",
+        "relationship": relationship,
+        "overdue": overdue,
+        "icon": entry.get("icon") or "briefcase",
+        "department_name": entry.get("name") or department_type,
+    }
+
+
+async def _me_work_dept_ids(principal: dict, dept_type: str) -> Optional[list[str]]:
+    """Department ids to query for this type, or None to skip entirely.
+
+    Non-CEO with no membership → []. CEO → enabled dept ids (assignee filter still applies).
+    """
+    access = await dept_access.accessible_department_ids(db, principal, dept_type)
+    if access is not None:
+        return access if access else None
+    # CEO bypass for membership — still require the type to be enabled in the workspace.
+    rows = await db.departments.find(
+        {
+            "workspace_id": principal["workspace_id"],
+            "type": dept_type,
+            "enabled": True,
+        },
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    ids = [r["department_id"] for r in rows if r.get("department_id")]
+    return ids or None
+
+
+@api_router.get("/me/work-items")
+async def my_work_items(principal=Depends(get_principal)):
+    """Cross-department open items assigned to (or, for Procurement, requested by) me."""
+    ws = principal["workspace_id"]
+    uid = principal["user_id"]
+    today = datetime.now(timezone.utc).date()
+    items: list[dict] = []
+
+    # Production — assigned_user_ids
+    prod_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_PRODUCTION)
+    if prod_ids is not None:
+        filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": prod_ids},
+            "assigned_user_ids": uid,
+            "status": {"$nin": ["completed", "done"]},
+        }
+        rows = await db.production_work_orders.find(filt, {"_id": 0}).to_list(200)
+        for r in rows:
+            items.append(_me_work_row(
+                item_id=r.get("id") or "",
+                department_type=dept_catalog.TYPE_PRODUCTION,
+                title=r.get("reference") or r.get("product") or r.get("id") or "Work order",
+                due_raw=r.get("due_date"),
+                status=r.get("status") or "",
+                today=today,
+            ))
+
+    # Legal — assigned_to
+    legal_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_LEGAL)
+    if legal_ids is not None:
+        filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": legal_ids},
+            "assigned_to": uid,
+            "status": {"$nin": ["filed"]},
+        }
+        rows = await db.legal_matters.find(filt, {"_id": 0}).to_list(200)
+        for r in rows:
+            items.append(_me_work_row(
+                item_id=r.get("id") or "",
+                department_type=dept_catalog.TYPE_LEGAL,
+                title=r.get("title") or r.get("id") or "Matter",
+                due_raw=r.get("due_date"),
+                status=r.get("status") or "",
+                today=today,
+            ))
+
+    # Maintenance — assigned_technician (no due_date on tickets)
+    maint_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_ENGINEERING_MAINTENANCE)
+    if maint_ids is not None:
+        filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": maint_ids},
+            "assigned_technician": uid,
+            "status": {"$nin": ["resolved"]},
+        }
+        rows = await db.maintenance_tickets.find(filt, {"_id": 0}).to_list(200)
+        for r in rows:
+            items.append(_me_work_row(
+                item_id=r.get("id") or "",
+                department_type=dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+                title=r.get("equipment_name") or r.get("description") or r.get("id") or "Ticket",
+                due_raw=None,
+                status=r.get("status") or "",
+                today=today,
+            ))
+
+    # HR onboarding / offboarding — incomplete steps assigned to me
+    hr_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_HR)
+    if hr_ids is not None:
+        hr_filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": hr_ids},
+            "overall_status": "in_progress",
+            "steps": {"$elemMatch": {"assigned_to": uid, "status": {"$ne": "done"}}},
+        }
+        for coll_name, label_key, prefix in (
+            ("hr_onboarding_instances", "hire_name", "Onboarding"),
+            ("hr_offboarding_instances", "employee_name", "Offboarding"),
+        ):
+            coll = getattr(db, coll_name)
+            rows = await coll.find(hr_filt, {"_id": 0}).to_list(200)
+            for inst in rows:
+                person = (inst.get(label_key) or "").strip() or "Employee"
+                for step in inst.get("steps") or []:
+                    if step.get("assigned_to") != uid or step.get("status") == "done":
+                        continue
+                    step_name = (step.get("name") or "Step").strip()
+                    items.append(_me_work_row(
+                        item_id=f"{inst.get('id')}:{step.get('id')}",
+                        department_type=dept_catalog.TYPE_HR,
+                        title=f"{prefix} · {person}: {step_name}",
+                        due_raw=None,
+                        status=step.get("status") or "",
+                        today=today,
+                    ))
+
+    # Sales — owner_user_id
+    sales_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_SALES)
+    if sales_ids is not None:
+        filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": sales_ids},
+            "owner_user_id": uid,
+            "stage": {"$nin": ["won", "lost"]},
+        }
+        rows = await db.deals.find(filt, {"_id": 0}).to_list(200)
+        for r in rows:
+            items.append(_me_work_row(
+                item_id=r.get("id") or "",
+                department_type=dept_catalog.TYPE_SALES,
+                title=r.get("name") or r.get("company") or r.get("id") or "Deal",
+                due_raw=r.get("next_step_date") or r.get("close_date"),
+                status=r.get("stage") or "",
+                today=today,
+            ))
+
+    # Procurement — requested_by (no individual assignee; labeled distinctly)
+    proc_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_PROCUREMENT)
+    if proc_ids is not None:
+        filt = {
+            "workspace_id": ws,
+            "department_id": {"$in": proc_ids},
+            "requested_by": uid,
+            "status": {"$nin": ["delivered", "rejected"]},
+        }
+        rows = await db.procurement_requests.find(filt, {"_id": 0}).to_list(200)
+        for r in rows:
+            items.append(_me_work_row(
+                item_id=r.get("id") or "",
+                department_type=dept_catalog.TYPE_PROCUREMENT,
+                title=r.get("item") or r.get("id") or "Request",
+                due_raw=r.get("expected_delivery_date"),
+                status=r.get("status") or "",
+                today=today,
+                relationship="requested_by_me",
+            ))
+
+    # Overdue first, then soonest due; undated last.
+    def _sort_key(it: dict):
+        due = it.get("due_date") or "9999-99-99"
+        return (0 if it.get("overdue") else 1, due, it.get("title") or "")
+
+    items.sort(key=_sort_key)
+    return {"items": items}
+
+
 def _parse_iso_dt(value) -> Optional[datetime]:
     if not value:
         return None
