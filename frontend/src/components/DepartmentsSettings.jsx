@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Building2, Trash2, UserPlus, User } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
-import { cn } from "@/lib/utils";
+import { departmentPath } from "@/lib/departmentRoutes";
 
+/**
+ * Manage departments — visible to every workspace member.
+ * Enable / disable / member assignment only when GET /departments says can_manage (CEO).
+ */
 export default function DepartmentsSettings() {
   const { data, loading, error, reload } = useFetch("/departments");
   const { data: membersData } = useFetch("/members");
@@ -21,6 +26,12 @@ export default function DepartmentsSettings() {
     setRoster({});
   }, [data]);
 
+  useEffect(() => {
+    if (window.location.hash === "#manage-departments") {
+      document.getElementById("manage-departments")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading]);
+
   if (loading) return <LoadingScreen label="Loading departments" />;
   if (error || !data) {
     return (
@@ -32,8 +43,7 @@ export default function DepartmentsSettings() {
     );
   }
 
-  if (!data.can_manage) return null;
-
+  const canManage = Boolean(data.can_manage || data.is_ceo);
   const departments = data.departments || [];
   const workspaceMembers = (membersData?.members || []).filter((m) => m.user_id && m.status === "active");
 
@@ -55,24 +65,32 @@ export default function DepartmentsSettings() {
     if (next && !roster[next]) await loadMembers(next);
   };
 
-  const toggleDept = async (dept) => {
+  const enableDept = async (dept) => {
     setBusyType(dept.type);
     try {
-      if (dept.enabled) {
-        const ok = window.confirm(
-          `Disable ${dept.name}?\n\nThis removes its department tools data (stages, requests, tickets, onboarding, etc.) for everyone. Pipeline deals and financial entries are kept.`,
-        );
-        if (!ok) return;
-        await api.delete(`/departments/${dept.department_id}`);
-        toast.success(`${dept.name} disabled`);
-        if (expanded === dept.department_id) setExpanded(null);
-      } else {
-        await api.post("/departments", { type: dept.type });
-        toast.success(`${dept.name} enabled`);
-      }
-      reload();
+      await api.post("/departments", { type: dept.type });
+      toast.success(`${dept.name} enabled`);
+      // Full navigation so AppLayout refetches /departments and the sidebar updates.
+      window.location.assign(departmentPath(dept.type));
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not update department");
+      toast.error(e?.response?.data?.detail || "Could not enable department");
+      setBusyType(null);
+    }
+  };
+
+  const disableDept = async (dept) => {
+    const ok = window.confirm(
+      `Disable ${dept.name}?\n\nThis removes its department tools data (stages, requests, tickets, onboarding, etc.) for everyone. Pipeline deals and financial entries are kept.`,
+    );
+    if (!ok) return;
+    setBusyType(dept.type);
+    try {
+      await api.delete(`/departments/${dept.department_id}`);
+      toast.success(`${dept.name} disabled`);
+      if (expanded === dept.department_id) setExpanded(null);
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not disable department");
     } finally {
       setBusyType(null);
     }
@@ -89,7 +107,7 @@ export default function DepartmentsSettings() {
       toast.success("Member added");
       setAddUserId("");
       await loadMembers(departmentId);
-      reload();
+      await reload();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not add member");
     } finally {
@@ -103,7 +121,7 @@ export default function DepartmentsSettings() {
       await api.delete(`/departments/${departmentId}/members/${userId}`);
       toast.success("Member removed");
       await loadMembers(departmentId);
-      reload();
+      await reload();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not remove member");
     } finally {
@@ -112,17 +130,19 @@ export default function DepartmentsSettings() {
   };
 
   return (
-    <GlassCard className="p-5 mb-4 fade-up" data-testid="departments-settings">
+    <GlassCard id="manage-departments" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="departments-settings">
       <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
         <Building2 className="w-4 h-4" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Departments</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Manage departments</span>
       </div>
       <p className="text-sm text-helm-muted mb-5 leading-relaxed">
-        Enable departments for your company, then assign teammates. Enabled departments appear in the sidebar for members (CEO always sees all enabled).
+        {canManage
+          ? "Enable any department for your company — independent of industry — then assign teammates. Enabled departments appear in the sidebar."
+          : "Departments enabled for this company. Only the CEO can turn additional departments on."}
       </p>
 
-      <SectionLabel className="mb-3">Add department</SectionLabel>
-      <div className="space-y-2 mb-6" data-testid="department-catalog">
+      <SectionLabel className="mb-3">All departments</SectionLabel>
+      <div className="space-y-2 mb-2" data-testid="department-catalog">
         {departments.map((dept) => {
           const Icon = departmentIcon(dept.icon);
           const busy = busyType === dept.type;
@@ -136,30 +156,55 @@ export default function DepartmentsSettings() {
                 <Icon className="w-4 h-4 text-helm-muted shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-helm-fg truncate">{dept.name}</p>
-                  <p className="text-[11px] text-helm-muted font-mono">{dept.type}</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={dept.enabled}
-                  data-testid={`dept-toggle-${dept.type}`}
-                  disabled={busy}
-                  onClick={() => toggleDept(dept)}
-                  className={cn(
-                    "relative h-6 w-11 rounded-full transition-colors disabled:opacity-50",
-                    dept.enabled ? "bg-helm-gold/80" : "bg-helm-fg/10",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-helm-card transition-transform",
-                      dept.enabled && "translate-x-5",
+                  <p className="text-[11px] text-helm-muted">
+                    {dept.enabled ? (
+                      <span className="text-helm-status-positive">Enabled</span>
+                    ) : (
+                      <span>Not enabled</span>
                     )}
-                  />
-                </button>
+                    {dept.enabled && dept.is_member ? " · You’re a member" : null}
+                  </p>
+                </div>
+
+                {dept.enabled ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      to={departmentPath(dept.type)}
+                      data-testid={`dept-open-${dept.type}`}
+                      className="text-xs text-helm-gold hover:underline"
+                    >
+                      Open
+                    </Link>
+                    {canManage && (
+                      <button
+                        type="button"
+                        data-testid={`dept-disable-${dept.type}`}
+                        disabled={busy}
+                        onClick={() => disableDept(dept)}
+                        className="text-xs text-helm-muted hover:text-helm-status-negative transition-colors disabled:opacity-50"
+                      >
+                        {busy ? "…" : "Disable"}
+                      </button>
+                    )}
+                  </div>
+                ) : canManage ? (
+                  <button
+                    type="button"
+                    data-testid={`dept-enable-${dept.type}`}
+                    disabled={busy}
+                    onClick={() => enableDept(dept)}
+                    className="shrink-0 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-1.5 hover:bg-helm-gold-hover disabled:opacity-60"
+                  >
+                    {busy ? "Enabling…" : "Enable"}
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-mono uppercase tracking-wide text-helm-muted shrink-0">
+                    Ask CEO
+                  </span>
+                )}
               </div>
 
-              {dept.enabled && (
+              {canManage && dept.enabled && (
                 <div className="mt-3 pt-3 border-t border-helm-line">
                   <button
                     type="button"

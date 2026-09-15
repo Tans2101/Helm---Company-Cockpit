@@ -196,7 +196,8 @@ export default function AccountSettings() {
       </GlassCard>
 
       {isOwner && <InviteCeoCard />}
-      {isOwner && <DepartmentsSettings />}
+      {/* Visible to every member; enable actions gated by can_manage inside the component */}
+      <DepartmentsSettings />
 
       <GlassCard className="p-5 mb-4 fade-up">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">

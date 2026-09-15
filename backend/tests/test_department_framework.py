@@ -214,6 +214,22 @@ def test_ceo_enable_and_list(dept_api):
     assert prod["visible_in_nav"] is True  # CEO sees enabled even without membership
 
 
+def test_enable_ignores_workspace_industry(dept_api):
+    """Industry (e.g. SaaS) must not gate which catalog departments a CEO can enable."""
+    client, depts, members, mock_db, as_ceo, as_member = dept_api
+    mock_db.companies = MagicMock()
+    mock_db.companies.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_test",
+        "industry": "SaaS / Software",
+    })
+    for dtype in ("production", "procurement", "engineering_maintenance"):
+        r = client.post("/api/departments", json={"type": dtype})
+        assert r.status_code == 200, f"{dtype}: {r.text}"
+    assert {d["type"] for d in depts.rows} >= {
+        "production", "procurement", "engineering_maintenance",
+    }
+
+
 def test_member_cannot_enable(dept_api):
     client, depts, members, mock_db, as_ceo, as_member = dept_api
     server.app.dependency_overrides[server.get_principal] = as_member
