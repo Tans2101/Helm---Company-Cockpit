@@ -49,15 +49,15 @@ export const WHO_HELM_IS_FOR = [
   },
   {
     title: "Leadership teams",
-    body: "From a handful of people to fifty — finance, sales, ops, and production keep their lanes. You get one synthesized view every morning.",
+    body: "From a handful of people to fifty — finance, sales, ops, and production keep their lanes. You get one synthesized view.",
   },
 ];
 
 export const CEO_DAY = [
-  { time: "7:30 AM", title: "Morning Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
-  { time: "9:00 AM", title: "Decision Center", body: "Six pending approvals ranked by impact. Helm recommends which to tackle first and why." },
-  { time: "12:00 PM", title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
-  { time: "Friday", title: "Weekly CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
+  { title: "Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
+  { title: "Decision Center", body: "Pending approvals ranked by impact. Helm recommends which to tackle first and why." },
+  { title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
+  { title: "Weekly CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
 ];
 
 export const PRICING_FAQ = [
@@ -201,12 +201,12 @@ export const PROBLEMS = [
 
 export const HOW_IT_WORKS = [
   { n: "01", title: "Your team updates the work", body: "Finance, sales, operations, and other departments use their own simple queues. Connect QuickBooks and Google where useful." },
-  { n: "02", title: "Helm prepares your morning view", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
+  { n: "02", title: "Helm prepares your briefing", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
   { n: "03", title: "You decide and hand off", body: "Approve, follow up, or assign the next step. Helm keeps the owner and outcome visible so decisions do not disappear." },
 ];
 
 export const FEATURE_HIGHLIGHTS = [
-  { title: "Morning Briefing", body: "What changed, what to decide, what to delegate — before your first meeting." },
+  { title: "Briefing", body: "What changed, what to decide, what to delegate — synthesized from your live company data." },
   { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus outcome checks." },
   { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking — always know where the money stands." },
   { title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },

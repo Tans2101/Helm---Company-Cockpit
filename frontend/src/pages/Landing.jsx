@@ -22,10 +22,10 @@ function BriefingPreview() {
   return (
     <div className="relative rounded-lg border border-helm-cream/10 bg-helm-ink-card p-5 md:p-7">
       <div className="flex items-center justify-between border-b border-helm-cream/[0.06] pb-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-helm-slate">Monday · Morning Briefing</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-helm-slate">Briefing</p>
         <span className="text-[10px] text-helm-slate">Live workspace data</span>
       </div>
-      <p className="font-display text-helm-cream text-2xl md:text-3xl font-medium mt-6 leading-snug tracking-tight">Good morning, Alex.</p>
+      <p className="font-display text-helm-cream text-2xl md:text-3xl font-medium mt-6 leading-snug tracking-tight">Welcome back, Alex.</p>
       <p className="text-helm-slate text-sm mt-3 leading-relaxed">Revenue is ahead of plan. Engineering capacity needs a decision today.</p>
       <div className="grid grid-cols-3 gap-3 mt-6 border-y border-helm-cream/[0.06] py-4">
         {[
@@ -118,16 +118,15 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">From morning briefing to weekly update.</h2>
+            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">What CEOs open Helm for.</h2>
           </motion.div>
           <div className="mt-16 space-y-0 border-t border-helm-cream/[0.06]">
             {CEO_DAY.map((step, i) => (
               <motion.div key={step.title} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}
-                className="grid sm:grid-cols-[7rem_1fr] gap-3 sm:gap-10 py-7 border-b border-helm-cream/[0.06]">
-                <p className="font-mono text-[10px] uppercase tracking-wider text-helm-slate pt-1">{step.time}</p>
+                className="grid sm:grid-cols-[10rem_1fr] gap-3 sm:gap-10 py-7 border-b border-helm-cream/[0.06]">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-helm-gold pt-1">{step.title}</p>
                 <div>
-                  <h3 className="font-display text-xl text-helm-cream tracking-tight">{step.title}</h3>
-                  <p className="mt-2 text-sm text-helm-slate leading-relaxed max-w-xl">{step.body}</p>
+                  <p className="text-sm text-helm-slate leading-relaxed max-w-xl">{step.body}</p>
                 </div>
               </motion.div>
             ))}
@@ -139,7 +138,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">One short operating rhythm.</h2>
+            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">How Helm fits together.</h2>
           </motion.div>
           <div className="mt-16 grid md:grid-cols-3 gap-12 md:gap-10">
             {HOW_IT_WORKS.map((s, i) => (
