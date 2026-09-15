@@ -203,39 +203,124 @@ export default function Telemetry() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setEditing(false)} />
           <GlassCard className="relative w-full sm:max-w-lg m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" data-testid="telemetry-edit-form">
-            <h3 className="text-lg text-helm-fg font-light mb-4">Edit telemetry risks</h3>
-            <label className="text-xs text-helm-muted block mb-4">Notes
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Context for your risk radar…"
-                className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 resize-none focus:outline-none focus:border-helm-gold/40" />
+            <h3 className="text-lg text-helm-fg font-light">Edit risk radar</h3>
+            <p className="text-xs text-helm-muted mt-1 mb-5 leading-relaxed">
+              Each risk is scored 1–5 for how likely it is and how bad it would be. Score = likelihood × impact.
+            </p>
+
+            <label className="text-xs text-helm-muted block mb-5">
+              Radar notes
+              <span className="block font-normal text-[11px] text-helm-muted/80 mt-0.5">Optional context for the whole radar — not a risk itself.</span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="What are you watching overall this month?"
+                className="mt-1.5 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 resize-none focus:outline-none focus:border-helm-gold/40"
+              />
             </label>
-            <div className="space-y-3">
-              {risks.map((r, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                  <input value={r.name} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                    placeholder="Risk name" className="col-span-6 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-1.5 focus:outline-none focus:border-helm-gold/40" />
-                  <input value={r.category} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, category: e.target.value } : x))}
-                    placeholder="Category" className="col-span-3 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-1.5 focus:outline-none focus:border-helm-gold/40" />
-                  <button type="button" onClick={() => setRisks((prev) => prev.filter((_, j) => j !== i))} className="col-span-1 text-helm-muted hover:text-helm-status-negative p-1"><Trash2 className="w-4 h-4" /></button>
-                  <div className="col-span-6 flex gap-2">
-                    <label className="text-[10px] text-helm-muted flex-1">Likelihood
-                      <input type="number" min={1} max={5} value={r.likelihood} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, likelihood: parseInt(e.target.value, 10) || 1 } : x))}
-                        className="mt-0.5 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-1 focus:outline-none focus:border-helm-gold/40" />
-                    </label>
-                    <label className="text-[10px] text-helm-muted flex-1">Impact
-                      <input type="number" min={1} max={5} value={r.impact} onChange={(e) => setRisks((prev) => prev.map((x, j) => j === i ? { ...x, impact: parseInt(e.target.value, 10) || 1 } : x))}
-                        className="mt-0.5 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-1 focus:outline-none focus:border-helm-gold/40" />
-                    </label>
-                  </div>
-                </div>
-              ))}
+
+            <div className="flex items-center justify-between mb-3">
+              <SectionLabel>Risks</SectionLabel>
+              <span className="text-[10px] font-mono text-helm-muted">{risks.filter((r) => r.name?.trim()).length} named</span>
             </div>
-            <button type="button" onClick={() => setRisks((prev) => [...prev, emptyRisk()])}
-              className="mt-3 inline-flex items-center gap-1 text-xs text-helm-gold hover:text-helm-gold-hover">
-              <Plus className="w-3.5 h-3.5" /> Add risk
+
+            <div className="space-y-3">
+              {risks.map((r, i) => {
+                const score = (Number(r.likelihood) || 1) * (Number(r.impact) || 1);
+                return (
+                  <div
+                    key={r.id || `new-${i}`}
+                    className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-4 space-y-3"
+                    data-testid={`risk-editor-${i}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-helm-muted block">
+                          Risk
+                          <input
+                            value={r.name}
+                            onChange={(e) => setRisks((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                            placeholder="e.g. Key hire slips, runway under 6 months"
+                            className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                          />
+                        </label>
+                        <label className="text-[10px] font-mono uppercase tracking-wider text-helm-muted block">
+                          Category
+                          <input
+                            value={r.category}
+                            onChange={(e) => setRisks((prev) => prev.map((x, j) => (j === i ? { ...x, category: e.target.value } : x)))}
+                            placeholder="People, Finance, Ops…"
+                            className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Remove risk"
+                        onClick={() => setRisks((prev) => (prev.length <= 1 ? [{ ...emptyRisk() }] : prev.filter((_, j) => j !== i)))}
+                        className="shrink-0 text-helm-muted hover:text-helm-status-negative p-1.5 rounded-md hover:bg-helm-fg/5"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1 border-t border-helm-line">
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-helm-muted block">
+                        Likelihood
+                        <span className="block normal-case tracking-normal font-sans text-[11px] text-helm-muted/80 mt-0.5">How likely? (1–5)</span>
+                        <select
+                          value={r.likelihood}
+                          onChange={(e) => setRisks((prev) => prev.map((x, j) => (j === i ? { ...x, likelihood: parseInt(e.target.value, 10) || 1 } : x)))}
+                          className="mt-1.5 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-2 focus:outline-none focus:border-helm-gold/40"
+                        >
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-helm-muted block">
+                        Impact
+                        <span className="block normal-case tracking-normal font-sans text-[11px] text-helm-muted/80 mt-0.5">How bad if it hits? (1–5)</span>
+                        <select
+                          value={r.impact}
+                          onChange={(e) => setRisks((prev) => prev.map((x, j) => (j === i ? { ...x, impact: parseInt(e.target.value, 10) || 1 } : x)))}
+                          className="mt-1.5 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-2 py-2 focus:outline-none focus:border-helm-gold/40"
+                        >
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-helm-muted font-mono">
+                        {r.likelihood} × {r.impact}
+                      </span>
+                      <span
+                        className="text-[11px] font-mono rounded px-2 py-0.5"
+                        style={{ color: riskColor(score), background: `${riskColor(score)}15` }}
+                      >
+                        Score {score}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRisks((prev) => [...prev, emptyRisk()])}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs text-helm-gold hover:text-helm-gold-hover"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add another risk
             </button>
+
             <div className="flex gap-2 mt-5">
               <button type="button" onClick={() => setEditing(false)} className="rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5">Cancel</button>
-              <button type="button" onClick={saveRisks} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm py-2.5 hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+              <button type="button" onClick={saveRisks} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm py-2.5 hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save risks"}</button>
             </div>
           </GlassCard>
         </div>
