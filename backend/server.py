@@ -2623,7 +2623,7 @@ async def briefing(principal=Depends(get_principal)):
     day = datetime.now(timezone.utc).date().isoformat()
     ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).sort("updated_at", -1).to_list(50)
     b["team_updates"] = [{"user_name": u.get("user_name"), "text": u.get("text"),
-                          "blocker": u.get("blocker", False), "mood": u.get("mood"),
+                          "blocker": u.get("blocker", False),
                           "ago": _rel_time(u.get("updated_at", ""))} for u in ups]
     b["what_to_decide"] = _briefing_what_to_decide(c)
     b["what_to_delegate"] = _briefing_what_to_delegate(c)
@@ -4591,7 +4591,6 @@ async def clear_done_tasks(principal=Depends(require_pro_perm("tasks:move"))):
 class UpdateInput(BaseModel):
     text: str
     blocker: bool = False
-    mood: Optional[str] = None
 
 
 @api_router.get("/updates/me")
@@ -4622,14 +4621,14 @@ async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("
     existing = await db.updates.find_one({"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "day": day}, {"_id": 0})
     if existing:
         await db.updates.update_one({"update_id": existing["update_id"]},
-                                    {"$set": {"text": text, "blocker": payload.blocker, "mood": payload.mood, "updated_at": now}})
+                                    {"$set": {"text": text, "blocker": payload.blocker, "updated_at": now}})
         if existing.get("activity_id"):
             await db.activities.update_one({"activity_id": existing["activity_id"]}, {"$set": {"summary": summary, "created_at": now}})
         return {"ok": True, "edited": True}
     act = await log_activity(principal, "updates", "daily.update", summary, {"blocker": payload.blocker})
     doc = {"update_id": f"upd_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
            "user_id": principal["user_id"], "user_name": name, "day": day, "text": text,
-           "blocker": payload.blocker, "mood": payload.mood, "activity_id": act["activity_id"],
+           "blocker": payload.blocker, "activity_id": act["activity_id"],
            "created_at": now, "updated_at": now}
     await db.updates.insert_one(doc)
     doc.pop("_id", None)

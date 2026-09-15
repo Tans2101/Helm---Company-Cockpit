@@ -105,7 +105,7 @@ def test_daily_update_create_then_edit_single_per_day(member, mongo):
     mongo.updates.delete_many({"workspace_id": WS_ID, "user_id": "test-user-2", "day": day})
 
     r = member.post(f"{BASE_URL}/api/updates",
-                    json={"text": "TEST_shipped onboarding", "blocker": False, "mood": "focused"})
+                    json={"text": "TEST_shipped onboarding", "blocker": False})
     assert r.status_code == 200
     body = r.json()
     assert body["edited"] is False
@@ -113,7 +113,7 @@ def test_daily_update_create_then_edit_single_per_day(member, mongo):
 
     # second POST same day EDITS
     r2 = member.post(f"{BASE_URL}/api/updates",
-                     json={"text": "TEST_edited update", "blocker": True, "mood": "tired"})
+                     json={"text": "TEST_edited update", "blocker": True})
     assert r2.status_code == 200
     assert r2.json()["edited"] is True
 
@@ -139,7 +139,7 @@ def test_updates_today_visible_to_owner(owner, member, mongo):
 def test_briefing_team_updates_and_what_changed(owner, member, mongo):
     day = datetime.now(timezone.utc).date().isoformat()
     # force a fresh post to move to top of activities
-    member.post(f"{BASE_URL}/api/updates", json={"text": "TEST_briefing_probe", "blocker": True, "mood": "focused"})
+    member.post(f"{BASE_URL}/api/updates", json={"text": "TEST_briefing_probe", "blocker": True})
     b = owner.get(f"{BASE_URL}/api/briefing").json()
     assert "team_updates" in b
     assert isinstance(b["team_updates"], list) and len(b["team_updates"]) >= 1

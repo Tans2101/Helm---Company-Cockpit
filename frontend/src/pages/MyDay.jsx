@@ -1,19 +1,15 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { Sparkles, Send, CheckCircle2, Circle, AlertTriangle, Plus, Users, Lock, PenLine, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Send, CheckCircle2, Circle, AlertTriangle, Plus, Users, Lock, PenLine, Trash2 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useDecisionActions, buildDelegateOptions } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import DecisionCard from "@/components/DecisionCard";
+import SuggestionCard from "@/components/SuggestionCard";
 import { cn } from "@/lib/utils";
-
-const MOODS = [
-  { id: "great", label: "Great" },
-  { id: "good", label: "Good" },
-  { id: "ok", label: "OK" },
-  { id: "stressed", label: "Stressed" },
-];
 
 /* Sticky-note chips keep a distinct paper palette so notes stay scannable; not brand fills. */
 const NOTE_STYLES = {
@@ -40,10 +36,13 @@ export default function MyDay() {
   const { data: mine, loading: l1, error: e1, reload: reloadMine } = useFetch("/updates/me");
   const { data: tasks, loading: l2, error: e2, reload: reloadTasks } = useFetch("/tasks/me");
   const { data: today, loading: l3, error: e3, reload: reloadToday } = useFetch("/updates/today");
+  const { data: decisionsData, loading: lDec, reload: reloadDecisions } = useFetch("/decisions");
+  const canActDecisions = !!decisionsData?.can_act;
+  const { data: membersData } = useFetch(canActDecisions ? "/members" : null);
+  const { busy: decisionBusy, act, approveSuggestion, dismissSuggestion } = useDecisionActions(reloadDecisions);
 
   const [teamText, setTeamText] = useState("");
   const [blocker, setBlocker] = useState(false);
-  const [mood, setMood] = useState("good");
   const [busy, setBusy] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [showTask, setShowTask] = useState(false);
@@ -56,14 +55,14 @@ export default function MyDay() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [showNoteComposer, setShowNoteComposer] = useState(false);
 
-  if (l0 || l1 || l2 || l3) return <LoadingScreen label="Assembling your day" />;
+  if (l0 || l1 || l2 || l3 || lDec) return <LoadingScreen label="Assembling your day" />;
   const dayError = e0 || e1 || e2 || e3;
   if (dayError || !notesData || !mine || !tasks || !today) {
     return (
       <ErrorScreen
         label="Could not load your day"
         message={fetchErrorMessage(dayError, "Your day view is unavailable right now.")}
-        onRetry={() => { reloadNotes(); reloadMine(); reloadTasks(); reloadToday(); }}
+        onRetry={() => { reloadNotes(); reloadMine(); reloadTasks(); reloadToday(); reloadDecisions(); }}
       />
     );
   }
@@ -71,6 +70,10 @@ export default function MyDay() {
   const first = user?.name?.split(" ")[0] || "there";
   const hasPosted = !!mine?.update;
   const notes = notesData.notes || [];
+  const suggestions = decisionsData?.suggestions || [];
+  const pendingDecisions = (decisionsData?.decisions || []).filter((d) => d.status === "pending");
+  const { selfMember, delegateMembers, selfLabel } = buildDelegateOptions(membersData);
+  const needsCallEmpty = suggestions.length === 0 && pendingDecisions.length === 0;
 
   const saveNote = async () => {
     if (!noteText.trim()) { toast.error("Write something first"); return; }
@@ -118,7 +121,7 @@ export default function MyDay() {
     if (!teamText.trim()) { toast.error("Write a quick update first"); return; }
     setBusy(true);
     try {
-      await api.post("/updates", { text: teamText.trim(), blocker, mood });
+      await api.post("/updates", { text: teamText.trim(), blocker });
       toast.success(hasPosted ? "Team update saved" : "Shared with your team");
       setTeamText(""); setShowTeam(false);
       reloadMine(); reloadToday();
@@ -155,6 +158,50 @@ export default function MyDay() {
         <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-helm-fg">Morning, {first}.</h1>
         <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
       </div>
+
+      {canActDecisions && (
+        <div className="mb-8 fade-up" data-testid="needs-your-call">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <SectionLabel>Needs your call</SectionLabel>
+            <Link to="/app/decisions" className="text-xs text-helm-gold hover:text-helm-gold-hover font-medium shrink-0">
+              See all decisions →
+            </Link>
+          </div>
+          {needsCallEmpty ? (
+            <GlassCard className="p-5">
+              <p className="text-sm text-helm-fg">Nothing needs your call right now</p>
+              <p className="text-xs text-helm-muted mt-1">You&apos;re all caught up — open Decision Center anytime to log a new call or refresh suggestions.</p>
+            </GlassCard>
+          ) : (
+            <div className="space-y-3">
+              {suggestions.map((s) => (
+                <SuggestionCard
+                  key={s.id}
+                  s={s}
+                  canAct
+                  busy={decisionBusy}
+                  onAcceptSuggestion={approveSuggestion}
+                  onDismissSuggestion={dismissSuggestion}
+                />
+              ))}
+              {pendingDecisions.map((d) => (
+                <DecisionCard
+                  key={d.id}
+                  d={d}
+                  canAct
+                  busy={decisionBusy}
+                  onApprove={(id) => act(id, "approved")}
+                  onReject={(id) => act(id, "rejected")}
+                  onDelegate={(id, owner) => act(id, "delegated", owner)}
+                  delegateMembers={delegateMembers}
+                  selfMember={selfMember}
+                  selfLabel={selfLabel}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
@@ -226,7 +273,7 @@ export default function MyDay() {
           )}
 
           <GlassCard className="p-4 fade-up">
-            <button type="button" onClick={() => { setShowTeam((s) => !s); if (!showTeam && mine?.update) { setTeamText(mine.update.text || ""); setBlocker(!!mine.update.blocker); setMood(mine.update.mood || "good"); } }}
+            <button type="button" onClick={() => { setShowTeam((s) => !s); if (!showTeam && mine?.update) { setTeamText(mine.update.text || ""); setBlocker(!!mine.update.blocker); } }}
               className="flex items-center gap-2 text-sm text-helm-fg hover:text-helm-fg w-full text-left">
               <Users className="w-4 h-4 text-helm-gold" />
               <span>{showTeam ? "Hide team update" : "Share an update with your team (optional)"}</span>
@@ -237,12 +284,6 @@ export default function MyDay() {
                   placeholder="What did you move forward? Any blocker or ask?"
                   className="w-full rounded-lg border border-helm-line bg-helm-card text-helm-fg text-sm p-3 focus:outline-none focus:border-helm-gold/40 resize-none" />
                 <div className="flex flex-wrap items-center gap-3 mt-3">
-                  <div className="flex items-center gap-1.5">
-                    {MOODS.map((m) => (
-                      <button key={m.id} onClick={() => setMood(m.id)}
-                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", mood === m.id ? "border-helm-gold/35 bg-helm-gold/12 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{m.label}</button>
-                    ))}
-                  </div>
                   <label className="flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
                     <input type="checkbox" checked={blocker} onChange={(e) => setBlocker(e.target.checked)} className="accent-helm-gold w-4 h-4" />
                     <AlertTriangle className="w-3.5 h-3.5 text-helm-status-warning" /> Blocked

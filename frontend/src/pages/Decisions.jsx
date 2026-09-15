@@ -1,32 +1,20 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, X, Sparkles, Plus, PenLine, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Trash2, RefreshCw, X, Sparkles } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useDecisionActions, buildDelegateOptions } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import DecisionCard, { statusStyle } from "@/components/DecisionCard";
+import SuggestionCard from "@/components/SuggestionCard";
 import { cn } from "@/lib/utils";
 
-const statusStyle = {
-  pending: "text-helm-fg bg-helm-status-warning/12 border-helm-status-warning/35",
-  approved: "text-helm-fg bg-helm-status-positive/12 border-helm-status-positive/35",
-  rejected: "text-helm-status-negative bg-helm-status-negative/12 border-helm-status-negative/35",
-  delegated: "text-helm-fg bg-helm-muted/12 border-helm-muted/35",
-};
 const emptyForm = () => ({ title: "", category: "General", description: "", recommendation: "", due: "", impact: "Medium" });
-
-function ConfidenceBadge({ confidence, ai }) {
-  if (confidence == null || confidence === "") return null;
-  return (
-    <span className={cn("ml-auto font-mono text-xs", ai ? "text-helm-status-warning" : "text-helm-gold")}>
-      {confidence}%{ai ? " AI estimate" : " confidence"}
-    </span>
-  );
-}
 
 export default function Decisions() {
   const { data, loading, error, reload } = useFetch("/decisions");
   const { data: membersData } = useFetch("/members");
-  const [busy, setBusy] = useState(null);
+  const { busy, act, approveSuggestion, dismissSuggestion } = useDecisionActions(reload);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -46,20 +34,7 @@ export default function Decisions() {
   const canAct = data.can_act;
   const suggestions = data.suggestions || [];
   const decisions = data.decisions || [];
-  const allMembers = membersData?.members || [];
-  const selfMember = allMembers.find((m) => m.is_self);
-  // Other people only — self is listed once as "Myself"
-  const seenUsers = new Set();
-  const delegateMembers = [];
-  for (const m of allMembers) {
-    if (m.is_self) continue;
-    if (m.status === "invited" && !m.user_id) continue;
-    const key = m.user_id || m.email;
-    if (!key || seenUsers.has(key)) continue;
-    seenUsers.add(key);
-    delegateMembers.push(m);
-  }
-  const selfLabel = selfMember?.name || selfMember?.email || "Myself";
+  const { selfMember, delegateMembers, selfLabel } = buildDelegateOptions(membersData);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (d) => {
@@ -88,37 +63,10 @@ export default function Decisions() {
     finally { setSaving(false); }
   };
 
-  const act = async (id, action, owner) => {
-    setBusy(id);
-    try { await api.post(`/decisions/${id}/action`, { action, owner }); reload(); toast.success(`Decision ${action}`); }
-    catch (e) { toast.error("Action failed"); }
-    finally { setBusy(null); }
-  };
-
   const del = async (id) => {
     if (!window.confirm("Delete this decision?")) return;
     try { await api.delete(`/decisions/${id}`); reload(); toast.success("Decision removed"); }
     catch (e) { toast.error("Could not delete"); }
-  };
-
-  const approveSuggestion = async (id) => {
-    setBusy(id);
-    try {
-      await api.post(`/decisions/suggestions/${id}/approve`);
-      toast.success("Suggestion accepted — now a pending decision");
-      reload();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Could not approve"); }
-    finally { setBusy(null); }
-  };
-
-  const dismissSuggestion = async (id) => {
-    setBusy(id);
-    try {
-      await api.post(`/decisions/suggestions/${id}/dismiss`);
-      toast.success("Suggestion dismissed");
-      reload();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Could not dismiss"); }
-    finally { setBusy(null); }
   };
 
   const regenerate = async () => {
@@ -167,56 +115,14 @@ export default function Decisions() {
           </div>
           <div className="space-y-3">
             {suggestions.map((s) => (
-              <GlassCard key={s.id} className="p-5 fade-up border-helm-status-warning/35" data-testid={`suggestion-${s.id}`}>
-                <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning border border-helm-status-warning/35 rounded px-1.5 py-0.5">
-                        AI Suggested — verify before acting
-                      </span>
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted border border-helm-line rounded px-1.5 py-0.5">{s.category}</span>
-                      <span className="text-[10px] font-mono text-helm-muted">Impact: {s.impact}</span>
-                    </div>
-                    <h3 className="text-lg text-helm-fg font-medium tracking-tight">{s.title}</h3>
-                    {s.description && <p className="text-sm text-helm-muted mt-1">{s.description}</p>}
-                    {s.recommendation && (
-                      <div className="mt-4 rounded-lg border border-helm-line border-l-2 border-l-helm-status-warning/70 bg-helm-card p-3">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
-                          <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm recommendation</span>
-                          <ConfidenceBadge confidence={s.confidence} ai />
-                        </div>
-                        <p className="text-sm text-helm-fg leading-relaxed">{s.recommendation}</p>
-                        {s.confidence != null && (
-                          <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden">
-                            <div className="h-full bg-helm-status-warning/70 rounded-full" style={{ width: `${s.confidence}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {canAct && (
-                    <div className="flex lg:flex-col gap-2 lg:w-40">
-                      <button
-                        data-testid={`approve-suggestion-${s.id}`}
-                        disabled={busy === s.id}
-                        onClick={() => approveSuggestion(s.id)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-helm-gold text-helm-navy text-sm font-medium py-2 hover:bg-helm-gold-hover disabled:opacity-50"
-                      >
-                        <Check className="w-4 h-4" /> Accept
-                      </button>
-                      <button
-                        data-testid={`dismiss-suggestion-${s.id}`}
-                        disabled={busy === s.id}
-                        onClick={() => dismissSuggestion(s.id)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line text-helm-muted text-sm py-2 hover:bg-helm-fg/5 hover:text-helm-status-negative disabled:opacity-50"
-                      >
-                        <X className="w-4 h-4" /> Dismiss
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </GlassCard>
+              <SuggestionCard
+                key={s.id}
+                s={s}
+                canAct={canAct}
+                busy={busy}
+                onAcceptSuggestion={approveSuggestion}
+                onDismissSuggestion={dismissSuggestion}
+              />
             ))}
           </div>
         </div>
@@ -229,75 +135,22 @@ export default function Decisions() {
         <>
           {pending.length > 0 && <SectionLabel className="mb-4">Open decisions</SectionLabel>}
           <div className="space-y-4">
-            {pending.map((d) => {
-              const isAi = d.source === "ai_suggested";
-              return (
-              <GlassCard key={d.id} className="p-5 fade-up" data-testid={`decision-${d.id}`}>
-                <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted border border-helm-line rounded px-1.5 py-0.5">{d.category}</span>
-                      <span className={cn("text-[10px] font-mono uppercase tracking-wider rounded px-1.5 py-0.5 border", statusStyle[d.status])}>{d.status}</span>
-                      {isAi && (
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning/90 border border-helm-status-warning/35 rounded px-1.5 py-0.5">
-                          From Helm
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono text-helm-muted">Impact: {d.impact} · Due {d.due}</span>
-                      {canAct && (
-                        <span className="ml-auto flex items-center gap-1">
-                          <button onClick={() => openEdit(d)} data-testid={`edit-decision-${d.id}`} className="text-helm-muted hover:text-helm-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => del(d.id)} data-testid={`del-decision-${d.id}`} className="text-helm-muted hover:text-helm-status-negative p-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-lg text-helm-fg font-medium tracking-tight">{d.title}</h3>
-                    {d.description && <p className="text-sm text-helm-muted mt-1">{d.description}</p>}
-
-                    {d.recommendation && (
-                      <div className={cn(
-                        "mt-4 rounded-lg border border-helm-line bg-helm-card p-3 border-l-2",
-                        isAi ? "border-l-helm-status-warning/70" : "border-l-helm-gold/70",
-                      )}>
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <Sparkles className={cn("w-3.5 h-3.5", isAi ? "text-helm-status-warning" : "text-helm-gold")} />
-                          <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-helm-status-warning" : "text-helm-gold")}>
-                            {isAi ? "Helm recommendation" : "Recommendation"}
-                          </span>
-                          <ConfidenceBadge confidence={d.confidence} ai={isAi} />
-                        </div>
-                        <p className="text-sm text-helm-fg leading-relaxed">{d.recommendation}</p>
-                        {d.confidence != null && (
-                          <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden">
-                            <div className={cn("h-full rounded-full", isAi ? "bg-helm-status-warning/70" : "bg-helm-gold")} style={{ width: `${d.confidence}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex lg:flex-col gap-2 lg:w-40">
-                    {canAct ? (
-                      <>
-                        <button data-testid={`approve-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "approved")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-helm-gold text-helm-navy text-sm font-medium py-2 transition-colors hover:bg-helm-gold-hover disabled:opacity-50"><Check className="w-4 h-4" /> Approve</button>
-                        <select data-testid={`delegate-${d.id}`} disabled={busy === d.id} defaultValue="" onChange={(e) => e.target.value && act(d.id, "delegated", e.target.value)} className="flex-1 rounded-md border border-helm-line text-helm-fg text-sm py-2 px-2 bg-helm-card transition-colors hover:bg-helm-fg/5 focus:outline-none focus:border-helm-gold/40 disabled:opacity-50">
-                          <option value="">Delegate to…</option>
-                          {selfMember && (
-                            <option value={selfLabel}>Myself</option>
-                          )}
-                          {delegateMembers.map((m) => (
-                            <option key={m.membership_id} value={m.name || m.email}>{m.name || m.email}</option>
-                          ))}
-                        </select>
-                        <button data-testid={`reject-${d.id}`} disabled={busy === d.id} onClick={() => act(d.id, "rejected")} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line text-helm-muted text-sm py-2 transition-colors hover:bg-helm-fg/5 hover:text-helm-status-negative disabled:opacity-50"><X className="w-4 h-4" /> Reject</button>
-                      </>
-                    ) : (
-                      <p className="text-xs text-helm-muted lg:w-40 leading-relaxed">Only owners and executives can act on decisions.</p>
-                    )}
-                  </div>
-                </div>
-              </GlassCard>
-            );})}
+            {pending.map((d) => (
+              <DecisionCard
+                key={d.id}
+                d={d}
+                canAct={canAct}
+                busy={busy}
+                onApprove={(id) => act(id, "approved")}
+                onReject={(id) => act(id, "rejected")}
+                onDelegate={(id, owner) => act(id, "delegated", owner)}
+                delegateMembers={delegateMembers}
+                selfMember={selfMember}
+                selfLabel={selfLabel}
+                onEdit={openEdit}
+                onDelete={del}
+              />
+            ))}
           </div>
 
           {resolved.length > 0 && (
