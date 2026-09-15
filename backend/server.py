@@ -3951,6 +3951,54 @@ async def _workspace_live_signals(
     )
 
 
+async def _activity_heatmap_for_workspace(workspace_id: str, weeks: int = 12) -> dict:
+    """Aggregate db.activities into a Bklit heatmap grid (Sunday-first week columns).
+
+    Returns {"columns": [...], "total": int} where each bin.count is the raw
+    activity count for that calendar day (frontend/chart levels via Bklit's
+    getHeatmapContributionLevel). Dates are ISO date strings for JSON.
+    """
+    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    days_since_sunday = (now.weekday() + 1) % 7
+    this_sunday = now - timedelta(days=days_since_sunday)
+    start_sunday = this_sunday - timedelta(weeks=max(1, weeks) - 1)
+    start_iso = start_sunday.isoformat()
+
+    counts: dict[str, int] = {}
+    cursor = db.activities.find(
+        {"workspace_id": workspace_id, "created_at": {"$gte": start_iso}},
+        {"_id": 0, "created_at": 1},
+    )
+    async for doc in cursor:
+        raw = doc.get("created_at") or ""
+        try:
+            if isinstance(raw, datetime):
+                day = raw.astimezone(timezone.utc).date()
+            else:
+                day = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).astimezone(timezone.utc).date()
+        except (TypeError, ValueError):
+            continue
+        key = day.isoformat()
+        counts[key] = counts.get(key, 0) + 1
+
+    columns = []
+    total = 0
+    for week_i in range(max(1, weeks)):
+        week_start = start_sunday + timedelta(weeks=week_i)
+        bins = []
+        for day_i in range(7):
+            day = (week_start + timedelta(days=day_i)).date()
+            raw_count = 0 if day > now.date() else int(counts.get(day.isoformat(), 0))
+            total += raw_count
+            bins.append({
+                "bin": day_i,
+                "count": raw_count,
+                "date": day.isoformat(),
+            })
+        columns.append({"bin": week_i, "bins": bins})
+    return {"columns": columns, "total": total}
+
+
 @api_router.get("/telemetry")
 async def telemetry(principal=Depends(require_section("telemetry", "telemetry:write"))):
     c = await get_ws(principal["workspace_id"])
@@ -4017,6 +4065,11 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
     except Exception:
         logger.exception("telemetry risk suggestions failed for %s", c.get("workspace_id"))
     can_write = await can_section_write(principal, "telemetry", "telemetry:write")
+    activity_heatmap = {"columns": [], "total": 0}
+    try:
+        activity_heatmap = await _activity_heatmap_for_workspace(c["workspace_id"], weeks=12)
+    except Exception:
+        logger.exception("telemetry activity heatmap failed for %s", c.get("workspace_id"))
     return {
         "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
         "suggested_risks": suggested_risks,
@@ -4026,6 +4079,7 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
         "can_write": can_write,
         "notes": manual.get("notes") or "",
         "targets": targets,
+        "activity_heatmap": activity_heatmap,
     }
 
 

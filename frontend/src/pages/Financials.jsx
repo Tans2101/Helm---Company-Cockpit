@@ -9,10 +9,12 @@ import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, 
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart, SkeletonCardList } from "@/components/kit";
+import { Gauge } from "@/components/charts/gauge";
 import { cn } from "@/lib/utils";
 import palette from "@/design/palette.json";
 
 const GOLD = palette.gold;
+const CREAM = palette.cream;
 const PIE = [palette.gold, palette.navy, palette.slate, palette.inkCard, palette.ink, palette.cream];
 const REV_CATS = ["Subscriptions", "Enterprise", "Services", "Other"];
 const EXP_CATS = ["Payroll", "Cloud/Infra", "Sales & Mktg", "G&A", "R&D Tools", "Other"];
@@ -678,7 +680,19 @@ export default function Financials() {
                     <div key={s.name} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`scenario-${s.name}`}>
                       <div className="flex items-center justify-between"><span className="text-sm text-helm-fg">{s.name}</span><span className="font-mono text-helm-gold text-sm">{s.runway}mo</span></div>
                       <p className="text-xs text-helm-muted mt-1">{s.desc}</p>
-                      <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden"><div className="h-full bg-helm-gold/70 rounded-full" style={{ width: `${Math.min(s.runway / 36 * 100, 100)}%` }} /></div>
+                      <Gauge
+                        orientation="linear"
+                        value={Math.min((Number(s.runway) || 0) / 36 * 100, 100)}
+                        totalNotches={36}
+                        spacing={0}
+                        notchCornerRadius={2}
+                        linearHeight={8}
+                        minWidth={80}
+                        activeFill={GOLD}
+                        inactiveFill={CREAM}
+                        inactiveFillOpacity={0.12}
+                        className="mt-2"
+                      />
                     </div>
                   ))}
                 </div>

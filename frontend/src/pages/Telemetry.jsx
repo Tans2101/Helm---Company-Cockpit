@@ -9,6 +9,16 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, Delta, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart } from "@/components/kit";
 import { FunnelChart } from "@/components/charts/funnel-chart";
+import {
+  HeatmapCells,
+  HeatmapChart,
+  HeatmapInteractionBoundary,
+  HeatmapInteractionProvider,
+  HeatmapLegend,
+  HeatmapTooltip,
+  HeatmapXAxis,
+  HeatmapYAxis,
+} from "@/components/charts/heatmap";
 import { cn } from "@/lib/utils";
 import palette from "@/design/palette.json";
 
@@ -16,11 +26,36 @@ const GOLD = palette.gold;
 const SLATE = palette.slate;
 const CREAM = palette.cream;
 
+/** Helm gold intensity scale for Bklit heatmap levels 0–4. */
+const ACTIVITY_LEVEL_COLORS = [
+  "rgba(245, 240, 230, 0.08)",
+  "rgba(201, 168, 75, 0.28)",
+  "rgba(201, 168, 75, 0.48)",
+  "rgba(201, 168, 75, 0.72)",
+  GOLD,
+];
+
+const ACTIVITY_LEVEL_STYLES = ACTIVITY_LEVEL_COLORS.map((color) => ({
+  color,
+  fillMode: "solid",
+  pattern: "none",
+}));
+
 function toFunnelStages(rows = []) {
   return rows.map((row) => ({
     label: row.stage,
     value: Number(row.value) || 0,
     displayValue: String(row.value ?? 0),
+  }));
+}
+
+function toHeatmapColumns(columns = []) {
+  return columns.map((col) => ({
+    ...col,
+    bins: (col.bins || []).map((bin) => ({
+      ...bin,
+      date: bin.date ? new Date(`${bin.date}T12:00:00`) : undefined,
+    })),
   }));
 }
 
@@ -103,6 +138,8 @@ export default function Telemetry() {
   const suggestedRisks = data.suggested_risks || [];
   const hasTargetLine = (data.revenue_trend || []).some((r) => r.target != null && r.target !== undefined);
   const funnelStages = toFunnelStages(data.funnel);
+  const activityTotal = data.activity_heatmap?.total ?? 0;
+  const heatmapColumns = toHeatmapColumns(data.activity_heatmap?.columns || []);
 
   const openEdit = (seedRisk = null) => {
     const base = (data.risks || []).length ? data.risks.map((r) => ({ ...r })) : [];
@@ -299,6 +336,43 @@ export default function Telemetry() {
           )}
         </GlassCard>
       )}
+
+      <GlassCard className="p-5 fade-up mb-6" data-testid="telemetry-activity">
+        <SectionLabel className="mb-4">Activity</SectionLabel>
+        {activityTotal === 0 || heatmapColumns.length === 0 ? (
+          <p className="text-sm text-helm-muted leading-relaxed">
+            Not enough workspace activity yet to show a pattern. As your team uses Helm, this calendar fills in.
+          </p>
+        ) : (
+          <HeatmapInteractionProvider>
+            <HeatmapInteractionBoundary>
+              <HeatmapChart
+                data={heatmapColumns}
+                layout="fluid"
+                gap={3}
+                binSize={11}
+                levelColors={ACTIVITY_LEVEL_COLORS}
+                margin={{ top: 28, right: 8, bottom: 0, left: 28 }}
+                className="max-w-full overflow-x-auto"
+              >
+                <HeatmapCells cornerRadius={2} />
+                <HeatmapXAxis />
+                <HeatmapYAxis tickFilter="odd" labelFormat="initial" />
+                <HeatmapTooltip
+                  formatLabel={(count) => (count === 1 ? "1 activity" : `${count} activities`)}
+                  backgroundColor="var(--helm-card, #121214)"
+                />
+              </HeatmapChart>
+              <HeatmapLegend
+                levelStyles={ACTIVITY_LEVEL_STYLES}
+                labelClassName="text-helm-muted"
+                className="mt-3"
+                align="start"
+              />
+            </HeatmapInteractionBoundary>
+          </HeatmapInteractionProvider>
+        )}
+      </GlassCard>
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
