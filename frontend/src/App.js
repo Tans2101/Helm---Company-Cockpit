@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useClerk, AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import ClerkHelmBridge from "@/components/ClerkHelmBridge";
 import AppearanceSync from "@/components/AppearanceSync";
@@ -96,6 +96,39 @@ function AppRouter() {
   useEffect(() => {
     persistReferralFromSearch(location.search);
   }, [location.search]);
+  useEffect(() => {
+    const titles = {
+      "/": "Helm — Run the business. Don't chase it.",
+      "/login": "Sign in · Helm",
+      "/sign-up": "Create account · Helm",
+      "/features": "Features · Helm",
+      "/about": "About · Helm",
+      "/security": "Security · Helm",
+      "/privacy": "Privacy · Helm",
+      "/terms": "Terms · Helm",
+      "/refunds": "Refunds · Helm",
+      "/app": "Briefing · Helm",
+      "/app/ask": "Ask Helm",
+      "/app/financials": "Financials · Helm",
+      "/app/billing": "Billing · Helm",
+      "/app/settings": "Settings · Helm",
+      "/app/members": "Team & Access · Helm",
+      "/app/integrations": "Integrations · Helm",
+    };
+    const path = location.pathname.replace(/\/$/, "") || "/";
+    const exact = titles[path] || titles[location.pathname];
+    if (exact) {
+      document.title = exact;
+      return;
+    }
+    if (path.startsWith("/app/")) {
+      const segment = path.split("/")[2] || "app";
+      const label = segment.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      document.title = `${label} · Helm`;
+      return;
+    }
+    document.title = "Helm";
+  }, [location.pathname]);
   const { clerkEnabled, configLoading } = useClerkMode();
   const Protected = configLoading
     ? () => <LoadingScreen label="Loading cockpit" />
@@ -192,6 +225,20 @@ function AuthShell() {
 }
 
 function App() {
+  useEffect(() => {
+    const onError = () => {
+      toast.error("Something went wrong — please try again");
+    };
+    const onRejection = () => {
+      toast.error("Something went wrong — please try again");
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
   return (
     <div className="App">
       <ClerkProviderBootstrap>

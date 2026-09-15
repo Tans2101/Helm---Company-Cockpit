@@ -174,9 +174,9 @@ async def test_generate_insights_keeps_prior_on_total_draft_failure():
          patch.object(srv.helm_llm, "draft_decision", new=AsyncMock(side_effect=boom)), \
          patch.object(srv.helm_llm, "draft_delegate", new=AsyncMock(side_effect=boom)), \
          patch.object(srv.doc_rate_limit, "insights_over_limit", AsyncMock(return_value=False)), \
-         patch.object(srv.doc_rate_limit, "record_insights_event", AsyncMock()) as record:
+         patch.object(srv.doc_rate_limit, "acquire_insights_slot", AsyncMock(return_value=True)) as acquire:
         result = await srv._generate_insights(ws_id, raise_on_rate_limit=False)
 
     assert result.get("skipped") == "draft_failed"
-    record.assert_not_called()
+    acquire.assert_not_called()
     mock_db.workspaces.update_one.assert_not_called()

@@ -8,9 +8,9 @@ const VALID = new Set(["light", "dark", "system"]);
 function savedTheme() {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return VALID.has(value) ? value : "light";
+    return VALID.has(value) ? value : "system";
   } catch {
-    return "light";
+    return "system";
   }
 }
 

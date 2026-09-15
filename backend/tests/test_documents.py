@@ -47,6 +47,10 @@ def client():
     mock_db.document_rate_events = MagicMock()
     mock_db.document_rate_events.count_documents = AsyncMock(return_value=0)
     mock_db.document_rate_events.insert_one = AsyncMock(return_value=None)
+    mock_db.document_rate_buckets = MagicMock()
+    mock_db.document_rate_buckets.find_one_and_update = AsyncMock(
+        return_value={"_id": "ws_doc_test:upload", "count": 1},
+    )
     mock_db.workspaces = MagicMock()
     mock_db.workspaces.find_one = AsyncMock(return_value={
         "workspace_id": "ws_doc_test",
@@ -246,8 +250,8 @@ def test_extract_returns_cached_result_without_second_claude_call(client):
     ), patch.object(
         server.helm_llm, "extract_financial_document", new_callable=AsyncMock, return_value=extracted_payload
     ) as extract_mock, patch.object(
-        server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=False
-    ), patch.object(server.doc_rate_limit, "record_event", new_callable=AsyncMock):
+        server.doc_rate_limit, "acquire_event_slot", new_callable=AsyncMock, return_value=True
+    ):
         r1 = client.post(f"/api/documents/{doc_id}/extract")
         r2 = client.post(f"/api/documents/{doc_id}/extract")
         r3 = client.post(f"/api/documents/{doc_id}/extract?force=true")
@@ -261,7 +265,7 @@ def test_extract_returns_cached_result_without_second_claude_call(client):
 
 
 def test_upload_rate_limit_returns_429(client):
-    with patch.object(server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=True), patch.object(
+    with patch.object(server.doc_rate_limit, "acquire_event_slot", new_callable=AsyncMock, return_value=False), patch.object(
         server, "log_activity", new_callable=AsyncMock
     ) as log_mock:
         r = client.post(
@@ -479,8 +483,8 @@ def test_extract_skips_document_ai_when_daily_cap_hit(client):
     ), patch.object(
         server.helm_llm, "extract_financial_document", new_callable=AsyncMock, return_value=extracted_payload
     ) as extract_mock, patch.object(
-        server.doc_rate_limit, "is_over_limit", new_callable=AsyncMock, return_value=False
-    ), patch.object(server.doc_rate_limit, "record_event", new_callable=AsyncMock), patch.object(
+        server.doc_rate_limit, "acquire_event_slot", new_callable=AsyncMock, return_value=True
+    ), patch.object(
         server.gcp_docai, "document_ai_configured", return_value=True
     ), patch.object(
         server.doc_rate_limit, "document_ai_allowed", new_callable=AsyncMock, return_value=False

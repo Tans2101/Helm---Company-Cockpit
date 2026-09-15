@@ -16,6 +16,7 @@ import { departmentIcon } from "@/lib/departmentIcons";
 import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
+import { departmentPath } from "@/lib/departmentRoutes";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -31,19 +32,8 @@ const NAV = [
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 
-/** Department types that map to existing product pages (not placeholder shells). */
-const DEPT_ROUTE = {
-  sales: "/app/sales",
-  accounting_finance: "/app/financials",
-  production: "/app/departments/production",
-  procurement: "/app/departments/procurement",
-  legal: "/app/departments/legal",
-  engineering_maintenance: "/app/departments/engineering_maintenance",
-  hr: "/app/departments/hr",
-};
-
 function departmentNavTo(type) {
-  return DEPT_ROUTE[type] || `/app/departments/${type}`;
+  return departmentPath(type);
 }
 
 function WorkspaceSwitcher({ onNavigate, billingEnforced }) {

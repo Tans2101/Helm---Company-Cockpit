@@ -45,6 +45,7 @@ export default function Decisions() {
   }
   const canAct = data.can_act;
   const suggestions = data.suggestions || [];
+  const decisions = data.decisions || [];
   const allMembers = membersData?.members || [];
   const selfMember = allMembers.find((m) => m.is_self);
   // Other people only — self is listed once as "Myself"
@@ -150,8 +151,8 @@ export default function Decisions() {
     </div>
   ) : null;
 
-  const pending = data.decisions.filter((d) => d.status === "pending");
-  const resolved = data.decisions.filter((d) => d.status !== "pending");
+  const pending = decisions.filter((d) => d.status === "pending");
+  const resolved = decisions.filter((d) => d.status !== "pending");
 
   return (
     <div>
@@ -221,7 +222,7 @@ export default function Decisions() {
         </div>
       )}
 
-      {data.decisions.length === 0 && suggestions.length === 0 ? (
+      {decisions.length === 0 && suggestions.length === 0 ? (
         <EmptyState title="No decisions yet" body="Log the calls that need to be made — or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
           action={canAct ? <button data-testid="empty-new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Log first decision</button> : null} />
       ) : (

@@ -47,6 +47,44 @@ async def is_over_limit(db, workspace_id: str, action: str, limit: int) -> bool:
     return await count_events(db, workspace_id, action) >= limit
 
 
+async def acquire_event_slot(db, workspace_id: str, action: str, limit: int) -> bool:
+    """Check+record in one step. Returns True when the caller may proceed.
+
+    Uses a per-(workspace, action) counter with find_one_and_update so two
+    concurrent requests cannot both slip under the same pre-increment count.
+    """
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit <= 0:
+        await record_event(db, workspace_id, action)
+        return True
+    now = datetime.now(timezone.utc)
+    key = f"{workspace_id}:{action}"
+    coll = db.document_rate_buckets
+    try:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {
+                "$inc": {"count": 1},
+                "$set": {"updated_at": now, "workspace_id": workspace_id, "action": action},
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+    if not doc:
+        return False
+    await record_event(db, workspace_id, action)
+    return True
+
+
 async def count_insights_events(db, workspace_id: str) -> int:
     return await db.insights_rate_events.count_documents({"workspace_id": workspace_id})
 
@@ -63,6 +101,39 @@ async def insights_over_limit(db, workspace_id: str, limit: int = INSIGHTS_DAILY
     if limit <= 0:
         return False
     return await count_insights_events(db, workspace_id) >= limit
+
+
+async def acquire_insights_slot(db, workspace_id: str, limit: int = INSIGHTS_DAILY_LIMIT) -> bool:
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit <= 0:
+        await record_insights_event(db, workspace_id)
+        return True
+    now = datetime.now(timezone.utc)
+    key = f"insights:{workspace_id}"
+    coll = db.insights_rate_buckets
+    try:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {
+                "$inc": {"count": 1},
+                "$set": {"updated_at": now, "workspace_id": workspace_id},
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+    if not doc:
+        return False
+    await record_insights_event(db, workspace_id)
+    return True
 
 
 async def count_ask_helm_events(db, workspace_id: str) -> int:
@@ -83,6 +154,41 @@ async def ask_helm_over_limit(
     if limit <= 0:
         return False
     return await count_ask_helm_events(db, workspace_id) >= limit
+
+
+async def acquire_ask_helm_slot(
+    db, workspace_id: str, limit: int = ASK_HELM_FREE_MONTHLY_LIMIT,
+) -> bool:
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit <= 0:
+        await record_ask_helm_event(db, workspace_id)
+        return True
+    now = datetime.now(timezone.utc)
+    key = f"ask:{workspace_id}"
+    coll = db.ask_helm_rate_buckets
+    try:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {
+                "$inc": {"count": 1},
+                "$set": {"updated_at": now, "workspace_id": workspace_id},
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        doc = await coll.find_one_and_update(
+            {"_id": key, "count": {"$lt": limit}},
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+    if not doc:
+        return False
+    await record_ask_helm_event(db, workspace_id)
+    return True
 
 
 async def document_ai_allowed(

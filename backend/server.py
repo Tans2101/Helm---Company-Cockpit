@@ -1310,14 +1310,15 @@ async def log_activity(principal, module, action, summary, patch=None):
 
 
 async def _enforce_document_rate_limit(principal, action: str, limit: int, message: str) -> None:
-    if await doc_rate_limit.is_over_limit(db, principal["workspace_id"], action, limit):
-        label = "Upload" if action == "upload" else "Extraction"
-        await log_activity(
-            principal, "financials", "document.rate_limit",
-            f"{label} limit reached for this workspace ({limit}/hour)",
-            {"action": action, "limit": limit},
-        )
-        raise HTTPException(status_code=429, detail=message)
+    if await doc_rate_limit.acquire_event_slot(db, principal["workspace_id"], action, limit):
+        return
+    label = "Upload" if action == "upload" else "Extraction"
+    await log_activity(
+        principal, "financials", "document.rate_limit",
+        f"{label} limit reached for this workspace ({limit}/hour)",
+        {"action": action, "limit": limit},
+    )
+    raise HTTPException(status_code=429, detail=message)
 
 
 # ------------------------- Financials (computed from entries) -------------------------
@@ -2873,7 +2874,13 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         )
         return {"skipped": "draft_failed", "signals": len(signals)}
 
-    await doc_rate_limit.record_insights_event(db, workspace_id)
+    if not await doc_rate_limit.acquire_insights_slot(db, workspace_id):
+        if raise_on_rate_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="Suggestion regeneration limit reached — try again tomorrow",
+            )
+        return {"skipped": "rate_limited"}
     await db.workspaces.update_one(
         {"workspace_id": workspace_id},
         {"$set": {
@@ -3640,6 +3647,8 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
         owner_name_fallback=payload.owner_name.strip() or creator_name,
         is_create=True,
     )
+    if payload.value < 0:
+        raise HTTPException(status_code=400, detail="Deal value cannot be negative")
     deal = {
         "id": f"deal_{uuid.uuid4().hex[:8]}",
         "workspace_id": principal["workspace_id"],
@@ -3671,6 +3680,8 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
     d = await db.deals.find_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Deal not found")
+    if payload.value < 0:
+        raise HTTPException(status_code=400, detail="Deal value cannot be negative")
     stage = payload.stage if payload.stage in DEAL_STAGES else d["stage"]
     owner_uid, owner_name = await _apply_deal_owner_assignment(
         principal=principal,
@@ -3948,7 +3959,6 @@ async def upload_financial_document(
         "linked_entry_id": None,
     }
     await db.documents.insert_one(doc)
-    await doc_rate_limit.record_event(db, principal["workspace_id"], "upload")
     await log_activity(principal, "financials", "document.upload", f"Uploaded bill · {filename}")
     return {"document_id": doc_id, "status": "uploaded"}
 
@@ -3987,7 +3997,6 @@ async def extract_financial_document_route(
         extracted = await helm_llm.extract_financial_document(
             file_bytes, doc["content_type"], use_document_ai=use_document_ai,
         )
-        await doc_rate_limit.record_event(db, principal["workspace_id"], "extract")
         status = "failed" if extracted.get("error") in ("not_financial", "unparseable_amount") else "extracted"
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
@@ -4104,7 +4113,6 @@ async def import_financial_document_from_drive(
         "source": "google_drive",
     }
     await db.documents.insert_one(doc)
-    await doc_rate_limit.record_event(db, principal["workspace_id"], "upload")
     await log_activity(principal, "financials", "document.upload", f"Imported from Drive · {filename}")
     return {"document_id": doc_id, "status": "uploaded"}
 
@@ -4520,6 +4528,9 @@ async def patch_task(task_id: str, payload: TaskPatch, principal=Depends(require
                 target["done_at"] = datetime.now(timezone.utc).isoformat()
         elif prev_col == "done":
             target.pop("done_at", None)
+            # Leaving Done should not keep a 100% progress display.
+            if fields.get("progress") is None:
+                target["progress"] = 50
 
     if "assignee_user_id" in fields:
         if not await can_section_write(principal, "tasks", "tasks:assign"):
@@ -6386,6 +6397,8 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
             qty_planned = float(qty_planned)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="quantity_planned must be a number")
+        if qty_planned < 0:
+            raise HTTPException(status_code=400, detail="quantity_planned cannot be negative")
     now = datetime.now(timezone.utc).isoformat()
     order = {
         "id": f"pwo_{uuid.uuid4().hex[:10]}",
@@ -6441,11 +6454,15 @@ async def patch_production_work_order(
             upd["quantity_planned"] = float(payload.quantity_planned)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="quantity_planned must be a number")
+        if upd["quantity_planned"] < 0:
+            raise HTTPException(status_code=400, detail="quantity_planned cannot be negative")
     if payload.quantity_produced is not None:
         try:
             upd["quantity_produced"] = float(payload.quantity_produced)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="quantity_produced must be a number")
+        if upd["quantity_produced"] < 0:
+            raise HTTPException(status_code=400, detail="quantity_produced cannot be negative")
     if payload.customer is not None:
         upd["customer"] = payload.customer.strip()[:200]
     if payload.priority is not None:
@@ -8977,7 +8994,7 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     ask_limit = helm_plans.ask_helm_monthly_limit(c.get("plan"))
     if BILLING_ENFORCED and ask_limit > 0:
-        if await doc_rate_limit.ask_helm_over_limit(db, c["workspace_id"], ask_limit):
+        if not await doc_rate_limit.acquire_ask_helm_slot(db, c["workspace_id"], ask_limit):
             raise HTTPException(
                 status_code=429,
                 detail=(
@@ -8985,7 +9002,6 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
                     "upgrade to continue."
                 ),
             )
-        await doc_rate_limit.record_ask_helm_event(db, c["workspace_id"])
     await _product_event(
         c["workspace_id"], principal["user_id"], helm_analytics.EVENT_ASK_HELM, {},
     )

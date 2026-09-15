@@ -14,19 +14,25 @@ export default function PaymentSuccess() {
     const sessionId = params.get("session_id");
     if (!sessionId) { setStatus("failed"); return; }
 
+    let mounted = true;
     let timer;
     const poll = async () => {
-      if (attempts.current >= 8) { setStatus("timeout"); return; }
+      if (!mounted) return;
+      if (attempts.current >= 8) { if (mounted) setStatus("timeout"); return; }
       attempts.current += 1;
       try {
         const { data } = await api.get(`/payments/status/${sessionId}`);
+        if (!mounted) return;
         if (data.payment_status === "paid") { setStatus("paid"); return; }
         if (data.status === "expired" || data.payment_status === "failed") { setStatus("failed"); return; }
       } catch (e) { /* keep polling */ }
-      timer = setTimeout(poll, 2000);
+      if (mounted) timer = setTimeout(poll, 2000);
     };
     poll();
-    return () => clearTimeout(timer);
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (

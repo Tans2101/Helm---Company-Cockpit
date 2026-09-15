@@ -30,14 +30,16 @@ export function AuthProvider({ children, onLogoutExtra, deferInitialAuth = false
       setLoading(false);
       return;
     }
+    if (deferInitialAuth) {
+      // ClerkHelmBridge owns the first /auth/me (via exchange); don't double-fetch.
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const watchdog = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 12000);
-    const run = deferInitialAuth
-      ? checkAuth().catch(() => setLoading(false))
-      : checkAuth().catch(() => {});
-    run.finally(() => {
+    checkAuth().catch(() => {}).finally(() => {
       cancelled = true;
       clearTimeout(watchdog);
     });

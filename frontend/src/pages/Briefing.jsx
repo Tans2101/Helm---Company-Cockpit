@@ -87,6 +87,10 @@ export default function Briefing() {
   const greeting = `${timeGreet}, ${company?.ceo_name?.split(" ")[0] || "CEO"}`;
   const doneCount = checklist?.steps?.filter((s) => s.done).length ?? 0;
   const stepCount = checklist?.steps?.length ?? 0;
+  const metrics = data.metrics || [];
+  const whatChanged = data.what_changed || [];
+  const whatToDecide = data.what_to_decide || [];
+  const whatToDelegate = data.what_to_delegate || [];
 
   return (
     <div className="max-w-5xl">
@@ -137,7 +141,7 @@ export default function Briefing() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-        {data.metrics.map((m, i) => (
+        {metrics.map((m, i) => (
           <div
             key={m.label}
             className="rounded-xl border border-helm-fg/[0.08] bg-helm-card p-4 fade-up"
@@ -283,10 +287,10 @@ export default function Briefing() {
         <GlassCard className="p-5 fade-up">
           <BriefLabel className="mb-4">What changed</BriefLabel>
           <div className="space-y-4">
-            {data.what_changed.length === 0 && (
+            {whatChanged.length === 0 && (
               <p className="text-sm text-helm-muted leading-relaxed">Nothing new logged yet.</p>
             )}
-            {data.what_changed.map((c, i) => (
+            {whatChanged.map((c, i) => (
               <div key={i} className="flex gap-3" data-testid={`changed-${i}`}>
                 <span className={cn("mt-1.5 w-1.5 h-1.5 rounded-full shrink-0", toneDot[c.tone])} />
                 <div>
@@ -301,13 +305,13 @@ export default function Briefing() {
         <GlassCard className="p-5 fade-up">
           <div className="flex items-center justify-between mb-4">
             <BriefLabel>What to decide</BriefLabel>
-            <span className="text-xs tabular-nums text-helm-muted">{data.what_to_decide.length}</span>
+            <span className="text-xs tabular-nums text-helm-muted">{whatToDecide.length}</span>
           </div>
           <div className="space-y-3">
-            {data.what_to_decide.length === 0 && (
+            {whatToDecide.length === 0 && (
               <p className="text-sm text-helm-muted leading-relaxed">No open decisions. Log one when something needs a call.</p>
             )}
-            {data.what_to_decide.map((d) => (
+            {whatToDecide.map((d) => (
               <button
                 key={d.id}
                 onClick={() => navigate("/app/decisions")}
@@ -342,10 +346,10 @@ export default function Briefing() {
         <GlassCard className="p-5 fade-up">
           <BriefLabel className="mb-4">What to hand off</BriefLabel>
           <div className="space-y-3">
-            {data.what_to_delegate.length === 0 && (
+            {whatToDelegate.length === 0 && (
               <p className="text-sm text-helm-muted leading-relaxed">No handoffs suggested. Overdue work will show up here.</p>
             )}
-            {data.what_to_delegate.map((d, i) => (
+            {whatToDelegate.map((d, i) => (
               <div key={d.id || i} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`delegate-${d.id || i}`}>
                 <p className="text-sm text-helm-fg leading-snug">{d.title}</p>
                 <p className="text-xs text-helm-muted mt-1 leading-relaxed">{d.detail}</p>

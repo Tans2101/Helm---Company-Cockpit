@@ -1120,11 +1120,29 @@ def collect_department_signals(
             signals.extend(detect_pending_leave_requests(leave_requests, now=now))
             continue
         if dtype == TYPE_PRODUCTION:
-            signals.extend(detect_overdue_work_orders(items, today=now.date()))
+            specific = detect_overdue_work_orders(items, today=now.date())
+            signals.extend(specific)
+            specific_ids = {s.get("related_id") for s in specific}
+            generic = detect_stalled_department_item(items, spec, now=now)
+            generic = [s for s in generic if s.get("related_id") not in specific_ids]
+            signals.extend(generic)
+            continue
         if dtype == TYPE_PROCUREMENT:
-            signals.extend(detect_overdue_procurement_requests(items, today=now.date()))
+            specific = detect_overdue_procurement_requests(items, today=now.date())
+            signals.extend(specific)
+            specific_ids = {s.get("related_id") for s in specific}
+            generic = detect_stalled_department_item(items, spec, now=now)
+            generic = [s for s in generic if s.get("related_id") not in specific_ids]
+            signals.extend(generic)
+            continue
         if dtype == TYPE_LEGAL:
-            signals.extend(detect_upcoming_legal_deadlines(items, today=now.date()))
+            specific = detect_upcoming_legal_deadlines(items, today=now.date())
+            signals.extend(specific)
+            specific_ids = {s.get("related_id") for s in specific}
+            generic = detect_stalled_department_item(items, spec, now=now)
+            generic = [s for s in generic if s.get("related_id") not in specific_ids]
+            signals.extend(generic)
+            continue
         generic = detect_stalled_department_item(items, spec, now=now)
         if dtype == TYPE_ENGINEERING_MAINTENANCE:
             urgent = detect_urgent_maintenance(items, spec, now=now)
