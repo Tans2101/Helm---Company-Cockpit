@@ -124,7 +124,7 @@ export default function ClerkHelmBridge() {
         }
       }
       if (!cancelled && runId === syncRunId.current) {
-        setSessionError("Clerk session not ready — wait a moment, then refresh.");
+        setSessionError("Clerk session not ready. Wait a moment, then refresh.");
       }
     })();
 

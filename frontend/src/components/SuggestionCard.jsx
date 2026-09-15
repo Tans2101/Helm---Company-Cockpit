@@ -15,7 +15,7 @@ export default function SuggestionCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning border border-helm-status-warning/35 rounded px-1.5 py-0.5">
-              AI Suggested — verify before acting
+              AI Suggested: verify before acting
             </span>
             <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted border border-helm-line rounded px-1.5 py-0.5">{s.category}</span>
             <span className="text-[10px] font-mono text-helm-muted">Impact: {s.impact}</span>

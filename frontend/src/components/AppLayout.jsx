@@ -271,7 +271,7 @@ export default function AppLayout() {
     <div className="app-shell min-h-screen">
       {pastDue && (
         <div className="lg:pl-[260px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
-          Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
+          Payment past due: <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
         </div>
       )}
       {/* Desktop sidebar */}

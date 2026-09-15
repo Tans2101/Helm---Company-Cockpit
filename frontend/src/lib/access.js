@@ -2,7 +2,7 @@
 import { Crown, LineChart, DollarSign, Users2, Briefcase, Wrench, Shield } from "lucide-react";
 
 export const PACKS = [
-  { id: "owner", label: "Owner", icon: Crown, style: "text-helm-gold bg-helm-gold/10 border-helm-gold/20", desc: "Full control — runs the company, billing & access." },
+  { id: "owner", label: "Owner", icon: Crown, style: "text-helm-gold bg-helm-gold/10 border-helm-gold/20", desc: "Full control: runs the company, billing & access." },
   { id: "exec", label: "Executive", icon: LineChart, style: "text-helm-navy bg-helm-gold/15 border-helm-gold/30", desc: "Full read + can decide, invite teammates, and manage manual reports." },
   { id: "finance", label: "Finance", icon: DollarSign, style: "text-helm-status-positive bg-helm-status-positive/10 border-helm-status-positive/20", desc: "Reads everything, writes financials." },
   { id: "hr", label: "People / HR", icon: Users2, style: "text-helm-muted bg-helm-muted/10 border-helm-muted/20", desc: "Reads everything, manages the roster & headcount." },

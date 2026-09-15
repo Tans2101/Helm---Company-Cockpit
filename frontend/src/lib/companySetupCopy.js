@@ -1,7 +1,7 @@
 /** Copy and options for the post-signup company setup flow. */
 
 export const FOUNDER_ROLES = [
-  { id: "CEO", label: "CEO", hint: "Chief Executive — you run the company day to day." },
+  { id: "CEO", label: "CEO", hint: "Chief Executive: you run the company day to day." },
   { id: "Founder", label: "Founder", hint: "You started the company and still lead it." },
   { id: "Co-founder", label: "Co-founder", hint: "You built this alongside your partner(s)." },
   { id: "Managing Director", label: "Managing Director", hint: "You lead operations and strategy." },

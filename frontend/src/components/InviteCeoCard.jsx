@@ -34,7 +34,7 @@ export default function InviteCeoCard() {
       if (copyTimer.current) clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Could not copy — select the link instead");
+      toast.error("Could not copy. Select the link instead");
     }
   };
 
@@ -64,7 +64,7 @@ export default function InviteCeoCard() {
         <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Invite a CEO</span>
       </div>
       <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-        Share Helm with another business owner you know. This is a tracking link only — no discount or credit is applied.
+        Share Helm with another business owner you know. This is a tracking link only, so no discount or credit is applied.
       </p>
       <div className="flex flex-col sm:flex-row gap-2">
         <input

@@ -137,7 +137,7 @@ export default function DepartmentsSettings() {
       </div>
       <p className="text-sm text-helm-muted mb-5 leading-relaxed">
         {canManage
-          ? "Enable any department for your company — independent of industry — then assign teammates. Enabled departments appear in the sidebar."
+          ? "Enable any department for your company, independent of industry, then assign teammates. Enabled departments appear in the sidebar."
           : "Departments enabled for this company. Only the CEO can turn additional departments on."}
       </p>
 
