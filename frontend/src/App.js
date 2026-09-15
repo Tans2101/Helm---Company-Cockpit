@@ -24,6 +24,7 @@ import palette from "@/design/palette.json";
 
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
+const Help = lazy(() => import("@/pages/Help"));
 const Security = lazy(() => import("@/pages/Security"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
 const Terms = lazy(() => import("@/pages/Terms"));
@@ -104,6 +105,7 @@ function AppRouter() {
       "/sign-up": "Create account · Helm",
       "/features": "Features · Helm",
       "/about": "About · Helm",
+      "/help": "Help · Helm",
       "/security": "Security · Helm",
       "/privacy": "Privacy · Helm",
       "/terms": "Terms · Helm",
@@ -146,6 +148,7 @@ function AppRouter() {
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
         <Route path="/features" element={<Features />} />
+        <Route path="/help" element={<Help />} />
         <Route path="/security" element={<Security />} />
         <Route path="/login/sso-callback" element={<ClerkOAuthCallbackGuard />} />
         <Route path="/sign-up/sso-callback" element={<ClerkOAuthCallbackGuard />} />

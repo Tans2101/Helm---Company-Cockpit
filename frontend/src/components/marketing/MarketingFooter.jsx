@@ -6,6 +6,7 @@ const FOOTER_LINKS = [
   { to: "/", label: "Home" },
   { to: "/features", label: "Features" },
   { to: "/about", label: "About" },
+  { to: "/help", label: "Help" },
   { to: "/security", label: "Security" },
   { to: "/#pricing", label: "Pricing" },
   { to: "/login", label: "Sign in" },

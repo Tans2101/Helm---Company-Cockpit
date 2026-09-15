@@ -344,61 +344,29 @@ export const FEATURE_MODULES = [
   },
 ];
 
-/** In-app onboarding — how CEOs use Helm day to day. */
+/** Public Help page — how Helm works, without a mandated schedule. */
 export const HOW_TO_USE_INTRO = {
   title: "How to use Helm",
-  subtitle: "Your CEO operating system in three rhythms: morning, during the day, and each week.",
+  subtitle: "Your CEO operating system — open it, get the signal, decide, delegate, and get back to running the company.",
   lead: "Helm isn't another dashboard to maintain. Open it once, get the signal, make the call, delegate the rest — then get back to building.",
 };
 
-export const HOW_TO_USE_RHYTHMS = [
-  {
-    id: "morning",
-    label: "Every morning",
-    time: "~5 minutes",
-    icon: "sun",
-    steps: [
-      { title: "Open Briefing", body: "Start on the Briefing tab. Three columns tell you what changed overnight, what needs your decision, and what to hand off." },
-      { title: "Scan Decisions", body: "Head to Decision Center. Approvals are ranked by impact — Helm recommends which to tackle first and why." },
-      { title: "Check My Day", body: "My Day pulls your calendar and top tasks into one view so you walk into the morning already oriented." },
-    ],
-  },
-  {
-    id: "day",
-    label: "During the day",
-    time: "As needed",
-    icon: "zap",
-    steps: [
-      { title: "Ask Helm", body: "Need a fast read? Ask \"What's stuck in procurement?\" or \"What's open in the pipeline?\" — answers come from your live data." },
-      { title: "Delegate from Decisions", body: "Approve, follow up, or assign. Helm tracks whether outcomes actually landed — no more decisions that vanish." },
-      { title: "Glance Telemetry", body: "Headcount, open tasks, revenue, and cash — one screen when someone asks you for a number." },
-    ],
-  },
-  {
-    id: "week",
-    label: "Each week",
-    time: "Friday · ~10 minutes",
-    icon: "calendar",
-    steps: [
-      { title: "Generate CEO Pack", body: "Reports → Weekly CEO Pack. One click produces a summary of financials, team pulse, and open decisions — ready to share with your leadership team." },
-      { title: "Connect integrations", body: "Connect Google Calendar and QuickBooks where useful. Your team can keep manual workflows for everything else." },
-      { title: "Invite your leadership team", body: "Team & Access lets CFO, VP Sales, and ops contribute data while you keep the synthesized view." },
-    ],
-  },
-];
-
 export const HOW_TO_USE_MODULES = [
-  { nav: "Briefing", path: "/app", tip: "Your daily starting point — always open this first." },
-  { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up." },
-  { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A grounded in your company, not the internet." },
+  { nav: "Briefing", path: "/app", tip: "What changed, what needs a decision, and what to hand off — synthesized for leadership." },
+  { nav: "My Day", path: "/app/me", tip: "Your calendar and top tasks in one view so you stay oriented on your own work." },
+  { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up until outcomes land." },
+  { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A from your live data — e.g. \"What's stuck in procurement?\" or \"What's open in the pipeline?\"" },
+  { nav: "Telemetry", path: "/app/telemetry", tip: "Headcount, open tasks, revenue, and cash on one screen when you need a number." },
   { nav: "Financials", path: "/app/financials", tip: "Revenue, expenses, and cash position for leadership updates." },
   { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline at a glance." },
+  { nav: "Reports", path: "/app/reports", tip: "Weekly CEO Pack — one click for financials, team pulse, and open decisions to share with leadership." },
   { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more — each team its own lane." },
-  { nav: "Integrations", path: "/app/integrations", tip: "Connect tools once; signal flows in automatically." },
+  { nav: "Team & Access", path: "/app/members", tip: "Invite CFO, VP Sales, and ops to contribute while you keep the synthesized view." },
+  { nav: "Integrations", path: "/app/integrations", tip: "Connect Google Calendar, QuickBooks, and other tools once — signal flows in automatically." },
 ];
 
 export const HOW_TO_USE_CHECKLIST = [
-  "Skim your Morning Briefing",
+  "Open your Briefing",
   "Clear or delegate one Decision",
   "Connect at least one integration",
   "Invite a leadership team member",
