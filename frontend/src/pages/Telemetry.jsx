@@ -2,18 +2,27 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, PenLine, Sparkles } from "lucide-react";
 import {
-  AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, Delta, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, Delta, ErrorScreen, EmptyState } from "@/components/kit";
+import { FunnelChart } from "@/components/charts/funnel-chart";
 import { cn } from "@/lib/utils";
 import palette from "@/design/palette.json";
 
 const GOLD = palette.gold;
 const SLATE = palette.slate;
 const CREAM = palette.cream;
+
+function toFunnelStages(rows = []) {
+  return rows.map((row) => ({
+    label: row.stage,
+    value: Number(row.value) || 0,
+    displayValue: String(row.value ?? 0),
+  }));
+}
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -55,8 +64,40 @@ export default function Telemetry() {
   const [growthPct, setGrowthPct] = useState(3);
   const [busy, setBusy] = useState(false);
 
-  if (loading) return <LoadingScreen label="Loading telemetry" />;
-  if (error || !data) {
+  if (error && !data) {
+    return (
+      <ErrorScreen
+        label="Could not load telemetry"
+        message={fetchErrorMessage(error, "Telemetry data is unavailable right now.")}
+        onRetry={reload}
+      />
+    );
+  }
+
+  if (loading && !data) {
+    return (
+      <div>
+        <PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." />
+        <div className="grid lg:grid-cols-2 gap-4 mb-6">
+          <GlassCard className="p-5 fade-up">
+            <SectionLabel className="mb-4">MRR</SectionLabel>
+            <div className="h-[240px] rounded-md bg-helm-fg/[0.03] animate-pulse" aria-hidden />
+          </GlassCard>
+          <GlassCard className="p-5 fade-up" data-testid="sales-funnel">
+            <SectionLabel className="mb-4">Sales Funnel</SectionLabel>
+            <FunnelChart
+              status="loading"
+              color={GOLD}
+              className="min-h-[240px]"
+              data={[{ label: "Loading", value: 1 }]}
+            />
+          </GlassCard>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
     return (
       <ErrorScreen
         label="Could not load telemetry"
@@ -71,6 +112,7 @@ export default function Telemetry() {
   const canWrite = data.can_write;
   const suggestedRisks = data.suggested_risks || [];
   const hasTargetLine = (data.revenue_trend || []).some((r) => r.target != null && r.target !== undefined);
+  const funnelStages = toFunnelStages(data.funnel);
 
   const openEdit = (seedRisk = null) => {
     const base = (data.risks || []).length ? data.risks.map((r) => ({ ...r })) : [];
@@ -183,20 +225,22 @@ export default function Telemetry() {
           )}
         </GlassCard>
 
-        {data.funnel.length > 0 && (
-          <GlassCard className="p-5 fade-up">
+        {funnelStages.length > 0 && (
+          <GlassCard className="p-5 fade-up" data-testid="sales-funnel">
             <SectionLabel className="mb-4">Sales Funnel</SectionLabel>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={data.funnel} layout="vertical" margin={{ left: 20, right: 16 }}>
-                <CartesianGrid stroke={SLATE} strokeOpacity={0.25} horizontal={false} />
-                <XAxis type="number" stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis type="category" dataKey="stage" stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} width={72} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: CREAM, fillOpacity: 0.06 }} />
-                <Bar dataKey="value" name="Count" radius={[0, 4, 4, 0]}>
-                  {data.funnel.map((_, i) => <Cell key={i} fill={GOLD} fillOpacity={1 - i * 0.14} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <FunnelChart
+              data={funnelStages}
+              color={GOLD}
+              layers={3}
+              className="min-h-[240px]"
+              grid={{
+                bands: true,
+                bandColor: `${CREAM}14`,
+                lines: true,
+                lineColor: SLATE,
+                lineOpacity: 0.28,
+              }}
+            />
           </GlassCard>
         )}
       </div>

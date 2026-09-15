@@ -8,9 +8,40 @@ import { initPaddle } from "@/lib/paddle";
 import { PLANS } from "@/lib/marketingCopy";
 import { normalizePlan } from "@/lib/helmPlan";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
+import { RingChart } from "@/components/charts/ring-chart";
+import { Ring } from "@/components/charts/ring";
+import { RingCenter } from "@/components/charts/ring-center";
 import { cn } from "@/lib/utils";
+import palette from "@/design/palette.json";
 
 const PLAN_RANK = { free: 0, starter: 1, growth: 2, business: 3 };
+
+function usageToneColor(pct) {
+  if (pct >= 100) return palette.statusNegative;
+  if (pct >= 80) return palette.statusWarning;
+  return palette.gold;
+}
+
+function UsageRing({ label, used, limit, color, testId }) {
+  const safeLimit = Math.max(Number(limit) || 0, 1);
+  const safeUsed = Math.max(0, Number(used) || 0);
+  const data = [{ label, value: safeUsed, maxValue: safeLimit, color }];
+  return (
+    <div className="flex flex-col items-center gap-1" data-testid={testId}>
+      <RingChart
+        data={data}
+        size={88}
+        strokeWidth={9}
+        ringGap={0}
+        baseInnerRadius={28}
+        className="text-helm-fg"
+      >
+        <Ring index={0} showGlow={false} animate />
+        <RingCenter defaultLabel={label} />
+      </RingChart>
+    </div>
+  );
+}
 
 export default function Billing() {
   const { data, loading, error, reload } = useFetch("/billing/plans");
@@ -44,6 +75,11 @@ export default function Billing() {
   const extractsUsed = data.ai_extracts_used ?? 0;
   const extractsLimit = data.ai_extracts_limit ?? 0;
   const extractPct = extractsLimit > 0 ? Math.min(100, Math.round((extractsUsed / extractsLimit) * 100)) : 0;
+  const seatsUsed = data.seats_used ?? 0;
+  const seatsLimit = data.seats_limit;
+  const seatsPct = seatsLimit > 0 ? Math.min(100, Math.round((seatsUsed / seatsLimit) * 100)) : 0;
+  const extractColor = usageToneColor(extractPct);
+  const seatColor = usageToneColor(seatsPct);
 
   const activatePaddle = async (planId) => {
     if (planId === "free") return;
@@ -244,12 +280,26 @@ export default function Billing() {
             Seats {data.seats_used ?? 0}/{data.seats_limit ?? "—"}
           </p>
         </div>
-        {extractsLimit > 0 && (
-          <div className="h-2 rounded-full bg-helm-fg/5 overflow-hidden" data-testid="usage-bar">
-            <div
-              className={cn("h-full rounded-full transition-all", extractPct >= 100 ? "bg-helm-status-negative" : extractPct >= 80 ? "bg-helm-status-warning" : "bg-helm-gold")}
-              style={{ width: `${extractPct}%` }}
-            />
+        {(seatsLimit > 0 || extractsLimit > 0) && (
+          <div className="flex flex-wrap items-center gap-6 pt-1" data-testid="usage-rings">
+            {seatsLimit > 0 && (
+              <UsageRing
+                label="Seats"
+                used={seatsUsed}
+                limit={seatsLimit}
+                color={seatColor}
+                testId="seats-usage-ring"
+              />
+            )}
+            {extractsLimit > 0 && (
+              <UsageRing
+                label="Extracts"
+                used={extractsUsed}
+                limit={extractsLimit}
+                color={extractColor}
+                testId="usage-bar"
+              />
+            )}
           </div>
         )}
       </GlassCard>
