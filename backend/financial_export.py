@@ -254,8 +254,8 @@ def statement_markdown(bundle: dict[str, Any]) -> str:
         if cash.get("ending_matches_dashboard"):
             lines.append("")
             lines.append(
-                f"Ending cash matches **Cash** on the Financials dashboard "
-                f"({format_export_amount(cash['dashboard_cash'], currency)})."
+                f"- Ending cash confirmed — matches Financials "
+                f"({format_export_amount(cash['dashboard_cash'], currency)})"
             )
     else:
         lines.append("Cash on hand has not been entered on Financials — starting and ending cash are omitted.")

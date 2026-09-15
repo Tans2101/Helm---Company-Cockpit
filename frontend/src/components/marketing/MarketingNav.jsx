@@ -46,7 +46,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
               data-testid="nav-signin-btn"
               type="button"
               onClick={onEnter}
-              className="group hidden sm:flex items-center gap-1.5 rounded-lg bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2 transition-colors hover:bg-helm-gold-hover"
+              className="group hidden sm:flex items-center gap-1.5 rounded-md bg-helm-cream text-helm-navy text-sm font-medium px-4 py-2 transition-colors hover:bg-helm-gold"
             >
               {authed ? "Open cockpit" : "Get started"}
               <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -83,7 +83,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
               <button
                 type="button"
                 onClick={() => { setOpen(false); onEnter?.(); }}
-                className="w-full rounded-lg bg-helm-gold text-helm-navy text-sm font-medium px-3 py-2.5"
+                className="w-full rounded-md bg-helm-cream text-helm-navy text-sm font-medium px-3 py-2.5 hover:bg-helm-gold transition-colors"
               >
                 {authed ? "Open cockpit" : "Get started"}
               </button>

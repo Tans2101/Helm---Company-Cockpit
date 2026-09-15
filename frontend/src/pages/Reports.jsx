@@ -5,6 +5,7 @@ import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import DocumentStamp, { stampLabelForLine } from "@/components/DocumentStamp";
 import { cn } from "@/lib/utils";
 
 const emptyReport = () => ({ title: "", type: "General", period: "", summary: "", metrics: [{ label: "", value: "" }, { label: "", value: "" }, { label: "", value: "" }] });
@@ -23,6 +24,8 @@ export default function Reports() {
   const [publishingDraftId, setPublishingDraftId] = useState(null);
   const [finPeriod, setFinPeriod] = useState("");
   const [finExporting, setFinExporting] = useState(null);
+  const [finPreview, setFinPreview] = useState(null);
+  const [finPreviewLoading, setFinPreviewLoading] = useState(false);
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
@@ -34,6 +37,27 @@ export default function Reports() {
     const next = data.financial_latest_month || months[months.length - 1] || new Date().toISOString().slice(0, 7);
     setFinPeriod((prev) => prev || next);
   }, [data]);
+
+  useEffect(() => {
+    const canExport = Boolean(data?.can_export_financials);
+    if (!canExport || !finPeriod) {
+      setFinPreview(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setFinPreviewLoading(true);
+    (async () => {
+      try {
+        const { data: bundle } = await api.get("/reports/financial-export", { params: { period: finPeriod } });
+        if (!cancelled) setFinPreview(bundle);
+      } catch {
+        if (!cancelled) setFinPreview(null);
+      } finally {
+        if (!cancelled) setFinPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.can_export_financials, finPeriod]);
 
   if (loading) return <LoadingScreen label="Loading reports" />;
   if (error || !data) {
@@ -338,7 +362,7 @@ export default function Reports() {
       )}
 
       {canExportFinancials && (
-        <GlassCard className="p-6 fade-up border-helm-gold/35 mb-6" data-testid="financial-export-card">
+        <GlassCard className="p-6 fade-up border-helm-line mb-6" data-testid="financial-export-card">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <SectionLabel>Financial Export</SectionLabel>
@@ -381,10 +405,19 @@ export default function Reports() {
               </div>
             </div>
           </div>
+          {(finPreviewLoading || finPreview) && (
+            <div className="mt-6" data-testid="financial-export-preview">
+              {finPreviewLoading && !finPreview ? (
+                <p className="text-xs text-helm-muted">Loading accountant view…</p>
+              ) : (
+                <FinancialExportPreview bundle={finPreview} />
+              )}
+            </div>
+          )}
         </GlassCard>
       )}
 
-      <GlassCard glow className="p-6 fade-up border-helm-gold/35">
+      <GlassCard className="p-6 fade-up border-helm-line">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <SectionLabel>Weekly CEO Pack</SectionLabel>
@@ -536,38 +569,168 @@ function InlineText({ children }) {
   ));
 }
 
+
+function formatExportMoney(n, currency = "usd") {
+  if (n === null || n === undefined) return "—";
+  const sym = currency === "gbp" ? "£" : currency === "eur" ? "€" : "$";
+  return `${sym}${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function LedgerRow({ label, value, stamp, strong }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-baseline gap-4 border-b border-helm-navy/10 py-2.5 text-[13px] leading-relaxed">
+      <div className="flex items-start gap-2.5 min-w-0">
+        {stamp && <DocumentStamp label={stamp} className="mt-0.5 border-helm-navy/70 text-helm-navy/80" />}
+        <p className={strong ? "font-medium text-helm-navy" : "text-helm-navy/90"}>{label}</p>
+      </div>
+      <p className="font-mono text-[13px] tabular-nums text-right text-helm-navy whitespace-nowrap">{value}</p>
+    </div>
+  );
+}
+
+/** Document-style Income Statement + Cash Summary for accountant export preview. */
+function FinancialExportPreview({ bundle }) {
+  if (!bundle) return null;
+  const currency = bundle.currency || "usd";
+  const income = bundle.income || {};
+  const cash = bundle.cash || {};
+  const items = bundle.line_items || [];
+  const confirmed = Boolean(cash.ending_matches_dashboard);
+
+  return (
+    <div
+      className="max-w-3xl bg-helm-cream text-helm-navy px-6 py-7 md:px-8 md:py-9 rounded-sm border border-helm-line"
+      data-testid="formatted-financial-export"
+    >
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-helm-navy/50">Financial Export</p>
+      <h2 className="mt-2 font-display text-2xl font-medium tracking-tight text-helm-navy">
+        {bundle.workspace_name || "Company"}
+      </h2>
+      <p className="mt-1 text-sm text-helm-navy/60">{bundle.period_label || bundle.period}</p>
+      <div className="mt-5 border-t border-helm-navy/25" />
+
+      <h3 className="mt-6 mb-2 border-b border-helm-navy/20 pb-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-helm-navy">
+        Income Statement
+      </h3>
+      <LedgerRow label="Revenue" value={formatExportMoney(income.revenue, currency)} strong />
+      {(income.expenses_by_category || []).map((row) => (
+        <LedgerRow key={row.category} label={row.category} value={formatExportMoney(row.amount, currency)} />
+      ))}
+      <LedgerRow label="Total expenses" value={formatExportMoney(income.expenses_total, currency)} strong />
+      <LedgerRow label="Net income" value={formatExportMoney(income.net_income, currency)} strong />
+
+      <h3 className="mt-6 mb-2 border-b border-helm-navy/20 pb-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-helm-navy">
+        Line items
+      </h3>
+      {items.length === 0 ? (
+        <p className="py-2.5 text-[13px] text-helm-navy/70 border-b border-helm-navy/10">None recorded this period</p>
+      ) : (
+        items.map((row, i) => (
+          <LedgerRow
+            key={`${row.name}-${i}`}
+            label={`${row.name} (${row.category}, ${row.type})`}
+            value={formatExportMoney(row.amount, currency)}
+          />
+        ))
+      )}
+
+      <h3 className="mt-6 mb-2 border-b border-helm-navy/20 pb-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-helm-navy">
+        Cash Summary
+      </h3>
+      {cash.entered ? (
+        <>
+          <LedgerRow label="Starting cash" value={formatExportMoney(cash.starting, currency)} />
+          <LedgerRow label="Inflows (revenue)" value={formatExportMoney(cash.inflows, currency)} />
+          <LedgerRow label="Outflows (expenses)" value={formatExportMoney(cash.outflows, currency)} />
+          <LedgerRow
+            label="Ending cash"
+            value={formatExportMoney(cash.ending, currency)}
+            stamp={confirmed ? "Confirmed" : null}
+            strong
+          />
+        </>
+      ) : (
+        <p className="py-2.5 text-[13px] text-helm-navy/70 border-b border-helm-navy/10">
+          Cash on hand has not been entered on Financials.
+        </p>
+      )}
+      <p className="mt-5 text-[11px] text-helm-navy/50 leading-relaxed">
+        Scope is Income Statement and Cash Summary only. No balance sheet is included.
+      </p>
+    </div>
+  );
+}
+
 function PackPreview({ content }) {
   const lines = String(content || "").split("\n");
   return (
-    <div className="max-w-3xl text-sm leading-relaxed text-helm-fg" data-testid="formatted-pack-content">
+    <div
+      className="max-w-3xl bg-helm-cream text-helm-navy px-6 py-7 md:px-8 md:py-9 rounded-sm border border-helm-line"
+      data-testid="formatted-pack-content"
+    >
       {lines.map((raw, index) => {
         const line = raw.trim();
-        if (!line) return <div key={index} className="h-2" />;
+        if (!line) return <div key={index} className="h-3" />;
         if (line.startsWith("# ")) {
-          return <h2 key={index} className="mb-2 text-xl font-medium tracking-tight text-helm-fg"><InlineText>{line.slice(2)}</InlineText></h2>;
+          return (
+            <h2 key={index} className="mb-3 font-display text-2xl font-medium tracking-tight text-helm-navy">
+              <InlineText>{line.slice(2)}</InlineText>
+            </h2>
+          );
         }
         if (line.startsWith("## ")) {
-          return <h3 key={index} className="mb-2 mt-5 text-sm font-medium uppercase tracking-wider text-helm-gold"><InlineText>{line.slice(3)}</InlineText></h3>;
+          return (
+            <h3
+              key={index}
+              className="mb-2 mt-6 border-b border-helm-navy/20 pb-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-helm-navy"
+            >
+              <InlineText>{line.slice(3)}</InlineText>
+            </h3>
+          );
         }
         if (/^[-*]\s+/.test(line)) {
+          const body = line.replace(/^[-*]\s+/, "");
+          const stamp = stampLabelForLine(body);
+          const money = body.match(/^(.*?)(\s+[–—-]\s+)?([£$€]?[\d,]+\.?\d*\s*[KMB]?%?)\s*$/);
           return (
-            <div key={index} className="mb-2 flex items-start gap-2.5">
-              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-helm-gold" />
-              <p><InlineText>{line.replace(/^[-*]\s+/, "")}</InlineText></p>
+            <div
+              key={index}
+              className="grid grid-cols-[1fr_auto] items-baseline gap-4 border-b border-helm-navy/10 py-2.5 text-[13px] leading-relaxed"
+            >
+              <div className="flex items-start gap-2.5 min-w-0">
+                {stamp && <DocumentStamp label={stamp} className="mt-0.5 border-helm-navy/70 text-helm-navy/80" />}
+                <p className="text-helm-navy/90">
+                  <InlineText>{money ? money[1].trim() : body}</InlineText>
+                </p>
+              </div>
+              {money && money[3] && (
+                <p className="font-mono text-[13px] tabular-nums text-right text-helm-navy whitespace-nowrap">
+                  {money[3]}
+                </p>
+              )}
             </div>
           );
         }
         const numbered = line.match(/^\d+\.\s+(.*)$/);
         if (numbered) {
+          const stamp = stampLabelForLine(numbered[1]);
           return (
-            <div key={index} className="mb-2 flex items-start gap-2.5">
-              <span className="min-w-4 font-mono text-xs text-helm-gold">{line.match(/^\d+/)?.[0]}.</span>
-              <p><InlineText>{numbered[1]}</InlineText></p>
+            <div
+              key={index}
+              className="flex items-start gap-2.5 border-b border-helm-navy/10 py-2.5 text-[13px] leading-relaxed"
+            >
+              <span className="min-w-4 font-mono text-xs text-helm-navy/50">{line.match(/^\d+/)?.[0]}.</span>
+              {stamp && <DocumentStamp label={stamp} className="mt-0.5 border-helm-navy/70 text-helm-navy/80" />}
+              <p className="text-helm-navy/90"><InlineText>{numbered[1]}</InlineText></p>
             </div>
           );
         }
-        if (line === "---") return <div key={index} className="my-4 border-t border-helm-line" />;
-        return <p key={index} className="mb-2"><InlineText>{line}</InlineText></p>;
+        if (line === "---") return <div key={index} className="my-5 border-t border-helm-navy/25" />;
+        return (
+          <p key={index} className="mb-2 text-[13px] leading-relaxed text-helm-navy/90">
+            <InlineText>{line}</InlineText>
+          </p>
+        );
       })}
     </div>
   );

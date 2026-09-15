@@ -5091,6 +5091,16 @@ async def _assemble_financial_export_for(principal, period: Optional[str]):
     return bundle, ws
 
 
+@api_router.get("/reports/financial-export")
+async def financial_export_preview(
+    period: Optional[str] = None,
+    principal=Depends(require_section("financials", "finance:write")),
+):
+    """Accountant-view JSON for the on-screen ledger preview (same bundle as PDF/Excel)."""
+    bundle, ws = await _assemble_financial_export_for(principal, period)
+    return {**bundle, "workspace_name": (ws or {}).get("name") or "Company"}
+
+
 @api_router.post("/reports/financial-export/pdf")
 async def financial_export_pdf(
     payload: FinancialExportInput,
