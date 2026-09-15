@@ -260,7 +260,8 @@ Return ONLY strict JSON with no markdown and no prose:
 {"title": string, "description": string, "recommendation": string, "confidence": number, "category": string, "impact": "High"|"Medium"|"Low"}
 
 Rules:
-- Be specific — cite the actual numbers, names, and dates from the signal. Do not write generically.
+- Be specific. Cite the actual numbers, names, and dates from the signal. Do not write generically.
+- Write plainly in title, description, and recommendation. Avoid em dashes. Prefer periods, commas, or plain connecting words instead, unless a sentence genuinely cannot be split any other way.
 - confidence is your genuine estimate from 0-100 that this recommendation is the right call given the signal (integer).
 - category is a short label like Finance, Sales, People, Product, Ops.
 - impact reflects business urgency: High / Medium / Low.
@@ -272,7 +273,8 @@ Return ONLY strict JSON with no markdown and no prose:
 {"title": string, "detail": string, "suggested_owner_user_id": string, "suggested_owner_name": string}
 
 Rules:
-- Be specific — cite the task, person, and dates from the signal.
+- Be specific. Cite the task, person, and dates from the signal.
+- Write plainly in title and detail. Avoid em dashes. Prefer periods, commas, or plain connecting words instead, unless a sentence genuinely cannot be split any other way.
 - suggested_owner_user_id and suggested_owner_name MUST come from the signal context (assignee_user_id / assignee_name). Do not invent a person.
 - title is a short actionable handoff; detail explains what to do and why.
 - If company context lists unknown_fields, do not fill those gaps with invented numbers or a $0 default.

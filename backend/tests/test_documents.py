@@ -274,7 +274,7 @@ def test_upload_rate_limit_returns_429(client):
         )
 
     assert r.status_code == 429
-    assert r.json()["detail"] == "Upload limit reached — try again in a bit"
+    assert r.json()["detail"] == "Upload limit reached. Try again in a bit"
     log_mock.assert_awaited()
     assert log_mock.await_args.args[2] == "document.rate_limit"
 

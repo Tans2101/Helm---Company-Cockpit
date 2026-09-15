@@ -27,7 +27,7 @@ export function useDecisionActions(reload) {
     setBusy(id);
     try {
       await api.post(`/decisions/suggestions/${id}/approve`);
-      toast.success("Suggestion accepted — now a pending decision");
+      toast.success("Suggestion accepted. It is now a pending decision");
       reload?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not approve");

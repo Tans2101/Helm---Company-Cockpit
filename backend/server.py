@@ -3018,12 +3018,15 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         "Write 3–4 sentences in plain English. Sound like a thoughtful human, not an AI analysis. "
         "Lead with what matters most today, name the one decision that needs a call if there is one, "
         "and end with a concrete next step. No lists, no bold, no confidence language. "
+        "Write plainly. Avoid em dashes. Prefer periods, commas, or plain connecting words instead, "
+        "unless a sentence genuinely cannot be split any other way. "
         "Never say 'synthesis', 'signal', 'blind spot', 'monetization', 'execution velocity', "
         "'worth confirming', or similar consultant/AI phrasing. "
         "Never treat missing financial figures as zero. Follow financials.instructions_for_missing_data exactly: "
-        "if cash was not entered, say to add a cash balance for an accurate runway picture — do not claim they are out of runway. "
-        "Follow calendar.instructions_for_missing_data: if calendar is not connected, say so — "
-        "do not treat a missing calendar as a free day."
+        "if cash was not entered, say to add a cash balance for an accurate runway picture. "
+        "Do not claim they are out of runway. "
+        "Follow calendar.instructions_for_missing_data: if calendar is not connected, say so. "
+        "Do not treat a missing calendar as a free day."
     )
     text = await helm_llm.complete(
         system,
@@ -5346,25 +5349,25 @@ async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
 
 Write the way you would speak in a short hallway update: clear prose, natural sentence rhythm,
 no synthesized-report voice. Use only facts in the supplied data. It must sound like a thoughtful
-human wrote it in plain English — not an AI analysis.
+human wrote it in plain English, not an AI analysis.
 
 Form:
-- Open with one title line: # [Company] — this week
+- Open with one title line: # [Company]: this week
 - Follow with a short opening that states what mattered (one or two plain sentences, not bolded).
 - Add ## headings only for topics that are actually notable this week. Name them for the content
   (for example "## Cash", "## Hiring", "## Monday"). Never invent empty sections to fill a template.
-- Prefer short paragraphs. Use bullets only when a short list is clearer than prose — not as the default.
+- Prefer short paragraphs. Use bullets only when a short list is clearer than prose, not as the default.
 - If the week is quiet, say so briefly and stop. Do not pad.
 
 Style (hard rules):
+- Write plainly. Avoid em dashes. Prefer periods, commas, or plain connecting words instead,
+  unless a sentence genuinely cannot be split any other way.
 - Do not structure lines as "**Label:** fact". That bold-label-plus-colon pattern is banned as the
   default sentence shape. Bold at most one or two critical numbers in the whole note, and only when
   emphasis truly helps a reader catch them.
-- Do not build sentences by stacking clauses with em dashes (—). Prefer periods and commas. Vary
-  sentence length the way a person actually writes.
 - Do not force the same section set every week. Never default to fixed headers such as Headline,
-  Growth, Financial Health, Risks, This Week's Focus — or always-on blocks like What happened /
-  What needs attention / Next week — when there is nothing real to put there. Structure follows
+  Growth, Financial Health, Risks, This Week's Focus, or always-on blocks like What happened /
+  What needs attention / Next week, when there is nothing real to put there. Structure follows
   what changed.
 - Maximum about 350 words.
 - Explain financial terms on first use: write "monthly recurring revenue (MRR)" and "cash runway".
@@ -9370,10 +9373,12 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
         "Answer like a sharp, trusted operator: direct, quantified, decisive. "
         "Use the live company snapshot provided. Keep answers tight. "
+        "Write plainly. Avoid em dashes. Prefer periods, commas, or plain connecting words instead, "
+        "unless a sentence genuinely cannot be split any other way. "
         "Never treat missing figures as zero. Follow every instructions_for_missing_data "
         "block in the snapshot (company_profile, financials, pipeline, onboarding, risks). "
-        "If a field is null or listed in unknown_fields, say the data is not in Helm yet — "
-        "do not infer it and do not describe it as zero. "
+        "If a field is null or listed in unknown_fields, say the data is not in Helm yet. "
+        "Do not infer it and do not describe it as zero. "
         "If financials.access is \"restricted\", the user does not have access to financial "
         "data in Helm. Tell them clearly they cannot see revenue, burn, runway, or related "
         "figures and should ask someone with Financials access. Do not invent numbers, "

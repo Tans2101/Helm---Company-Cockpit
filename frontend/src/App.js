@@ -100,7 +100,7 @@ function AppRouter() {
   }, [location.search]);
   useEffect(() => {
     const titles = {
-      "/": "Helm — Run the business. Don't chase it.",
+      "/": "Helm · Run the business. Don't chase it.",
       "/login": "Sign in · Helm",
       "/sign-up": "Create account · Helm",
       "/features": "Features · Helm",
@@ -231,10 +231,10 @@ function AuthShell() {
 function App() {
   useEffect(() => {
     const onError = () => {
-      toast.error("Something went wrong — please try again");
+      toast.error("Something went wrong. Please try again");
     };
     const onRejection = () => {
-      toast.error("Something went wrong — please try again");
+      toast.error("Something went wrong. Please try again");
     };
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
