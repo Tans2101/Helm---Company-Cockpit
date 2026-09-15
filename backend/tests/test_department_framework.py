@@ -89,7 +89,13 @@ class FakeDepartments:
         return MagicMock(deleted_count=before - len(self.rows))
 
     async def update_one(self, query, update):
-        pass
+        for r in self.rows:
+            if all(r.get(k) == v for k, v in query.items()):
+                r.update(update.get("$set") or {})
+                for k in (update.get("$unset") or {}):
+                    r.pop(k, None)
+                return MagicMock(matched_count=1, modified_count=1)
+        return MagicMock(matched_count=0, modified_count=0)
 
 
 class FakeDeptMembers:
@@ -290,7 +296,55 @@ def test_disable_clears_dependent_data(dept_api):
     assert r.status_code == 200, r.text
     assert r.json()["ok"] is True
     mock_db.production_work_orders.delete_many.assert_called()
-    assert not any(d["department_id"] == dept_id for d in depts.rows)
+    # Soft-disable keeps the row with enabled=False (same department_id for re-enable)
+    row = next(d for d in depts.rows if d["department_id"] == dept_id)
+    assert row["enabled"] is False
+    assert row.get("disabled_at")
+
+
+def test_disable_reenable_keeps_department_id_for_deals(dept_api):
+    """Re-enabling must reuse the soft-disabled id so old deals stay visible."""
+    client, depts, members, mock_db, as_ceo, as_member = dept_api
+    # Sales is a real catalog type whose records use department_id filtering.
+    enabled = client.post("/api/departments", json={"type": "sales"})
+    assert enabled.status_code == 200, enabled.text
+    dept_id = enabled.json()["department"]["department_id"]
+    members.rows.append({
+        "department_id": dept_id,
+        "user_id": "u_member",
+        "role": "member",
+        "created_at": "2026-01-01",
+    })
+    mock_db.deals = MagicMock()
+    # Feature clear no-ops for sales (no production_* collections required beyond MagicMock)
+    for name in (
+        "production_work_orders", "procurement_requests", "legal_matters",
+        "maintenance_tickets", "hr_onboarding_instances", "hr_onboarding_template",
+        "hr_employees", "hr_offboarding_instances", "hr_offboarding_template",
+        "hr_leave_requests",
+    ):
+        coll = MagicMock()
+        coll.delete_many = AsyncMock(return_value=MagicMock(deleted_count=0))
+        cursor = MagicMock()
+        cursor.to_list = AsyncMock(return_value=[])
+        coll.find = MagicMock(return_value=cursor)
+        coll.find_one = AsyncMock(return_value=None)
+        setattr(mock_db, name, coll)
+
+    disabled = client.delete(f"/api/departments/{dept_id}")
+    assert disabled.status_code == 200, disabled.text
+    assert depts.rows[0]["department_id"] == dept_id
+    assert depts.rows[0]["enabled"] is False
+
+    reenabled = client.post("/api/departments", json={"type": "sales"})
+    assert reenabled.status_code == 200, reenabled.text
+    assert reenabled.json()["department"]["department_id"] == dept_id
+    assert depts.rows[0]["enabled"] is True
+    # Catalog list omits disabled rows and shows the same id after re-enable
+    listing = client.get("/api/departments").json()["departments"]
+    sales = next(d for d in listing if d["type"] == "sales")
+    assert sales["enabled"] is True
+    assert sales["department_id"] == dept_id
 
 
 def test_add_and_remove_member(dept_api):

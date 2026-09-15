@@ -285,6 +285,17 @@ Expired grants are cleared so owners can reconnect in Integrations. Manual
 - `render.yaml`, `frontend/vercel.json`, `backend/.env.example`, this file  
 - Removed Emergent visual-edits package so Vercel can install without Emergent CDN  
 
+### Department disable / re-enable (Sept 2026)
+
+Disabling a department now soft-disables (`enabled: false`) instead of deleting the
+Mongo row. Re-enable reuses the same `department_id`, so deals and financial entries
+created before the disable stay linked. Workspaces that already deleted a department
+(pre-fix) and re-created it may have orphaned `department_id` values on old deals —
+those are rare; only repair if a customer reports missing history after a disable/re-enable
+cycle that happened before this change. No automatic backfill script is required unless
+Atlas shows deleted department ids still referenced by deals/entries with no matching
+department document.
+
 PR: https://github.com/tansherd21/Helm---Company-Cockpit/pull/3  
 
 ---

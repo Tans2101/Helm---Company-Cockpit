@@ -5885,22 +5885,22 @@ async def enable_department(payload: EnableDepartmentInput, principal=Depends(ge
     if dtype not in dept_catalog.VALID_DEPARTMENT_TYPES:
         raise HTTPException(status_code=400, detail="Unknown department type")
     existing = await db.departments.find_one(
-        {"workspace_id": principal["workspace_id"], "type": dtype, "enabled": True},
+        {"workspace_id": principal["workspace_id"], "type": dtype},
         {"_id": 0},
     )
-    if existing:
+    if existing and existing.get("enabled"):
         raise HTTPException(status_code=409, detail="Department already enabled")
-    now = datetime.now(timezone.utc).isoformat()
-    department_id = f"dept_{uuid.uuid4().hex[:12]}"
-    name = dept_catalog.default_name(dtype)
-    await db.departments.insert_one({
-        "department_id": department_id,
-        "workspace_id": principal["workspace_id"],
-        "type": dtype,
-        "name": name,
-        "enabled": True,
-        "created_at": now,
-    })
+    # Re-enable a soft-disabled row (same department_id) so deals/entries stay linked.
+    dept, created_or_reenabled = await dept_migrate.ensure_enabled_department(
+        db, principal["workspace_id"], dtype,
+    )
+    department_id = dept["department_id"]
+    name = dept.get("name") or dept_catalog.default_name(dtype)
+    if created_or_reenabled and existing and existing.get("disabled_at"):
+        await db.departments.update_one(
+            {"department_id": department_id, "workspace_id": principal["workspace_id"]},
+            {"$unset": {"disabled_at": ""}},
+        )
     if dtype == dept_catalog.TYPE_HR:
         await _ensure_hr_onboarding_template(
             principal["workspace_id"], department_id,
@@ -5930,11 +5930,14 @@ async def disable_department(department_id: str, principal=Depends(get_principal
         raise HTTPException(status_code=403, detail="Only the CEO can disable departments")
     doc = await _department_in_workspace(department_id, principal["workspace_id"])
     # Clear department-owned feature data (stages, queues, HR template, etc.).
-    # Core workspace records (deals / financial entries) are left intact.
+    # Core workspace records (deals / financial entries) are left intact and keep
+    # department_id — soft-disable so re-enable reuses the same id.
     cleared = await dept_access.clear_department_feature_data(db, department_id)
     await db.department_members.delete_many({"department_id": department_id})
-    await db.departments.delete_one(
+    now = datetime.now(timezone.utc).isoformat()
+    await db.departments.update_one(
         {"department_id": department_id, "workspace_id": principal["workspace_id"]},
+        {"$set": {"enabled": False, "disabled_at": now}},
     )
     return {"ok": True, "type": doc.get("type"), "cleared": cleared}
 
