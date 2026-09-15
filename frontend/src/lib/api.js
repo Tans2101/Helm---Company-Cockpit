@@ -14,9 +14,24 @@ let clerkGetToken = null;
 
 const BOOTSTRAP_PATHS = ["/auth/me", "/auth/config"];
 
+function isBootstrapPath(url) {
+  const path = String(url || "").split("?")[0];
+  return BOOTSTRAP_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
 /** Register Clerk getToken so every API call can send the session JWT. */
 export function setClerkTokenGetter(getter) {
   clerkGetToken = getter;
+}
+
+/** Bearer headers for raw fetch (SSE streams that cannot use axios). */
+export async function getApiAuthHeaders(extra = {}) {
+  const headers = { ...extra };
+  if (!clerkGetToken) return headers;
+  const token = await clerkGetToken();
+  if (!token) throw new Error("clerk-token-timeout");
+  headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 api.interceptors.request.use(async (config) => {
@@ -25,7 +40,7 @@ api.interceptors.request.use(async (config) => {
   if (config.headers.Authorization) return config;
   if (!clerkGetToken) return config;
   const url = config.url || "";
-  if (BOOTSTRAP_PATHS.some((p) => url.includes(p))) return config;
+  if (isBootstrapPath(url)) return config;
   try {
     // getCachedClerkToken already bounds Clerk refreshes and falls back to a
     // still-valid JWT. Do not wrap another short Promise.race here — a 1.5s
@@ -50,3 +65,5 @@ export async function fetchAuthConfig() {
   const { data } = await axios.get(`${API}/auth/config`, { withCredentials: true });
   return data;
 }
+
+export { isBootstrapPath };

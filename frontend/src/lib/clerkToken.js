@@ -57,7 +57,7 @@ export async function getCachedClerkToken(getToken, session, { tokenTimeoutMs = 
         withTimeout(getToken(), tokenTimeoutMs, "auth-token-timeout").catch(() => null),
       ]);
       const token = fromSession || fromAuth;
-      if (gen !== cacheGeneration) return priorToken;
+      if (gen !== cacheGeneration) return null;
       if (token && token.split(".").length === 3) {
         cachedToken = token;
         cachedExpMs = jwtExpMs(token) || now + 55_000;

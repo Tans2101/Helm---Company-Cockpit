@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Send, Sparkles, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
-import { API } from "@/lib/api";
+import { API, getApiAuthHeaders } from "@/lib/api";
 import { PageHeader, Spinner } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -36,9 +36,10 @@ export default function AskHelm() {
     setMessages((m) => [...m, { role: "user", content: q }, { role: "assistant", content: "" }]);
     setStreaming(true);
     try {
+      const headers = await getApiAuthHeaders({ "Content-Type": "application/json" });
       const res = await fetch(`${API}/ask`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify({ message: q }),
       });

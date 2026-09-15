@@ -102,6 +102,8 @@ export default function Members() {
   };
 
   const remove = async (m) => {
+    const label = m.name || m.email || "this member";
+    if (!window.confirm(`Remove ${label} from this workspace?`)) return;
     try {
       await api.delete(`/members/${m.membership_id}`);
       reload();
