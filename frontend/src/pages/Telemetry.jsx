@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, PenLine } from "lucide-react";
+import { Plus, Trash2, PenLine, Sparkles } from "lucide-react";
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -51,6 +51,8 @@ export default function Telemetry() {
   const [editing, setEditing] = useState(false);
   const [risks, setRisks] = useState([]);
   const [notes, setNotes] = useState("");
+  const [targetEnabled, setTargetEnabled] = useState(false);
+  const [growthPct, setGrowthPct] = useState(3);
   const [busy, setBusy] = useState(false);
 
   if (loading) return <LoadingScreen label="Loading telemetry" />;
@@ -67,19 +69,41 @@ export default function Telemetry() {
 
   const asOf = data.data_as_of ? new Date(data.data_as_of).toLocaleString() : null;
   const canWrite = data.can_write;
+  const suggestedRisks = data.suggested_risks || [];
+  const hasTargetLine = (data.revenue_trend || []).some((r) => r.target != null && r.target !== undefined);
 
-  const openEdit = () => {
-    setRisks((data.risks || []).length ? data.risks.map((r) => ({ ...r })) : [{ ...emptyRisk() }]);
+  const openEdit = (seedRisk = null) => {
+    const base = (data.risks || []).length ? data.risks.map((r) => ({ ...r })) : [];
+    if (seedRisk) {
+      base.push({
+        ...emptyRisk(),
+        name: seedRisk.name || "",
+        category: seedRisk.category || "General",
+        likelihood: 3,
+        impact: 3,
+      });
+    }
+    setRisks(base.length ? base : [{ ...emptyRisk() }]);
     setNotes(data.notes || "");
+    setTargetEnabled(!!data.targets?.enabled);
+    setGrowthPct(
+      data.targets?.monthly_growth_pct != null && data.targets.monthly_growth_pct !== ""
+        ? Number(data.targets.monthly_growth_pct)
+        : 3,
+    );
     setEditing(true);
   };
 
-  const saveRisks = async () => {
+  const saveTelemetry = async () => {
     setBusy(true);
     try {
       await api.patch("/telemetry", {
         risks: risks.filter((r) => r.name?.trim()),
         notes: notes.trim(),
+        targets: {
+          enabled: !!targetEnabled,
+          monthly_growth_pct: Number.isFinite(Number(growthPct)) ? Number(growthPct) : 0,
+        },
       });
       toast.success("Telemetry updated");
       setEditing(false);
@@ -97,8 +121,8 @@ export default function Telemetry() {
         title="Telemetry"
         subtitle="Live KPIs from your integrated sources — financials, pipeline, people, and tasks."
         action={canWrite ? (
-          <button type="button" onClick={openEdit} className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10">
-            <PenLine className="w-3.5 h-3.5" /> Edit risks
+          <button type="button" onClick={() => openEdit()} className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10">
+            <PenLine className="w-3.5 h-3.5" /> Edit telemetry
           </button>
         ) : null}
       />
@@ -134,23 +158,29 @@ export default function Telemetry() {
 
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">
-          <SectionLabel className="mb-4">MRR vs Target</SectionLabel>
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={data.revenue_trend} margin={{ left: -18, right: 8, top: 8 }}>
-              <defs>
-                <linearGradient id="mrr" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke={SLATE} strokeOpacity={0.25} vertical={false} />
-              <XAxis dataKey="month" stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="target" name="Target" stroke={SLATE} strokeDasharray="4 4" fill="none" strokeWidth={1.5} />
-              <Area type="monotone" dataKey="mrr" name="MRR" stroke={GOLD} strokeWidth={2} fill="url(#mrr)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <SectionLabel className="mb-4">{hasTargetLine ? "MRR vs Target" : "MRR"}</SectionLabel>
+          {(data.revenue_trend || []).length === 0 ? (
+            <p className="text-sm text-helm-muted py-10 text-center">No revenue series yet — add financial entries to plot MRR.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={data.revenue_trend} margin={{ left: -18, right: 8, top: 8 }}>
+                <defs>
+                  <linearGradient id="mrr" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={SLATE} strokeOpacity={0.25} vertical={false} />
+                <XAxis dataKey="month" stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke={SLATE} fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTooltip />} />
+                {hasTargetLine && (
+                  <Area type="monotone" dataKey="target" name="Target" stroke={SLATE} strokeDasharray="4 4" fill="none" strokeWidth={1.5} />
+                )}
+                <Area type="monotone" dataKey="mrr" name="MRR" stroke={GOLD} strokeWidth={2} fill="url(#mrr)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </GlassCard>
 
         {data.funnel.length > 0 && (
@@ -171,7 +201,7 @@ export default function Telemetry() {
         )}
       </div>
 
-      {(data.risks?.length > 0 || data.notes || canWrite) && (
+      {(data.risks?.length > 0 || data.notes || canWrite || suggestedRisks.length > 0) && (
         <GlassCard className="p-5 fade-up" data-testid="telemetry-risks">
           <SectionLabel className="mb-4">Risk radar</SectionLabel>
           {data.notes && !editing && (
@@ -199,7 +229,39 @@ export default function Telemetry() {
             </div>
           )}
           {!editing && !data.risks?.length && canWrite && (
-            <p className="text-sm text-helm-muted">No risks logged yet — click Edit risks to add what you&apos;re watching.</p>
+            <p className="text-sm text-helm-muted">No risks logged yet — click Edit telemetry to add what you&apos;re watching.</p>
+          )}
+
+          {!editing && suggestedRisks.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-helm-line" data-testid="helm-noticed-risks">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
+                <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm noticed</span>
+              </div>
+              <div className="space-y-2">
+                {suggestedRisks.map((s) => (
+                  <div
+                    key={s.source_signal}
+                    className="flex items-center gap-3 rounded-lg border border-helm-status-warning/25 bg-helm-status-warning/[0.04] px-3 py-2.5"
+                    data-testid={`suggested-risk-${s.source_signal}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-helm-fg truncate">{s.name}</p>
+                      <p className="text-[10px] font-mono uppercase text-helm-muted mt-0.5">{s.category}</p>
+                    </div>
+                    {canWrite && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(s)}
+                        className="shrink-0 text-xs text-helm-gold hover:text-helm-gold-hover font-medium"
+                      >
+                        Add to radar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </GlassCard>
       )}
@@ -208,10 +270,40 @@ export default function Telemetry() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setEditing(false)} />
           <GlassCard className="relative w-full sm:max-w-lg m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto" data-testid="telemetry-edit-form">
-            <h3 className="text-lg text-helm-fg font-light">Edit risk radar</h3>
+            <h3 className="text-lg text-helm-fg font-light">Edit telemetry</h3>
             <p className="text-xs text-helm-muted mt-1 mb-5 leading-relaxed">
-              Each risk is scored 1–5 for how likely it is and how bad it would be. Score = likelihood × impact.
+              Set an optional revenue target and track risks scored 1–5 for likelihood and impact.
             </p>
+
+            <div className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-4 mb-5" data-testid="telemetry-targets-editor">
+              <SectionLabel className="mb-3">Targets</SectionLabel>
+              <label className="flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={targetEnabled}
+                  onChange={(e) => setTargetEnabled(e.target.checked)}
+                  className="accent-helm-gold w-4 h-4"
+                  data-testid="enable-revenue-target"
+                />
+                Enable revenue target
+              </label>
+              <p className="text-[11px] text-helm-muted mt-1.5 leading-relaxed">
+                When on, the chart shows a dashed target from last month&apos;s actual MRR grown by your %.
+              </p>
+              {targetEnabled && (
+                <label className="text-[10px] font-mono uppercase tracking-wider text-helm-muted block mt-3">
+                  Target monthly growth %
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={growthPct}
+                    onChange={(e) => setGrowthPct(e.target.value)}
+                    data-testid="target-growth-pct"
+                    className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40"
+                  />
+                </label>
+              )}
+            </div>
 
             <label className="text-xs text-helm-muted block mb-5">
               Radar notes
@@ -325,7 +417,7 @@ export default function Telemetry() {
 
             <div className="flex gap-2 mt-5">
               <button type="button" onClick={() => setEditing(false)} className="rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5">Cancel</button>
-              <button type="button" onClick={saveRisks} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm py-2.5 hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save risks"}</button>
+              <button type="button" onClick={saveTelemetry} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium text-sm py-2.5 hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
             </div>
           </GlassCard>
         </div>

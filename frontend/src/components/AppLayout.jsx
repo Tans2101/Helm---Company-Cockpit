@@ -22,7 +22,7 @@ const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
-  { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry" },
+  { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry", section: "telemetry" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
   { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
@@ -31,6 +31,14 @@ const NAV = [
   { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:invite" },
   { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
+
+function navItemVisible(item, user) {
+  // Pack-only perms (e.g. members:invite) — unchanged shallow check.
+  if (item.perm && !(user?.perms || []).includes(item.perm)) return false;
+  // Grant-aware sections (e.g. telemetry) — includes pack holders via /auth/me.
+  if (item.section && !(user?.granted_sections || []).includes(item.section)) return false;
+  return true;
+}
 
 function departmentNavTo(type) {
   return departmentPath(type);
@@ -128,7 +136,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV.filter((item) => !item.perm || (user?.perms || []).includes(item.perm)).map((item) => (
+        {NAV.filter((item) => navItemVisible(item, user)).map((item) => (
           <NavLink
             key={item.id}
             to={item.to}

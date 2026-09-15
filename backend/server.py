@@ -1963,10 +1963,23 @@ async def _user_session_payload(user: dict) -> dict:
             "role": None,
             "pack": None,
             "perms": [],
+            "granted_sections": [],
             "default_route": "/app/welcome",
             "pack_label": None,
         }
     pack = pack_of(membership)
+    principal_like = {
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "name": user.get("name"),
+        "workspace_id": membership["workspace_id"],
+        "role": membership["role"],
+        "pack": pack,
+    }
+    granted_sections = []
+    for item in sec_access.MANAGEABLE_SECTIONS:
+        if await can_section_write(principal_like, item["id"], item["perm"]):
+            granted_sections.append(item["id"])
     payload = {
         **base,
         "workspace_id": membership["workspace_id"],
@@ -1974,6 +1987,7 @@ async def _user_session_payload(user: dict) -> dict:
         "role": membership["role"],
         "pack": pack,
         "perms": sorted(perms_for(pack)),
+        "granted_sections": granted_sections,
         "default_route": PACK_HOME.get(pack, "/app"),
         "pack_label": PACK_LABEL.get(pack, "Member"),
     }
@@ -3798,8 +3812,141 @@ async def delete_deal(deal_id: str, principal=Depends(require_section("sales", "
     return {"ok": True}
 
 
+# ------------------------- Telemetry helpers -------------------------
+_TELEMETRY_RISK_SUGGEST_TYPES = (
+    "runway_risk",
+    "burn_increase",
+    "expense_spike",
+    "recurring_blocker",
+    "overdue_work_order",
+    "overdue_procurement",
+    "overdue_procurement_blocking_production",
+    "overdue_legal_deadline",
+    "urgent_maintenance",
+)
+_TELEMETRY_RISK_SUGGEST_CATEGORY = {
+    "runway_risk": "Financial",
+    "burn_increase": "Financial",
+    "expense_spike": "Financial",
+    "recurring_blocker": "People",
+    "overdue_work_order": "Production",
+    "overdue_procurement": "Procurement",
+    "overdue_procurement_blocking_production": "Procurement",
+    "overdue_legal_deadline": "Legal",
+    "urgent_maintenance": "Maintenance",
+}
+
+
+def _normalize_telemetry_targets(raw) -> dict:
+    """Return {enabled: bool, monthly_growth_pct: float} with safe bounds."""
+    if not isinstance(raw, dict):
+        return {"enabled": False, "monthly_growth_pct": 0.0}
+    enabled = bool(raw.get("enabled"))
+    try:
+        pct = float(raw.get("monthly_growth_pct") if raw.get("monthly_growth_pct") is not None else 0)
+    except (TypeError, ValueError):
+        pct = 0.0
+    if not math.isfinite(pct):
+        pct = 0.0
+    pct = max(-100.0, min(1000.0, pct))
+    return {"enabled": enabled, "monthly_growth_pct": pct}
+
+
+def _revenue_trend_with_targets(revenue_series: list, targets: dict) -> list:
+    """Build revenue_trend points; include target only when targets.enabled."""
+    series = list(revenue_series or [])
+    enabled = bool((targets or {}).get("enabled"))
+    pct = float((targets or {}).get("monthly_growth_pct") or 0)
+    out = []
+    for i, row in enumerate(series):
+        point = {"month": row.get("month"), "mrr": row.get("revenue")}
+        if enabled:
+            try:
+                actual = float(row.get("revenue") or 0)
+            except (TypeError, ValueError):
+                actual = 0.0
+            if i == 0:
+                point["target"] = round(actual)
+            else:
+                try:
+                    prev = float(series[i - 1].get("revenue") or 0)
+                except (TypeError, ValueError):
+                    prev = 0.0
+                point["target"] = round(prev * (1 + pct / 100.0))
+        out.append(point)
+    return out
+
+
+def _summarize_telemetry_signal_group(signal_type: str, group: list) -> str:
+    if not group:
+        return signal_type
+    first = (group[0].get("summary") or signal_type).strip()
+    if len(group) == 1:
+        return first[:120]
+    n = len(group)
+    if signal_type == "recurring_blocker":
+        return f"{n} teammates with recurring blockers"[:120]
+    if signal_type.startswith("overdue_"):
+        return f"{n} overdue items — {first}"[:120]
+    if signal_type == "urgent_maintenance":
+        return f"{n} urgent maintenance tickets"[:120]
+    return f"{first} (+{n - 1} more)"[:120]
+
+
+def _telemetry_risk_suggestions_from_signals(signals: list, *, cap: int = 5) -> list:
+    """One suggestion per signal type, capped — no storage, fresh each load."""
+    by_type: dict[str, list] = {}
+    for sig in signals or []:
+        t = sig.get("type")
+        if t not in _TELEMETRY_RISK_SUGGEST_TYPES:
+            continue
+        by_type.setdefault(t, []).append(sig)
+    out = []
+    for t in _TELEMETRY_RISK_SUGGEST_TYPES:
+        group = by_type.get(t) or []
+        if not group:
+            continue
+        out.append({
+            "name": _summarize_telemetry_signal_group(t, group),
+            "category": _TELEMETRY_RISK_SUGGEST_CATEGORY.get(t, "General"),
+            "source_signal": t,
+        })
+        if len(out) >= cap:
+            break
+    return out
+
+
+async def _workspace_live_signals(
+    workspace_id: str,
+    *,
+    fin: Optional[dict] = None,
+    deals: Optional[list] = None,
+    c: Optional[dict] = None,
+) -> list:
+    """Same detector path Decisions/Briefing use — reuse, don't reimplement."""
+    c = c or await get_ws(workspace_id)
+    fin = fin if fin is not None else await compute_financials(workspace_id)
+    currency = fin.get("currency") or "usd"
+    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    expense_by_month = decision_engine.expense_totals_by_month_category(entries)
+    if deals is None:
+        deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
+    tasks = list((c.get("tasks") or {}).get("items") or [])
+    updates = await _recent_updates(workspace_id, days=7)
+    department_items = await _department_signal_inputs(workspace_id)
+    return decision_engine.collect_signals(
+        fin=fin,
+        expense_by_month=expense_by_month,
+        deals=deals,
+        tasks=tasks,
+        updates=updates,
+        currency=currency,
+        department_items=department_items,
+    )
+
+
 @api_router.get("/telemetry")
-async def telemetry(principal=Depends(get_principal)):
+async def telemetry(principal=Depends(require_section("telemetry", "telemetry:write"))):
     c = await get_ws(principal["workspace_id"])
     fin = await compute_financials(c["workspace_id"])
     items = c["tasks"]["items"]
@@ -3831,16 +3978,16 @@ async def telemetry(principal=Depends(get_principal)):
         kpis.append({"label": "Pipeline", "value": fmt_money(metrics["open_value"], currency),
                      "delta": 0, "tone": "neutral", "spark": []})
         sources.append({"label": "Pipeline", "detail": "Live from deals in your CRM board", "freshness": "live"})
-    revenue_trend = [{"month": r["month"], "mrr": r["revenue"], "target": round(r["revenue"] * 1.03)}
-                     for r in fin["revenue_series"]]
+    tel = c.get("telemetry") or {}
+    manual = c.get("telemetry_manual") or {}
+    targets = _normalize_telemetry_targets(manual.get("targets"))
+    revenue_trend = _revenue_trend_with_targets(fin.get("revenue_series") or [], targets)
     funnel = []
     if metrics:
         funnel = [{"stage": row["label"], "value": row["count"]} for row in metrics["by_stage"] if row["count"] > 0]
-    elif (c.get("telemetry") or {}).get("funnel"):
-        funnel = c["telemetry"]["funnel"]
+    elif tel.get("funnel"):
+        funnel = tel["funnel"]
         sources.append({"label": "Sales Funnel", "detail": "Sample funnel — add deals for live pipeline stages", "freshness": "sample"})
-    tel = c.get("telemetry") or {}
-    manual = c.get("telemetry_manual") or {}
     risks = manual.get("risks") if manual.get("risks") is not None else (tel.get("risks") or [])
     if risks and not metrics and not manual.get("risks"):
         sources.append({"label": "Risks", "detail": "Sample risk radar — edit risks below or connect integrations", "freshness": "sample"})
@@ -3855,20 +4002,36 @@ async def telemetry(principal=Depends(get_principal)):
         sources.append({"label": "HubSpot", "detail": "CRM deals synced into Pipeline", "freshness": "live"})
     if cred_crypto.credentials_present(c.get("google_tokens")):
         sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
+    suggested_risks = []
+    try:
+        signals = await _workspace_live_signals(
+            c["workspace_id"], fin=fin, deals=deals, c=c,
+        )
+        suggested_risks = _telemetry_risk_suggestions_from_signals(signals, cap=5)
+    except Exception:
+        logger.exception("telemetry risk suggestions failed for %s", c.get("workspace_id"))
     can_write = await can_section_write(principal, "telemetry", "telemetry:write")
     return {
         "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
+        "suggested_risks": suggested_risks,
         "expense_breakdown": fin["expense_breakdown"],
         "data_as_of": now.isoformat(),
         "sources": sources,
         "can_write": can_write,
         "notes": manual.get("notes") or "",
+        "targets": targets,
     }
+
+
+class TelemetryTargetsInput(BaseModel):
+    enabled: bool = False
+    monthly_growth_pct: float = 0.0
 
 
 class TelemetryRiskInput(BaseModel):
     risks: list
     notes: Optional[str] = ""
+    targets: Optional[TelemetryTargetsInput] = None
 
 
 @api_router.patch("/telemetry")
@@ -3888,13 +4051,27 @@ async def update_telemetry(payload: TelemetryRiskInput, principal=Depends(requir
             "impact": max(1, min(5, int(r.get("impact") or 3))),
             "category": (r.get("category") or "General").strip()[:40],
         })
-    manual = {"risks": cleaned, "notes": (payload.notes or "").strip()[:1000]}
+    prior = dict(c.get("telemetry_manual") or {})
+    manual = {
+        "risks": cleaned,
+        "notes": (payload.notes or "").strip()[:1000],
+        "targets": prior.get("targets") or {"enabled": False, "monthly_growth_pct": 0.0},
+    }
+    if payload.targets is not None:
+        manual["targets"] = _normalize_telemetry_targets(payload.targets.model_dump())
+    else:
+        manual["targets"] = _normalize_telemetry_targets(manual.get("targets"))
     await db.workspaces.update_one(
         {"workspace_id": c["workspace_id"]},
         {"$set": {"telemetry_manual": manual}},
     )
     await log_activity(principal, "telemetry", "telemetry.edit", f"Updated telemetry — {len(cleaned)} risk(s)")
-    return {"ok": True, "risks": cleaned, "notes": manual["notes"]}
+    return {
+        "ok": True,
+        "risks": cleaned,
+        "notes": manual["notes"],
+        "targets": manual["targets"],
+    }
 
 
 @api_router.get("/financials")

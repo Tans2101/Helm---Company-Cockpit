@@ -10,6 +10,7 @@ import AppearanceSync from "@/components/AppearanceSync";
 import ClerkProviderBootstrap, { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ProtectedRouteClerk from "@/components/ProtectedRouteClerk";
+import SectionGate from "@/components/SectionGate";
 import { clerkAfterAuthRedirect } from "@/lib/clerkRedirect";
 import { persistReferralFromSearch } from "@/lib/referral";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -160,7 +161,7 @@ function AppRouter() {
           <Route path="me" element={<MyDay />} />
           <Route path="sales" element={<Pipeline />} />
           <Route path="decisions" element={<Decisions />} />
-          <Route path="telemetry" element={<Telemetry />} />
+          <Route path="telemetry" element={<SectionGate section="telemetry"><Telemetry /></SectionGate>} />
           <Route path="financials" element={<Financials />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="reports" element={<Reports />} />
