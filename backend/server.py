@@ -3549,7 +3549,6 @@ async def _ensure_deal_won_revenue_entry(deal: dict, principal: dict) -> tuple[O
         "amount": amount,
         "month": month,
         "recurring": False,
-        "recurrence": None,
         "note": f"Auto-created from won deal {deal_id}",
         "source": "deal",
         "source_deal_id": deal_id,
@@ -4169,6 +4168,8 @@ async def export_financials_to_sheets(principal=Depends(require_section("financi
 
 @api_router.post("/financials/entries")
 async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
+    from pymongo.errors import DuplicateKeyError
+
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
     if not _valid_fin_month(payload.month):
@@ -4205,26 +4206,58 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         source = "ai_upload"
         source_document_id = payload.source_document_id
     finance_dept_id = await dept_migrate.finance_department_id(db, principal["workspace_id"])
-    category = payload.category.strip() or "Other"
-    entry = {"id": f"fe_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
-             "department_id": finance_dept_id,
-             "type": payload.type, "category": category, "name": entry_name,
-             "amount": round(payload.amount, 2), "month": payload.month.strip(), "recurring": payload.recurring,
-             "recurrence": _fin_entry_recurrence(payload),
-             "note": (payload.note or "").strip(), "source": source, "created_by": principal["user_id"],
-             "created_at": datetime.now(timezone.utc).isoformat()}
+    if not finance_dept_id:
+        raise HTTPException(status_code=500, detail="Finance department is not available — try again")
+    # Keep writers enrolled so the new row stays visible under department filters.
+    await dept_migrate.ensure_department_member(
+        db, finance_dept_id, principal["user_id"], role="member",
+    )
+    category = (payload.category or "").strip() or "Other"
+    entry = {
+        "id": f"fe_{uuid.uuid4().hex[:10]}",
+        "workspace_id": principal["workspace_id"],
+        "department_id": finance_dept_id,
+        "type": payload.type,
+        "category": category,
+        "name": entry_name,
+        "amount": round(payload.amount, 2),
+        "month": payload.month.strip(),
+        "recurring": payload.recurring,
+        "note": (payload.note or "").strip(),
+        "source": source,
+        "created_by": principal["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Omit null optional keys — sparse unique indexes on qb_txn_id / source_deal_id
+    # still index explicit nulls, so never store those fields as null on manual rows.
+    recurrence = _fin_entry_recurrence(payload)
+    if recurrence:
+        entry["recurrence"] = recurrence
     if source_document_id:
         entry["source_document_id"] = source_document_id
-    await db.financial_entries.insert_one(entry)
+    try:
+        await db.financial_entries.insert_one(entry)
+    except DuplicateKeyError as exc:
+        logger.exception("financial entry insert duplicate key for %s", principal["workspace_id"])
+        raise HTTPException(
+            status_code=409,
+            detail="Could not save this entry — a matching ledger row already exists. Refresh and try again.",
+        ) from exc
     entry.pop("_id", None)
     if source_document_id:
         await db.documents.update_one(
             {"id": source_document_id, "workspace_id": principal["workspace_id"]},
             {"$set": {"status": "committed", "linked_entry_id": entry["id"]}},
         )
-    await log_activity(principal, "financials", "entry.add",
-                       f"Logged {payload.type} · {entry['name']} {fmt_money(entry['amount'], await _workspace_currency(principal['workspace_id']))} ({payload.month})",
-                       {"type": payload.type, "amount": entry["amount"], "month": payload.month})
+    try:
+        await log_activity(
+            principal, "financials", "entry.add",
+            f"Logged {payload.type} · {entry['name']} {fmt_money(entry['amount'], await _workspace_currency(principal['workspace_id']))} ({payload.month})",
+            {"type": payload.type, "amount": entry["amount"], "month": payload.month},
+        )
+    except Exception:
+        # Entry is already persisted — don't fail the client over the activity feed.
+        logger.exception("activity log failed after financial entry add")
     return {"ok": True, "entry": entry}
 
 
@@ -4242,7 +4275,7 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
         entry_name = require_entry_name(payload.name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    category = payload.category.strip() or "Other"
+    category = (payload.category or "").strip() or "Other"
     res = await db.financial_entries.update_one(
         {"id": entry_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"type": payload.type, "category": category, "name": entry_name,
@@ -4375,7 +4408,6 @@ async def import_financials_csv_confirm(
             "amount": amount,
             "month": month,
             "recurring": bool(raw.get("recurring")),
-            "recurrence": None,
             "note": (raw.get("note") or "").strip(),
             "source": "csv_import",
             "created_by": principal["user_id"],
@@ -10909,8 +10941,18 @@ async def _ensure_indexes():
         (db.financial_entries, [("workspace_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1)], {}),
         (db.financial_entries, [("workspace_id", 1), ("department_id", 1), ("month", -1)], {}),
-        (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {"unique": True, "sparse": True}),
-        (db.financial_entries, [("workspace_id", 1), ("source_deal_id", 1)], {"unique": True, "sparse": True}),
+        # Partial unique indexes: sparse unique still indexes explicit null, which
+        # collides on a second manual row that stored qb_txn_id/source_deal_id: null.
+        (db.financial_entries, [("workspace_id", 1), ("qb_txn_id", 1)], {
+            "unique": True,
+            "name": "ws_qb_txn_id_partial",
+            "partialFilterExpression": {"qb_txn_id": {"$type": "string"}},
+        }),
+        (db.financial_entries, [("workspace_id", 1), ("source_deal_id", 1)], {
+            "unique": True,
+            "name": "ws_source_deal_id_partial",
+            "partialFilterExpression": {"source_deal_id": {"$type": "string"}},
+        }),
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
         (db.documents, [("status", 1), ("uploaded_at", 1)], {}),
@@ -11040,6 +11082,7 @@ async def startup():
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(_run_sales_finance_migration())
     asyncio.create_task(_backfill_financial_entry_names())
+    asyncio.create_task(_scrub_null_financial_external_ids())
     asyncio.create_task(_seal_plaintext_integration_tokens())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
     if clerk_auth.clerk_configured():
@@ -11070,6 +11113,35 @@ async def _backfill_financial_entry_names() -> None:
             logger.info("backfilled name on %s financial entries", updated)
     except Exception:
         logger.exception("financial entry name backfill failed")
+
+
+async def _scrub_null_financial_external_ids() -> None:
+    """Drop explicit null external ids so sparse unique indexes stop colliding.
+
+    Legacy rows sometimes stored qb_txn_id/source_deal_id: null; Mongo sparse
+    unique indexes still index null, so a second null insert 500s.
+    """
+    try:
+        qb = await db.financial_entries.update_many(
+            {"qb_txn_id": None}, {"$unset": {"qb_txn_id": ""}},
+        )
+        deal = await db.financial_entries.update_many(
+            {"source_deal_id": None}, {"$unset": {"source_deal_id": ""}},
+        )
+        # Drop legacy sparse indexes once partial ones exist (best-effort).
+        for name in (
+            "workspace_id_1_qb_txn_id_1",
+            "workspace_id_1_source_deal_id_1",
+        ):
+            try:
+                await db.financial_entries.drop_index(name)
+            except Exception:
+                pass
+        touched = (qb.modified_count or 0) + (deal.modified_count or 0)
+        if touched:
+            logger.info("scrubbed null external ids on %s financial entries", touched)
+    except Exception:
+        logger.exception("financial external-id scrub failed")
 
 
 _INTEGRATION_TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens")

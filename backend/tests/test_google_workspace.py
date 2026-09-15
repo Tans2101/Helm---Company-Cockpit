@@ -34,9 +34,11 @@ def test_capabilities_and_missing_write_scopes():
     caps = gcal.google_capabilities(tokens)
     assert caps["gmail"] is True
     assert caps["sheets"] is False
+    assert caps["drive_file"] is False
     assert caps["calendar_write"] is False
     assert caps["needs_reconnect"] is True
     assert "spreadsheets" in gcal.missing_write_scopes(tokens)
+    assert "drive.file" in gcal.missing_write_scopes(tokens)
 
 
 def test_catalog_reconnect_when_write_scopes_missing():

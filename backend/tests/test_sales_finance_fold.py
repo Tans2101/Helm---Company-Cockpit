@@ -354,6 +354,44 @@ async def test_create_deal_auto_department_id_unit():
     assert await migrate.sales_department_id(mock_db, "ws_fold") == "dept_sales"
 
 
+@pytest.mark.asyncio
+async def test_ensure_enabled_department_handles_insert_race():
+    """Concurrent first-enable must not 500 on unique (workspace_id, type)."""
+    from pymongo.errors import DuplicateKeyError
+
+    calls = {"insert": 0}
+    existing_after_race = {
+        "department_id": "dept_fin_raced",
+        "workspace_id": "ws_race",
+        "type": catalog.TYPE_ACCOUNTING_FINANCE,
+        "name": "Accounting & Finance",
+        "enabled": True,
+    }
+
+    class RaceColl:
+        async def find_one(self, query, projection=None):
+            # First call: nothing; after failed insert: the raced row.
+            if calls["insert"] == 0:
+                return None
+            return dict(existing_after_race)
+
+        async def insert_one(self, doc):
+            calls["insert"] += 1
+            raise DuplicateKeyError("E11000 duplicate key")
+
+        async def update_one(self, query, update):
+            return MagicMock(modified_count=1)
+
+    mock_db = MagicMock()
+    mock_db.departments = RaceColl()
+    dept, created = await migrate.ensure_enabled_department(
+        mock_db, "ws_race", catalog.TYPE_ACCOUNTING_FINANCE,
+    )
+    assert created is False
+    assert dept["department_id"] == "dept_fin_raced"
+    assert await migrate.finance_department_id(mock_db, "ws_race") == "dept_fin_raced"
+
+
 def test_placeholder_types_exclude_sales_finance():
     assert catalog.TYPE_SALES not in catalog.PLACEHOLDER_SHELL_TYPES
     assert catalog.TYPE_ACCOUNTING_FINANCE not in catalog.PLACEHOLDER_SHELL_TYPES

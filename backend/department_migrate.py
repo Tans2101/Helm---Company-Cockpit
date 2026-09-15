@@ -27,7 +27,10 @@ async def ensure_enabled_department(db, workspace_id: str, dept_type: str) -> tu
     """Return (department, created_or_reenabled).
 
     Honors unique (workspace_id, type): re-enables a disabled row instead of inserting a second.
+    Concurrent first-enable races (startup migration vs first ledger write) are safe.
     """
+    from pymongo.errors import DuplicateKeyError
+
     existing = await db.departments.find_one(
         {"workspace_id": workspace_id, "type": dept_type},
         {"_id": 0},
@@ -52,7 +55,23 @@ async def ensure_enabled_department(db, workspace_id: str, dept_type: str) -> tu
         "enabled": True,
         "created_at": now,
     }
-    await db.departments.insert_one(dict(doc))
+    try:
+        await db.departments.insert_one(dict(doc))
+    except DuplicateKeyError:
+        # Another request created (workspace_id, type) between find and insert.
+        raced = await db.departments.find_one(
+            {"workspace_id": workspace_id, "type": dept_type},
+            {"_id": 0},
+        )
+        if not raced:
+            raise
+        if not raced.get("enabled"):
+            await db.departments.update_one(
+                {"workspace_id": workspace_id, "type": dept_type},
+                {"$set": {"enabled": True}},
+            )
+            raced = {**raced, "enabled": True}
+        return raced, False
     return doc, True
 
 
@@ -176,15 +195,15 @@ async def migrate_all_workspaces_sales_finance(db) -> list[dict[str, Any]]:
 
 async def sales_department_id(db, workspace_id: str) -> Optional[str]:
     dept = await get_enabled_department(db, workspace_id, catalog.TYPE_SALES)
-    if dept:
+    if dept and dept.get("department_id"):
         return dept["department_id"]
     dept, _ = await ensure_enabled_department(db, workspace_id, catalog.TYPE_SALES)
-    return dept["department_id"]
+    return (dept or {}).get("department_id")
 
 
 async def finance_department_id(db, workspace_id: str) -> Optional[str]:
     dept = await get_enabled_department(db, workspace_id, catalog.TYPE_ACCOUNTING_FINANCE)
-    if dept:
+    if dept and dept.get("department_id"):
         return dept["department_id"]
     dept, _ = await ensure_enabled_department(db, workspace_id, catalog.TYPE_ACCOUNTING_FINANCE)
-    return dept["department_id"]
+    return (dept or {}).get("department_id")
