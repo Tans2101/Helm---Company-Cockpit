@@ -360,6 +360,155 @@ async def draft_delegate(signal: dict, company_context: dict) -> dict:
     return _validate_delegate_draft(_parse_extract_json(raw), signal)
 
 
+_REPORT_SUMMARY_SYSTEM = """You are Helm, reading one business report on behalf of a CEO who receives many of these and cannot read each one in full.
+Return ONLY strict JSON with no markdown and no prose:
+{"summary": string, "key_figures": [{"label": string, "value": string}], "unclear": boolean}
+
+Rules:
+- summary is 2-4 sentences describing what this report shows, written in plain language, with real figures worked into the sentences rather than listed separately.
+- Only state a number, date, or figure that is explicitly present in the report. Never estimate, round significantly, or infer a figure that isn't there.
+- key_figures lists up to 8 notable labeled figures that appear in the report (empty list if none are clear).
+- If the report's content is unclear, unreadable, or doesn't look like a business report at all, set unclear to true and say so plainly in summary rather than guessing at what it might mean.
+- Write plainly. Avoid em dashes; use periods, commas, or plain connecting words instead, unless a sentence genuinely cannot be split any other way.
+"""
+
+_REPORTS_DIGEST_SYSTEM = """You are Helm, combining several already-summarized business reports from the same day into one short briefing for a CEO.
+Write 1-3 short paragraphs. Group related reports together where it makes sense (e.g. multiple reports about the same commodity or topic) rather than listing them one by one. Use the real figures already given to you — do not invent, average, or estimate a number that isn't explicitly in the input. If two reports appear to conflict, say so rather than picking one silently. Write plainly; avoid em dashes unless a sentence genuinely cannot be split any other way.
+Return plain prose only — no JSON, no markdown headings, no bullet lists.
+"""
+
+
+def _validate_report_summary(data: dict) -> dict:
+    summary = str(data.get("summary") or "").strip()[:2000]
+    unclear = bool(data.get("unclear"))
+    if not summary:
+        summary = "This file could not be summarized clearly."
+        unclear = True
+    figures = []
+    raw_figs = data.get("key_figures") or []
+    if isinstance(raw_figs, list):
+        for item in raw_figs[:8]:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()[:120]
+            value = str(item.get("value") or "").strip()[:120]
+            if label and value:
+                figures.append({"label": label, "value": value})
+    return {"summary": summary, "key_figures": figures, "unclear": unclear}
+
+
+async def summarize_report_document(
+    content: bytes | str,
+    content_type: str,
+    filename: str,
+    *,
+    truncated: bool = False,
+) -> dict:
+    """Summarize one uploaded report. PDF/images use multimodal blocks; sheets use text."""
+    if not anthropic_configured():
+        raise RuntimeError("AI summarization is not configured")
+
+    client = get_client()
+    name = (filename or "report").strip()[:200] or "report"
+    note = (
+        "Note: this spreadsheet was truncated to fit the model context. "
+        "Only summarize what is present below.\n\n"
+        if truncated
+        else ""
+    )
+
+    if content_type == "application/pdf":
+        if not isinstance(content, (bytes, bytearray)):
+            raise ValueError("PDF content must be bytes")
+        user_content = [
+            {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": base64.standard_b64encode(content).decode("ascii"),
+                },
+            },
+            {
+                "type": "text",
+                "text": f"{note}Filename: {name}\nSummarize this business report as JSON now.",
+            },
+        ]
+    elif content_type in ("image/png", "image/jpeg"):
+        if not isinstance(content, (bytes, bytearray)):
+            raise ValueError("Image content must be bytes")
+        user_content = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": content_type,
+                    "data": base64.standard_b64encode(content).decode("ascii"),
+                },
+            },
+            {
+                "type": "text",
+                "text": f"{note}Filename: {name}\nSummarize this business report as JSON now.",
+            },
+        ]
+    else:
+        text = content if isinstance(content, str) else content.decode("utf-8", errors="replace")
+        user_content = (
+            f"{note}Filename: {name}\nContent type: {content_type}\n\n"
+            f"Report contents:\n{text}\n\nSummarize this business report as JSON now."
+        )
+
+    msg = await client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=1200,
+        system=_REPORT_SUMMARY_SYSTEM,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    parts = []
+    for block_out in msg.content:
+        text = getattr(block_out, "text", None)
+        if text:
+            parts.append(text)
+    raw = "".join(parts).strip()
+    if not raw:
+        raise ValueError("Empty response from model")
+    out = _validate_report_summary(_parse_extract_json(raw))
+    if truncated and not out["unclear"]:
+        out["summary"] = (
+            out["summary"].rstrip()
+            + " Some rows were omitted because the file was large."
+        )
+    return out
+
+
+async def combine_daily_report_digest(items: list[dict]) -> str:
+    """Combine already-summarized reports for one day into connected prose."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return str(items[0].get("summary") or "").strip()
+    if not anthropic_configured():
+        # Fallback: join summaries plainly when AI is down
+        return "\n\n".join(
+            str(it.get("summary") or "").strip() for it in items if it.get("summary")
+        )
+    payload = []
+    for it in items:
+        payload.append({
+            "filename": it.get("filename") or "report",
+            "summary": it.get("summary") or "",
+            "key_figures": it.get("key_figures") or [],
+            "unclear": bool(it.get("unclear")),
+        })
+    user = (
+        "Today's already-summarized reports (JSON):\n"
+        f"{json.dumps(payload, default=str)}\n\n"
+        "Write the combined daily briefing now."
+    )
+    text = await complete(_REPORTS_DIGEST_SYSTEM, user, max_tokens=900)
+    return _strip_markdown_fences(text or "").strip()
+
+
 GMAIL_DRAFT_DISCLAIMER = "(Drafted in Helm. Edit this in Gmail before you send.)"
 
 _GMAIL_REPLY_SYSTEM = """You draft short professional email replies for a CEO using Helm.

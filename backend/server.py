@@ -18,7 +18,7 @@ from collections import defaultdict
 import httpx
 import jwt
 import resend
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -4177,6 +4177,16 @@ def _fin_entry_recurrence(payload: "FinEntryInput") -> Optional[str]:
 
 
 ALLOWED_DOC_TYPES = frozenset({"application/pdf", "image/png", "image/jpeg"})
+# Reports digest accepts bills-style files plus spreadsheets. Bills pipeline above
+# stays on ALLOWED_DOC_TYPES only — do not widen that set.
+ALLOWED_REPORT_DOC_TYPES = frozenset({
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv",
+    "application/csv",
+})
 MAX_DOC_BYTES = 15 * 1024 * 1024
 
 
@@ -4193,6 +4203,33 @@ async def _read_validated_document(file: UploadFile) -> bytes:
         "image/jpeg": (b"\xff\xd8\xff",),
     }
     if not any(data.startswith(sig) for sig in signatures.get(file.content_type, ())):
+        raise HTTPException(status_code=400, detail="File content does not match its declared type.")
+    return data
+
+
+async def _read_validated_report_document(file: UploadFile) -> bytes:
+    """Bounded read + type check for report digest uploads (PDF/images + sheets)."""
+    data = await file.read(MAX_DOC_BYTES + 1)
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 15MB.")
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    ctype = file.content_type or ""
+    if ctype == "application/pdf":
+        ok = data.startswith(b"%PDF-")
+    elif ctype == "image/png":
+        ok = data.startswith(b"\x89PNG\r\n\x1a\n")
+    elif ctype == "image/jpeg":
+        ok = data.startswith(b"\xff\xd8\xff")
+    elif ctype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        # xlsx is a ZIP package
+        ok = data.startswith(b"PK\x03\x04") or data.startswith(b"PK\x05\x06")
+    elif ctype in ("text/csv", "application/csv"):
+        # Reject obvious binary masquerading as CSV
+        ok = b"\x00" not in data[:1024]
+    else:
+        ok = False
+    if not ok:
         raise HTTPException(status_code=400, detail="File content does not match its declared type.")
     return data
 
@@ -5342,6 +5379,217 @@ async def dismiss_report_draft(draft_id: str, principal=Depends(require_section(
     if not ok:
         raise HTTPException(status_code=404, detail="Draft not found")
     return {"ok": True}
+
+
+def _today_report_date() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _parse_report_date(value: Optional[str]) -> str:
+    raw = (value or "").strip() or _today_report_date()
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+
+@api_router.post("/reports/documents/upload")
+async def upload_report_document(
+    file: UploadFile = File(...),
+    report_date: Optional[str] = Form(None),
+    principal=Depends(require_section("reports", "reports:write")),
+):
+    """Upload a report file for the daily digest (xlsx/csv/pdf/png/jpeg).
+
+    Shares the AI-extract quota pool with bill extraction — intentional for v1;
+    revisit with a separate quota if digest usage competes with bills in practice.
+    """
+    await _enforce_ai_extract_quota(principal)
+    await _enforce_document_rate_limit(
+        principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
+        "Upload limit reached. Try again in a bit",
+    )
+    if file.content_type not in ALLOWED_REPORT_DOC_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="File type not allowed. Upload PDF, PNG, JPEG, XLSX, or CSV.",
+        )
+    data = await _read_validated_report_document(file)
+    if not doc_storage.r2_configured():
+        raise HTTPException(status_code=503, detail="Document storage is not configured")
+    filename = (file.filename or "report").replace("/", "_").replace("\\", "_")[:200]
+    try:
+        storage_key = await asyncio.to_thread(
+            doc_storage.upload_document,
+            principal["workspace_id"], data, filename, file.content_type,
+        )
+    except Exception as exc:
+        logger.exception("report document upload failed")
+        raise HTTPException(status_code=500, detail="Could not store document") from exc
+    doc_id = f"rdoc_{uuid.uuid4().hex[:12]}"
+    day = _parse_report_date(report_date)
+    doc = {
+        "id": doc_id,
+        "workspace_id": principal["workspace_id"],
+        "storage_key": storage_key,
+        "filename": filename,
+        "content_type": file.content_type,
+        "uploaded_by": principal["user_id"],
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "report_date": day,
+        "status": "uploaded",
+        "summary": None,
+        "key_figures": None,
+        "unclear": None,
+        "summarized_at": None,
+    }
+    await db.report_documents.insert_one(doc)
+    await log_activity(principal, "reports", "report_document.upload", f"Uploaded report · {filename}")
+    return {"document_id": doc_id, "status": "uploaded", "report_date": day}
+
+
+@api_router.post("/reports/documents/{document_id}/summarize")
+async def summarize_report_document_route(
+    document_id: str,
+    principal=Depends(require_section("reports", "reports:write")),
+):
+    """Summarize one report file. Shares bill AI-extract quota (see upload docstring)."""
+    doc = await db.report_documents.find_one(
+        {"id": document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.get("status") == "summarized" and doc.get("summary"):
+        return {
+            "document_id": document_id,
+            "status": "summarized",
+            "summary": doc.get("summary"),
+            "key_figures": doc.get("key_figures") or [],
+            "unclear": bool(doc.get("unclear")),
+            "report_date": doc.get("report_date"),
+        }
+    if not helm_llm.anthropic_configured():
+        raise HTTPException(status_code=503, detail="AI summarization is not configured")
+    await _enforce_ai_extract_quota(principal)
+    await _enforce_document_rate_limit(
+        principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
+        "Extraction limit reached. Try again in a bit",
+    )
+    import report_text as report_txt
+    try:
+        file_bytes = await asyncio.to_thread(doc_storage.get_document_bytes, doc["storage_key"])
+        ctype = doc.get("content_type") or ""
+        truncated = False
+        if report_txt.is_spreadsheet_mime(ctype):
+            text, truncated = await asyncio.to_thread(
+                report_txt.spreadsheet_bytes_to_text, file_bytes, ctype, doc.get("filename") or "",
+            )
+            result = await helm_llm.summarize_report_document(
+                text, ctype, doc.get("filename") or "report", truncated=truncated,
+            )
+        else:
+            result = await helm_llm.summarize_report_document(
+                file_bytes, ctype, doc.get("filename") or "report", truncated=False,
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        await db.report_documents.update_one(
+            {"id": document_id, "workspace_id": principal["workspace_id"]},
+            {"$set": {
+                "status": "summarized",
+                "summary": result["summary"],
+                "key_figures": result["key_figures"],
+                "unclear": result["unclear"],
+                "summarized_at": now,
+            }},
+        )
+        ws = await get_ws(principal["workspace_id"])
+        if helm_plans.ai_extracts_lifetime_limit(ws.get("plan")) > 0:
+            await plan_usage.increment_lifetime_extract(db, principal["workspace_id"])
+        else:
+            period = plan_usage.current_usage_period(ws)
+            await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
+        await log_activity(
+            principal, "reports", "report_document.summarize",
+            f"Summarized report · {doc.get('filename') or document_id}",
+        )
+        await _product_event(
+            principal["workspace_id"], principal["user_id"],
+            helm_analytics.EVENT_AI_EXTRACT,
+            {"document_id": document_id, "kind": "report_digest"},
+        )
+        return {
+            "document_id": document_id,
+            "status": "summarized",
+            "summary": result["summary"],
+            "key_figures": result["key_figures"],
+            "unclear": result["unclear"],
+            "report_date": doc.get("report_date"),
+        }
+    except ValueError as exc:
+        await db.report_documents.update_one(
+            {"id": document_id, "workspace_id": principal["workspace_id"]},
+            {"$set": {"status": "failed", "summary": str(exc), "unclear": True}},
+        )
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("report summarize failed for %s", document_id)
+        await db.report_documents.update_one(
+            {"id": document_id, "workspace_id": principal["workspace_id"]},
+            {"$set": {"status": "failed"}},
+        )
+        raise HTTPException(status_code=500, detail="Could not summarize report") from exc
+
+
+@api_router.get("/reports/digest")
+async def reports_daily_digest(
+    date: Optional[str] = Query(None),
+    principal=Depends(require_section("reports", "reports:write")),
+):
+    """Return that day's report documents plus a freshly combined digest.
+
+    Digest combine uses already-extracted summaries (cheap) and does not
+    decrement the AI-extract quota — only per-file summarize does.
+    """
+    day = _parse_report_date(date)
+    rows = await db.report_documents.find(
+        {"workspace_id": principal["workspace_id"], "report_date": day},
+        {"_id": 0, "storage_key": 0},
+    ).sort("uploaded_at", 1).to_list(200)
+    summarized = [
+        {
+            "filename": r.get("filename") or "report",
+            "summary": r.get("summary") or "",
+            "key_figures": r.get("key_figures") or [],
+            "unclear": bool(r.get("unclear")),
+        }
+        for r in rows
+        if r.get("status") == "summarized" and r.get("summary")
+    ]
+    combined = ""
+    if summarized:
+        try:
+            combined = await helm_llm.combine_daily_report_digest(summarized)
+        except Exception:
+            logger.exception("report digest combine failed for %s %s", principal["workspace_id"], day)
+            combined = "\n\n".join(s["summary"] for s in summarized if s.get("summary"))
+    return {
+        "date": day,
+        "reports": [
+            {
+                "id": r.get("id"),
+                "filename": r.get("filename"),
+                "content_type": r.get("content_type"),
+                "uploaded_at": r.get("uploaded_at"),
+                "status": r.get("status"),
+                "summary": r.get("summary"),
+                "key_figures": r.get("key_figures") or [],
+                "unclear": r.get("unclear"),
+                "summarized_at": r.get("summarized_at"),
+            }
+            for r in rows
+        ],
+        "combined_digest": combined,
+    }
 
 
 def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dict:
@@ -10880,7 +11128,7 @@ async def paddle_webhook(request: Request):
 
 # ------------------------- GDPR / account -------------------------
 _WORKSPACE_COLLECTIONS = (
-    "financial_entries", "deals", "documents", "activities", "updates",
+    "financial_entries", "deals", "documents", "report_documents", "activities", "updates",
     "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
     "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
     "document_ai_usage",
@@ -11099,6 +11347,9 @@ async def _delete_workspace_data(ws_id: str):
     document_rows = await db.documents.find(
         {"workspace_id": ws_id}, {"_id": 0, "storage_key": 1},
     ).to_list(10000)
+    report_doc_rows = await db.report_documents.find(
+        {"workspace_id": ws_id}, {"_id": 0, "storage_key": 1},
+    ).to_list(10000)
     legal_rows = await db.legal_matters.find(
         {"workspace_id": ws_id}, {"_id": 0, "document_ref": 1},
     ).to_list(10000)
@@ -11107,6 +11358,11 @@ async def _delete_workspace_data(ws_id: str):
         for row in document_rows
         if row.get("storage_key")
     }
+    storage_keys.update(
+        row.get("storage_key")
+        for row in report_doc_rows
+        if row.get("storage_key")
+    )
     for row in legal_rows:
         ref = row.get("document_ref") or {}
         if isinstance(ref, dict) and ref.get("storage_key"):
@@ -11394,6 +11650,8 @@ async def _ensure_indexes():
         (db.documents, [("workspace_id", 1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
         (db.documents, [("status", 1), ("uploaded_at", 1)], {}),
+        (db.report_documents, [("workspace_id", 1), ("report_date", 1)], {}),
+        (db.report_documents, [("id", 1)], {"unique": True}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),

@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart, SkeletonCardList } from "@/components/kit";
 import DocumentStamp, { stampLabelForLine } from "@/components/DocumentStamp";
+import ReportsDailyDigest from "@/components/ReportsDailyDigest";
 import { cn } from "@/lib/utils";
 
 const emptyReport = () => ({ title: "", type: "General", period: "", summary: "", metrics: [{ label: "", value: "" }, { label: "", value: "" }, { label: "", value: "" }] });
@@ -427,6 +428,8 @@ export default function Reports() {
           )}
         </GlassCard>
       )}
+
+      {canWrite && <ReportsDailyDigest canWrite={canWrite} />}
 
       <GlassCard className="p-6 fade-up border-helm-line">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
