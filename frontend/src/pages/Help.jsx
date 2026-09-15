@@ -20,7 +20,7 @@ export default function Help() {
             Help
           </h1>
           <p className="mt-6 text-lg text-helm-slate leading-relaxed">
-            A short orientation to the cockpit: what each part is for, and how to get set up.
+            New to Helm? Start here. This page explains what the product does, what each part is for, and how owners and invited teammates use it differently.
           </p>
         </div>
       </section>
