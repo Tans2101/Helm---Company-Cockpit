@@ -164,7 +164,7 @@ def markdown_to_flowables(markdown: str, styles: dict) -> list:
     return story
 
 
-_PACK_FOOTER = "Generated with Helm — share with your leadership team, investors, or accountant."
+_PACK_FOOTER = "Generated with Helm. Share with your leadership team, investors, or accountant."
 
 
 def render_document_pdf(
@@ -196,7 +196,7 @@ def render_document_pdf(
         rightMargin=0.85 * inch,
         topMargin=0.75 * inch,
         bottomMargin=0.75 * inch,
-        title=pdf_title or f"{kicker} — {company}",
+        title=pdf_title or f"{kicker}: {company}",
         author="Helm",
     )
     styles = _styles()
@@ -225,6 +225,6 @@ def render_weekly_pack_pdf(
         workspace_name=workspace_name,
         kicker="CEO Pack",
         generated_at=generated_at,
-        pdf_title=f"CEO Pack — {workspace_name}",
+        pdf_title=f"CEO Pack: {workspace_name}",
         empty_message="Pack content is empty",
     )

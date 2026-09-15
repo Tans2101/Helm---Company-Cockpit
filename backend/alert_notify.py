@@ -60,7 +60,7 @@ def build_alert_email_html(workspace_name: str, alerts: list, app_url: str) -> s
 
 
 def build_slack_text(workspace_name: str, alerts: list, app_url: str) -> str:
-    lines = [f"*Helm high-severity alert — {workspace_name}*"]
+    lines = [f"*Helm high-severity alert: {workspace_name}*"]
     for a in alerts:
         title = a.get("title") or (a.get("signal") or {}).get("summary") or "Alert"
         detail = a.get("description") or (a.get("signal") or {}).get("detail") or ""

@@ -358,7 +358,7 @@ async def draft_delegate(signal: dict, company_context: dict) -> dict:
     return _validate_delegate_draft(_parse_extract_json(raw), signal)
 
 
-GMAIL_DRAFT_DISCLAIMER = "(Drafted in Helm — edit this in Gmail before you send.)"
+GMAIL_DRAFT_DISCLAIMER = "(Drafted in Helm. Edit this in Gmail before you send.)"
 
 _GMAIL_REPLY_SYSTEM = """You draft short professional email replies for a CEO using Helm.
 Return ONLY the email body as plain text — no subject line, no markdown fences, no preamble.

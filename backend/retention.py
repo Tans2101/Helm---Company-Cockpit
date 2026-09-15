@@ -200,7 +200,7 @@ def inactivity_email_html(*, workspace_name: str, days: int, bullets: list[str],
     )
     return _email_shell(
         kicker="Catch up",
-        heading=f"Your last briefing was {days} days ago — here's what's changed since",
+        heading=f"Your last briefing was {days} days ago. Here's what's changed since",
         intro=intro,
         bullets=bullets,
         cta_url=briefing_url,
@@ -313,7 +313,7 @@ async def run_retention_checks(
                     days = days_inactive(ws, now=now)
                     result = await send_email(
                         emails,
-                        f"Your last briefing was {days} days ago — here's what's changed since",
+                        f"Your last briefing was {days} days ago. Here's what's changed since",
                         inactivity_email_html(
                             workspace_name=name, days=days, bullets=bullets, briefing_url=link,
                         ),

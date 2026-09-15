@@ -49,7 +49,7 @@ def _fernet_key_bytes() -> bytes:
     if not raw:
         if _is_production():
             raise CredentialCryptoError(
-                "INTEGRATION_ENCRYPTION_KEY must be set in production — "
+                "INTEGRATION_ENCRYPTION_KEY must be set in production. "
                 "generate with Fernet.generate_key() and set it on Render"
             )
         # Dev/test only: stable derived key so local restarts can still decrypt.

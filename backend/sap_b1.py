@@ -108,7 +108,7 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
     category = _line_category(doc) or ("Sales" if kind == "ar" else "Purchases")
     name = (card or comments or category).strip()[:120]
     extras = [p for p in [f"Doc #{doc_num}" if doc_num is not None else "", comments] if p and p != name]
-    note = " — ".join(extras)
+    note = " · ".join(extras)
 
     if kind == "ap":
         return {

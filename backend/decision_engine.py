@@ -744,7 +744,7 @@ def detect_chronic_equipment_failure(
             )
         summary = (
             f"The {equipment} has needed repair {count} times in {span_days} days"
-            f"{downtime_clause} — may be worth replacing rather than continuing to repair."
+            f"{downtime_clause}, so it may be worth replacing rather than continuing to repair."
         )
         detail = (
             f"'{equipment}' has {count} maintenance tickets in the last {window_days} days "

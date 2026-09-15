@@ -269,7 +269,7 @@ async def _list_or_search_deals(
         if resp.status_code == 401:
             raise HubSpotAuthError("HubSpot access token rejected")
         if resp.status_code == 403:
-            raise HubSpotAuthError("HubSpot deal access denied — reconnect with CRM scopes")
+            raise HubSpotAuthError("HubSpot deal access denied. Reconnect with CRM scopes")
         if resp.status_code != 200:
             raise RuntimeError(f"HubSpot deals failed ({resp.status_code}): {resp.text[:300]}")
 

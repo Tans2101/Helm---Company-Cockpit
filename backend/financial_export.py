@@ -19,7 +19,7 @@ from money_fmt import currency_symbol, entered_cash_amount, normalize_currency
 import weekly_pack_export as pack_pdf
 
 _FIN_FOOTER = (
-    "Generated with Helm — Income Statement and Cash Summary for the selected period. "
+    "Generated with Helm. Income Statement and Cash Summary for the selected period. "
     "This is not a balance sheet."
 )
 _MONEY_FORMAT = '#,##0.00'
@@ -206,20 +206,20 @@ def statement_markdown(bundle: dict[str, Any]) -> str:
         "# Income Statement",
         f"Period: **{bundle['period_label']}**",
         "",
-        f"**Revenue** — {format_export_amount(income['revenue'], currency)}",
+        f"**Revenue**: {format_export_amount(income['revenue'], currency)}",
         "",
         "**Expenses**",
     ]
     if income["expenses_by_category"]:
         for row in income["expenses_by_category"]:
-            lines.append(f"- {row['category']} — {format_export_amount(row['amount'], currency)}")
+            lines.append(f"- {row['category']}: {format_export_amount(row['amount'], currency)}")
     else:
         lines.append("- None recorded this period")
     lines.extend(
         [
             "",
-            f"**Total expenses** — {format_export_amount(income['expenses_total'], currency)}",
-            f"**Net income** — {format_export_amount(income['net_income'], currency)}",
+            f"**Total expenses**: {format_export_amount(income['expenses_total'], currency)}",
+            f"**Net income**: {format_export_amount(income['net_income'], currency)}",
             "",
             "# Line items",
         ]
@@ -228,7 +228,7 @@ def statement_markdown(bundle: dict[str, Any]) -> str:
     if items:
         for row in items:
             lines.append(
-                f"- {row['name']} ({row['category']}, {row['type']}) — "
+                f"- {row['name']} ({row['category']}, {row['type']}): "
                 f"{format_export_amount(row['amount'], currency)}"
             )
     else:
@@ -246,23 +246,23 @@ def statement_markdown(bundle: dict[str, Any]) -> str:
                 "this period is after that snapshot."
             )
         else:
-            lines.append(f"**Starting cash** — {format_export_amount(cash['starting'], currency)}")
-        lines.append(f"**Inflows (revenue)** — {format_export_amount(cash['inflows'], currency)}")
-        lines.append(f"**Outflows (expenses)** — {format_export_amount(cash['outflows'], currency)}")
+            lines.append(f"**Starting cash**: {format_export_amount(cash['starting'], currency)}")
+        lines.append(f"**Inflows (revenue)**: {format_export_amount(cash['inflows'], currency)}")
+        lines.append(f"**Outflows (expenses)**: {format_export_amount(cash['outflows'], currency)}")
         if cash["ending"] is not None:
-            lines.append(f"**Ending cash** — {format_export_amount(cash['ending'], currency)}")
+            lines.append(f"**Ending cash**: {format_export_amount(cash['ending'], currency)}")
         if cash.get("ending_matches_dashboard"):
             lines.append("")
             lines.append(
-                f"- Ending cash confirmed — matches Financials "
+                f"- Ending cash confirmed: matches Financials "
                 f"({format_export_amount(cash['dashboard_cash'], currency)})"
             )
     else:
-        lines.append("Cash on hand has not been entered on Financials — starting and ending cash are omitted.")
-        lines.append(f"**Inflows (revenue)** — {format_export_amount(cash['inflows'], currency)}")
-        lines.append(f"**Outflows (expenses)** — {format_export_amount(cash['outflows'], currency)}")
-        lines.append("**Starting cash** — —")
-        lines.append("**Ending cash** — —")
+        lines.append("Cash on hand has not been entered on Financials, so starting and ending cash are omitted.")
+        lines.append(f"**Inflows (revenue)**: {format_export_amount(cash['inflows'], currency)}")
+        lines.append(f"**Outflows (expenses)**: {format_export_amount(cash['outflows'], currency)}")
+        lines.append("**Starting cash**: —")
+        lines.append("**Ending cash**: —")
     lines.extend(
         [
             "",
@@ -277,7 +277,7 @@ def render_financial_pdf(bundle: dict[str, Any], *, workspace_name: str) -> byte
         statement_markdown(bundle),
         workspace_name=workspace_name,
         kicker="Financial Export",
-        pdf_title=f"Financial Export — {workspace_name} — {bundle['period']}",
+        pdf_title=f"Financial Export: {workspace_name} ({bundle['period']})",
         footer=_FIN_FOOTER,
         empty_message="Financial export is empty",
     )
@@ -360,7 +360,7 @@ def render_financial_xlsx(bundle: dict[str, Any], *, workspace_name: str) -> byt
     ws.title = "Income Statement"
     ws["A1"] = company
     ws["A1"].font = _xlsx_title_font()
-    ws["A2"] = f"Income Statement — {period}"
+    ws["A2"] = f"Income Statement: {period}"
     ws["A2"].font = Font(name="Calibri", italic=True, size=11, color="52525B")
     ws["A3"] = f"Currency: {currency.upper()} ({sym})"
     ws["A3"].font = Font(name="Calibri", size=10, color="52525B")
@@ -401,7 +401,7 @@ def render_financial_xlsx(bundle: dict[str, Any], *, workspace_name: str) -> byt
     ws.cell(row, 1).border = border
     ws.cell(row, 2).border = border
     row += 2
-    ws.cell(row, 1, "Not a balance sheet — Income Statement only.")
+    ws.cell(row, 1, "Not a balance sheet. Income Statement only.")
     ws.cell(row, 1).font = Font(name="Calibri", italic=True, size=9, color="52525B")
     autosize(ws, 2)
     ws.freeze_panes = "A6"
@@ -414,7 +414,7 @@ def render_financial_xlsx(bundle: dict[str, Any], *, workspace_name: str) -> byt
     cs = wb.create_sheet("Cash Summary")
     cs["A1"] = company
     cs["A1"].font = _xlsx_title_font()
-    cs["A2"] = f"Cash Summary — {period}"
+    cs["A2"] = f"Cash Summary: {period}"
     cs["A2"].font = Font(name="Calibri", italic=True, size=11, color="52525B")
     cs["A3"] = f"Currency: {currency.upper()} ({sym})"
     cs["A3"].font = Font(name="Calibri", size=10, color="52525B")
@@ -459,7 +459,7 @@ def render_financial_xlsx(bundle: dict[str, Any], *, workspace_name: str) -> byt
     li = wb.create_sheet("Line items")
     li["A1"] = company
     li["A1"].font = _xlsx_title_font()
-    li["A2"] = f"Line items — {period}"
+    li["A2"] = f"Line items: {period}"
     li["A2"].font = Font(name="Calibri", italic=True, size=11, color="52525B")
     li["A3"] = f"Currency: {currency.upper()} ({sym})"
     li["A3"].font = Font(name="Calibri", size=10, color="52525B")

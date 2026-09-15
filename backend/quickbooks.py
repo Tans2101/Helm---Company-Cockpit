@@ -93,7 +93,7 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
         category = _line_category(txn) or "Other"
         name = (vendor or memo or category).strip()[:120]
         extras = [p for p in [memo] if p and p != name]
-        note = " — ".join(extras) if extras else ""
+        note = " · ".join(extras) if extras else ""
         return {
             "type": "expense",
             "category": category,
@@ -111,7 +111,7 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
     category = _line_category(txn) or "Other"
     name = (customer or doc or category).strip()[:120]
     extras = [p for p in [doc, memo] if p and p != name]
-    note = " — ".join(extras) if extras else ""
+    note = " · ".join(extras) if extras else ""
     return {
         "type": "revenue",
         "category": category,

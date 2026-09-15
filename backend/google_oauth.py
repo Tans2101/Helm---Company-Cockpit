@@ -91,7 +91,7 @@ async def refresh_google_token(tokens: dict, client_id: str, client_secret: str)
         return tokens
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
-        raise GoogleAuthError("Missing refresh token — reconnect Google Calendar")
+        raise GoogleAuthError("Missing refresh token. Reconnect Google Calendar")
     if not client_id or not client_secret:
         raise GoogleAuthError("Google OAuth is not configured")
 
@@ -218,7 +218,7 @@ async def _fetch_calendar_events(
             },
         )
     if resp.status_code == 401:
-        raise GoogleAuthError("Google access token rejected — reconnect Google Calendar")
+        raise GoogleAuthError("Google access token rejected. Reconnect Google Calendar")
     if resp.status_code != 200:
         raise RuntimeError(f"Google Calendar API failed ({resp.status_code}): {resp.text[:300]}")
 
@@ -341,9 +341,9 @@ async def _gmail_list_ids(hc: httpx.AsyncClient, access_token: str, query: str, 
         params={"q": query, "maxResults": max_results},
     )
     if resp.status_code == 401:
-        raise GoogleAuthError("Google access token rejected — reconnect Google")
+        raise GoogleAuthError("Google access token rejected. Reconnect Google")
     if resp.status_code == 403:
-        raise GoogleAuthError("Gmail access not granted — reconnect Google to enable Gmail")
+        raise GoogleAuthError("Gmail access not granted. Reconnect Google to enable Gmail")
     if resp.status_code != 200:
         raise RuntimeError(f"Gmail list failed ({resp.status_code}): {resp.text[:300]}")
     return list(resp.json().get("messages") or [])
@@ -360,9 +360,9 @@ async def _gmail_get_message(hc: httpx.AsyncClient, access_token: str, message_i
         },
     )
     if resp.status_code == 401:
-        raise GoogleAuthError("Google access token rejected — reconnect Google")
+        raise GoogleAuthError("Google access token rejected. Reconnect Google")
     if resp.status_code == 403:
-        raise GoogleAuthError("Gmail access not granted — reconnect Google to enable Gmail")
+        raise GoogleAuthError("Gmail access not granted. Reconnect Google to enable Gmail")
     if resp.status_code != 200:
         raise RuntimeError(f"Gmail message failed ({resp.status_code}): {resp.text[:300]}")
     return resp.json()
@@ -383,7 +383,7 @@ async def fetch_important_threads(
     preference for external senders. Returns metadata + snippets only (no bodies).
     """
     if not has_gmail_scope(tokens):
-        raise GoogleAuthError("Gmail access not granted — reconnect Google to enable Gmail")
+        raise GoogleAuthError("Gmail access not granted. Reconnect Google to enable Gmail")
 
     tokens = await refresh_google_token(tokens, client_id, client_secret)
     access_token = tokens.get("access_token")
@@ -454,7 +454,7 @@ async def create_calendar_event(
 ) -> tuple[str, dict]:
     """Insert an event on the user's primary calendar. Returns (google_event_id, tokens)."""
     if not has_scope(tokens, "calendar.events"):
-        raise GoogleAuthError("Calendar write access not granted — reconnect Google")
+        raise GoogleAuthError("Calendar write access not granted. Reconnect Google")
     tokens = await refresh_google_token(tokens, client_id, client_secret)
     if all_day and date:
         body = {
@@ -475,7 +475,7 @@ async def create_calendar_event(
             json=body,
         )
     if resp.status_code in (401, 403):
-        raise GoogleAuthError("Calendar write failed — reconnect Google")
+        raise GoogleAuthError("Calendar write failed. Reconnect Google")
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"Calendar insert failed ({resp.status_code}): {resp.text[:300]}")
     return (resp.json() or {}).get("id") or "", tokens
@@ -568,7 +568,7 @@ async def create_spreadsheet(
 ) -> tuple[str, str, dict]:
     """Create a Google Sheet the user owns. Returns (id, url, tokens)."""
     if not has_scope(tokens, "spreadsheets"):
-        raise GoogleAuthError("Sheets access not granted — reconnect Google")
+        raise GoogleAuthError("Sheets access not granted. Reconnect Google")
     tokens = await refresh_google_token(tokens, client_id, client_secret)
     async with httpx.AsyncClient(timeout=45.0) as hc:
         resp = await hc.post(
@@ -577,7 +577,7 @@ async def create_spreadsheet(
             json=body,
         )
     if resp.status_code in (401, 403):
-        raise GoogleAuthError("Sheets access not granted — reconnect Google")
+        raise GoogleAuthError("Sheets access not granted. Reconnect Google")
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"Sheets create failed ({resp.status_code}): {resp.text[:300]}")
     data = resp.json() or {}
@@ -598,7 +598,7 @@ async def create_gmail_draft(
 ) -> tuple[str, str, dict]:
     """Create a Gmail draft (Helm never sends). Returns (draft_id, open_url, tokens)."""
     if not has_scope(tokens, "gmail.compose"):
-        raise GoogleAuthError("Gmail draft access not granted — reconnect Google")
+        raise GoogleAuthError("Gmail draft access not granted. Reconnect Google")
     tokens = await refresh_google_token(tokens, client_id, client_secret)
     subj = subject if subject.lower().startswith("re:") else f"Re: {subject}"
     rfc = (
@@ -619,7 +619,7 @@ async def create_gmail_draft(
             json=payload,
         )
     if resp.status_code in (401, 403):
-        raise GoogleAuthError("Gmail draft access not granted — reconnect Google")
+        raise GoogleAuthError("Gmail draft access not granted. Reconnect Google")
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"Gmail draft failed ({resp.status_code}): {resp.text[:300]}")
     data = resp.json() or {}
@@ -637,7 +637,7 @@ async def download_drive_file(
 ) -> tuple[bytes, str, str, dict]:
     """Download a Drive file the user picked. Returns (bytes, mime, name, tokens)."""
     if not has_scope(tokens, "drive.file"):
-        raise GoogleAuthError("Drive access not granted — reconnect Google")
+        raise GoogleAuthError("Drive access not granted. Reconnect Google")
     if not file_id or "/" in file_id or ".." in file_id:
         raise GoogleAuthError("Invalid Drive file")
     tokens = await refresh_google_token(tokens, client_id, client_secret)
@@ -649,7 +649,7 @@ async def download_drive_file(
             params={"fields": "id,name,mimeType,size"},
         )
         if meta.status_code in (401, 403):
-            raise GoogleAuthError("Drive access not granted — reconnect Google")
+            raise GoogleAuthError("Drive access not granted. Reconnect Google")
         if meta.status_code != 200:
             raise RuntimeError(f"Drive metadata failed ({meta.status_code}): {meta.text[:300]}")
         info = meta.json() or {}

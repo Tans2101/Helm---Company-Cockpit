@@ -182,7 +182,7 @@ def build_draft_doc(
     if not items:
         return None
     summary, metrics = summarize(spec, items)
-    title = f"{spec['name']} activity — {period.lower()}"
+    title = f"{spec['name']} activity: {period.lower()}"
     return {
         "id": (existing or {}).get("id") or f"drft_{uuid.uuid4().hex[:10]}",
         "workspace_id": workspace_id,

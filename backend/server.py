@@ -704,7 +704,7 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
 <h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{inviter_name} invited you to<br><span style="color:#c9a962;">{workspace_name}</span></h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm — the CEO Operating System. Sign in with Google to see the briefing, decisions, financials and more.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm, the CEO Operating System. Sign in with Google to see the briefing, decisions, financials and more.</p>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
 <a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Helm &rarr;</a>
@@ -913,7 +913,7 @@ async def _notify_high_severity_alerts(workspace_id: str, decision_suggestions: 
     recipients = await _alert_recipient_emails(workspace_id)
     email_result = await send_resend_email(
         to=recipients,
-        subject=f"Helm alert: {len(fresh)} high-severity signal{'s' if len(fresh) != 1 else ''} — {ws_name}",
+        subject=f"Helm alert: {len(fresh)} high-severity signal{'s' if len(fresh) != 1 else ''}: {ws_name}",
         html=html,
     )
     slack_result = {"ok": False, "reason": "not_configured"}
@@ -970,7 +970,7 @@ async def _user_from_clerk_jwt(token: str):
         logger.exception("clerk jwt auth failed")
         raise HTTPException(
             status_code=401,
-            detail="Clerk sign-in failed — check Render CLERK_SECRET_KEY matches your Clerk publishable key",
+            detail="Clerk sign-in failed. Check Render CLERK_SECRET_KEY matches your Clerk publishable key",
         )
     try:
         return await _upsert_clerk_user(
@@ -985,7 +985,7 @@ async def _user_from_clerk_jwt(token: str):
         logger.exception("clerk user upsert failed for %s", identity.get("email"))
         raise HTTPException(
             status_code=503,
-            detail="Could not save your account — database unavailable. Try again in a moment.",
+            detail="Could not save your account: database unavailable. Try again in a moment.",
         )
 
 
@@ -1200,7 +1200,7 @@ async def _enforce_seat_available(workspace_id: str, plan: str | None = None) ->
     if used >= limit:
         raise HTTPException(
             status_code=403,
-            detail=f"Upgrade to add more members — your plan allows {limit} seat{'s' if limit != 1 else ''} ({used}/{limit} used).",
+            detail=f"Upgrade to add more members. Your plan allows {limit} seat{'s' if limit != 1 else ''} ({used}/{limit} used).",
         )
 
 
@@ -1209,7 +1209,7 @@ async def _enforce_ai_extract_quota(principal) -> None:
     if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
         raise HTTPException(
             status_code=403,
-            detail="AI document upload is not available on this plan — upgrade to Starter or higher.",
+            detail="AI document upload is not available on this plan. Upgrade to Starter or higher.",
         )
     if not BILLING_ENFORCED:
         return
@@ -1220,7 +1220,7 @@ async def _enforce_ai_extract_quota(principal) -> None:
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    f"You've used your {lifetime_limit} free AI extracts — "
+                    f"You've used your {lifetime_limit} free AI extracts. "
                     "upgrade to continue."
                 ),
             )
@@ -1229,14 +1229,14 @@ async def _enforce_ai_extract_quota(principal) -> None:
     if limit <= 0:
         raise HTTPException(
             status_code=403,
-            detail="AI document upload is not available on your plan — upgrade to continue.",
+            detail="AI document upload is not available on your plan. Upgrade to continue.",
         )
     period = plan_usage.current_usage_period(c)
     used = await plan_usage.get_period_extract_count(db, principal["workspace_id"], period["key"])
     if used >= limit:
         raise HTTPException(
             status_code=429,
-            detail="You've hit this month's document limit — upgrade for more.",
+            detail="You've hit this month's document limit. Upgrade for more.",
         )
 
 
@@ -1821,7 +1821,7 @@ async def clerk_login(request: Request, response: Response):
         logger.exception("clerk token verification failed")
         raise HTTPException(
             status_code=401,
-            detail="Invalid Clerk session — check Render CLERK_SECRET_KEY matches your pk_live key",
+            detail="Invalid Clerk session. Check Render CLERK_SECRET_KEY matches your pk_live key",
         )
     user = await _upsert_clerk_user(
         email=identity["email"],
@@ -2012,13 +2012,13 @@ async def clerk_exchange(request: Request, response: Response):
             status_code=503,
             detail=(
                 f"CLERK_SECRET_KEY is {clerk_auth.clerk_secret_mode() or 'unknown'} but the publishable key "
-                "is a different mode — use matching sk_live_/pk_live_ keys from the same Clerk instance on Render"
+                "is a different mode. Use matching sk_live_/pk_live_ keys from the same Clerk instance on Render"
             ),
         )
     if not await clerk_auth.clerk_jwks_ok():
         raise HTTPException(
             status_code=503,
-            detail="Clerk signing keys unavailable — check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online",
+            detail="Clerk signing keys unavailable. Check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online",
         )
     token = _bearer_token(request)
     if not token:
@@ -2026,7 +2026,7 @@ async def clerk_exchange(request: Request, response: Response):
     if not _looks_like_jwt(token):
         raise HTTPException(
             status_code=401,
-            detail="Clerk returned a non-JWT token — try signing out and back in",
+            detail="Clerk returned a non-JWT token. Try signing out and back in",
         )
     user = await _user_from_clerk_jwt(token)
     await _issue_session(response, user["user_id"])
@@ -2817,7 +2817,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         if raise_on_rate_limit:
             raise HTTPException(
                 status_code=429,
-                detail="Suggestion regeneration limit reached — try again tomorrow",
+                detail="Suggestion regeneration limit reached. Try again tomorrow",
             )
         return {"skipped": "rate_limited"}
 
@@ -2895,7 +2895,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         if raise_on_rate_limit:
             raise HTTPException(
                 status_code=429,
-                detail="Suggestion regeneration limit reached — try again tomorrow",
+                detail="Suggestion regeneration limit reached. Try again tomorrow",
             )
         return {"skipped": "rate_limited"}
     await db.workspaces.update_one(
@@ -3890,7 +3890,7 @@ def _summarize_telemetry_signal_group(signal_type: str, group: list) -> str:
     if signal_type == "recurring_blocker":
         return f"{n} teammates with recurring blockers"[:120]
     if signal_type.startswith("overdue_"):
-        return f"{n} overdue items — {first}"[:120]
+        return f"{n} overdue items: {first}"[:120]
     if signal_type == "urgent_maintenance":
         return f"{n} urgent maintenance tickets"[:120]
     return f"{first} (+{n - 1} more)"[:120]
@@ -3990,10 +3990,10 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
         funnel = [{"stage": row["label"], "value": row["count"]} for row in metrics["by_stage"] if row["count"] > 0]
     elif tel.get("funnel"):
         funnel = tel["funnel"]
-        sources.append({"label": "Sales Funnel", "detail": "Sample funnel — add deals for live pipeline stages", "freshness": "sample"})
+        sources.append({"label": "Sales Funnel", "detail": "Sample funnel. Add deals for live pipeline stages", "freshness": "sample"})
     risks = manual.get("risks") if manual.get("risks") is not None else (tel.get("risks") or [])
     if risks and not metrics and not manual.get("risks"):
-        sources.append({"label": "Risks", "detail": "Sample risk radar — edit risks below or connect integrations", "freshness": "sample"})
+        sources.append({"label": "Risks", "detail": "Sample risk radar. Edit risks below or connect integrations", "freshness": "sample"})
     elif manual.get("risks"):
         sources.append({"label": "Risks", "detail": "Manually maintained risk radar", "freshness": "live"})
     qb = c.get("quickbooks_tokens")
@@ -4068,7 +4068,7 @@ async def update_telemetry(payload: TelemetryRiskInput, principal=Depends(requir
         {"workspace_id": c["workspace_id"]},
         {"$set": {"telemetry_manual": manual}},
     )
-    await log_activity(principal, "telemetry", "telemetry.edit", f"Updated telemetry — {len(cleaned)} risk(s)")
+    await log_activity(principal, "telemetry", "telemetry.edit", f"Updated telemetry: {len(cleaned)} risk(s)")
     return {
         "ok": True,
         "risks": cleaned,
@@ -4148,7 +4148,7 @@ async def upload_financial_document(
     await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
-        "Upload limit reached — try again in a bit",
+        "Upload limit reached. Try again in a bit",
     )
     if file.content_type not in ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed. Upload PDF, PNG, or JPEG.")
@@ -4204,7 +4204,7 @@ async def extract_financial_document_route(
     await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
-        "Extraction limit reached — try again in a bit",
+        "Extraction limit reached. Try again in a bit",
     )
     use_document_ai = False
     if gcp_docai.document_ai_configured():
@@ -4290,7 +4290,7 @@ async def import_financial_document_from_drive(
     await _enforce_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "upload", doc_rate_limit.DOC_UPLOAD_HOURLY_LIMIT,
-        "Upload limit reached — try again in a bit",
+        "Upload limit reached. Try again in a bit",
     )
     if not doc_storage.r2_configured():
         raise HTTPException(status_code=503, detail="Document storage is not configured")
@@ -4434,7 +4434,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         source_document_id = payload.source_document_id
     finance_dept_id = await dept_migrate.finance_department_id(db, principal["workspace_id"])
     if not finance_dept_id:
-        raise HTTPException(status_code=500, detail="Finance department is not available — try again")
+        raise HTTPException(status_code=500, detail="Finance department is not available. Try again")
     # Keep writers enrolled so the new row stays visible under department filters.
     try:
         await dept_migrate.ensure_department_member(
@@ -4471,7 +4471,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         logger.exception("financial entry insert duplicate key for %s", principal["workspace_id"])
         raise HTTPException(
             status_code=409,
-            detail="Could not save this entry — a matching ledger row already exists. Refresh and try again.",
+            detail="Could not save this entry: a matching ledger row already exists. Refresh and try again.",
         ) from exc
     entry.pop("_id", None)
     if source_document_id:
@@ -4555,7 +4555,7 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     runway = fin["runway_months"]
     cur = fin.get("currency") or "usd"
     await log_activity(principal, "financials", "settings.update",
-                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f" — runway now {runway}mo" if runway is not None else ""),
+                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f", runway now {runway}mo" if runway is not None else ""),
                        {"cash": payload.cash, "runway_months": runway, "currency": cur})
     return {"ok": True, "settings": fin.get("settings"), "currency": cur}
 
@@ -4589,7 +4589,7 @@ async def import_financials_csv_preview(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         logger.exception("csv parse failed")
-        raise HTTPException(status_code=400, detail="Malformed CSV — check headers and row formatting")
+        raise HTTPException(status_code=400, detail="Malformed CSV. Check headers and row formatting")
     return {
         "ok": True,
         "preview": True,
@@ -4836,7 +4836,7 @@ async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("
     now = datetime.now(timezone.utc).isoformat()
     text = payload.text.strip()[:600]
     name = principal.get("name") or principal.get("email") or "Someone"
-    summary = f'Update from {name}: "{text[:90]}"' + (" — blocked" if payload.blocker else "")
+    summary = f'Update from {name}: "{text[:90]}"' + (" (blocked)" if payload.blocker else "")
     existing = await db.updates.find_one({"workspace_id": principal["workspace_id"], "user_id": principal["user_id"], "day": day}, {"_id": 0})
     if existing:
         await db.updates.update_one({"update_id": existing["update_id"]},
@@ -5015,13 +5015,13 @@ def _shipped_in_window(items, *, now: Optional[datetime] = None, days: int = 7) 
 
 def _signed_delta(curr, prev, *, money: bool = False, suffix: str = "", currency: str = "usd") -> str:
     if prev is None and curr is None:
-        return "first week — no trend yet"
+        return "first week, no trend yet"
     if prev is None:
-        return "first week — no trend yet"
+        return "first week, no trend yet"
     try:
         delta = float(curr if curr is not None else 0) - float(prev if prev is not None else 0)
     except (TypeError, ValueError):
-        return "first week — no trend yet"
+        return "first week, no trend yet"
     if abs(delta) < 0.05:
         return f"flat vs last week{suffix}"
     sign = "+" if delta > 0 else ""
@@ -6072,7 +6072,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
             raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
         existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
         if existing:
-            raise HTTPException(status_code=400, detail="Already a member or invited — they should already be on the roster")
+            raise HTTPException(status_code=400, detail="Already a member or invited; they should already be on the roster")
         await _enforce_seat_available(principal["workspace_id"])
 
     c = await get_ws(principal["workspace_id"])
@@ -6109,7 +6109,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})
-    summary = f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f" — headcount now {headcount}"
+    summary = f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f", headcount now {headcount}"
     if invite:
         summary += " · invited to Team & Access"
     await log_activity(principal, "people", "person.add", summary, {"headcount": headcount})
@@ -6154,7 +6154,7 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
         if still:
             raise HTTPException(
                 status_code=400,
-                detail="This person has Team & Access login — remove them from Team & Access first",
+                detail="This person has Team & Access login. Remove them from Team & Access first",
             )
     people["people"] = [p for p in people["people"] if p["id"] != person_id]
     headcount = len(people["people"])
@@ -6162,7 +6162,7 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
                                    {"$set": {"people": people, "employees": headcount}})
     if person:
         await log_activity(principal, "people", "person.delete",
-                           f"Removed {person['name']} — headcount now {headcount}", {"headcount": headcount})
+                           f"Removed {person['name']}, headcount now {headcount}", {"headcount": headcount})
     return {"ok": True}
 
 
@@ -8633,7 +8633,7 @@ async def create_hr_onboarding(payload: HrOnboardingCreate, principal=Depends(ge
             "assigned_to": None,
         })
     if not steps:
-        raise HTTPException(status_code=400, detail="Template has no steps — edit the template first")
+        raise HTTPException(status_code=400, detail="Template has no steps. Edit the template first")
     now = datetime.now(timezone.utc).isoformat()
     inst = {
         "id": f"hronb_{uuid.uuid4().hex[:10]}",
@@ -9047,7 +9047,7 @@ async def create_hr_offboarding(payload: HrOffboardingCreate, principal=Depends(
             "assigned_to": None,
         })
     if not steps:
-        raise HTTPException(status_code=400, detail="Template has no steps — edit the template first")
+        raise HTTPException(status_code=400, detail="Template has no steps. Edit the template first")
     now = datetime.now(timezone.utc).isoformat()
     inst = {
         "id": f"hroff_{uuid.uuid4().hex[:10]}",
@@ -9167,7 +9167,7 @@ class HrLeavePatch(BaseModel):
 def _leave_title(employee_name: str, leave_type: str) -> str:
     label = HR_LEAVE_TYPE_LABELS.get(leave_type, leave_type or "Leave")
     name = (employee_name or "").strip() or "Employee"
-    return f"{name} — {label}"
+    return f"{name}: {label}"
 
 
 async def _hr_employee_for_leave(employee_id: str, department_id: str) -> dict:
@@ -9336,7 +9336,7 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    f"You've used your {ask_limit} Ask Helm messages this month — "
+                    f"You've used your {ask_limit} Ask Helm messages this month. "
                     "upgrade to continue."
                 ),
             )
@@ -9624,7 +9624,7 @@ async def integration_connect(provider: str, request: Request, principal=Depends
         }.get(provider, "OAuth credentials")
         return {
             "configured": False,
-            "message": f"Not configured yet — set {missing} on the API host, then reconnect.",
+            "message": f"Not configured yet. Set {missing} on the API host, then reconnect.",
             "redirect_uri": cfg["redirect_uri"],
         }
     nonce = secrets.token_urlsafe(24)
@@ -9906,12 +9906,12 @@ async def _run_sap_b1_sync_for_workspace(c: dict, principal: dict, *, source: st
     ws_id = c["workspace_id"]
     creds = _integration_tokens(c, "sap_b1_credentials")
     if not creds:
-        raise HTTPException(status_code=400, detail="SAP Business One is not connected — connect it in Integrations first.")
+        raise HTTPException(status_code=400, detail="SAP Business One is not connected. Connect it in Integrations first.")
     try:
         live = await sap_b1_sync.ensure_session(creds)
     except sap_b1_sync.SapB1AuthError as exc:
         await _store_integration_tokens(ws_id, "sap_b1_credentials", None, extra_unset={"sap_b1_last_synced_at": ""})
-        raise HTTPException(status_code=401, detail="SAP Business One session expired — reconnect in Integrations.") from exc
+        raise HTTPException(status_code=401, detail="SAP Business One session expired. Reconnect in Integrations.") from exc
     await _store_integration_tokens(ws_id, "sap_b1_credentials", live)
     since = c.get("sap_b1_last_synced_at")
     txns = await sap_b1_sync.fetch_sap_transactions(live, since)
@@ -9940,13 +9940,13 @@ async def sap_b1_sync_endpoint(principal=Depends(require_pro_perm("integrations:
         await _store_integration_tokens(ws_id, "sap_b1_credentials", None, extra_unset={"sap_b1_last_synced_at": ""})
         raise HTTPException(
             status_code=401,
-            detail="SAP Business One connection expired — please reconnect in Integrations.",
+            detail="SAP Business One connection expired. Please reconnect in Integrations.",
         ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("SAP B1 sync failed for %s", ws_id)
-        raise HTTPException(status_code=502, detail="SAP Business One sync failed — try again shortly.") from exc
+        raise HTTPException(status_code=502, detail="SAP Business One sync failed. Try again shortly.") from exc
 
 
 @api_router.post("/integrations/xero/select-tenant")
@@ -9956,7 +9956,7 @@ async def xero_select_tenant(payload: XeroTenantInput, principal=Depends(require
     c = await get_ws(ws_id)
     tokens = _require_integration_token_use(principal, c, "xero_tokens")
     if not tokens:
-        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
+        raise HTTPException(status_code=400, detail="Xero is not connected. Connect it in Integrations first.")
     tenant_id = (payload.tenant_id or "").strip()
     pending = list(tokens.get("pending_tenants") or [])
     match = next((t for t in pending if t.get("tenant_id") == tenant_id), None)
@@ -9970,7 +9970,7 @@ async def xero_select_tenant(payload: XeroTenantInput, principal=Depends(require
             pending = await xero_sync.fetch_xero_connections(tokens.get("access_token") or "")
         except xero_sync.XeroAuthError as exc:
             await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
-            raise HTTPException(status_code=401, detail="Xero connection expired — please reconnect.") from exc
+            raise HTTPException(status_code=401, detail="Xero connection expired. Please reconnect.") from exc
         match = next((t for t in pending if t.get("tenant_id") == tenant_id), None)
         if not match:
             raise HTTPException(status_code=400, detail="Unknown Xero organisation for this connection.")
@@ -10059,10 +10059,10 @@ async def _run_quickbooks_sync_for_workspace(c: dict, principal: dict, *, source
     ws_id = c["workspace_id"]
     tokens = _integration_tokens(c, "quickbooks_tokens")
     if not tokens:
-        raise HTTPException(status_code=400, detail="QuickBooks is not connected — connect it in Integrations first.")
+        raise HTTPException(status_code=400, detail="QuickBooks is not connected. Connect it in Integrations first.")
     realm_id = tokens.get("realmId")
     if not realm_id:
-        raise HTTPException(status_code=400, detail="QuickBooks company (realmId) is missing — reconnect QuickBooks.")
+        raise HTTPException(status_code=400, detail="QuickBooks company (realmId) is missing. Reconnect QuickBooks.")
 
     tokens = await qb_sync.refresh_qb_token(tokens)
     await _store_integration_tokens(ws_id, "quickbooks_tokens", tokens)
@@ -10081,7 +10081,7 @@ async def _run_xero_sync_for_workspace(c: dict, principal: dict, *, source: str 
     ws_id = c["workspace_id"]
     tokens = _integration_tokens(c, "xero_tokens")
     if not tokens:
-        raise HTTPException(status_code=400, detail="Xero is not connected — connect it in Integrations first.")
+        raise HTTPException(status_code=400, detail="Xero is not connected. Connect it in Integrations first.")
     tenant_id = tokens.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Choose a Xero organisation before syncing.")
@@ -10116,13 +10116,13 @@ async def quickbooks_sync(principal=Depends(require_pro_perm("integrations:manag
         await _store_integration_tokens(ws_id, "quickbooks_tokens", None, extra_unset={"qb_last_synced_at": ""})
         raise HTTPException(
             status_code=401,
-            detail="QuickBooks connection expired — please reconnect in Integrations.",
+            detail="QuickBooks connection expired. Please reconnect in Integrations.",
         ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("QuickBooks sync failed for %s", ws_id)
-        raise HTTPException(status_code=502, detail="QuickBooks sync failed — try again shortly.") from exc
+        raise HTTPException(status_code=502, detail="QuickBooks sync failed. Try again shortly.") from exc
 
 
 @api_router.post("/integrations/xero/sync")
@@ -10143,13 +10143,13 @@ async def xero_sync_endpoint(principal=Depends(require_pro_perm("integrations:ma
         await _store_integration_tokens(ws_id, "xero_tokens", None, extra_unset={"xero_last_synced_at": ""})
         raise HTTPException(
             status_code=401,
-            detail="Xero connection expired — please reconnect in Integrations.",
+            detail="Xero connection expired. Please reconnect in Integrations.",
         ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Xero sync failed for %s", ws_id)
-        raise HTTPException(status_code=502, detail="Xero sync failed — try again shortly.") from exc
+        raise HTTPException(status_code=502, detail="Xero sync failed. Try again shortly.") from exc
 
 
 async def run_accounting_auto_sync() -> dict:
@@ -10263,7 +10263,7 @@ async def hubspot_sync_endpoint(principal=Depends(require_pro_perm("integrations
     c = await get_ws(ws_id)
     tokens = _require_integration_token_use(principal, c, "hubspot_tokens")
     if not tokens:
-        raise HTTPException(status_code=400, detail="HubSpot is not connected — connect it in Integrations first.")
+        raise HTTPException(status_code=400, detail="HubSpot is not connected. Connect it in Integrations first.")
 
     try:
         tokens = await hubspot_sync.refresh_hubspot_token(tokens)
@@ -10286,11 +10286,11 @@ async def hubspot_sync_endpoint(principal=Depends(require_pro_perm("integrations
         await _store_integration_tokens(ws_id, "hubspot_tokens", None, extra_unset={"hubspot_last_synced_at": ""})
         raise HTTPException(
             status_code=401,
-            detail="HubSpot connection expired — please reconnect in Integrations.",
+            detail="HubSpot connection expired. Please reconnect in Integrations.",
         ) from exc
     except Exception as exc:
         logger.exception("HubSpot sync failed for %s", ws_id)
-        raise HTTPException(status_code=502, detail="HubSpot sync failed — try again shortly.") from exc
+        raise HTTPException(status_code=502, detail="HubSpot sync failed. Try again shortly.") from exc
 
 
 async def _upsert_hubspot_deals(*, ws_id: str, principal: dict, deals: list) -> int:
@@ -10518,7 +10518,7 @@ async def schedule_plan_change(payload: SchedulePlanInput, principal=Depends(req
     if helm_plans.is_upgrade(current, target):
         raise HTTPException(
             status_code=400,
-            detail="Upgrades require Paddle checkout — use the Upgrade button on Billing.",
+            detail="Upgrades require Paddle checkout. Use the Upgrade button on Billing.",
         )
     period = plan_usage.current_usage_period(c)
     effective_at = period["end"].isoformat()
@@ -10594,7 +10594,7 @@ async def paddle_config(request: Request, principal=Depends(require("billing:man
     if not price_id:
         raise HTTPException(
             status_code=400,
-            detail=f"Checkout for {helm_plans.plan_def(target)['label']} is not configured yet — set the Paddle price ID env var",
+            detail=f"Checkout for {helm_plans.plan_def(target)['label']} is not configured yet. Set the Paddle price ID env var",
         )
     nonce = uuid.uuid4().hex
     await db.paddle_intents.insert_one({

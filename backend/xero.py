@@ -170,7 +170,7 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
     line_desc = _line_description(inv)
     name = (contact or line_desc or number or category).strip()[:120]
     extras = [p for p in [number, ref, line_desc] if p and p != name]
-    note = " — ".join(extras)
+    note = " · ".join(extras)
 
     if inv_type == "ACCPAY":
         return {
@@ -231,7 +231,7 @@ async def _fetch_invoices(
     if resp.status_code == 401:
         raise XeroAuthError("Xero access token rejected")
     if resp.status_code == 403:
-        raise XeroAuthError("Xero tenant access denied — reconnect and pick an organisation")
+        raise XeroAuthError("Xero tenant access denied. Reconnect and pick an organisation")
     if resp.status_code != 200:
         raise RuntimeError(f"Xero Invoices failed ({resp.status_code}): {resp.text[:300]}")
     rows = resp.json().get("Invoices") or []

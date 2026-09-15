@@ -101,11 +101,11 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
     }
 
     decisions = [
-        {"id": "d1", "title": "Approve $40K annual infra reservation", "category": "Finance", "description": "Reserved-capacity plan for the inference cluster.", "recommendation": "Approve — pays back in 4.2 months and cuts cloud spend 18%.", "confidence": 92, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
-        {"id": "d2", "title": "Hire second GTM engineer", "category": "People", "description": "Backfill pipeline load; Maya is at 118% utilization.", "recommendation": "Approve conditional — start after Acme closes to protect runway.", "confidence": 74, "status": "pending", "owner": None, "due": "This week", "impact": "Medium"},
-        {"id": "d3", "title": "Sign off Acme discount to 12%", "category": "Sales", "description": "Enterprise deal, $96K ARR, 3-yr term requested.", "recommendation": "Approve at 10% with 3-yr lock — protects ACV and sets a defensible floor.", "confidence": 81, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
+        {"id": "d1", "title": "Approve $40K annual infra reservation", "category": "Finance", "description": "Reserved-capacity plan for the inference cluster.", "recommendation": "Approve: pays back in 4.2 months and cuts cloud spend 18%.", "confidence": 92, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
+        {"id": "d2", "title": "Hire second GTM engineer", "category": "People", "description": "Backfill pipeline load; Maya is at 118% utilization.", "recommendation": "Approve conditional: start after Acme closes to protect runway.", "confidence": 74, "status": "pending", "owner": None, "due": "This week", "impact": "Medium"},
+        {"id": "d3", "title": "Sign off Acme discount to 12%", "category": "Sales", "description": "Enterprise deal, $96K ARR, 3-yr term requested.", "recommendation": "Approve at 10% with 3-yr lock, which protects ACV and sets a defensible floor.", "confidence": 81, "status": "pending", "owner": None, "due": "Today", "impact": "High"},
         {"id": "d4", "title": "Sunset legacy v1 API", "category": "Product", "description": "18% of infra cost, used by 6 customers.", "recommendation": "Delegate migration plan; deprecate in 90 days with comms.", "confidence": 68, "status": "pending", "owner": None, "due": "Next week", "impact": "Medium"},
-        {"id": "d5", "title": "Q3 board deck narrative", "category": "Strategy", "description": "Lead with efficiency or growth?", "recommendation": "Lead with efficient growth — NRR 118% + improving CAC payback is the story.", "confidence": 88, "status": "approved", "owner": "You", "due": "Done", "impact": "High"},
+        {"id": "d5", "title": "Q3 board deck narrative", "category": "Strategy", "description": "Lead with efficiency or growth?", "recommendation": "Lead with efficient growth: NRR 118% + improving CAC payback is the story.", "confidence": 88, "status": "approved", "owner": "You", "due": "Done", "impact": "High"},
     ]
 
     tasks = {
@@ -134,7 +134,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         "meetings": [
             {"id": "m1", "title": "Acme final review", "time": "09:30", "duration": 45, "attendees": 4, "type": "Sales", "prep": "Bring 3-yr pricing + security pack. Champion: VP Eng.", "importance": "high"},
             {"id": "m2", "title": "Weekly leadership sync", "time": "11:00", "duration": 30, "attendees": 5, "type": "Internal", "prep": "Decide infra reservation + GTM hire.", "importance": "medium"},
-            {"id": "m3", "title": "1:1 with Maya", "time": "14:00", "duration": 30, "attendees": 2, "type": "1:1", "prep": "Address open pipeline load — redistribute or hire.", "importance": "high"},
+            {"id": "m3", "title": "1:1 with Maya", "time": "14:00", "duration": 30, "attendees": 2, "type": "1:1", "prep": "Address open pipeline load: redistribute or hire.", "importance": "high"},
             {"id": "m4", "title": "Investor update call", "time": "16:00", "duration": 30, "attendees": 3, "type": "Board", "prep": "Lead with NRR 118% and CAC payback trend.", "importance": "medium"},
         ],
         "focus_hours": 3.5, "meeting_hours": 2.25,

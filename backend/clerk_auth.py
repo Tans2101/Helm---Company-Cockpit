@@ -248,7 +248,7 @@ def _fetch_bapi_jwks_sync() -> dict[str, Any]:
         r = client.get(f"{CLERK_BAPI}/jwks", headers=_bapi_headers())
         if r.status_code in (401, 403):
             raise ValueError(
-                "CLERK_SECRET_KEY rejected by Clerk API — use the secret key from the same "
+                "CLERK_SECRET_KEY rejected by Clerk API. Use the secret key from the same "
                 "Clerk instance as your publishable key (Dashboard → API keys)"
             )
         r.raise_for_status()
@@ -269,7 +269,7 @@ def _fetch_jwks_sync() -> dict[str, Any]:
         raise
     except httpx.HTTPError as exc:
         raise ValueError(
-            "Could not load Clerk signing keys — check CLERK_JWKS_URL and CLERK_SECRET_KEY on Render"
+            "Could not load Clerk signing keys. Check CLERK_JWKS_URL and CLERK_SECRET_KEY on Render"
         ) from exc
 
 
@@ -284,7 +284,7 @@ def _signing_key_from_jwt(token: str):
         if key_data.get("kid") == kid:
             return RSAAlgorithm.from_jwk(json.dumps(key_data))
     raise jwt.InvalidTokenError(
-        "JWKS kid not found — CLERK_SECRET_KEY may be from a different Clerk instance than pk_live on Vercel"
+        "JWKS kid not found. CLERK_SECRET_KEY may be from a different Clerk instance than pk_live on Vercel"
     )
 
 
@@ -638,7 +638,7 @@ def _jwt_payload_unverified(token: str) -> dict[str, Any]:
 
     parts = (token or "").split(".")
     if len(parts) != 3:
-        raise ValueError("Clerk returned a non-JWT token — sign out and sign in again")
+        raise ValueError("Clerk returned a non-JWT token. Sign out and sign in again")
     pad = "=" * (-len(parts[1]) % 4)
     try:
         return json.loads(base64.urlsafe_b64decode(parts[1] + pad))
@@ -687,16 +687,16 @@ async def _verify_clerk_session_via_bapi(token: str) -> dict[str, Any]:
         raise ValueError("Clerk session token is missing session or user id")
     exp = payload.get("exp")
     if exp is not None and exp < time.time() - 60:
-        raise ValueError("Clerk session expired — sign out and sign in again")
+        raise ValueError("Clerk session expired. Sign out and sign in again")
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"{CLERK_BAPI}/sessions/{sid}", headers=_bapi_headers())
     if r.status_code in (401, 403):
         raise ValueError(
-            "CLERK_SECRET_KEY rejected by Clerk API — use sk_live_ from clerk.helmcontrol.online on Render"
+            "CLERK_SECRET_KEY rejected by Clerk API. Use sk_live_ from clerk.helmcontrol.online on Render"
         )
     if r.status_code == 404:
         raise ValueError(
-            "Clerk session not found — CLERK_SECRET_KEY may be from a different Clerk instance than pk_live"
+            "Clerk session not found. CLERK_SECRET_KEY may be from a different Clerk instance than pk_live"
         )
     if r.status_code >= 400:
         raise ValueError(f"Clerk session check failed ({r.status_code})")
@@ -705,7 +705,7 @@ async def _verify_clerk_session_via_bapi(token: str) -> dict[str, Any]:
         raise ValueError("Clerk session user mismatch")
     status = (session.get("status") or "").lower()
     if status not in ("active", "pending"):
-        raise ValueError("Clerk session is not active — sign in again")
+        raise ValueError("Clerk session is not active. Sign in again")
     return payload
 
 
@@ -746,16 +746,16 @@ async def decode_clerk_jwt(token: str) -> dict[str, Any]:
     try:
         return await _verify_clerk_jwt_jwks(token)
     except jwt.ExpiredSignatureError:
-        raise ValueError("Clerk session expired — sign out and sign in again")
+        raise ValueError("Clerk session expired. Sign out and sign in again")
     except jwt.InvalidTokenError as exc:
         logger.warning("clerk jwt invalid: %s (jwks=%s)", exc, CLERK_JWKS_URL)
         raise ValueError(
-            "Invalid Clerk session token — sign out, hard-refresh, and sign in again"
+            "Invalid Clerk session token. Sign out, hard-refresh, and sign in again"
         ) from exc
     except Exception as exc:
         logger.warning("clerk jwks verify failed: %s (%s)", type(exc).__name__, exc)
         raise ValueError(
-            "Could not verify Clerk session — check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online"
+            "Could not verify Clerk session. Check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online"
         ) from exc
 
 
@@ -774,11 +774,11 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
             if attempt < retries - 1:
                 await asyncio.sleep(0.4 * (attempt + 1))
                 continue
-            raise ValueError("Clerk API unreachable — try signing in again") from exc
+            raise ValueError("Clerk API unreachable. Try signing in again") from exc
         last_status = r.status_code
         if r.status_code in (401, 403):
             raise ValueError(
-                "CLERK_SECRET_KEY rejected by Clerk API — use the sk_live_ key from the same "
+                "CLERK_SECRET_KEY rejected by Clerk API. Use the sk_live_ key from the same "
                 "instance as pk_live on Vercel (clerk.helmcontrol.online)"
             )
         if r.status_code == 404 and attempt < retries - 1:
@@ -786,7 +786,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
             continue
         if r.status_code == 404:
             raise ValueError(
-                "Clerk user not found via API — Render CLERK_SECRET_KEY is likely from a "
+                "Clerk user not found via API. Render CLERK_SECRET_KEY is likely from a "
                 "different Clerk instance than your publishable key. In Clerk Dashboard → API keys "
                 "(clerk.helmcontrol.online), copy Secret key → Render CLERK_SECRET_KEY and redeploy."
             )
@@ -809,7 +809,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
             "picture": data.get("image_url"),
         }
     raise ValueError(
-        f"Clerk user lookup failed ({last_status}) — check CLERK_SECRET_KEY matches pk_live"
+        f"Clerk user lookup failed ({last_status}). Check CLERK_SECRET_KEY matches pk_live"
     )
 
 
@@ -1248,7 +1248,7 @@ async def sync_clerk_instance() -> dict[str, Any]:
 
             if is_dev_fapi and primary and not any(h in primary for h in HELM_PRIMARY_HOSTS):
                 status["warnings"].append(
-                    "Using Clerk development FAPI — register helmcontrol.online in Clerk Dashboard → Domains."
+                    "Using Clerk development FAPI. Register helmcontrol.online in Clerk Dashboard → Domains."
                 )
 
             portal_primary = clerk_primary_origin() or primary
@@ -1266,26 +1266,26 @@ async def sync_clerk_instance() -> dict[str, Any]:
             if not portal.get("ok"):
                 redirect_hint = portal_url
                 status["warnings"].append(
-                    "Could not auto-update Clerk redirect URLs — in Clerk Dashboard set every "
+                    "Could not auto-update Clerk redirect URLs. In Clerk Dashboard set every "
                     f"after sign-in / sign-up fallback to {redirect_hint} in Clerk Dashboard."
                 )
             if redirects.get("reason") not in ("ok", "partial") or (
                 redirects.get("reason") == "partial" and redirects.get("errors")
             ):
                 status["warnings"].append(
-                    "Could not register Clerk allowed redirect URLs — add "
+                    "Could not register Clerk allowed redirect URLs. Add "
                     f"{portal_url} in Clerk Dashboard → Paths → Redirect URLs."
                 )
             if not satellite.get("ok"):
                 status["warnings"].append(
-                    f"Could not register {urlparse(primary).hostname} as Clerk satellite domain — "
+                    f"Could not register {urlparse(primary).hostname} as Clerk satellite domain. "
                     "add it manually in Clerk Dashboard → Configure → Domains."
                 )
             if not domain_proxy.get("ok") and domain_proxy.get("reason") not in (
                 "custom_domain_ssl_ok", "already_set",
             ):
                 status["warnings"].append(
-                    f"Could not enable Clerk proxy at {domain_proxy.get('proxy_url')} — "
+                    f"Could not enable Clerk proxy at {domain_proxy.get('proxy_url')}. "
                     "set it manually in Clerk Dashboard → Domains → Proxy URL after Vercel deploy."
                 )
 
