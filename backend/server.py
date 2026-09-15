@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import uuid
 import json
 import html
@@ -4174,6 +4175,8 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
         raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
+    if not math.isfinite(payload.amount):
+        raise HTTPException(status_code=400, detail="amount must be a finite number")
     try:
         entry_name = require_entry_name(payload.name)
     except ValueError as exc:
@@ -4233,6 +4236,8 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
         raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
+    if not math.isfinite(payload.amount):
+        raise HTTPException(status_code=400, detail="amount must be a finite number")
     try:
         entry_name = require_entry_name(payload.name)
     except ValueError as exc:
@@ -4270,6 +4275,10 @@ class FinSettingsInput(BaseModel):
 
 @api_router.put("/financials/settings")
 async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_section("financials", "finance:write"))):
+    if not math.isfinite(payload.cash):
+        raise HTTPException(status_code=400, detail="cash must be a finite number")
+    if payload.gross_margin is not None and not math.isfinite(payload.gross_margin):
+        raise HTTPException(status_code=400, detail="gross_margin must be a finite number")
     currency = normalize_currency(payload.currency) if payload.currency is not None else None
     sets = {
         "financial_settings.cash": round(payload.cash, 2),

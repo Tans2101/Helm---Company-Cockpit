@@ -27,11 +27,11 @@ api.interceptors.request.use(async (config) => {
   const url = config.url || "";
   if (BOOTSTRAP_PATHS.some((p) => url.includes(p))) return config;
   try {
-    // Short race: cached tokens resolve in ms; never stall clicks for 4s.
-    const token = await Promise.race([
-      clerkGetToken(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("clerk-token-timeout")), 1500)),
-    ]);
+    // getCachedClerkToken already bounds Clerk refreshes and falls back to a
+    // still-valid JWT. Do not wrap another short Promise.race here — a 1.5s
+    // outer timeout was aborting legitimate refreshes (session + getToken can
+    // each take up to 1.5s) and surfacing as "Could not save" on Financials.
+    const token = await clerkGetToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       return config;

@@ -255,13 +255,18 @@ export default function Financials() {
       toast.error("Add a name, amount, and month");
       return;
     }
+    const amount = parseFloat(form.amount);
+    if (!Number.isFinite(amount)) {
+      toast.error("Enter a valid amount");
+      return;
+    }
     setBusy(true);
     try {
       const payload = {
         type: form.type,
         category: form.category,
         name: form.name.trim(),
-        amount: parseFloat(form.amount),
+        amount,
         month: form.month,
         recurring: form.recurring,
         recurrence: form.recurring ? (form.type === "expense" ? form.recurrence : "monthly") : null,
@@ -274,7 +279,7 @@ export default function Financials() {
       setShowForm(false);
       reload();
       reloadActs();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Could not save"); }
+    } catch (e) { toast.error(fetchErrorMessage(e, "Could not save")); }
     finally { setBusy(false); }
   };
 
@@ -285,18 +290,28 @@ export default function Financials() {
   };
 
   const saveSettings = async () => {
+    const cashValue = parseFloat(cash || 0);
+    const gmValue = gm ? parseFloat(gm) : null;
+    if (!Number.isFinite(cashValue)) {
+      toast.error("Enter a valid cash amount");
+      return;
+    }
+    if (gmValue != null && !Number.isFinite(gmValue)) {
+      toast.error("Enter a valid gross margin");
+      return;
+    }
     setBusy(true);
     try {
       await api.put("/financials/settings", {
-        cash: parseFloat(cash || 0),
-        gross_margin: gm ? parseFloat(gm) : null,
+        cash: cashValue,
+        gross_margin: gmValue,
         currency,
       });
       toast.success("Updated");
       setShowSettings(false);
       reload();
       reloadActs();
-    } catch (e) { toast.error("Could not save"); }
+    } catch (e) { toast.error(fetchErrorMessage(e, "Could not save")); }
     finally { setBusy(false); }
   };
 

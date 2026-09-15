@@ -48,10 +48,14 @@ export async function getCachedClerkToken(getToken, session, { tokenTimeoutMs = 
 
   inflight = (async () => {
     try {
-      const fromSession = session?.getToken
-        ? await withTimeout(session.getToken(), tokenTimeoutMs, "session-token-timeout").catch(() => null)
-        : null;
-      const fromAuth = await withTimeout(getToken(), tokenTimeoutMs, "auth-token-timeout").catch(() => null);
+      // Fetch session + auth tokens in parallel so a cold refresh finishes in
+      // ~tokenTimeoutMs instead of up to 2× that when run sequentially.
+      const [fromSession, fromAuth] = await Promise.all([
+        session?.getToken
+          ? withTimeout(session.getToken(), tokenTimeoutMs, "session-token-timeout").catch(() => null)
+          : Promise.resolve(null),
+        withTimeout(getToken(), tokenTimeoutMs, "auth-token-timeout").catch(() => null),
+      ]);
       const token = fromSession || fromAuth;
       if (gen !== cacheGeneration) return priorToken;
       if (token && token.split(".").length === 3) {
