@@ -13,6 +13,8 @@ from anthropic import AsyncAnthropic
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or ""
 # Default Sonnet model — see current IDs at https://docs.anthropic.com/en/docs/about-claude/models/overview
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+# Cheaper/faster model for high-volume grounded report read/summarize + digest combine.
+ANTHROPIC_MODEL_FAST = os.environ.get("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5")
 
 _EXTRACT_SYSTEM = """You extract financial data from bills, receipts, and invoices.
 Return ONLY strict JSON with no markdown and no prose.
@@ -53,10 +55,10 @@ def get_client() -> AsyncAnthropic:
     return _client
 
 
-async def complete(system: str, user: str, *, max_tokens: int = 1200) -> str:
+async def complete(system: str, user: str, *, max_tokens: int = 1200, model: Optional[str] = None) -> str:
     client = get_client()
     msg = await client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=model or ANTHROPIC_MODEL,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
@@ -459,7 +461,7 @@ async def summarize_report_document(
         )
 
     msg = await client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=ANTHROPIC_MODEL_FAST,
         max_tokens=1200,
         system=_REPORT_SUMMARY_SYSTEM,
         messages=[{"role": "user", "content": user_content}],
@@ -505,7 +507,9 @@ async def combine_daily_report_digest(items: list[dict]) -> str:
         f"{json.dumps(payload, default=str)}\n\n"
         "Write the combined daily briefing now."
     )
-    text = await complete(_REPORTS_DIGEST_SYSTEM, user, max_tokens=900)
+    text = await complete(
+        _REPORTS_DIGEST_SYSTEM, user, max_tokens=900, model=ANTHROPIC_MODEL_FAST,
+    )
     return _strip_markdown_fences(text or "").strip()
 
 

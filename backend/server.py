@@ -5502,6 +5502,19 @@ async def summarize_report_document_route(
                 "summarized_at": now,
             }},
         )
+        report_day = doc.get("report_date") or _today_report_date()
+        await db.report_digests.update_one(
+            {"workspace_id": principal["workspace_id"], "date": report_day},
+            {"$set": {
+                "workspace_id": principal["workspace_id"],
+                "date": report_day,
+                "stale": True,
+            }, "$setOnInsert": {
+                "combined_digest": "",
+                "computed_at": None,
+            }},
+            upsert=True,
+        )
         ws = await get_ws(principal["workspace_id"])
         if helm_plans.ai_extracts_lifetime_limit(ws.get("plan")) > 0:
             await plan_usage.increment_lifetime_extract(db, principal["workspace_id"])
@@ -5545,14 +5558,16 @@ async def reports_daily_digest(
     date: Optional[str] = Query(None),
     principal=Depends(require_section("reports", "reports:write")),
 ):
-    """Return that day's report documents plus a freshly combined digest.
+    """Return that day's report documents plus a cached combined digest.
 
-    Digest combine uses already-extracted summaries (cheap) and does not
-    decrement the AI-extract quota — only per-file summarize does.
+    Recomputes combined_digest only when the day's digest record is stale
+    (marked after a successful summarize). Digests do not decrement the
+    AI-extract quota — only per-file summarize does.
     """
     day = _parse_report_date(date)
+    ws_id = principal["workspace_id"]
     rows = await db.report_documents.find(
-        {"workspace_id": principal["workspace_id"], "report_date": day},
+        {"workspace_id": ws_id, "report_date": day},
         {"_id": 0, "storage_key": 0},
     ).sort("uploaded_at", 1).to_list(200)
     summarized = [
@@ -5565,13 +5580,47 @@ async def reports_daily_digest(
         for r in rows
         if r.get("status") == "summarized" and r.get("summary")
     ]
-    combined = ""
-    if summarized:
+
+    digest_rec = await db.report_digests.find_one(
+        {"workspace_id": ws_id, "date": day}, {"_id": 0},
+    )
+    combined = (digest_rec or {}).get("combined_digest") or ""
+    needs_recompute = bool(summarized) and (
+        digest_rec is None
+        or digest_rec.get("stale", True)
+        or not combined
+    )
+
+    if not summarized:
+        combined = ""
+        if digest_rec is not None:
+            await db.report_digests.update_one(
+                {"workspace_id": ws_id, "date": day},
+                {"$set": {
+                    "combined_digest": "",
+                    "stale": False,
+                    "computed_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+    elif needs_recompute:
         try:
             combined = await helm_llm.combine_daily_report_digest(summarized)
         except Exception:
-            logger.exception("report digest combine failed for %s %s", principal["workspace_id"], day)
+            logger.exception("report digest combine failed for %s %s", ws_id, day)
             combined = "\n\n".join(s["summary"] for s in summarized if s.get("summary"))
+        now = datetime.now(timezone.utc).isoformat()
+        await db.report_digests.update_one(
+            {"workspace_id": ws_id, "date": day},
+            {"$set": {
+                "workspace_id": ws_id,
+                "date": day,
+                "combined_digest": combined,
+                "stale": False,
+                "computed_at": now,
+            }},
+            upsert=True,
+        )
+
     return {
         "date": day,
         "reports": [
@@ -5589,6 +5638,7 @@ async def reports_daily_digest(
             for r in rows
         ],
         "combined_digest": combined,
+        "digest_cached": bool(summarized) and not needs_recompute,
     }
 
 
@@ -11128,7 +11178,7 @@ async def paddle_webhook(request: Request):
 
 # ------------------------- GDPR / account -------------------------
 _WORKSPACE_COLLECTIONS = (
-    "financial_entries", "deals", "documents", "report_documents", "activities", "updates",
+    "financial_entries", "deals", "documents", "report_documents", "report_digests", "activities", "updates",
     "chat_messages", "private_notes", "paddle_intents", "payment_transactions",
     "document_rate_events", "insights_rate_events", "ask_helm_rate_events",
     "document_ai_usage",
@@ -11652,6 +11702,7 @@ async def _ensure_indexes():
         (db.documents, [("status", 1), ("uploaded_at", 1)], {}),
         (db.report_documents, [("workspace_id", 1), ("report_date", 1)], {}),
         (db.report_documents, [("id", 1)], {"unique": True}),
+        (db.report_digests, [("workspace_id", 1), ("date", 1)], {"unique": True}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),

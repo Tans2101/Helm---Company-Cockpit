@@ -95,6 +95,9 @@ def client():
     cursor.sort.return_value = cursor
     cursor.to_list = AsyncMock(return_value=[])
     mock_db.report_documents.find.return_value = cursor
+    mock_db.report_digests = MagicMock()
+    mock_db.report_digests.find_one = AsyncMock(return_value=None)
+    mock_db.report_digests.update_one = AsyncMock(return_value=None)
     mock_db.documents = MagicMock()
     mock_db.documents.insert_one = AsyncMock(return_value=None)
     mock_db.activities = MagicMock()
@@ -212,6 +215,14 @@ def test_report_summarize_xlsx(client):
     args = summarize.await_args.args
     assert isinstance(args[0], str)
     assert "Copper" in args[0]
+    # Successful summarize marks that day's digest stale
+    server.db.report_digests.update_one.assert_awaited()
+    stale_call = server.db.report_digests.update_one.await_args
+    assert stale_call.args[0] == {
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "date": "2026-09-15",
+    }
+    assert stale_call.args[1]["$set"]["stale"] is True
 
 
 def test_digest_empty_day(client):
@@ -223,7 +234,7 @@ def test_digest_empty_day(client):
     assert body["combined_digest"] == ""
 
 
-def test_digest_combines_summaries(client):
+def test_digest_combines_when_stale(client):
     cursor = MagicMock()
     cursor.sort.return_value = cursor
     cursor.to_list = AsyncMock(return_value=[
@@ -251,6 +262,13 @@ def test_digest_combines_summaries(client):
         },
     ])
     server.db.report_documents.find.return_value = cursor
+    server.db.report_digests.find_one = AsyncMock(return_value={
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "date": "2026-09-15",
+        "combined_digest": "old cached text",
+        "stale": True,
+        "computed_at": "2026-09-15T10:00:00+00:00",
+    })
     with patch.object(
         server.helm_llm, "combine_daily_report_digest", new_callable=AsyncMock,
         return_value="Copper closed at 4.52 and zinc at 1.10.",
@@ -260,4 +278,88 @@ def test_digest_combines_summaries(client):
     body = r.json()
     assert len(body["reports"]) == 2
     assert "4.52" in body["combined_digest"]
+    assert body["digest_cached"] is False
     combine.assert_awaited_once()
+    # Cache write after recompute
+    assert server.db.report_digests.update_one.await_args.args[1]["$set"]["stale"] is False
+
+
+def test_digest_serves_cache_when_not_stale(client):
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=[
+        {
+            "id": "rdoc_1",
+            "filename": "copper.xlsx",
+            "status": "summarized",
+            "summary": "Copper closed at 4.52.",
+            "key_figures": [{"label": "Copper", "value": "4.52"}],
+            "unclear": False,
+            "uploaded_at": "2026-09-15T10:00:00+00:00",
+            "summarized_at": "2026-09-15T10:01:00+00:00",
+        },
+    ])
+    server.db.report_documents.find.return_value = cursor
+    server.db.report_digests.find_one = AsyncMock(return_value={
+        "workspace_id": MOCK_PRINCIPAL["workspace_id"],
+        "date": "2026-09-15",
+        "combined_digest": "Cached: Copper closed at 4.52.",
+        "stale": False,
+        "computed_at": "2026-09-15T10:02:00+00:00",
+    })
+    with patch.object(
+        server.helm_llm, "combine_daily_report_digest", new_callable=AsyncMock,
+        return_value="should not be used",
+    ) as combine:
+        r1 = client.get("/api/reports/digest", params={"date": "2026-09-15"})
+        r2 = client.get("/api/reports/digest", params={"date": "2026-09-15"})
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["combined_digest"] == "Cached: Copper closed at 4.52."
+    assert r1.json()["digest_cached"] is True
+    assert r2.json()["combined_digest"] == "Cached: Copper closed at 4.52."
+    combine.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_summarize_report_document_uses_fast_model():
+    import llm as helm_llm
+
+    captured = {}
+
+    class _Msg:
+        content = [type("B", (), {"text": '{"summary":"Copper is 4.52.","key_figures":[],"unclear":false}'})()]
+
+    class _Client:
+        class messages:
+            @staticmethod
+            async def create(**kwargs):
+                captured.update(kwargs)
+                return _Msg()
+
+    with patch.object(helm_llm, "anthropic_configured", return_value=True), patch.object(
+        helm_llm, "get_client", return_value=_Client()
+    ):
+        out = await helm_llm.summarize_report_document(
+            "Metal | Price\nCopper | 4.52",
+            "text/csv",
+            "prices.csv",
+        )
+    assert out["summary"].startswith("Copper")
+    assert captured["model"] == helm_llm.ANTHROPIC_MODEL_FAST
+    assert captured["model"] != helm_llm.ANTHROPIC_MODEL
+    assert "haiku" in captured["model"]
+
+
+@pytest.mark.asyncio
+async def test_combine_digest_uses_fast_model():
+    import llm as helm_llm
+
+    with patch.object(helm_llm, "anthropic_configured", return_value=True), patch.object(
+        helm_llm, "complete", new_callable=AsyncMock, return_value="Combined briefing."
+    ) as complete:
+        text = await helm_llm.combine_daily_report_digest([
+            {"filename": "a.csv", "summary": "A is 1.", "key_figures": [], "unclear": False},
+            {"filename": "b.csv", "summary": "B is 2.", "key_figures": [], "unclear": False},
+        ])
+    assert text == "Combined briefing."
+    assert complete.await_args.kwargs["model"] == helm_llm.ANTHROPIC_MODEL_FAST
