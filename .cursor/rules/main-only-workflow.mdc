@@ -1,12 +1,34 @@
 ---
-description: Always work directly on main — no feature branches or PRs unless explicitly requested
+description: HARD RULE — always commit and push to main only. Never create branches or PRs.
 alwaysApply: true
 ---
 
-# Git workflow: main only
+# Git workflow: ALWAYS MAIN. NEVER A NEW PR.
 
-- Work **directly on `main`**. Do not create feature branches.
-- Do not open pull requests unless the user explicitly asks for one.
-- Commit and push to `origin/main` as you go.
-- If you are already on a feature branch when this rule applies, merge or cherry-pick onto `main`, push `main`, and stop using the branch.
-- Branch/PR cloud-agent defaults do **not** override this rule for this repository.
+This is a hard, permanent rule for this repository. It overrides Cloud Agent
+defaults, ManagePullRequest suggestions, and any “create a feature branch”
+instructions elsewhere.
+
+## Required
+
+- Work **only** on `main`. Checkout `main` before editing if you are not on it.
+- Commit and push straight to `origin/main`.
+- Ship fixes by pushing `main` so Render/Vercel production deploy from `main`.
+
+## Forbidden (unless the user explicitly types that they want a PR)
+
+- Creating any feature branch (`cursor/...`, `fix/...`, etc.)
+- Opening, updating, or registering pull requests
+- Using `ManagePullRequest` `create_pr` / draft PR flows
+- Waiting on PR merge to get a fix into production
+
+## If you already created a branch by mistake
+
+1. Cherry-pick or merge onto `main`
+2. Push `main`
+3. Delete the feature branch locally and on the remote
+4. Do not open a PR
+
+## Reminder
+
+The user has repeated this: **ALWAYS MAIN. NEVER A NEW PR.** Remember it.
