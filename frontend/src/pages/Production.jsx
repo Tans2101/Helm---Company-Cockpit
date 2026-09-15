@@ -373,7 +373,7 @@ export default function Production() {
     <div data-testid="production-page">
       <PageHeader
         title={data?.name || "Production"}
-        subtitle="Work order queue — fixed statuses, no pipeline setup."
+        subtitle="Work order queue with fixed statuses and no pipeline setup."
         action={action}
       />
 
@@ -405,7 +405,7 @@ export default function Production() {
           body={
             allOrders.length
               ? "Turn on “Show completed” to see finished jobs, or create a new work order."
-              : "Create a work order to start the queue — no stage setup needed."
+              : "Create a work order to start the queue. No stage setup needed."
           }
           action={(
             <button

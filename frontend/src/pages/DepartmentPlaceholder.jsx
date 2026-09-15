@@ -59,7 +59,7 @@ export default function DepartmentPlaceholder() {
               title={`${name} isn’t enabled yet`}
               body={
                 canManage
-                  ? "Enable this department to open its tools. Any CEO can turn on any catalog department — industry choice doesn’t restrict this."
+                  ? "Enable this department to open its tools. Any CEO can turn on any catalog department. Industry choice doesn’t restrict this."
                   : "This department isn’t enabled for your company. Ask your CEO to enable it from Account settings → Manage departments."
               }
               action={(
@@ -122,7 +122,7 @@ export default function DepartmentPlaceholder() {
       <GlassCard className="p-8">
         <EmptyState
           icon={Icon}
-          title={`${name} — coming soon`}
+          title={`${name} coming soon`}
           body={`${name} tools are coming soon. Reach out if there's a specific workflow you want prioritized.`}
         />
       </GlassCard>

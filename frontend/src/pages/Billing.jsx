@@ -85,7 +85,7 @@ export default function Billing() {
     if (planId === "free") return;
     const tier = plans.find((p) => p.id === planId);
     if (tier && tier.checkout_available === false) {
-      toast.error(`${tier.label} checkout isn’t set up yet — add PADDLE_PRICE_ID_${planId.toUpperCase()} on Render`);
+      toast.error(`${tier.label} checkout isn’t set up yet. Add PADDLE_PRICE_ID_${planId.toUpperCase()} on Render`);
       return;
     }
     setBusy(planId);
@@ -93,7 +93,7 @@ export default function Billing() {
       const { data: cfg } = await api.post("/billing/paddle/config", { plan: planId });
       const Paddle = await initPaddle(cfg.client_token, cfg.environment, (ev) => {
         if (ev?.name === "checkout.completed") {
-          toast.success("Payment received — activating your plan…");
+          toast.success("Payment received. Activating your plan…");
           setTimeout(() => window.location.reload(), 4500);
         }
       });
@@ -167,7 +167,7 @@ export default function Billing() {
     if (pendingPlan === plan.id) {
       return (
         <div className="text-center text-[11px] text-helm-muted border border-helm-line rounded-md py-2.5 px-2">
-          Scheduled — takes effect next billing period
+          Scheduled. Takes effect next billing period
         </div>
       );
     }
@@ -227,7 +227,7 @@ export default function Billing() {
 
       {trialing && (
         <div className="mb-6 rounded-lg border border-helm-gold/35 bg-helm-gold/12 px-4 py-3 text-sm text-helm-gold" data-testid="trialing-banner">
-          You’re on a free trial — cancel anytime before it ends to avoid being charged.
+          You’re on a free trial. Cancel anytime before it ends to avoid being charged.
         </div>
       )}
 
@@ -268,7 +268,7 @@ export default function Billing() {
             </SectionLabel>
             <p className="text-sm text-helm-muted mt-1">
               {data.ai_extracts_kind === "lifetime"
-                ? `${extractsUsed} of ${extractsLimit} free AI extracts used — then upgrade to continue`
+                ? `${extractsUsed} of ${extractsLimit} free AI extracts used, then upgrade to continue`
                 : extractsLimit > 0
                   ? `${extractsUsed} of ${extractsLimit} document uploads used`
                   : currentPlan === "free"

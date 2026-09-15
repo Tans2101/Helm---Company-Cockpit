@@ -157,10 +157,10 @@ export default function Landing() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">
-              Everything a CEO needs — nothing they don&apos;t.
+              Everything a CEO needs, nothing they don&apos;t.
             </h2>
             <p className="mt-5 text-helm-slate leading-relaxed">
-              Real surfaces from the cockpit — not illustrations.
+              Real surfaces from the cockpit, not illustrations.
             </p>
           </motion.div>
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="mt-14">

@@ -64,7 +64,7 @@ export default function Refunds() {
             <p>
               You can cancel anytime through the Paddle customer portal (linked from{" "}
               <Link to="/app/billing" className="text-helm-gold hover:underline">Billing</Link> when available).
-              Cancellation takes effect at the end of the current billing period — you keep access until that period ends,
+              Cancellation takes effect at the end of the current billing period. You keep access until that period ends,
               and you will not be charged for the next period. Canceling does not entitle you to a refund for time already
               paid in the current period.
             </p>

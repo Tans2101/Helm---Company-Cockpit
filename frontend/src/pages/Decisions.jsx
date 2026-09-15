@@ -104,7 +104,7 @@ export default function Decisions() {
 
   return (
     <div>
-      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals — you confirm before anything becomes a real call." action={addBtn} />
+      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals. You confirm before anything becomes a real call." action={addBtn} />
 
       {suggestions.length > 0 && (
         <div className="mb-8" data-testid="suggested-decisions">
@@ -129,7 +129,7 @@ export default function Decisions() {
       )}
 
       {decisions.length === 0 && suggestions.length === 0 ? (
-        <EmptyState title="No decisions yet" body="Log the calls that need to be made — or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
+        <EmptyState title="No decisions yet" body="Log the calls that need to be made, or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
           action={canAct ? <button data-testid="empty-new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Log first decision</button> : null} />
       ) : (
         <>

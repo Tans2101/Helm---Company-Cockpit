@@ -179,7 +179,7 @@ export default function Legal() {
     try {
       const { data: res } = await api.patch(`/legal/matters/${selected.id}`, body);
       if (res?.renewal_matter?.id) {
-        toast.success(`Matter filed — next cycle created (${res.renewal_matter.due_date || "set a due date"})`);
+        toast.success(`Matter filed. Next cycle created (${res.renewal_matter.due_date || "set a due date"})`);
       } else {
         toast.success("Matter updated");
       }
@@ -249,7 +249,7 @@ export default function Legal() {
     <div data-testid="legal-page">
       <PageHeader
         title={data?.name || "Legal"}
-        subtitle="Matter queue — contracts and reviews moving independently."
+        subtitle="Matter queue for contracts and reviews moving independently."
         action={(
           <button
             type="button"
@@ -600,7 +600,7 @@ export default function Legal() {
                 data-testid="legal-new-title"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="NDA — Acme Supplier"
+                placeholder="NDA: Acme Supplier"
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
                 autoFocus
               />

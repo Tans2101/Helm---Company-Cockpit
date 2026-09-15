@@ -201,7 +201,7 @@ export default function Tasks() {
 
   return (
     <div>
-      <PageHeader title="Tasks" subtitle="Delegate, track and sync work across your team. Drag cards across the board — your tasks are marked in gold." action={action} />
+      <PageHeader title="Tasks" subtitle="Delegate, track and sync work across your team. Drag cards across the board. Your tasks are marked in gold." action={action} />
       {data.items.length === 0 ? (
         <EmptyState title="No tasks yet" body="Create the first task, or assign work to a teammate."
           action={canCreate ? <button data-testid="empty-new-task-btn" onClick={() => { setForm(emptyTask()); setShowForm(true); }} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> New task</button> : null} />

@@ -50,7 +50,7 @@ export default function AskHelm() {
         return;
       }
       if (res.status === 429) {
-        let detail = "You've used your Ask Helm messages this month — upgrade to continue.";
+        let detail = "You've used your Ask Helm messages this month. Upgrade to continue.";
         try {
           const body = await res.json();
           if (body?.detail) detail = typeof body.detail === "string" ? body.detail : detail;
@@ -98,7 +98,7 @@ export default function AskHelm() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)]">
-      <PageHeader title="Ask Helm" subtitle="Your executive AI chief-of-staff — grounded in your live company data." />
+      <PageHeader title="Ask Helm" subtitle="Your executive AI chief-of-staff, grounded in your live company data." />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-6">
         {messages.length === 0 && (

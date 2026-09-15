@@ -32,7 +32,7 @@ const WHERE_DATA_LIVES = [
   {
     icon: Database,
     title: "MongoDB Atlas",
-    body: "Primary company data — workspaces, financials, pipeline, decisions, and team records — lives in a dedicated MongoDB database, not in the browser.",
+    body: "Primary company data (workspaces, financials, pipeline, decisions, and team records) lives in a dedicated MongoDB database, not in the browser.",
   },
   {
     icon: Cloud,
@@ -87,7 +87,7 @@ const CONTROLS = [
 const PRACTICES = [
   "Integration access is opt-in and can be disconnected at any time.",
   "Shared OAuth connections (Google, QuickBooks, Xero, HubSpot) can be used only by the teammate who connected them, or by a workspace owner. Legacy unstamped connections are limited to owners until someone reconnects.",
-  "Google is not read-only. The current Connect Google grant includes Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm — not a full mailbox or Drive dump.",
+  "Google is not read-only. The current Connect Google grant includes Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm, not a full mailbox or Drive dump.",
   "Workspaces that connected Google under the original Calendar + Gmail read grant keep that narrower access until an owner reconnects and accepts the wider consent screen.",
   "Payment card details are handled by Paddle, not stored on Helm servers.",
   "Authentication is handled by Clerk using secure session controls.",
@@ -102,7 +102,7 @@ const QUESTIONS = [
   },
   {
     q: "Does Helm store our full email inbox?",
-    a: "No. Helm reads Gmail metadata and short snippets (sender, subject, preview, thread link) for the briefing. Full message bodies are not stored as a mailbox archive. If compose access is granted, Helm can create a Gmail draft when you click Draft reply — it does not send mail. You send from Gmail.",
+    a: "No. Helm reads Gmail metadata and short snippets (sender, subject, preview, thread link) for the briefing. Full message bodies are not stored as a mailbox archive. If compose access is granted, Helm can create a Gmail draft when you click Draft reply. It does not send mail. You send from Gmail.",
   },
   {
     q: "What Google access does Helm request now?",
@@ -163,7 +163,7 @@ export default function Security() {
               className="mx-auto mt-7 max-w-2xl text-base leading-relaxed text-helm-slate md:text-lg"
             >
               Cash, decisions, documents, and connected systems are the operating picture of a company.
-              Helm is designed so that picture stays inside the workspace that owns it — from sign-in through deletion.
+              Helm is designed so that picture stays inside the workspace that owns it, from sign-in through deletion.
             </motion.p>
             <motion.p
               variants={fade}
@@ -186,7 +186,7 @@ export default function Security() {
             <p className="mt-5 max-w-3xl leading-relaxed text-helm-slate">
               Helm holds the numbers leadership uses to decide, the files finance and legal attach,
               and the tokens that connect accounting, CRM, and calendar. That is why security is
-              part of the product — not a footnote on a pricing page.
+              part of the product, not a footnote on a pricing page.
             </p>
           </div>
         </section>

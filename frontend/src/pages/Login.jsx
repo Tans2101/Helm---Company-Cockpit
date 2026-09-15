@@ -22,7 +22,7 @@ export default function Login() {
   if (!clerkEnabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-helm-ink p-8">
-        <p className="text-sm text-helm-status-negative">Sign-in is not available — Clerk is not configured on this deployment.</p>
+        <p className="text-sm text-helm-status-negative">Sign-in is not available. Clerk is not configured on this deployment.</p>
       </div>
     );
   }
@@ -98,7 +98,7 @@ function LoginClerk() {
             {HERO_SUB}
           </p>
         </div>
-        <p className="text-xs text-helm-muted">Know what matters — whenever you open Helm.</p>
+        <p className="text-xs text-helm-muted">Know what matters whenever you open Helm.</p>
       </div>
 
       <div className="flex items-center justify-center p-10 relative z-10">

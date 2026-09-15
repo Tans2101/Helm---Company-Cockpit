@@ -112,7 +112,7 @@ export default function People() {
         if (form.inviteToAccess) {
           toast.success(res.auto_joined ? "Added to roster and Team & Access" : res.email_sent ? "Added and invitation emailed" : "Added and invited to Team & Access");
         } else {
-          toast.success("Person added — headcount synced");
+          toast.success("Person added. Headcount synced");
         }
       }
       setShowForm(false);
@@ -127,7 +127,7 @@ export default function People() {
       return;
     }
     if (!window.confirm(`Remove ${p.name} from the roster?`)) return;
-    try { await api.delete(`/people/${p.id}`); reload(); toast.success("Person removed — headcount synced"); }
+    try { await api.delete(`/people/${p.id}`); reload(); toast.success("Person removed. Headcount synced"); }
     catch (e) { toast.error(e?.response?.data?.detail || "Could not delete"); }
   };
 
@@ -141,8 +141,8 @@ export default function People() {
   if (data.people.length === 0) {
     return (
       <div>
-        <PageHeader title="People" subtitle="Your team roster — linked with Team & Access for anyone who can log in." action={action} />
-        <EmptyState title="No people yet" body="Add your team here — invites from Team & Access show up automatically."
+        <PageHeader title="People" subtitle="Your team roster, linked with Team & Access for anyone who can log in." action={action} />
+        <EmptyState title="No people yet" body="Add your team here. Invites from Team & Access show up automatically."
           action={canWrite ? <button data-testid="empty-add-person-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first person</button> : null} />
         {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, person: editingPerson, close: () => setShowForm(false), canInvite, packOptions }} />}
       </div>
@@ -151,7 +151,7 @@ export default function People() {
 
   return (
     <div>
-      <PageHeader title="People" subtitle="Your team roster — who does what, and how headcount tracks over time." action={action} />
+      <PageHeader title="People" subtitle="Your team roster: who does what, and how headcount tracks over time." action={action} />
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <GlassCard className="p-5 fade-up">
@@ -172,8 +172,8 @@ export default function People() {
           <AlertTriangle className="w-4 h-4 text-helm-status-warning shrink-0" />
           <p className="text-sm text-helm-fg flex-1">
             {unassignedCount === 1
-              ? "1 person has no department — their work won't show up anywhere in Helm."
-              : `${unassignedCount} people have no department — their work won't show up anywhere in Helm.`}
+              ? "1 person has no department, so their work won't show up anywhere in Helm."
+              : `${unassignedCount} people have no department, so their work won't show up anywhere in Helm.`}
           </p>
           <Link
             to="/app/members"
@@ -210,7 +210,7 @@ export default function People() {
                       ? "bg-helm-gold/12 border border-helm-gold/35 text-helm-gold"
                       : "bg-transparent border border-dashed border-helm-muted/50 text-helm-muted",
                   )}
-                  title={p.has_access ? "Has Helm login" : "Roster only — no login"}
+                  title={p.has_access ? "Has Helm login" : "Roster only, no login"}
                   data-testid={`person-avatar-${p.id}`}
                 >
                   {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
@@ -299,7 +299,7 @@ function PersonForm({ form, setForm, submit, busy, editing, person, close, canIn
             <p className="mt-1 text-helm-muted">
               Assign access in{" "}
               <Link to="/app/members" className="text-helm-gold hover:underline">Team & Access</Link>
-              {" "}→ department membership — not from this roster field.
+              {" "}→ department membership, not from this roster field.
             </p>
           </div>
           {!editing && canInvite && (

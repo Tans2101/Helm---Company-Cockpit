@@ -161,7 +161,7 @@ export default function MyDay() {
       <div className="mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">My Day</p>
         <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-helm-fg">{greeting}, {first}.</h1>
-        <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
+        <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update. Start with what matters to you.</p>
       </div>
 
       {canActDecisions && (
@@ -175,7 +175,7 @@ export default function MyDay() {
           {needsCallEmpty ? (
             <GlassCard className="p-5">
               <p className="text-sm text-helm-fg">Nothing needs your call right now</p>
-              <p className="text-xs text-helm-muted mt-1">You&apos;re all caught up — open Decision Center anytime to log a new call or refresh suggestions.</p>
+              <p className="text-xs text-helm-muted mt-1">You&apos;re all caught up. Open Decision Center anytime to log a new call or refresh suggestions.</p>
             </GlassCard>
           ) : (
             <div className="space-y-3">
@@ -304,7 +304,7 @@ export default function MyDay() {
           )}
 
           {notes.length === 0 && !showNoteComposer ? (
-            <EmptyState title="No private notes yet" body="Sticky notes here are only visible to you — great for priorities, reminders, and scratch ideas."
+            <EmptyState title="No private notes yet" body="Sticky notes here are only visible to you, and are great for priorities, reminders, and scratch ideas."
               action={<button type="button" onClick={openNewNote} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add your first note</button>} />
           ) : (
             <div className="grid sm:grid-cols-2 gap-3" data-testid="sticky-notes-grid">

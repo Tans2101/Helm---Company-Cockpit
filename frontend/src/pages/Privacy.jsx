@@ -51,7 +51,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Financial &amp; business data</h2>
             <p>
-              Helm stores the business data you enter or generate in the product — for example revenue and expense entries,
+              Helm stores the business data you enter or generate in the product, for example revenue and expense entries,
               categories, tasks, decisions, reports, team roster, pipeline deals, and related workspace content.
               Financial figures come from what you manually enter or from documents you upload.
             </p>
@@ -63,7 +63,7 @@ export default function Privacy() {
               Documents you upload (such as bills, receipts, or invoices) are stored in a private{" "}
               <span className="text-helm-cream">Cloudflare R2</span> bucket. Files are not publicly accessible.
               When you upload a document for extraction, it is sent to <span className="text-helm-cream">Anthropic&apos;s Claude API</span>{" "}
-              for automated parsing. <span className="text-helm-cream">No human at Helm views your uploaded documents</span> —
+              for automated parsing. <span className="text-helm-cream">No human at Helm views your uploaded documents</span>,
               only the automated Claude process does, solely to extract suggested entries for your workspace.
             </p>
           </section>
@@ -74,11 +74,11 @@ export default function Privacy() {
               If you connect Google from Integrations, Helm requests access to{" "}
               <span className="text-helm-cream">Google Calendar</span> (read events, and write events when you
               create or update them in Helm), <span className="text-helm-cream">Gmail</span> (read message
-              metadata and short snippets for the briefing; compose access to create drafts — Helm does not
+              metadata and short snippets for the briefing; compose access to create drafts. Helm does not
               send mail), <span className="text-helm-cream">Google Sheets</span> (create a Financials export
               spreadsheet you trigger), and <span className="text-helm-cream">Google Drive</span> files you
               pick in Helm (bill import via <span className="font-mono text-xs">drive.file</span>, not full Drive).
-              For Gmail we do not store full email bodies as a mailbox archive — only the metadata needed to
+              For Gmail we do not store full email bodies as a mailbox archive, only the metadata needed to
               render the current briefing. Helm does not request <span className="font-mono text-xs">gmail.send</span>.
               The original Connect Google grant was Calendar and Gmail read-only; existing workspaces keep that
               narrower access until an owner reconnects and consents again. Nothing from Google is accessed
@@ -159,21 +159,21 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Where data is stored</h2>
             <ul className="list-disc pl-5 space-y-2 mt-2">
-              <li><span className="text-helm-cream">MongoDB Atlas</span> — primary database for account and business data</li>
-              <li><span className="text-helm-cream">Cloudflare R2</span> — uploaded document files (private bucket)</li>
-              <li><span className="text-helm-cream">Clerk</span> — authentication and login/session data</li>
-              <li><span className="text-helm-cream">Anthropic</span> — processes uploaded documents and Ask Helm messages</li>
-              <li><span className="text-helm-cream">Paddle</span> — payment processing</li>
-              <li><span className="text-helm-cream">Resend</span> — transactional email</li>
-              <li><span className="text-helm-cream">Vercel</span> — hosting and cookieless web analytics (page views)</li>
-              <li><span className="text-helm-cream">QuickBooks (Intuit)</span> — only for users who connect it</li>
+              <li><span className="text-helm-cream">MongoDB Atlas</span>: primary database for account and business data</li>
+              <li><span className="text-helm-cream">Cloudflare R2</span>: uploaded document files (private bucket)</li>
+              <li><span className="text-helm-cream">Clerk</span>: authentication and login/session data</li>
+              <li><span className="text-helm-cream">Anthropic</span>: processes uploaded documents and Ask Helm messages</li>
+              <li><span className="text-helm-cream">Paddle</span>: payment processing</li>
+              <li><span className="text-helm-cream">Resend</span>: transactional email</li>
+              <li><span className="text-helm-cream">Vercel</span>: hosting and cookieless web analytics (page views)</li>
+              <li><span className="text-helm-cream">QuickBooks (Intuit)</span>: only for users who connect it</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Retention &amp; deletion</h2>
             <p>
-              When you delete your account, your personal data is wiped immediately — there is no retention period after deletion.
+              When you delete your account, your personal data is wiped immediately. There is no retention period after deletion.
               Workspace owners can export a full data package for companies they own (workspace records with integration
               tokens stripped). Non-owner members receive their own account data plus a summary of workspaces they belong to.
               You can export and delete from{" "}

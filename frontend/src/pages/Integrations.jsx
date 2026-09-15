@@ -208,7 +208,7 @@ export default function Integrations() {
             : connected === "hubspot"
               ? "HubSpot"
             : connected;
-      toast.success(`${name} connected — your data will flow into Helm`);
+      toast.success(`${name} connected. Your data will flow into Helm`);
       setParams({});
       reload();
     } else if (params.get("xero_select")) {
@@ -360,7 +360,7 @@ export default function Integrations() {
     <div>
       <PageHeader
         title="Integrations"
-        subtitle="Connect your calendar, accounting, and tools — Helm pulls your data in so the briefing, financials, and calendar stay current."
+        subtitle="Connect your calendar, accounting, and tools. Helm pulls your data in so the briefing, financials, and calendar stay current."
       />
 
       <GlassCard className="p-4 mb-8 fade-up border-helm-line">
@@ -456,7 +456,7 @@ export default function Integrations() {
       {roadmap.length > 0 && (
         <>
           <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-3">Coming soon</h2>
-          <p className="text-sm text-helm-muted mb-4 max-w-2xl">More connections on the way — engineering tools next.</p>
+          <p className="text-sm text-helm-muted mb-4 max-w-2xl">More connections on the way, with engineering tools next.</p>
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
             {roadmap.map((it) => (
               <IntegrationCard

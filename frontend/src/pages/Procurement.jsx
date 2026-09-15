@@ -339,7 +339,7 @@ export default function Procurement() {
     <div data-testid="procurement-page">
       <PageHeader
         title={data?.name || "Procurement"}
-        subtitle="Purchase request queue — each request moves independently."
+        subtitle="Purchase request queue. Each request moves independently."
         action={action}
       />
 
@@ -627,7 +627,7 @@ export default function Procurement() {
           <div className="relative w-full max-w-sm rounded-md border border-helm-line bg-helm-card p-5 space-y-3">
             <p className="text-sm font-medium text-helm-fg">Expected delivery date?</p>
             <p className="text-sm text-helm-muted leading-relaxed">
-              Optional — add a vendor delivery date so Helm can flag this request if it runs late.
+              Optional: add a vendor delivery date so Helm can flag this request if it runs late.
             </p>
             <input
               type="date"
@@ -742,7 +742,7 @@ export default function Procurement() {
                   >
                     <span className="font-medium">{s.vendor_name}</span>
                     <span className="text-helm-muted">
-                      {" — "}
+                      {" · "}
                       {s.last_cost != null ? `last paid $${Number(s.last_cost).toFixed(2)}` : "no cost on file"}
                       {`, ordered ${s.times_used}x`}
                       {s.last_ordered_at ? `, most recently ${String(s.last_ordered_at).slice(0, 10)}` : ""}

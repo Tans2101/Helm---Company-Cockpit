@@ -490,7 +490,7 @@ export default function CalendarPage() {
         window.location.href = res.authorization_url;
         return;
       }
-      toast.info(res.message || "Google Calendar isn't available yet — try again later.");
+      toast.info(res.message || "Google Calendar isn't available yet. Try again later.");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start Google Calendar connection");
     } finally {
@@ -530,9 +530,9 @@ export default function CalendarPage() {
               <Link2 className="w-4 h-4" />{connecting ? "Connecting…" : "Connect Google Calendar"}
             </button>
           ) : (
-            <span className="text-xs text-helm-muted border border-helm-line rounded-md px-3 py-2">Google Calendar — unavailable on this instance</span>
+            <span className="text-xs text-helm-muted border border-helm-line rounded-md px-3 py-2">Google Calendar unavailable on this instance</span>
           )}
-          <span className="text-xs text-helm-muted border border-helm-line rounded-md px-3 py-2">Microsoft Teams — coming soon</span>
+          <span className="text-xs text-helm-muted border border-helm-line rounded-md px-3 py-2">Microsoft Teams coming soon</span>
         </div>
       </div>
     </GlassCard>
@@ -572,7 +572,7 @@ export default function CalendarPage() {
         <div>
           <h1 className="font-display text-2xl md:text-3xl font-normal tracking-tight text-helm-fg">Calendar</h1>
           <p className="text-helm-muted text-sm mt-1">
-            {googleConnected ? "Synced with Google Calendar" : "Helm events and deadlines — connect Google to sync external meetings"}
+            {googleConnected ? "Synced with Google Calendar" : "Helm events and deadlines. Connect Google to sync external meetings"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">

@@ -261,7 +261,7 @@ export default function Maintenance() {
     <div data-testid="maintenance-page">
       <PageHeader
         title={data?.name || "Engineering & Maintenance"}
-        subtitle="Ticket queue — repairs and maintenance moving independently."
+        subtitle="Ticket queue for repairs and maintenance moving independently."
         action={(
           <button
             type="button"
@@ -303,7 +303,7 @@ export default function Maintenance() {
             </span>
             {" "}across {downtimeSummary.ticket_count || 0} ticket
             {(downtimeSummary.ticket_count || 0) === 1 ? "" : "s"}
-            {" — "}time tickets were open, not confirmed machine-down time
+             (time tickets were open, not confirmed machine-down time)
           </p>
           {(downtimeSummary.by_equipment || []).length > 0 && (
             <ul

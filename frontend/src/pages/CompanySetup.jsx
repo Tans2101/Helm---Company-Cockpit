@@ -170,7 +170,7 @@ export default function CompanySetup({ company }) {
                   </div>
                   <div>
                     <h2 className="text-lg text-helm-fg tracking-tight">About your company</h2>
-                    <p className="text-xs text-helm-muted mt-0.5">Name, industry, and how established you are — the basics for your cockpit.</p>
+                    <p className="text-xs text-helm-muted mt-0.5">Name, industry, and how established you are: the basics for your cockpit.</p>
                   </div>
                 </div>
                 <div className="space-y-5">
@@ -318,7 +318,7 @@ export default function CompanySetup({ company }) {
                   ))}
                 </dl>
                 <p className="mt-5 text-xs text-helm-muted leading-relaxed">
-                  Next you'll choose whether to explore with sample data or start clean — then activate Helm when you're ready.
+                  Next you'll choose whether to explore with sample data or start clean, then activate Helm when you're ready.
                 </p>
               </div>
             )}

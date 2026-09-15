@@ -189,7 +189,7 @@ export default function HR() {
       await Promise.all([reload(), reloadEmp(), reloadSummary()]);
       if (res?.instance?.id) setSelectedId(res.instance.id);
       if (res?.instance?.overall_status === "active") {
-        toast.success("Onboarding complete — employee record created");
+        toast.success("Onboarding complete. Employee record created");
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update step");
@@ -292,7 +292,7 @@ export default function HR() {
       await Promise.all([reloadOff(), reloadEmp(), reloadSummary()]);
       if (res?.instance?.id) setSelectedOffId(res.instance.id);
       if (res?.instance?.overall_status === "active") {
-        toast.success("Offboarding complete — employee marked departed");
+        toast.success("Offboarding complete. Employee marked departed");
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not update step");
@@ -372,7 +372,7 @@ export default function HR() {
     <div data-testid="hr-page">
       <PageHeader
         title={data?.name || "HR"}
-        subtitle="Onboarding, employee records, and offboarding — no sensitive employment data stored."
+        subtitle="Onboarding, employee records, and offboarding, with no sensitive employment data stored."
         action={(
           <div className="flex items-center gap-2">
             {isLead && tab === "onboarding" && (
@@ -498,7 +498,7 @@ export default function HR() {
                 all.length
                   ? "Turn on “Show completed” to see finished hires, or start a new one."
                   : isLead
-                    ? "Start onboarding for a new hire — their checklist is copied from the template."
+                    ? "Start onboarding for a new hire. Their checklist is copied from the template."
                     : "Ask an HR lead or the CEO to start onboarding for a new hire."
               }
               action={isLead ? (
@@ -680,7 +680,7 @@ export default function HR() {
             <EmptyState
               icon={Users}
               title="No employee records yet"
-              body="Complete an onboarding checklist — that creates the employee record automatically."
+              body="Complete an onboarding checklist, which creates the employee record automatically."
             />
           ) : (
             <div className="overflow-x-auto rounded-md border border-helm-line mb-6">
@@ -729,7 +729,7 @@ export default function HR() {
                   <SectionLabel>Employee</SectionLabel>
                   <p className="text-helm-fg text-sm mt-1">{selectedEmp.name}</p>
                   <p className="text-xs text-helm-muted mt-1">
-                    Employment record only — Helm never stores medical data, government IDs, compensation, or protected characteristics.
+                    Employment record only. Helm never stores medical data, government IDs, compensation, or protected characteristics.
                   </p>
                 </div>
                 <button type="button" onClick={() => setSelectedEmpId(null)} className="text-helm-muted hover:text-helm-fg">
@@ -800,7 +800,7 @@ export default function HR() {
               title="No leave requests"
               body={
                 myLinkedEmployees.length
-                  ? "Submit a leave request — approved dates appear on the Calendar."
+                  ? "Submit a leave request. Approved dates appear on the Calendar."
                   : isLead
                     ? "Link an employee to a Helm user (or create records via onboarding) before requesting leave."
                     : "Ask an HR lead to link your account to an employee record, then you can request leave."

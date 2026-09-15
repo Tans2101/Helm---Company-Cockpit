@@ -35,7 +35,7 @@ export default function Features() {
           </motion.h1>
           <motion.p variants={fade} initial="hidden" animate="show" custom={2}
             className="mt-6 text-lg text-helm-slate leading-relaxed">
-            Briefing, decisions, departments, and the rest of the cockpit —
+            Briefing, decisions, departments, and the rest of the cockpit,
             each designed to answer a specific leadership question:
             what changed, what to decide, what to delegate, and whether it landed.
           </motion.p>
@@ -47,7 +47,7 @@ export default function Features() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-3xl md:text-4xl font-medium tracking-tight max-w-xl leading-tight">
-              Production, Procurement, and Decision Center — as they appear in Helm.
+              Production, Procurement, and Decision Center as they appear in Helm.
             </h2>
           </motion.div>
           <div className="mt-12">

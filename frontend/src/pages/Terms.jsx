@@ -56,7 +56,7 @@ export default function Terms() {
           </section>
 
           <section className="rounded-lg border border-helm-line border-l-2 border-l-helm-gold/70 bg-helm-card p-5">
-            <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy — please read</h2>
+            <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy: please read</h2>
             <p className="text-helm-fg">
               Helm uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to
               generate AI briefings and summaries. <span className="text-helm-cream font-medium">You must independently verify
@@ -73,7 +73,7 @@ export default function Terms() {
               options, prices, and feature limits are shown on the{" "}
               <Link to="/app/billing" className="text-helm-gold hover:underline">Billing</Link> page (and marketing pricing).
               Paid plans include a <span className="text-helm-cream">7-day free trial</span>. After a payment is processed,
-              charges are non-refundable — see our{" "}
+              charges are non-refundable. See our{" "}
               <Link to="/refunds" className="text-helm-gold hover:underline">Refund &amp; Billing Policy</Link>.
               You may cancel anytime; cancellation takes effect at the end of the current billing period.
               Failure to pay may result in downgrade or suspension of paid features.

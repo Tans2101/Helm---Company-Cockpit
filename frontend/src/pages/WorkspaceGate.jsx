@@ -76,7 +76,7 @@ export default function WorkspaceGate() {
               className="text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] p-6 transition-colors hover:border-helm-gold/35 group">
               <div className="w-11 h-11 rounded-xl bg-helm-fg/[0.04] border border-helm-line flex items-center justify-center"><Building2 className="w-5 h-5 text-helm-gold" /></div>
               <h3 className="mt-4 text-lg text-helm-fg tracking-tight">Create a company</h3>
-              <p className="mt-1.5 text-sm text-helm-muted leading-relaxed">Name your company now — you'll set up the rest (stage, team, industry) on the next screen.</p>
+              <p className="mt-1.5 text-sm text-helm-muted leading-relaxed">Name your company now. You'll set up the rest (stage, team, industry) on the next screen.</p>
               <span className="mt-4 inline-flex items-center gap-1.5 text-sm text-helm-gold">Get started <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
           </div>

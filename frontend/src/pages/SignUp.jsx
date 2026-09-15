@@ -22,7 +22,7 @@ export default function SignUpPage() {
   if (!clerkEnabled) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-helm-ink p-8">
-        <p className="text-sm text-helm-status-negative">Sign-up is not available — Clerk is not configured on this deployment.</p>
+        <p className="text-sm text-helm-status-negative">Sign-up is not available. Clerk is not configured on this deployment.</p>
       </div>
     );
   }
@@ -93,7 +93,7 @@ function SignUpClerk() {
             {TAGLINE}
           </h1>
           <p className="text-helm-slate text-base md:text-lg mt-6 leading-relaxed">
-            Create your account and set up your workspace. Start on Free, or upgrade anytime — paid plans include a 7-day trial.
+            Create your account and set up your workspace. Start on Free, or upgrade anytime. Paid plans include a 7-day trial.
           </p>
         </div>
         <p className="text-xs text-helm-muted">
@@ -105,7 +105,7 @@ function SignUpClerk() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Create your account</h2>
-          <p className="text-helm-slate text-sm mt-2">Google or email — activate Helm after sign-up.</p>
+          <p className="text-helm-slate text-sm mt-2">Google or email. Activate Helm after sign-up.</p>
           {passwordMinLength > 8 && (
             <p className="mt-3 text-sm text-helm-gold/90">
               Email sign-up needs a password of at least {passwordMinLength} characters

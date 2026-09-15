@@ -106,7 +106,7 @@ export default function Telemetry() {
       />
     );
   }
-  if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." /><EmptyState title="No telemetry yet" body="Log financials and add your team — your KPIs build from real data." /></div>;
+  if ((data.kpis || []).length === 0) return <div><PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." /><EmptyState title="No telemetry yet" body="Log financials and add your team. Your KPIs build from real data." /></div>;
 
   const asOf = data.data_as_of ? new Date(data.data_as_of).toLocaleString() : null;
   const canWrite = data.can_write;
@@ -161,7 +161,7 @@ export default function Telemetry() {
     <div>
       <PageHeader
         title="Telemetry"
-        subtitle="Live KPIs from your integrated sources — financials, pipeline, people, and tasks."
+        subtitle="Live KPIs from your integrated sources: financials, pipeline, people, and tasks."
         action={canWrite ? (
           <button type="button" onClick={() => openEdit()} className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10">
             <PenLine className="w-3.5 h-3.5" /> Edit telemetry
@@ -202,7 +202,7 @@ export default function Telemetry() {
         <GlassCard className="p-5 fade-up">
           <SectionLabel className="mb-4">{hasTargetLine ? "MRR vs Target" : "MRR"}</SectionLabel>
           {(data.revenue_trend || []).length === 0 ? (
-            <p className="text-sm text-helm-muted py-10 text-center">No revenue series yet — add financial entries to plot MRR.</p>
+            <p className="text-sm text-helm-muted py-10 text-center">No revenue series yet. Add financial entries to plot MRR.</p>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={data.revenue_trend} margin={{ left: -18, right: 8, top: 8 }}>
@@ -273,7 +273,7 @@ export default function Telemetry() {
             </div>
           )}
           {!editing && !data.risks?.length && canWrite && (
-            <p className="text-sm text-helm-muted">No risks logged yet — click Edit telemetry to add what you&apos;re watching.</p>
+            <p className="text-sm text-helm-muted">No risks logged yet. Click Edit telemetry to add what you&apos;re watching.</p>
           )}
 
           {!editing && suggestedRisks.length > 0 && (
@@ -351,7 +351,7 @@ export default function Telemetry() {
 
             <label className="text-xs text-helm-muted block mb-5">
               Radar notes
-              <span className="block font-normal text-[11px] text-helm-muted/80 mt-0.5">Optional context for the whole radar — not a risk itself.</span>
+              <span className="block font-normal text-[11px] text-helm-muted/80 mt-0.5">Optional context for the whole radar, not a risk itself.</span>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

@@ -17,7 +17,7 @@ const fade = {
 };
 
 const DIFFERENTIATORS = [
-  { title: "Synthesis, not dashboards", body: "We don't give you more charts — we tell you what moved, why it matters, and what to do about it." },
+  { title: "Synthesis, not dashboards", body: "We don't give you more charts. We tell you what moved, why it matters, and what to do about it." },
   { title: "Decisions, not data dumps", body: "Every module points toward a call you need to make or a handoff you need to give. Helm tracks whether outcomes landed." },
   { title: "Quiet control", body: "No noise, no engagement bait, no notification spam. Just the signal a CEO needs to run the company." },
   { title: "CEO-first, always", body: "Your leadership team contributes through role-based access. The briefing, synthesis, and decision queue belong to you." },
@@ -37,7 +37,7 @@ export default function About() {
             className="font-mono text-xs uppercase tracking-[0.3em] text-helm-slate">{CATEGORY}</motion.p>
           <motion.h1 variants={fade} initial="hidden" animate="show" custom={1}
             className="font-display mt-8 text-5xl md:text-6xl font-medium tracking-[-0.03em] leading-[1.05]">
-            Built for CEOs who run the company — not chase it.
+            Built for CEOs who run the company, not chase it.
           </motion.h1>
           <motion.p variants={fade} initial="hidden" animate="show" custom={2}
             className="mt-8 text-lg text-helm-slate leading-relaxed">
@@ -73,8 +73,8 @@ export default function About() {
           <div>
             <h2 className="font-display text-3xl font-medium tracking-tight">Who Helm is for</h2>
             <p className="mt-5 text-helm-slate leading-relaxed mb-10">
-              {AUDIENCE} If you&apos;re the person everyone counts on — the one who needs the whole picture,
-              makes the hard calls, and delegates the rest — Helm is your cockpit.
+              {AUDIENCE} If you&apos;re the person everyone counts on, the one who needs the whole picture,
+              makes the hard calls, and delegates the rest. Helm is your cockpit.
             </p>
             <div className="border-t border-helm-cream/[0.06]">
               {WHO_HELM_IS_FOR.map((item) => (

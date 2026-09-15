@@ -33,7 +33,7 @@ export default function Onboarding() {
           </div>
           <h3 className="mt-5 text-xl text-helm-fg tracking-tight">Explore with sample data</h3>
           <p className="mt-2 text-sm text-helm-muted leading-relaxed flex-1">
-            Load "Northwind Robotics" — a realistic company with financials, decisions, tasks and a team. See exactly how Helm works in 10 seconds.
+            Load "Northwind Robotics", a realistic company with financials, decisions, tasks and a team. See exactly how Helm works in 10 seconds.
           </p>
           <ul className="mt-4 space-y-1.5">
             {["6 months of financials", "Live briefing & decisions", "Full team & telemetry"].map((f) => (
@@ -53,7 +53,7 @@ export default function Onboarding() {
           </div>
           <h3 className="mt-5 text-xl text-helm-fg tracking-tight">Start clean</h3>
           <p className="mt-2 text-sm text-helm-muted leading-relaxed flex-1">
-            Begin with an empty cockpit and make it yours. Log your financials, invite your team, and connect your tools — Helm builds your command center around real data.
+            Begin with an empty cockpit and make it yours. Log your financials, invite your team, and connect your tools. Helm builds your command center around real data.
           </p>
           <ul className="mt-4 space-y-1.5">
             {["Log financials in Helm", "Invite your finance team", "Connect Google, QuickBooks & more"].map((f) => (

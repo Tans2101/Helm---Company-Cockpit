@@ -108,11 +108,11 @@ export default function Financials() {
         { timeout: 120000 },
       );
       if (extracted?.error === "not_financial") {
-        toast.error("This doesn't look like a bill or invoice — upload a financial document only.");
+        toast.error("This doesn't look like a bill or invoice. Upload a financial document only.");
         return;
       }
       if (extracted?.error === "unparseable_amount") {
-        toast.error("Couldn't read a clear amount from this document — try entering it manually.");
+        toast.error("Couldn't read a clear amount from this document. Try entering it manually.");
         return;
       }
       const entryType = extracted.type === "revenue" ? "revenue" : "expense";
@@ -194,11 +194,11 @@ export default function Financials() {
         { timeout: 120000 },
       );
       if (extracted?.error === "not_financial") {
-        toast.error("This doesn't look like a bill or invoice — pick a financial document.");
+        toast.error("This doesn't look like a bill or invoice. Pick a financial document.");
         return;
       }
       if (extracted?.error === "unparseable_amount") {
-        toast.error("Couldn't read a clear amount from this document — try entering it manually.");
+        toast.error("Couldn't read a clear amount from this document. Try entering it manually.");
         return;
       }
       const entryType = extracted.type === "revenue" ? "revenue" : "expense";
@@ -363,7 +363,7 @@ export default function Financials() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setCsvPreview(preview);
-      toast.success(`Parsed ${preview.valid_count || 0} row(s) — review before importing`);
+      toast.success(`Parsed ${preview.valid_count || 0} row(s). Review before importing`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not parse CSV");
     } finally {
@@ -470,7 +470,7 @@ export default function Financials() {
 
   return (
     <div>
-      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here — Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
+      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
 
       {csvPreview && (
         <GlassCard className="p-5 mb-6 fade-up" data-testid="csv-import-preview">
@@ -479,7 +479,7 @@ export default function Financials() {
               <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-gold">CSV import preview</p>
               <p className="text-sm text-helm-muted mt-1">
                 {csvPreview.valid_count} ready · {csvPreview.skipped_count} skipped
-                {csvPreview.filename ? ` · ${csvPreview.filename}` : ""} — nothing is saved until you confirm.
+                {csvPreview.filename ? ` · ${csvPreview.filename}` : ""}. Nothing is saved until you confirm.
               </p>
             </div>
             <button type="button" onClick={() => setCsvPreview(null)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
@@ -747,13 +747,13 @@ export default function Financials() {
             {form.extract_confidence === "low" && (
               <div className="mb-4 flex items-start gap-2 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 px-3 py-2.5 text-sm text-helm-fg" data-testid="low-confidence-banner">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Double-check this one — I wasn&apos;t fully sure.</span>
+                <span>Double-check this one. I wasn&apos;t fully sure.</span>
               </div>
             )}
             {form.source_document_id && (
               <p className="mb-4 text-xs text-helm-muted flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-helm-gold" />
-                Pre-filled from your upload — edit anything before saving.
+                Pre-filled from your upload. Edit anything before saving.
               </p>
             )}
             <div className="grid grid-cols-2 gap-3">

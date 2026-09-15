@@ -220,7 +220,7 @@ export default function Pipeline() {
 
   return (
     <div>
-      <PageHeader title="Sales Pipeline" subtitle="Log deals and stages — pipeline signals roll straight into the CEO Briefing." action={action} />
+      <PageHeader title="Sales Pipeline" subtitle="Log deals and stages. Pipeline signals roll straight into the CEO Briefing." action={action} />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
@@ -239,7 +239,7 @@ export default function Pipeline() {
       </div>
 
       {deals.length === 0 ? (
-        <EmptyState icon={TrendingUp} title={mineOnly ? "No deals assigned to you" : "No deals yet"} body={mineOnly ? "Deals you own will show up here. Ask a Sales lead to assign one, or clear the filter." : "Add your first deal — as it moves through stages, the CEO sees it in the briefing."}
+        <EmptyState icon={TrendingUp} title={mineOnly ? "No deals assigned to you" : "No deals yet"} body={mineOnly ? "Deals you own will show up here. Ask a Sales lead to assign one, or clear the filter." : "Add your first deal. As it moves through stages, the CEO sees it in the briefing."}
           action={!mineOnly && canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
       ) : (
         <>
@@ -322,7 +322,7 @@ export default function Pipeline() {
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="deal-form">
             <div className="flex items-center justify-between mb-5"><h3 className="text-lg text-helm-fg font-light">{editing ? "Edit deal" : "New deal"}</h3><button onClick={() => setShowForm(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button></div>
             <label className="text-xs text-helm-muted block">Deal name
-              <input data-testid="deal-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Acme Corp — Enterprise" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
+              <input data-testid="deal-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Acme Corp Enterprise" className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2 focus:outline-none focus:border-helm-gold/40" />
             </label>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="text-xs text-helm-muted">Company

@@ -163,7 +163,7 @@ export default function Reports() {
       if (copyTimer.current) clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Could not copy — select the text instead");
+      toast.error("Could not copy. Select the text instead");
     }
   };
 
@@ -274,7 +274,7 @@ export default function Reports() {
         <div className="mb-8" data-testid="department-drafts">
           <SectionLabel className="mb-3">Suggested from your departments</SectionLabel>
           <p className="text-sm text-helm-muted mb-3">
-            Rollups of completed department work this week. Review before they become a report — they are not published until you say so.
+            Rollups of completed department work this week. Review before they become a report. They are not published until you say so.
           </p>
           <div className="grid md:grid-cols-3 gap-4">
             {drafts.map((d, i) => (
@@ -335,7 +335,7 @@ export default function Reports() {
 
       {manual.length === 0 && canWrite && (
         <div className="mb-8">
-          <EmptyState title="No manual reports yet" body="Add your first report — weekly sales, production uptime, procurement status, or anything your team tracks." />
+          <EmptyState title="No manual reports yet" body="Add your first report: weekly sales, production uptime, procurement status, or anything your team tracks." />
         </div>
       )}
 
@@ -343,7 +343,7 @@ export default function Reports() {
         <div className="mb-8" data-testid="week-over-week-trends">
           <SectionLabel className="mb-2">Week-over-week trends</SectionLabel>
           <p className="text-sm text-helm-muted mb-4 max-w-2xl leading-relaxed">
-            Auto-generated from your data — use these as a starting point for your own report.
+            Auto-generated from your data. Use these as a starting point for your own report.
           </p>
           <div className="grid md:grid-cols-3 gap-4">
             {auto.map((r, i) => (
@@ -367,7 +367,7 @@ export default function Reports() {
             <div>
               <SectionLabel>Financial Export</SectionLabel>
               <p className="text-sm text-helm-muted max-w-xl mt-1">
-                Income Statement, Cash Summary, and named line items for a selected month — the same figures as Financials, ready for your accountant. Not a balance sheet.
+                Income Statement, Cash Summary, and named line items for a selected month: the same figures as Financials, ready for your accountant. Not a balance sheet.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
