@@ -9,19 +9,19 @@ export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
 export const PUBLIC_CONTACT_EMAIL = "contact@helmcontrol.online";
 export const PUBLIC_CONTACT_MAILTO = `mailto:${PUBLIC_CONTACT_EMAIL}`;
 export const FOUNDER_NOTE =
-  "Helm is built and run by Tansher Dhawan, CEO & Founder — a CEO making the cockpit he wished existed for running a company of this size."
+  "Helm is built and run by Tansher Dhawan, CEO & Founder, a CEO making the cockpit he wished existed for running a company of this size."
 
 export const HERO_SUB =
-  "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal — see what changed, make the call, and get back to running the business.";
+  "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear decisions — so you run the business instead of chasing it.";
+  "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear decisions, so you run the business instead of chasing it.";
 
 export const VISION =
-  "A world where running a company doesn't mean drowning in dashboards — leaders see what matters, decide fast, and delegate with confidence.";
+  "A world where running a company doesn't mean drowning in dashboards. Leaders see what matters, decide fast, and delegate with confidence.";
 
 export const ABOUT_STORY =
-  "Helm started from a simple frustration: CEOs running companies of up to 50 people waste hours opening twelve tabs — Slack, the CRM, the finance sheet, the shop floor, email — and still lack a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
+  "Helm started from a simple frustration: CEOs running companies of up to 50 people waste hours opening twelve tabs (Slack, the CRM, the finance sheet, the shop floor, email) and still lack a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs, not another dashboard to maintain.";
 
 export const VALUES = [
   {
@@ -34,14 +34,14 @@ export const VALUES = [
   },
   {
     title: "Honest synthesis",
-    body: "AI recommendations cite your real numbers — cash, pipeline, team load — not generic advice. When data is missing, Helm says so.",
+    body: "AI recommendations cite your real numbers: cash, pipeline, and team load, not generic advice. When data is missing, Helm says so.",
   },
 ];
 
 export const WHO_HELM_IS_FOR = [
   {
     title: "CEOs of companies up to 50",
-    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you a clear view to share with your leadership team — without hiring a chief of staff.",
+    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you a clear view to share with your leadership team without hiring a chief of staff.",
   },
   {
     title: "Owner-operators & traditional businesses",
@@ -49,42 +49,42 @@ export const WHO_HELM_IS_FOR = [
   },
   {
     title: "Leadership teams",
-    body: "From a handful of people to fifty — finance, sales, ops, and production keep their lanes. You get one synthesized view.",
+    body: "From a handful of people to fifty. Finance, sales, ops, and production keep their lanes. You get one synthesized view.",
   },
 ];
 
 export const CEO_DAY = [
-  { title: "Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
+  { title: "Briefing", body: "Three columns: what changed, what to decide, what to delegate, plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
   { title: "Decision Center", body: "Pending approvals ranked by impact. Helm recommends which to tackle first and why." },
-  { title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
-  { title: "CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
+  { title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" answered from your financials and pipeline, not the internet." },
+  { title: "CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions, generated in one click, ready to share with your leadership team." },
 ];
 
 export const PRICING_FAQ = [
   { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract quotas, more seats, and QuickBooks." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50 — with role-based access packs." },
+  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
   { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
-  { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment — use the trial to evaluate." },
+  { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment. Use the trial to evaluate." },
 ];
 
 export const FEATURE_CATEGORIES = [
   {
     id: "intelligence",
     label: "Executive intelligence",
-    intro: "AI grounded in your company — not generic chatbot answers.",
+    intro: "AI grounded in your company, not generic chatbot answers.",
     modules: ["Briefing", "Decision Center", "Ask Helm", "CEO Pack", "Gmail thread surfacing + AI draft replies"],
   },
   {
     id: "finance",
     label: "Finance & growth",
-    intro: "Pipeline and financials are connected — won deals land as revenue, not a spreadsheet chase.",
+    intro: "Pipeline and financials are connected: won deals land as revenue, not a spreadsheet chase.",
     modules: ["Won deals become revenue", "Deal ownership & follow-ups", "Telemetry"],
   },
   {
     id: "operations",
     label: "Production, procurement & maintenance",
-    intro: "Not three separate trackers. When production is blocked, Helm shows you exactly why — and jumps that item to the top of whichever queue is holding it up.",
+    intro: "Not three separate trackers. When production is blocked, Helm shows you exactly why, and jumps that item to the top of whichever queue is holding it up.",
     modules: [
       "Work order tracking",
       "Vendor memory",
@@ -95,7 +95,7 @@ export const FEATURE_CATEGORIES = [
   {
     id: "people",
     label: "People & operations",
-    intro: "Team access, department lanes, and integrations — everyone contributes, you stay in control.",
+    intro: "Team access, department lanes, and integrations. Everyone contributes, you stay in control.",
     modules: ["Integrations", "Team & Access"],
   },
 ];
@@ -187,7 +187,7 @@ export const PRODUCT_FACTS = [
 export const PROBLEMS = [
   {
     title: "The answer is scattered",
-    body: "What needs your attention lives across Slack, the CRM, the finance sheet, the floor, and six dashboards. Nobody has the whole picture — least of all you.",
+    body: "What needs your attention lives across Slack, the CRM, the finance sheet, the floor, and six dashboards. Nobody has the whole picture, least of all you.",
   },
   {
     title: "You react instead of lead",
@@ -195,7 +195,7 @@ export const PROBLEMS = [
   },
   {
     title: "Dashboards ≠ decisions",
-    body: "More charts don't help. You need synthesis — the one number that moved, the one call to make, the one thing to hand off.",
+    body: "More charts don't help. You need synthesis: the one number that moved, the one call to make, the one thing to hand off.",
   },
 ];
 
@@ -206,9 +206,9 @@ export const HOW_IT_WORKS = [
 ];
 
 export const FEATURE_HIGHLIGHTS = [
-  { title: "Briefing", body: "What changed, what to decide, what to delegate — synthesized from your live company data." },
+  { title: "Briefing", body: "What changed, what to decide, what to delegate, synthesized from your live company data." },
   { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus outcome checks." },
-  { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking — always know where the money stands." },
+  { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking. Always know where the money stands." },
   { title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },
 ];
 
@@ -217,12 +217,12 @@ export const DEPARTMENTS_SECTION = {
   label: "Departments",
   title: "Turn on only the departments your company actually needs.",
   intro:
-    "Give each team its own lane — Procurement, Production, Accounting & Finance, Sales, Legal, HR, Engineering & Maintenance — while you see everything from the top. Disable what you don't use.",
+    "Give each team its own lane (Procurement, Production, Accounting & Finance, Sales, Legal, HR, Engineering & Maintenance) while you see everything from the top. Disable what you don't use.",
   items: [
     {
       name: "Procurement",
       icon: "package",
-      body: "A purchase request queue: requested, approved, ordered, delivered — each request moves on its own.",
+      body: "A purchase request queue: requested, approved, ordered, delivered. Each request moves on its own.",
     },
     {
       name: "Production",
@@ -237,7 +237,7 @@ export const DEPARTMENTS_SECTION = {
     {
       name: "Sales",
       icon: "briefcase",
-      body: "Deal pipeline by stage — open value and wins roll straight into the briefing.",
+      body: "Deal pipeline by stage: open value and wins roll straight into the briefing.",
     },
     {
       name: "Legal",
@@ -247,12 +247,12 @@ export const DEPARTMENTS_SECTION = {
     {
       name: "HR",
       icon: "users",
-      body: "Per-hire onboarding from a reusable template — each new hire gets their own checklist with assignees.",
+      body: "Per-hire onboarding from a reusable template. Each new hire gets their own checklist with assignees.",
     },
     {
       name: "Engineering & Maintenance",
       icon: "wrench",
-      body: "A ticket queue for equipment: reported, diagnosed, in repair, resolved — assign a technician and track it.",
+      body: "A ticket queue for equipment: reported, diagnosed, in repair, resolved. Assign a technician and track it.",
     },
   ],
 };
@@ -260,75 +260,75 @@ export const DEPARTMENTS_SECTION = {
 export const FEATURE_MODULES = [
   {
     title: "Briefing",
-    ceoValue: "Know what changed and what needs you — whenever you open Helm.",
-    body: "Three columns — what changed, what to decide, what to delegate — plus AI synthesis when you need the full picture.",
+    ceoValue: "Know what changed and what needs you whenever you open Helm.",
+    body: "Three columns: what changed, what to decide, what to delegate, plus AI synthesis when you need the full picture.",
     example: "Revenue is ahead of plan, but engineering capacity risk is rising. Approve the infra reservation.",
   },
   {
     title: "Decision Center",
     ceoValue: "Every open decision, ranked by impact.",
     body: "Approve, follow up, or delegate with AI confidence scores. Helm tracks whether outcomes actually landed.",
-    example: "Six pending approvals. Helm recommends the $40K reservation first — 4.2-month payback.",
+    example: "Six pending approvals. Helm recommends the $40K reservation first: 4.2-month payback.",
   },
   {
     title: "Won deals become revenue",
-    ceoValue: "Close the deal once — financials and production follow.",
-    body: "Moving a deal to won logs the revenue automatically and offers a production work order from the same deal — pipeline and financials stay linked.",
+    ceoValue: "Close the deal once. Financials and production follow.",
+    body: "Moving a deal to won logs the revenue automatically and offers a production work order from the same deal, so pipeline and financials stay linked.",
     example: "Acme Enterprise closes at $25k. Revenue appears in Financials; Helm asks if you want a work order started.",
   },
   {
     title: "Deal ownership & follow-ups",
-    ceoValue: "Real owners, planned next steps — not free-text ghosts.",
+    ceoValue: "Real owners, planned next steps, not free-text ghosts.",
     body: "Deals link to Sales teammates, with next-step and follow-up dates so quiet deals surface before they stall.",
-    example: "Riley owns the negotiation. Call-back Thursday is on the card — Helm reminds before it slips.",
+    example: "Riley owns the negotiation. Call-back Thursday is on the card, and Helm reminds before it slips.",
   },
   {
     title: "Telemetry",
-    ceoValue: "Live KPIs — signal over noise.",
+    ceoValue: "Live KPIs: signal over noise.",
     body: "Headcount, open tasks, MRR, and burn in one view. No digging through five dashboards.",
     example: "MRR up 8% MoM. Open tasks down. One team member overloaded.",
   },
   {
     title: "Ask Helm",
     ceoValue: "Your executive chief-of-staff, on call.",
-    body: "Ask anything about your company — grounded in live workspace data, not generic AI.",
+    body: "Ask anything about your company, grounded in live workspace data, not generic AI.",
     example: "What's our biggest risk this quarter? Helm answers from your actual financials and pipeline.",
   },
   {
     title: "CEO Pack",
     ceoValue: "Leadership synthesis in one click.",
-    body: "A plain-English update covering what happened, what needs attention, and what to do next — ready for your leadership team.",
-    example: "Financial snapshot, team updates, and open decisions — formatted to forward, not rebuilt in slides.",
+    body: "A plain-English update covering what happened, what needs attention, and what to do next, ready for your leadership team.",
+    example: "Financial snapshot, team updates, and open decisions, formatted to forward, not rebuilt in slides.",
   },
   {
     title: "Gmail thread surfacing + AI draft replies",
     ceoValue: "Inbox signal without living in email.",
-    body: "Surfaces important Gmail threads in the cockpit and drafts replies you can send — grounded in company context, not a blank compose box.",
+    body: "Surfaces important Gmail threads in the cockpit and drafts replies you can send, grounded in company context, not a blank compose box.",
     example: "A customer thread needs a decision. Helm drafts the reply; you edit and send.",
   },
   {
     title: "Work order tracking",
     ceoValue: "Production status without a separate system.",
-    body: "Work orders move through a fixed flow — Awaiting Materials, In Production, Quality Check, Completed — with overdue detection and average cycle time.",
+    body: "Work orders move through a fixed flow: Awaiting Materials, In Production, Quality Check, Completed, with overdue detection and average cycle time.",
     example: "Three orders awaiting materials. One past due. Average cycle time visible without a spreadsheet.",
   },
   {
     title: "Vendor memory",
     ceoValue: "Re-order without starting from scratch.",
     body: "Procurement remembers past vendors and prices per item, tracks expected delivery, and flags overdue requests by priority.",
-    example: "Same bracket as last quarter — Helm recalls the vendor and last price when you raise the request.",
+    example: "Same bracket as last quarter. Helm recalls the vendor and last price when you raise the request.",
   },
   {
     title: "Equipment reliability alerts",
     ceoValue: "Notice the machine that keeps coming back.",
-    body: "Maintenance tickets for equipment issues, plus reliability alerts when the same machine repeats — and ticket-open downtime totals.",
+    body: "Maintenance tickets for equipment issues, plus reliability alerts when the same machine repeats, and ticket-open downtime totals.",
     example: "Press #3 logged three tickets in 90 days. Helm flags it before the next breakdown.",
   },
   {
     title: "Cross-department blocking",
-    ceoValue: "See why production is stuck — in one place.",
+    ceoValue: "See why production is stuck, in one place.",
     body: "A blocked work order shows the part still in transit or the machine still in repair, and that item jumps to the top of its queue automatically.",
-    example: "WO-441 blocked on a bearing order and a mill repair — both sit at the top of Procurement and Maintenance.",
+    example: "WO-441 blocked on a bearing order and a mill repair. Both sit at the top of Procurement and Maintenance.",
   },
   {
     title: "Integrations",
@@ -339,7 +339,7 @@ export const FEATURE_MODULES = [
   {
     title: "Team & Access",
     ceoValue: "Invite your team with the right lane.",
-    body: "Role-based packs plus per-department access. Turn on only the departments you need — each team works in its own lane; you see everything from the top.",
+    body: "Role-based packs plus per-department access. Turn on only the departments you need. Each team works in its own lane; you see everything from the top.",
     example: "Your plant lead owns Production. Purchasing runs the request queue. You still see the synthesis in the briefing.",
   },
 ];
@@ -347,22 +347,22 @@ export const FEATURE_MODULES = [
 /** Public Help page — how Helm works, without a mandated schedule. */
 export const HOW_TO_USE_INTRO = {
   title: "How to use Helm",
-  subtitle: "Your CEO operating system — open it, get the signal, decide, delegate, and get back to running the company.",
-  lead: "Helm isn't another dashboard to maintain. Open it whenever you need signal, make the call, delegate the rest — then get back to building.",
+  subtitle: "Your CEO operating system. Open it, get the signal, decide, delegate, and get back to running the company.",
+  lead: "Helm isn't another dashboard to maintain. Open it whenever you need signal, make the call, delegate the rest, then get back to building.",
 };
 
 export const HOW_TO_USE_MODULES = [
-  { nav: "Briefing", path: "/app", tip: "What changed, what needs a decision, and what to hand off — synthesized for leadership." },
+  { nav: "Briefing", path: "/app", tip: "What changed, what needs a decision, and what to hand off, synthesized for leadership." },
   { nav: "My Day", path: "/app/me", tip: "Your calendar and top tasks in one view so you stay oriented on your own work." },
   { nav: "Decisions", path: "/app/decisions", tip: "Where approvals live. Act or delegate; Helm follows up until outcomes land." },
-  { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A from your live data — e.g. \"What's stuck in procurement?\" or \"What's open in the pipeline?\"" },
+  { nav: "Ask Helm", path: "/app/ask", tip: "Executive Q&A from your live data, e.g. \"What's stuck in procurement?\" or \"What's open in the pipeline?\"" },
   { nav: "Telemetry", path: "/app/telemetry", tip: "Headcount, open tasks, revenue, and cash on one screen when you need a number." },
   { nav: "Financials", path: "/app/financials", tip: "Revenue, expenses, and cash position for leadership updates." },
   { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline at a glance." },
-  { nav: "Reports", path: "/app/reports", tip: "CEO Pack — one click for financials, team pulse, and open decisions to share with leadership." },
-  { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more — each team its own lane." },
+  { nav: "Reports", path: "/app/reports", tip: "CEO Pack: one click for financials, team pulse, and open decisions to share with leadership." },
+  { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more. Each team its own lane." },
   { nav: "Team & Access", path: "/app/members", tip: "Invite CFO, VP Sales, and ops to contribute while you keep the synthesized view." },
-  { nav: "Integrations", path: "/app/integrations", tip: "Connect Google Calendar, QuickBooks, and other tools once — signal flows in automatically." },
+  { nav: "Integrations", path: "/app/integrations", tip: "Connect Google Calendar, QuickBooks, and other tools once, and signal flows in automatically." },
 ];
 
 export const HOW_TO_USE_CHECKLIST = [
