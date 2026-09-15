@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 logger = logging.getLogger("helm")
@@ -28,8 +29,28 @@ _IMAGE_FORMATS = {
 }
 
 
+def resolve_r2_endpoint(endpoint: str = "", account_id: str = "") -> str:
+    """Prefer an explicit endpoint; otherwise derive from Cloudflare account id."""
+    cleaned = (endpoint or "").strip().rstrip("/")
+    if cleaned:
+        return cleaned
+    account = (account_id or "").strip()
+    if account:
+        return f"https://{account}.r2.cloudflarestorage.com"
+    return ""
+
+
+def r2_endpoint() -> str:
+    return resolve_r2_endpoint(R2_ENDPOINT, R2_ACCOUNT_ID)
+
+
 def r2_configured() -> bool:
-    return bool(R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME and R2_ENDPOINT)
+    return bool(
+        R2_ACCESS_KEY_ID
+        and R2_SECRET_ACCESS_KEY
+        and R2_BUCKET_NAME
+        and r2_endpoint()
+    )
 
 
 @lru_cache(maxsize=1)
@@ -39,12 +60,29 @@ def _client():
         raise RuntimeError("R2 storage is not configured")
     return boto3.client(
         "s3",
-        endpoint_url=R2_ENDPOINT,
+        endpoint_url=r2_endpoint(),
         aws_access_key_id=R2_ACCESS_KEY_ID,
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         config=Config(signature_version="s3v4"),
         region_name="auto",
     )
+
+
+def probe_r2() -> dict:
+    """Connectivity check for setup/status. Never raises."""
+    if not r2_configured():
+        return {"configured": False, "ok": False}
+    try:
+        _client().head_bucket(Bucket=R2_BUCKET_NAME)
+        return {"configured": True, "ok": True, "bucket": R2_BUCKET_NAME}
+    except (ClientError, BotoCoreError, Exception) as exc:
+        logger.warning("R2 probe failed: %s", type(exc).__name__)
+        return {
+            "configured": True,
+            "ok": False,
+            "bucket": R2_BUCKET_NAME,
+            "error": type(exc).__name__,
+        }
 
 
 def _content_type_key(content_type: str) -> str:

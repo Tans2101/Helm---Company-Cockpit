@@ -77,6 +77,7 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
 1. https://www.helmcontrol.online/login
 2. Sign up / sign in (Google or email)
 3. Land on https://www.helmcontrol.online/app
+4. After R2 is configured ([docs/R2_SETUP.md](R2_SETUP.md)): Financials → Upload a bill
 
 ---
 
@@ -88,3 +89,4 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
 | Clerk shows apexcoach | Expected until Clerk primary domain is changed; redirects must point to helmcontrol |
 | Login loops | Set `COOKIE_DOMAIN=helmcontrol.online` on Render |
 | API JSON on wrong URL | Use `www.helmcontrol.online`, not `onrender.com` directly |
+| Bill upload → storage not configured | Set R2 env on Render per [R2_SETUP.md](R2_SETUP.md) and redeploy |

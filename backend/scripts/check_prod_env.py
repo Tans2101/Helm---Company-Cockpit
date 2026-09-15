@@ -29,7 +29,7 @@ RECOMMENDED = [
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "R2_BUCKET_NAME",
-    "R2_ENDPOINT",
+    # R2_ENDPOINT is optional when R2_ACCOUNT_ID is set (endpoint is derived).
     "PADDLE_API_KEY",
     "PADDLE_CLIENT_TOKEN",
     "PADDLE_PRICE_ID_STARTER",
@@ -99,6 +99,10 @@ def main() -> int:
         )
 
     rec_missing = [k for k in RECOMMENDED if not (os.environ.get(k) or "").strip()]
+    r2_endpoint = (os.environ.get("R2_ENDPOINT") or "").strip()
+    r2_account = (os.environ.get("R2_ACCOUNT_ID") or "").strip()
+    if not r2_endpoint and not r2_account:
+        rec_missing.append("R2_ENDPOINT or R2_ACCOUNT_ID")
 
     integ_key = (os.environ.get("INTEGRATION_ENCRYPTION_KEY") or "").strip()
     if integ_key:

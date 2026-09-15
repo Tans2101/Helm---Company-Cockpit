@@ -142,3 +142,48 @@ def test_presigned_urls_expire_after_fifteen_minutes():
     with patch.object(storage, "_client", return_value=fake):
         assert storage.get_presigned_url("ws_test/invoice.pdf") == "https://example.test/private"
     assert fake.generate_presigned_url.call_args.kwargs["ExpiresIn"] == 900
+
+
+def test_resolve_r2_endpoint_prefers_explicit():
+    assert storage.resolve_r2_endpoint(
+        "https://abc.r2.cloudflarestorage.com/",
+        "ignored",
+    ) == "https://abc.r2.cloudflarestorage.com"
+
+
+def test_resolve_r2_endpoint_derives_from_account_id():
+    assert storage.resolve_r2_endpoint(
+        "",
+        "0123456789abcdef0123456789abcdef",
+    ) == "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"
+
+
+def test_resolve_r2_endpoint_empty_without_inputs():
+    assert storage.resolve_r2_endpoint("", "") == ""
+
+
+def test_probe_r2_not_configured():
+    with patch.object(storage, "r2_configured", return_value=False):
+        assert storage.probe_r2() == {"configured": False, "ok": False}
+
+
+def test_probe_r2_ok_when_head_bucket_succeeds():
+    fake = MagicMock()
+    with patch.object(storage, "r2_configured", return_value=True), patch.object(
+        storage, "_client", return_value=fake
+    ), patch.object(storage, "R2_BUCKET_NAME", "helm-documents"):
+        result = storage.probe_r2()
+    fake.head_bucket.assert_called_once_with(Bucket="helm-documents")
+    assert result == {"configured": True, "ok": True, "bucket": "helm-documents"}
+
+
+def test_probe_r2_reports_error_type():
+    fake = MagicMock()
+    fake.head_bucket.side_effect = RuntimeError("boom")
+    with patch.object(storage, "r2_configured", return_value=True), patch.object(
+        storage, "_client", return_value=fake
+    ), patch.object(storage, "R2_BUCKET_NAME", "helm-documents"):
+        result = storage.probe_r2()
+    assert result["configured"] is True
+    assert result["ok"] is False
+    assert result["error"] == "RuntimeError"

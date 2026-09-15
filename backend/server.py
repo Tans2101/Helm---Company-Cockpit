@@ -10727,11 +10727,13 @@ async def setup_status(request: Request):
             clerk_ok = bool(await clerk_auth.clerk_api_ok())
         except Exception:
             clerk_ok = False
+    r2 = await asyncio.to_thread(doc_storage.probe_r2)
     return {
         "ok": bool(mongo_ok and clerk_auth.clerk_configured()),
         "mongo": bool(mongo_ok),
         "clerk_configured": clerk_auth.clerk_configured(),
         "clerk_api_ok": clerk_ok,
+        "r2": r2,
     }
 
 

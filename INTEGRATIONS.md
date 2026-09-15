@@ -13,7 +13,7 @@ Users never create API keys. Once you paste keys on Render, owners click **Conne
 | **Xero** | `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` | [Xero Developer](https://developer.xero.com/) → My Apps → OAuth 2.0 |
 | **HubSpot** | `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET` | [HubSpot Developer](https://developers.hubspot.com/) → Apps → Auth |
 | **Anthropic** | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | [Anthropic Console](https://console.anthropic.com/settings/keys) |
-| **Cloudflare R2** | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT` | Cloudflare → R2 → Manage API tokens |
+| **Cloudflare R2** | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, plus `R2_ACCOUNT_ID` and/or `R2_ENDPOINT` | See **[docs/R2_SETUP.md](docs/R2_SETUP.md)** — Cloudflare → R2 → Manage API tokens |
 | **Resend** | `RESEND_API_KEY`, `SENDER_EMAIL` | [Resend](https://resend.com/) — optional until invites |
 | **Paddle** | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_PRICE_ID_STARTER` / `_GROWTH` / `_BUSINESS` (or legacy `PADDLE_PRICE_ID`), `PADDLE_WEBHOOK_SECRET`, `PADDLE_ENV` | Paddle dashboard — when charging |
 | **Clerk** | already on Render | Sign-in |

@@ -28,7 +28,8 @@ Do these steps in order. After each step, check the “Done when” line.
 2. **[Clerk](docs/CLERK_SETUP.md)** — Google sign-in (no Emergent, no DIY Google OAuth for login)
 3. **Render** — API (see below)
 4. **Vercel** — frontend + domain
-5. **Anthropic** + **Paddle** keys on Render
+5. **Anthropic** + **Cloudflare R2** + **Paddle** keys on Render
+   - R2: [docs/R2_SETUP.md](docs/R2_SETUP.md) (required for Financials bill uploads)
 
 The code on branch `cursor/helm-production-ready-2637` is set up for **your** stack:
 Render (API) + Vercel (frontend) + MongoDB Atlas + Clerk + Anthropic + Paddle.
@@ -82,6 +83,19 @@ Skip this if Clerk is configured. Clerk handles Google login for you.
 2. Keep it for Render env as `ANTHROPIC_API_KEY`
 
 **Done when:** you have a `sk-ant-...` key.
+
+---
+
+## 3b. Cloudflare R2 (bill / receipt uploads)
+
+Full walkthrough: **[docs/R2_SETUP.md](docs/R2_SETUP.md)**.
+
+1. Cloudflare → R2 → create private bucket (e.g. `helm-documents`)
+2. Create R2 API token (Object Read & Write) → copy Access Key ID + Secret
+3. On Render set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` (`R2_ENDPOINT` optional if account id is set)
+4. Redeploy → verify with `/api/setup/status` (`r2.ok: true`) or upload a bill in Financials
+
+**Done when:** setup status shows R2 configured and ok, or a PDF upload reaches extraction.
 
 ---
 
