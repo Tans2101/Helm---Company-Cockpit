@@ -4,7 +4,7 @@ import { UserPlus, User, Trash2, Mail, Copy, Link2, Shield, Check } from "lucide
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, ErrorScreen, SkeletonCardList } from "@/components/kit";
 import { PACKS, packMeta, hasPerm } from "@/lib/access";
 import { formatDepartmentNames } from "@/lib/departments";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,14 @@ export default function Members() {
     setGrantsDraft(null);
   }, [accessData]);
 
-  if (loading) return <LoadingScreen label="Loading team" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Team & Access" subtitle="Invite teammates with access packs. They also appear on the People roster." />
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

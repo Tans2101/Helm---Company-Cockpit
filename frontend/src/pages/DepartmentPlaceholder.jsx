@@ -3,7 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
+import { PageHeader, ErrorScreen, EmptyState, GlassCard, PageHeaderSkeleton, SkeletonCardList } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
 import { departmentPath, DEPARTMENT_ROUTES, MANAGE_DEPARTMENTS_HREF } from "@/lib/departmentRoutes";
 
@@ -16,7 +16,14 @@ export default function DepartmentPlaceholder() {
   const { data: catalog, reload: reloadCatalog } = useFetch("/departments");
   const [enabling, setEnabling] = useState(false);
 
-  if (loading) return <LoadingScreen label="Loading department" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeaderSkeleton />
+        <SkeletonCardList count={2} />
+      </div>
+    );
+  }
 
   if (error) {
     const status = error?.response?.status;

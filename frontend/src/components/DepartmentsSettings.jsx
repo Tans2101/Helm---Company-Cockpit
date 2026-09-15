@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Building2, Trash2, UserPlus, User } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
+import { GlassCard, SectionLabel, ErrorScreen, SkeletonCardList } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
 import { departmentPath } from "@/lib/departmentRoutes";
 
@@ -32,7 +32,13 @@ export default function DepartmentsSettings() {
     }
   }, [loading]);
 
-  if (loading) return <LoadingScreen label="Loading departments" />;
+  if (loading) {
+    return (
+      <div>
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

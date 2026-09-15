@@ -7,7 +7,7 @@ import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hook
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { dayPartGreeting } from "@/lib/greeting";
-import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { GlassCard, SectionLabel, ErrorScreen, EmptyState, PageHeaderSkeleton, SkeletonCardList } from "@/components/kit";
 import DecisionCard from "@/components/DecisionCard";
 import SuggestionCard from "@/components/SuggestionCard";
 import { departmentIcon } from "@/lib/departmentIcons";
@@ -58,7 +58,18 @@ export default function MyDay() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [showNoteComposer, setShowNoteComposer] = useState(false);
 
-  if (l0 || l1 || l2 || l3 || lDec || lWork) return <LoadingScreen label="Assembling your day" />;
+  if (l0 || l1 || l2 || l3 || lDec || lWork) {
+    return (
+      <div>
+        <PageHeaderSkeleton />
+        <SkeletonCardList count={2} className="mb-6" />
+        <div className="grid lg:grid-cols-2 gap-4">
+          <SkeletonCardList count={3} />
+          <SkeletonCardList count={3} />
+        </div>
+      </div>
+    );
+  }
   const dayError = e0 || e1 || e2 || e3 || eWork;
   if (dayError || !notesData || !mine || !tasks || !today || !workData) {
     return (

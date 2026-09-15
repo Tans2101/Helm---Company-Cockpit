@@ -5,7 +5,8 @@ import { useSearchParams } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +126,15 @@ export default function HR() {
     setOffTmplDraft(steps.map((s) => ({ ...s })));
   }, [offTemplateUpdatedAt, editingOffTemplate, offTemplateSteps]);
 
-  if (loading) return <LoadingScreen label="Loading HR" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="HR" subtitle="Onboarding, employee records, and offboarding, with no sensitive employment data stored." />
+        <SkeletonKPIRow count={4} />
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {

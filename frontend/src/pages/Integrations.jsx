@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, LoadingScreen, ErrorScreen } from "@/components/kit";
+import { PageHeader, GlassCard, ErrorScreen, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const ICONS = {
@@ -233,7 +233,17 @@ export default function Integrations() {
     if (data?.slack_webhook_url != null) setSlackUrl(data.slack_webhook_url || "");
   }, [data?.slack_webhook_url]);
 
-  if (loading) return <LoadingScreen label="Loading integrations" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader
+          title="Integrations"
+          subtitle="Connect your calendar, accounting, and tools. Helm pulls your data in so the briefing, financials, and calendar stay current."
+        />
+        <SkeletonCardList count={5} />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

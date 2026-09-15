@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
@@ -102,7 +103,15 @@ export default function Pipeline() {
     }
   };
 
-  if (loading) return <LoadingScreen label="Loading pipeline" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Sales Pipeline" subtitle="Log deals and stages. Pipeline signals roll straight into the CEO Briefing." />
+        <SkeletonKPIRow count={4} />
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (loadError || !meta) {
     return (
       <ErrorScreen

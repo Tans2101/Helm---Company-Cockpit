@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, Delta, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, Delta, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart } from "@/components/kit";
 import { FunnelChart } from "@/components/charts/funnel-chart";
 import { cn } from "@/lib/utils";
 import palette from "@/design/palette.json";
@@ -78,20 +78,10 @@ export default function Telemetry() {
     return (
       <div>
         <PageHeader title="Telemetry" subtitle="Live KPIs and growth trends from your real data." />
+        <SkeletonKPIRow count={3} className="lg:grid-cols-3" />
         <div className="grid lg:grid-cols-2 gap-4 mb-6">
-          <GlassCard className="p-5 fade-up">
-            <SectionLabel className="mb-4">MRR</SectionLabel>
-            <div className="h-[240px] rounded-md bg-helm-fg/[0.03] animate-pulse" aria-hidden />
-          </GlassCard>
-          <GlassCard className="p-5 fade-up" data-testid="sales-funnel">
-            <SectionLabel className="mb-4">Sales Funnel</SectionLabel>
-            <FunnelChart
-              status="loading"
-              color={GOLD}
-              className="min-h-[240px]"
-              data={[{ label: "Loading", value: 1 }]}
-            />
-          </GlassCard>
+          <SkeletonChart />
+          <SkeletonChart />
         </div>
       </div>
     );

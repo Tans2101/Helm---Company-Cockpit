@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, LoadingScreen, ErrorScreen, Delta } from "@/components/kit";
+import { GlassCard, ErrorScreen, Delta, PageHeaderSkeleton, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 import { dayPartGreeting } from "@/lib/greeting";
@@ -31,7 +31,19 @@ export default function Briefing() {
   const error = briefingError || companyError;
   const reload = () => { reloadBriefing(); reloadCompany(); };
 
-  if (loading) return <LoadingScreen label="Loading briefing" />;
+  if (loading) {
+    return (
+      <div className="max-w-5xl">
+        <PageHeaderSkeleton />
+        <SkeletonKPIRow count={4} />
+        <div className="grid lg:grid-cols-3 gap-4">
+          <SkeletonCardList count={3} />
+          <SkeletonCardList count={3} />
+          <SkeletonCardList count={3} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data || !company) {
     return (
       <ErrorScreen

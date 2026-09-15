@@ -6,7 +6,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { LoadingScreen, ErrorScreen, EmptyState, GlassCard } from "@/components/kit";
+import { ErrorScreen, EmptyState, GlassCard, PageHeaderSkeleton, SkeletonChart, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const HOUR_HEIGHT = 52;
@@ -498,7 +498,19 @@ export default function CalendarPage() {
     }
   };
 
-  if (loading) return <LoadingScreen label="Loading calendar" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeaderSkeleton className="px-2 md:px-4" />
+        <div className="px-2 md:px-4 mb-4">
+          <SkeletonChart />
+        </div>
+        <div className="px-2 md:px-4">
+          <SkeletonCardList count={3} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

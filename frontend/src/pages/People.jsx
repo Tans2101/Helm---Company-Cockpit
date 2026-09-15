@@ -5,7 +5,7 @@ import { Plus, PenLine, Trash2, X, AlertTriangle } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
 import { formatDepartmentNames } from "@/lib/departments";
 import { PACKS, hasPerm } from "@/lib/access";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,15 @@ export default function People() {
 
   const roster = useMemo(() => sortRoster(data?.people), [data?.people]);
 
-  if (loading) return <LoadingScreen label="Loading roster" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="People" subtitle="Your team roster: who does what, and how headcount tracks over time." />
+        <SkeletonKPIRow count={2} />
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

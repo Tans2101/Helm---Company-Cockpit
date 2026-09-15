@@ -4,7 +4,8 @@ import { Plus, Trash2, X, Scale, FileText, Upload } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +91,15 @@ export default function Legal() {
     });
   }, [selected]);
 
-  if (loading) return <LoadingScreen label="Loading legal matters" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Legal" subtitle="Matter queue for contracts and reviews moving independently." />
+        <SkeletonKPIRow count={3} className="lg:grid-cols-3" />
+        <SkeletonCardList count={5} />
+      </div>
+    );
+  }
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {

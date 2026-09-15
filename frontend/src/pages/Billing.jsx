@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { initPaddle } from "@/lib/paddle";
 import { PLANS } from "@/lib/marketingCopy";
 import { normalizePlan } from "@/lib/helmPlan";
-import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen } from "@/components/kit";
+import { GlassCard, SectionLabel, ErrorScreen, PageHeaderSkeleton, SkeletonCardList } from "@/components/kit";
 import { RingChart } from "@/components/charts/ring-chart";
 import { Ring } from "@/components/charts/ring";
 import { RingCenter } from "@/components/charts/ring-center";
@@ -48,7 +48,20 @@ export default function Billing() {
   const [busy, setBusy] = useState(null);
   const navigate = useNavigate();
 
-  if (loading) return <LoadingScreen label="Loading billing" />;
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <PageHeaderSkeleton />
+        <SkeletonCardList count={1} className="mb-8" />
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <SkeletonCardList count={1} />
+          <SkeletonCardList count={1} />
+          <SkeletonCardList count={1} />
+          <SkeletonCardList count={1} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { GripVertical, Plus, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, ErrorScreen, EmptyState, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
 const priorityStyle = {
@@ -32,7 +32,18 @@ export default function Tasks() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focusTaskId, data?.items]);
 
-  if (loading) return <LoadingScreen label="Loading board" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Tasks" subtitle="Delegate, track and sync work across your team. Drag cards across the board. Your tasks are marked in gold." />
+        <div className="grid md:grid-cols-3 gap-4">
+          <SkeletonCardList count={3} />
+          <SkeletonCardList count={2} />
+          <SkeletonCardList count={2} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

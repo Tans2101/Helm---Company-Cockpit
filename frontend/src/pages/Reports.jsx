@@ -4,7 +4,7 @@ import { FileText, Plus, PenLine, Trash2, X, Copy, Download, Check } from "lucid
 import { useFetch, fetchErrorMessage, blobErrorDetail } from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart, SkeletonCardList } from "@/components/kit";
 import DocumentStamp, { stampLabelForLine } from "@/components/DocumentStamp";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +59,18 @@ export default function Reports() {
     return () => { cancelled = true; };
   }, [data?.can_export_financials, finPeriod]);
 
-  if (loading) return <LoadingScreen label="Loading reports" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Reports" subtitle="Understand the week, add context, and create an update you can share." />
+        <SkeletonKPIRow count={3} className="lg:grid-cols-3" />
+        <div className="grid lg:grid-cols-2 gap-4 mb-6">
+          <SkeletonChart />
+          <SkeletonCardList count={3} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

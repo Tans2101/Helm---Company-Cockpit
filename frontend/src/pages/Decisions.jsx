@@ -4,7 +4,7 @@ import { Plus, Trash2, RefreshCw, X, Sparkles } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonCardList } from "@/components/kit";
 import DecisionCard, { statusStyle } from "@/components/DecisionCard";
 import SuggestionCard from "@/components/SuggestionCard";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,14 @@ export default function Decisions() {
   const [saving, setSaving] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
 
-  if (loading) return <LoadingScreen label="Loading decisions" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals. You confirm before anything becomes a real call." />
+        <SkeletonCardList count={4} />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

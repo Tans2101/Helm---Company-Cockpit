@@ -4,7 +4,8 @@ import { Plus, Trash2, X, Package } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +148,15 @@ export default function Procurement() {
     });
   }, [selected]);
 
-  if (loading) return <LoadingScreen label="Loading procurement" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Procurement" subtitle="Purchase request queue. Each request moves independently." />
+        <SkeletonKPIRow count={3} className="lg:grid-cols-3" />
+        <SkeletonCardList count={5} />
+      </div>
+    );
+  }
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {

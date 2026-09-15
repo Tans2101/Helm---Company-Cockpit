@@ -4,7 +4,8 @@ import { Plus, X, Factory, Trash2 } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState, ConfirmDialog,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -175,7 +176,15 @@ export default function Production() {
     setCompleting(false);
   }, [selected]);
 
-  if (loading) return <LoadingScreen label="Loading production" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Production" subtitle="Work order queue with fixed statuses and no pipeline setup." />
+        <SkeletonKPIRow count={4} />
+        <SkeletonCardList count={5} />
+      </div>
+    );
+  }
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {

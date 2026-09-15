@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function GlassCard({ className, children, glow, ...props }) {
   return (
@@ -24,6 +25,58 @@ export function PageHeader({ title, subtitle, action }) {
       </div>
       {action}
     </div>
+  );
+}
+
+export function PageHeaderSkeleton({ className }) {
+  return (
+    <div className={cn("mb-8 fade-up", className)} aria-hidden>
+      <Skeleton className="h-9 w-48 md:w-64 max-w-[70%]" />
+      <Skeleton className="h-4 w-full max-w-md mt-3" />
+    </div>
+  );
+}
+
+export function SkeletonKPIRow({ count = 4, className }) {
+  return (
+    <div
+      className={cn(
+        "grid gap-4 mb-6",
+        count <= 2 ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-4",
+        className,
+      )}
+      aria-hidden
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <GlassCard key={i} className="p-4 fade-up">
+          <Skeleton className="h-3 w-20 mb-3" />
+          <Skeleton className="h-8 w-28" />
+        </GlassCard>
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonCardList({ count = 3, className }) {
+  return (
+    <div className={cn("space-y-3", className)} aria-hidden>
+      {Array.from({ length: count }, (_, i) => (
+        <GlassCard key={i} className="p-4 fade-up">
+          <Skeleton className="h-4 w-48 max-w-full mb-3" />
+          <Skeleton className="h-3 w-full max-w-md mb-2" />
+          <Skeleton className="h-3 w-40 max-w-full" />
+        </GlassCard>
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonChart({ className }) {
+  return (
+    <GlassCard className={cn("p-5 fade-up", className)} aria-hidden>
+      <Skeleton className="h-3 w-28 mb-4" />
+      <Skeleton className="h-64 w-full" />
+    </GlassCard>
   );
 }
 

@@ -8,7 +8,7 @@ import {
 import { Plus, Trash2, Wallet, X, PenLine, History, Upload, Sparkles, FileText, AlertTriangle, FileSpreadsheet, Sheet } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
+import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import palette from "@/design/palette.json";
 
@@ -262,7 +262,18 @@ export default function Financials() {
     }
   };
 
-  if (loading) return <LoadingScreen label="Loading financials" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Helm turns it into live MRR, runway and burn across the whole cockpit." />
+        <SkeletonKPIRow count={4} />
+        <div className="grid lg:grid-cols-2 gap-4 mb-6">
+          <SkeletonChart />
+          <SkeletonCardList count={3} />
+        </div>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
       <ErrorScreen

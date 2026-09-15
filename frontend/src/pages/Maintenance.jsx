@@ -4,7 +4,8 @@ import { Plus, Trash2, X, Wrench } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -151,7 +152,15 @@ export default function Maintenance() {
     });
   }, [selected]);
 
-  if (loading) return <LoadingScreen label="Loading maintenance tickets" />;
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Engineering & Maintenance" subtitle="Ticket queue for repairs and maintenance moving independently." />
+        <SkeletonKPIRow count={3} className="lg:grid-cols-3" />
+        <SkeletonCardList count={5} />
+      </div>
+    );
+  }
   if (error) {
     const status = error?.response?.status;
     if (status === 403) {
