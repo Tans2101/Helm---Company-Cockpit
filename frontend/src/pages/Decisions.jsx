@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, RefreshCw, X, Sparkles } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
-import { useDecisionActions, buildDelegateOptions } from "@/hooks/useDecisionActions";
+import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import DecisionCard, { statusStyle } from "@/components/DecisionCard";
@@ -99,8 +99,8 @@ export default function Decisions() {
     </div>
   ) : null;
 
-  const pending = decisions.filter((d) => d.status === "pending");
-  const resolved = decisions.filter((d) => d.status !== "pending");
+  const pending = decisions.filter((d) => isOpenDecision(d, selfLabel));
+  const resolved = decisions.filter((d) => !isOpenDecision(d, selfLabel));
 
   return (
     <div>

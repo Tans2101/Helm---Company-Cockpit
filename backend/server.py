@@ -3016,22 +3016,53 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
     return {"ai_summary": text}
 
 
+class DecisionAction(BaseModel):
+    action: str
+    owner: Optional[str] = None
+
+
+def _decision_owner_is_self(principal: dict, owner: Optional[str]) -> bool:
+    """True when a delegate/owner label refers to the acting principal (e.g. Myself)."""
+    if not owner or not str(owner).strip():
+        return False
+    label = str(owner).strip().lower()
+    if label in ("myself", "me"):
+        return True
+    names = {
+        (principal.get("name") or "").strip().lower(),
+        (principal.get("email") or "").strip().lower(),
+    }
+    names.discard("")
+    return label in names
+
+
+def _heal_self_delegated_decisions(principal: dict, decisions: list) -> bool:
+    """Delegating to yourself must stay actionable — rewrite stuck status=delegated rows."""
+    changed = False
+    for d in decisions:
+        if d.get("status") == "delegated" and _decision_owner_is_self(principal, d.get("owner")):
+            d["status"] = "pending"
+            changed = True
+    return changed
+
+
 @api_router.get("/decisions")
 async def decisions(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
+    decisions_list = list(c.get("decisions") or [])
+    if _heal_self_delegated_decisions(principal, decisions_list):
+        await db.workspaces.update_one(
+            {"workspace_id": c["workspace_id"]},
+            {"$set": {"decisions": decisions_list}},
+        )
     suggestions = [s for s in (c.get("decision_suggestions") or []) if s.get("status") == "suggested"]
     return {
-        "decisions": c["decisions"],
+        "decisions": decisions_list,
         "suggestions": suggestions,
         "insights_generated_at": c.get("insights_generated_at"),
         "is_pro": workspace_is_pro(c),
         "can_act": await can_section_write(principal, "decisions", "decisions:act"),
     }
-
-
-class DecisionAction(BaseModel):
-    action: str
-    owner: Optional[str] = None
 
 
 @api_router.post("/decisions/{decision_id}/action")
@@ -3041,9 +3072,17 @@ async def decision_action(decision_id: str, payload: DecisionAction, principal=D
     found = False
     for d in decisions:
         if d["id"] == decision_id:
-            d["status"] = payload.action
-            if payload.owner:
-                d["owner"] = payload.owner
+            # "Delegate to Myself" is claim ownership, not a terminal resolution —
+            # keep status pending so approve/reject remain available.
+            if payload.action == "delegated" and _decision_owner_is_self(principal, payload.owner):
+                d["status"] = "pending"
+                d["owner"] = (payload.owner or "").strip() or (
+                    principal.get("name") or principal.get("email") or "Myself"
+                )
+            else:
+                d["status"] = payload.action
+                if payload.owner:
+                    d["owner"] = payload.owner
             found = True
             break
     if not found:

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Send, CheckCircle2, Circle, AlertTriangle, Plus, Users, Lock, PenLine, Trash2, Briefcase } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
-import { useDecisionActions, buildDelegateOptions } from "@/hooks/useDecisionActions";
+import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
@@ -73,8 +73,8 @@ export default function MyDay() {
   const hasPosted = !!mine?.update;
   const notes = notesData.notes || [];
   const suggestions = decisionsData?.suggestions || [];
-  const pendingDecisions = (decisionsData?.decisions || []).filter((d) => d.status === "pending");
   const { selfMember, delegateMembers, selfLabel } = buildDelegateOptions(membersData);
+  const pendingDecisions = (decisionsData?.decisions || []).filter((d) => isOpenDecision(d, selfLabel));
   const needsCallEmpty = suggestions.length === 0 && pendingDecisions.length === 0;
   const workItems = workData?.items || [];
 

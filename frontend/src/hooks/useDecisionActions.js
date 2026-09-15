@@ -11,7 +11,11 @@ export function useDecisionActions(reload) {
     try {
       await api.post(`/decisions/${id}/action`, { action, owner });
       reload?.();
-      toast.success(`Decision ${action}`);
+      if (action === "delegated" && owner) {
+        toast.success(`Assigned to ${owner}`);
+      } else {
+        toast.success(`Decision ${action}`);
+      }
     } catch (e) {
       toast.error("Action failed");
     } finally {
@@ -64,4 +68,23 @@ export function buildDelegateOptions(membersData) {
   }
   const selfLabel = selfMember?.name || selfMember?.email || "Myself";
   return { selfMember, delegateMembers, selfLabel };
+}
+
+/** True when owner label is the current user (Myself / name / email). */
+export function decisionOwnerIsSelf(owner, selfLabel) {
+  const o = (owner || "").trim().toLowerCase();
+  if (!o) return false;
+  if (o === "myself" || o === "me") return true;
+  const me = (selfLabel || "").trim().toLowerCase();
+  return !!me && o === me;
+}
+
+/**
+ * Open decisions stay actionable. "Delegated to myself" is ownership, not a
+ * final resolution — keep those in the open list so approve/reject still work.
+ */
+export function isOpenDecision(d, selfLabel) {
+  if (!d) return false;
+  if (d.status === "pending") return true;
+  return d.status === "delegated" && decisionOwnerIsSelf(d.owner, selfLabel);
 }

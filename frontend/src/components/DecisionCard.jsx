@@ -46,6 +46,9 @@ export default function DecisionCard({
               </span>
             )}
             <span className="text-[10px] font-mono text-helm-muted">Impact: {d.impact} · Due {d.due}</span>
+            {d.owner && (
+              <span className="text-[10px] font-mono text-helm-muted">Owner: {d.owner}</span>
+            )}
             {canAct && (onEdit || onDelete) && (
               <span className="ml-auto flex items-center gap-1">
                 {onEdit && (
