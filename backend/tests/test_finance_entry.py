@@ -46,11 +46,79 @@ def test_add_fin_entry_stores_name():
     with patch.object(server, "db", mock_db), patch.object(
         server.dept_migrate, "finance_department_id", new=AsyncMock(return_value="dept_fin"),
     ), patch.object(
+        server.dept_migrate, "ensure_department_member", new=AsyncMock(return_value=True),
+    ), patch.object(
         server, "_workspace_currency", new=AsyncMock(return_value="usd"),
     ), patch.object(server, "log_activity", new=AsyncMock()):
         result = asyncio.run(server.add_fin_entry(payload, principal))
     assert result["entry"]["name"] == "MongoDB Database Subscription"
     assert result["entry"]["category"] == "Cloud/Infra"
+    assert "qb_txn_id" not in result["entry"]
+    assert "source_deal_id" not in result["entry"]
+    assert "recurrence" not in result["entry"]  # non-recurring → omit null
+
+
+def test_add_fin_entry_survives_activity_log_failure():
+    mock_db = MagicMock()
+    mock_db.financial_entries.insert_one = AsyncMock()
+    payload = server.FinEntryInput(
+        type="revenue",
+        category="Subscriptions",
+        name="Acme MRR",
+        amount=100,
+        month="2026-09",
+        recurring=True,
+    )
+    principal = {
+        "user_id": "u1",
+        "workspace_id": "ws1",
+        "email": "a@b.c",
+        "name": "A",
+        "role": "owner",
+        "pack": "owner",
+    }
+    with patch.object(server, "db", mock_db), patch.object(
+        server.dept_migrate, "finance_department_id", new=AsyncMock(return_value="dept_fin"),
+    ), patch.object(
+        server.dept_migrate, "ensure_department_member", new=AsyncMock(return_value=True),
+    ), patch.object(
+        server, "_workspace_currency", new=AsyncMock(return_value="usd"),
+    ), patch.object(
+        server, "log_activity", new=AsyncMock(side_effect=RuntimeError("activities down")),
+    ):
+        result = asyncio.run(server.add_fin_entry(payload, principal))
+    assert result["ok"] is True
+    assert result["entry"]["recurrence"] == "monthly"
+
+
+def test_add_fin_entry_maps_duplicate_key_to_409():
+    from pymongo.errors import DuplicateKeyError
+
+    mock_db = MagicMock()
+    mock_db.financial_entries.insert_one = AsyncMock(side_effect=DuplicateKeyError("E11000"))
+    payload = server.FinEntryInput(
+        type="expense",
+        category="Other",
+        name="Printer ink",
+        amount=12,
+        month="2026-09",
+    )
+    principal = {
+        "user_id": "u1",
+        "workspace_id": "ws1",
+        "email": "a@b.c",
+        "name": "A",
+        "role": "owner",
+        "pack": "owner",
+    }
+    with patch.object(server, "db", mock_db), patch.object(
+        server.dept_migrate, "finance_department_id", new=AsyncMock(return_value="dept_fin"),
+    ), patch.object(
+        server.dept_migrate, "ensure_department_member", new=AsyncMock(return_value=True),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.add_fin_entry(payload, principal))
+    assert exc.value.status_code == 409
 
 
 def test_add_fin_entry_rejects_blank_name():

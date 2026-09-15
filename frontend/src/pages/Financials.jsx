@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -65,6 +66,7 @@ function itemNameFromExtract(extracted) {
 }
 
 export default function Financials() {
+  const navigate = useNavigate();
   const { data, loading, error, reload } = useFetch("/financials");
   const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
@@ -152,11 +154,26 @@ export default function Financials() {
   };
 
   const importFromDrive = async () => {
+    if (!data.google?.connected) {
+      toast.error("Connect Google on Integrations to import from Drive");
+      navigate("/app/integrations");
+      return;
+    }
+    if (!data.google?.drive_file) {
+      toast.error("Reconnect Google on Integrations to import from Drive");
+      navigate("/app/integrations");
+      return;
+    }
     setUploadBusy(true);
     try {
       const { data: cfg } = await api.get("/integrations/google/picker");
+      if (cfg?.access_denied) {
+        toast.error("Only the teammate who connected Google (or an owner) can import from Drive");
+        return;
+      }
       if (cfg?.needs_reconnect) {
         toast.error("Reconnect Google on Integrations to import from Drive");
+        navigate("/app/integrations");
         return;
       }
       if (!cfg?.configured) {
@@ -209,6 +226,16 @@ export default function Financials() {
   };
 
   const exportToSheets = async () => {
+    if (!data.google?.connected) {
+      toast.error("Connect Google on Integrations to export to Sheets");
+      navigate("/app/integrations");
+      return;
+    }
+    if (!data.google?.sheets) {
+      toast.error("Reconnect Google on Integrations to export to Sheets");
+      navigate("/app/integrations");
+      return;
+    }
     setSheetsBusy(true);
     try {
       const { data: res } = await api.post("/financials/export-sheets", {}, { timeout: 45000 });
@@ -404,30 +431,26 @@ export default function Financials() {
         <Upload className="w-4 h-4" />
         {uploadBusy ? "Reading bill…" : "Upload a bill"}
       </button>
-      {data.google?.drive_file && (
-        <button
-          type="button"
-          data-testid="import-drive-btn"
-          disabled={uploadBusy || csvBusy}
-          onClick={importFromDrive}
-          className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
-        >
-          <FileText className="w-4 h-4" />
-          From Drive
-        </button>
-      )}
-      {data.google?.sheets && (
-        <button
-          type="button"
-          data-testid="export-sheets-btn"
-          disabled={sheetsBusy || !data.has_data}
-          onClick={exportToSheets}
-          className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
-        >
-          <Sheet className="w-4 h-4" />
-          {sheetsBusy ? "Creating Sheet…" : "Export to Sheets"}
-        </button>
-      )}
+      <button
+        type="button"
+        data-testid="import-drive-btn"
+        disabled={uploadBusy || csvBusy}
+        onClick={importFromDrive}
+        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
+      >
+        <FileText className="w-4 h-4" />
+        From Drive
+      </button>
+      <button
+        type="button"
+        data-testid="export-sheets-btn"
+        disabled={sheetsBusy || !data.has_data}
+        onClick={exportToSheets}
+        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
+      >
+        <Sheet className="w-4 h-4" />
+        {sheetsBusy ? "Creating Sheet…" : "Export to Sheets"}
+      </button>
       <button
         type="button"
         data-testid="import-csv-btn"

@@ -414,6 +414,8 @@ def test_financial_entry_commits_its_source_document():
     with patch.object(server, "db", mock_db), patch.object(
         server.dept_migrate, "finance_department_id", new=AsyncMock(return_value="dept_fin"),
     ), patch.object(
+        server.dept_migrate, "ensure_department_member", new=AsyncMock(return_value=True),
+    ), patch.object(
         server, "_workspace_currency", new=AsyncMock(return_value="USD"),
     ), patch.object(server, "log_activity", new=AsyncMock()):
         result = asyncio.run(server.add_fin_entry(payload, MOCK_PRINCIPAL))
