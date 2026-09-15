@@ -187,7 +187,12 @@ export default function Telemetry() {
                       <p className="text-sm text-helm-fg">{r.name}</p>
                       <span className="text-[10px] font-mono rounded px-1.5 py-0.5" style={{ color: riskColor(score), background: `${riskColor(score)}15` }}>{score}</span>
                     </div>
-                    <p className="text-[10px] text-helm-muted mt-1 font-mono uppercase">{r.category}</p>
+                    <p className="text-[10px] text-helm-muted mt-1 font-mono uppercase">
+                      {r.category}
+                      <span className="normal-case tracking-normal ml-2 opacity-80">
+                        L{r.likelihood} × I{r.impact}
+                      </span>
+                    </p>
                   </div>
                 );
               })}
