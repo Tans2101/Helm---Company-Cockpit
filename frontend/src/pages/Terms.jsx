@@ -55,7 +55,7 @@ export default function Terms() {
             </p>
           </section>
 
-          <section className="rounded-lg border border-helm-gold/35 bg-helm-gold/12 p-5">
+          <section className="rounded-lg border border-helm-line border-l-2 border-l-helm-gold/70 bg-helm-card p-5">
             <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy — please read</h2>
             <p className="text-helm-fg">
               Helm uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to

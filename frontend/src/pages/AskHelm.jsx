@@ -124,7 +124,7 @@ export default function AskHelm() {
               {m.role === "user" ? <User className="w-3.5 h-3.5 text-helm-muted" /> : <span className="font-mono text-helm-gold text-xs">H</span>}
             </div>
             <div className={cn("max-w-[80%] rounded-xl px-4 py-3 text-[15px] leading-relaxed",
-              m.role === "user" ? "bg-helm-gold/12 border border-helm-gold/35 text-helm-fg" : "bg-helm-card border border-helm-line text-helm-fg")}>
+              m.role === "user" ? "bg-helm-fg/5 border border-helm-line text-helm-fg" : "bg-helm-card border border-helm-line text-helm-fg")}>
               {m.content ? <p className="whitespace-pre-wrap">{m.content}</p> : <Spinner className="w-4 h-4" />}
             </div>
           </div>

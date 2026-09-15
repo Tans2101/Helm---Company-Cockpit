@@ -166,7 +166,7 @@ export default function Decisions() {
           </div>
           <div className="space-y-3">
             {suggestions.map((s) => (
-              <GlassCard key={s.id} className="p-5 fade-up border-helm-status-warning/35 bg-helm-status-warning/12" data-testid={`suggestion-${s.id}`}>
+              <GlassCard key={s.id} className="p-5 fade-up border-helm-status-warning/35" data-testid={`suggestion-${s.id}`}>
                 <div className="flex flex-col lg:flex-row lg:items-start gap-5">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -179,7 +179,7 @@ export default function Decisions() {
                     <h3 className="text-lg text-helm-fg font-medium tracking-tight">{s.title}</h3>
                     {s.description && <p className="text-sm text-helm-muted mt-1">{s.description}</p>}
                     {s.recommendation && (
-                      <div className="mt-4 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 p-3">
+                      <div className="mt-4 rounded-lg border border-helm-line border-l-2 border-l-helm-status-warning/70 bg-helm-card p-3">
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
                           <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm recommendation</span>
@@ -254,7 +254,10 @@ export default function Decisions() {
                     {d.description && <p className="text-sm text-helm-muted mt-1">{d.description}</p>}
 
                     {d.recommendation && (
-                      <div className={cn("mt-4 rounded-lg border p-3", isAi ? "border-helm-status-warning/35 bg-helm-status-warning/12" : "border-helm-gold/35 bg-helm-gold/12")}>
+                      <div className={cn(
+                        "mt-4 rounded-lg border border-helm-line bg-helm-card p-3 border-l-2",
+                        isAi ? "border-l-helm-status-warning/70" : "border-l-helm-gold/70",
+                      )}>
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Sparkles className={cn("w-3.5 h-3.5", isAi ? "text-helm-status-warning" : "text-helm-gold")} />
                           <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-helm-status-warning" : "text-helm-gold")}>

@@ -42,15 +42,18 @@
 
     html[data-theme="light"] {
         --helm-fg: var(--helm-navy);
+        /* Flat page canvas = raw cream token only — no gold/warning mix-ins */
         --helm-bg: var(--helm-cream);
         --helm-card: color-mix(in srgb, var(--helm-cream) 70%, white);
         --helm-muted: var(--helm-slate);
         --helm-line: color-mix(in srgb, var(--helm-navy) 16%, transparent);
-        --background: 40 33% 93%;
+        /* Keep shadcn bg-background in lockstep with #F5F0E6 */
+        --background: 40 42.86% 93.14%;
         --foreground: 221 51% 16%;
-        --card: 40 40% 97%;
+        /* Card ≈ cream 70% + white 30% (#F8F4ED), not a warmer peach HSL */
+        --card: 38 44% 95%;
         --card-foreground: 221 51% 16%;
-        --popover: 40 40% 97%;
+        --popover: 38 44% 95%;
         --popover-foreground: 221 51% 16%;
         --primary: 41 55% 54%;
         --primary-foreground: 221 51% 16%;
@@ -160,11 +163,21 @@ input.cl-otpCodeFieldInput {
   color: var(--helm-fg);
 }
 
-html[data-theme="light"] body {
+/* Single opaque cream page fill — no stacked tints, grain, or gradients */
+html[data-theme="light"],
+html[data-theme="light"] body,
+html[data-theme="light"] #root,
+html[data-theme="light"] .app-shell {
   background-color: var(--helm-cream);
+  background-image: none;
 }
 
-html[data-theme="light"] .app-shell.grain::before {
+html[data-theme="light"] body {
+  background-attachment: scroll;
+}
+
+html[data-theme="light"] .app-shell.grain::before,
+html[data-theme="light"] .grain::before {
   display: none;
 }
 

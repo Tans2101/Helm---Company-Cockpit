@@ -126,7 +126,7 @@ export default function HelmHowToUse({ className }) {
       </div>
 
       {/* First-week checklist */}
-      <div className="rounded-xl border border-helm-gold/15 bg-helm-gold/12 p-5">
+      <div className="rounded-xl border border-helm-line border-l-2 border-l-helm-gold/70 bg-helm-card p-5">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-gold mb-4">Your first week</p>
         <ul className="space-y-2.5">
           {HOW_TO_USE_CHECKLIST.map((item) => (
