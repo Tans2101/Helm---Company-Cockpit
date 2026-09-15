@@ -162,7 +162,7 @@ function AppRouter() {
           <Route path="sales" element={<Pipeline />} />
           <Route path="decisions" element={<Decisions />} />
           <Route path="telemetry" element={<SectionGate section="telemetry"><Telemetry /></SectionGate>} />
-          <Route path="financials" element={<Financials />} />
+          <Route path="financials" element={<SectionGate section="financials"><Financials /></SectionGate>} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="reports" element={<Reports />} />
           <Route path="calendar" element={<CalendarPage />} />

@@ -1633,16 +1633,24 @@ def ask_context_for_synthesis(
     sales_tracked: bool = False,
     onboarding_instances=None,
     hr_tracked: bool = False,
+    financials_visible: bool = True,
 ) -> dict:
     """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished."""
     profile = company_profile_for_synthesis(c)
     roster = ((c.get("people") or {}).get("people") or [])
+    if financials_visible:
+        financials_ctx = financials_for_synthesis(fin)
+    else:
+        financials_ctx = {
+            "access": "restricted",
+            "note": "Financial figures are not shared with this user's role.",
+        }
     return {
         "company": profile.get("name"),
         "company_profile": profile,
         # People-roster length is computed — 0 means nobody on the list, not "headcount not entered".
         "people_count": len(roster),
-        "financials": financials_for_synthesis(fin),
+        "financials": financials_ctx,
         "pipeline": pipeline_for_synthesis(deals, sales_tracked=sales_tracked),
         "onboarding": onboarding_for_synthesis(onboarding_instances, hr_tracked=hr_tracked),
         "risks": risks_for_synthesis(c),
@@ -2603,33 +2611,36 @@ async def briefing(principal=Depends(get_principal)):
     if (b.get("headline") or "").startswith("Your cockpit is ready"):
         b["headline"] = "Start by logging your financials and adding your team."
     is_pro = workspace_is_pro(c)
-    fin = await compute_financials(c["workspace_id"])
-    metrics = [
-        {
-            "label": "MRR",
-            "value": fin["mrr"] if fin.get("mrr_known") else "Add data",
-            "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
-            "tone": "positive" if fin.get("mrr_known") else "neutral",
-            "missing": not fin.get("mrr_known"),
-        },
-        {
-            "label": "Runway",
-            "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "Add data",
-            "delta": 0,
-            "tone": "neutral",
-            "missing": fin["runway_months"] is None,
-        },
-        {
-            "label": "Burn",
-            "value": fin["burn"] if fin.get("burn_known") else "Add data",
-            "delta": 0,
-            "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
-            "missing": not fin.get("burn_known"),
-        },
-    ]
-    nrr = b.get("nrr")
-    if nrr:
-        metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
+    has_fin_access = await can_section_write(principal, "financials", "finance:write")
+    metrics = []
+    if has_fin_access:
+        fin = await compute_financials(c["workspace_id"])
+        metrics = [
+            {
+                "label": "MRR",
+                "value": fin["mrr"] if fin.get("mrr_known") else "Add data",
+                "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
+                "tone": "positive" if fin.get("mrr_known") else "neutral",
+                "missing": not fin.get("mrr_known"),
+            },
+            {
+                "label": "Runway",
+                "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "Add data",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": fin["runway_months"] is None,
+            },
+            {
+                "label": "Burn",
+                "value": fin["burn"] if fin.get("burn_known") else "Add data",
+                "delta": 0,
+                "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
+                "missing": not fin.get("burn_known"),
+            },
+        ]
+        nrr = b.get("nrr")
+        if nrr:
+            metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
     b["metrics"] = metrics
     acts = await db.activities.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(5)
     act_items = [{"title": a["summary"], "detail": f"{a['actor_name']} · {_rel_time(a['created_at'])}", "tone": "neutral"} for a in acts]
@@ -4075,7 +4086,7 @@ async def update_telemetry(payload: TelemetryRiskInput, principal=Depends(requir
 
 
 @api_router.get("/financials")
-async def financials(principal=Depends(get_principal)):
+async def financials(principal=Depends(require_section("financials", "finance:write"))):
     dept_ids = await dept_access.accessible_department_ids(
         db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
     )
@@ -5236,7 +5247,7 @@ async def _apply_report_snapshot(workspace_id: str, current: dict) -> Optional[d
     return previous
 
 
-def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
+def _computed_report_cards(c, fin, items, ups, headcount, prior=None, *, include_financials: bool = True):
     # Task / update / blocker / shipped counts and people-roster headcount are
     # computed from workspace collections. Zero is unambiguous (none found) —
     # there is no separate "not entered" state. Money fields still use fin
@@ -5277,15 +5288,19 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
             f"{curr['open_tasks']} remain open."
         )
 
-    return [
-        {"id": "auto_fin", "title": "Money check-in", "type": "Updated weekly", "period": period,
-         "summary": fin_summary,
-         "metrics": [
-             {"label": "Monthly recurring revenue", "value": fin["mrr"], "change": mrr_change},
-             {"label": "Cash runway", "value": f"{fin['runway_months']} months" if fin["runway_months"] is not None else "Not available", "change": runway_change},
-             {"label": "Net burn this month", "value": fin["burn"], "change": burn_change},
-         ],
-         "baseline_at": baseline_at, "source": "auto"},
+    cards = []
+    if include_financials:
+        cards.append(
+            {"id": "auto_fin", "title": "Money check-in", "type": "Updated weekly", "period": period,
+             "summary": fin_summary,
+             "metrics": [
+                 {"label": "Monthly recurring revenue", "value": fin["mrr"], "change": mrr_change},
+                 {"label": "Cash runway", "value": f"{fin['runway_months']} months" if fin["runway_months"] is not None else "Not available", "change": runway_change},
+                 {"label": "Net burn this month", "value": fin["burn"], "change": burn_change},
+             ],
+             "baseline_at": baseline_at, "source": "auto"},
+        )
+    cards.extend([
         {"id": "auto_team", "title": "Team check-in", "type": "Updated weekly", "period": period,
          "summary": team_summary,
          "metrics": [
@@ -5302,7 +5317,8 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None):
              {"label": "Still open", "value": str(curr["open_tasks"]), "change": "Current total"},
          ],
          "baseline_at": baseline_at, "source": "auto"},
-    ]
+    ])
+    return cards
 
 
 @api_router.get("/reports")
@@ -5316,9 +5332,11 @@ async def reports(principal=Depends(get_principal)):
     manual = [r for r in (c.get("manual_reports") or []) if r.get("source") != helm_dept_drafts.SOURCE]
     current = _report_metric_snapshot(fin, items, ups, headcount)
     prior = await _apply_report_snapshot(c["workspace_id"], current)
-    auto = _computed_report_cards(c, fin, items, ups, headcount, prior=prior)
     can_write = await can_section_write(principal, "reports", "reports:write")
     can_export_financials = await can_section_write(principal, "financials", "finance:write")
+    auto = _computed_report_cards(
+        c, fin, items, ups, headcount, prior=prior, include_financials=can_export_financials,
+    )
     drafts = await helm_dept_drafts.list_open_drafts(db, c["workspace_id"])
     financial_months = list(fin.get("months") or [])
     financial_latest_month = fin.get("latest_month")
@@ -9442,7 +9460,8 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     )
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
-    fin = await compute_financials(c["workspace_id"])
+    has_fin_access = await can_section_write(principal, "financials", "finance:write")
+    fin = await compute_financials(c["workspace_id"]) if has_fin_access else {}
     deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
     onboarding_rows = await db.hr_onboarding_instances.find(
         {"workspace_id": c["workspace_id"]}, {"_id": 0},
@@ -9460,6 +9479,7 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         sales_tracked=sales_dept is not None,
         onboarding_instances=onboarding_rows,
         hr_tracked=hr_dept is not None,
+        financials_visible=has_fin_access,
     )
     system = (
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
@@ -9469,6 +9489,10 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         "block in the snapshot (company_profile, financials, pipeline, onboarding, risks). "
         "If a field is null or listed in unknown_fields, say the data is not in Helm yet — "
         "do not infer it and do not describe it as zero. "
+        "If financials.access is \"restricted\", the user does not have access to financial "
+        "data in Helm. Tell them clearly they cannot see revenue, burn, runway, or related "
+        "figures and should ask someone with Financials access. Do not invent numbers, "
+        "describe them as zero, or estimate them from pipeline deal values or other clues. "
         f"Current company snapshot:\n{json.dumps(context, indent=2)}"
     )
 

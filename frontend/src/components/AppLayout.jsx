@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, KanbanSquare,
   FileText, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun,
+  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -23,6 +23,7 @@ const NAV = [
   { to: "/app", label: "Briefing", icon: LayoutDashboard, id: "briefing", end: true },
   { to: "/app/decisions", label: "Decisions", icon: GitBranch, id: "decisions" },
   { to: "/app/telemetry", label: "Telemetry", icon: Activity, id: "telemetry", section: "telemetry" },
+  { to: "/app/financials", label: "Financials", icon: Wallet, id: "financials", section: "financials" },
   { to: "/app/tasks", label: "Tasks", icon: KanbanSquare, id: "tasks" },
   { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
@@ -35,8 +36,15 @@ const NAV = [
 function navItemVisible(item, user) {
   // Pack-only perms (e.g. members:invite) — unchanged shallow check.
   if (item.perm && !(user?.perms || []).includes(item.perm)) return false;
-  // Grant-aware sections (e.g. telemetry) — includes pack holders via /auth/me.
+  // Grant-aware sections (e.g. telemetry, financials) — includes pack holders via /auth/me.
   if (item.section && !(user?.granted_sections || []).includes(item.section)) return false;
+  return true;
+}
+
+function departmentNavVisible(dept) {
+  if (!dept?.visible_in_nav) return false;
+  // Financials is gated via the main NAV entry + SectionGate; hide the dept duplicate.
+  if (dept.type === "accounting_finance") return false;
   return true;
 }
 
@@ -117,7 +125,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
   const { data: company } = useFetch("/company");
   const { data: deptData } = useFetch("/departments");
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
-  const deptNav = (deptData?.departments || []).filter((d) => d.visible_in_nav);
+  const deptNav = (deptData?.departments || []).filter((d) => departmentNavVisible(d));
 
   return (
     <div className="flex flex-col h-full">

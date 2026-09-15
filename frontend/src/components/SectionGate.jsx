@@ -3,7 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { LoadingScreen } from "@/components/kit";
 
 /**
- * Route guard for Manage Access sections (e.g. telemetry).
+ * Route guard for Manage Access sections (e.g. telemetry, financials).
  * Pack holders and explicitly granted members pass via user.granted_sections.
  */
 export default function SectionGate({ section, children, fallback = null }) {
