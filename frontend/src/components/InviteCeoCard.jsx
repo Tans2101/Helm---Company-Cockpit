@@ -98,7 +98,7 @@ export default function InviteCeoCard() {
           type="button"
           onClick={trackEmail}
           disabled={busy || !email.trim()}
-          className="rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-4 py-2.5 hover:bg-helm-gold/15 disabled:opacity-50"
+          className="rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-4 py-2.5 hover:bg-helm-gold/10 disabled:opacity-50"
         >
           {busy ? "Saving…" : "Track invite"}
         </button>

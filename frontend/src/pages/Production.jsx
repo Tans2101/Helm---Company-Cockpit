@@ -11,19 +11,19 @@ import { cn } from "@/lib/utils";
 const STATUS_META = {
   awaiting_materials: {
     label: "Awaiting materials",
-    className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30",
+    className: "bg-helm-status-warning/12 text-helm-fg border-helm-status-warning/35",
   },
   in_production: {
     label: "In production",
-    className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30",
+    className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35",
   },
   quality_check: {
     label: "Quality check",
-    className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30",
+    className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35",
   },
   completed: {
     label: "Completed",
-    className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30",
+    className: "bg-helm-status-positive/12 text-helm-fg border-helm-status-positive/35",
   },
 };
 
@@ -441,7 +441,7 @@ export default function Production() {
                     onClick={() => setSelectedId(order.id)}
                     className={cn(
                       "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                      selectedId === order.id && "bg-helm-gold/[0.06]",
+                      selectedId === order.id && "bg-helm-gold/12",
                     )}
                   >
                     <td className="px-3 py-2.5 text-helm-fg">
@@ -450,7 +450,7 @@ export default function Production() {
                         {order.blocked && (
                           <span
                             data-testid={`blocked-badge-${order.id}`}
-                            className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-status-negative/40 bg-helm-status-negative/10 text-helm-status-negative"
+                            className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-status-negative/35 bg-helm-status-negative/12 text-helm-status-negative"
                             title={order.blocked_reason?.detail || ""}
                           >
                             Blocked
@@ -735,8 +735,8 @@ export default function Production() {
                 className={cn(
                   "rounded-md border text-xs px-2.5 py-1.5 disabled:opacity-40",
                   draft.status === st
-                    ? "border-helm-gold/50 bg-helm-gold/10 text-helm-gold"
-                    : "border-helm-line text-helm-fg hover:border-helm-gold/40",
+                    ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
+                    : "border-helm-line text-helm-fg hover:border-helm-gold/35",
                 )}
               >
                 {STATUS_META[st]?.label || st}
@@ -791,7 +791,7 @@ export default function Production() {
               disabled={busy}
               data-testid="delete-work-order-btn"
               onClick={() => setConfirmDelete(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+              className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>

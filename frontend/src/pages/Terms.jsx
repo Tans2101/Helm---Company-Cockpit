@@ -5,7 +5,7 @@ export default function Terms() {
     <div className="min-h-screen bg-helm-ink text-helm-cream">
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-helm-slate hover:text-helm-cream transition-colors mb-10">
-          <span className="w-6 h-6 rounded bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center">
+          <span className="w-6 h-6 rounded bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
             <span className="font-mono text-helm-gold text-xs">H</span>
           </span>
           Back to Helm
@@ -55,7 +55,7 @@ export default function Terms() {
             </p>
           </section>
 
-          <section className="rounded-lg border border-helm-gold/30 bg-helm-gold/5 p-5">
+          <section className="rounded-lg border border-helm-gold/35 bg-helm-gold/12 p-5">
             <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy — please read</h2>
             <p className="text-helm-fg">
               Helm uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to

@@ -13,7 +13,7 @@ export default function MarketingLogo({ size = "md", showTagline = false, classN
       className={`inline-flex items-center gap-2.5 group transition-opacity hover:opacity-90 ${className}`}
       data-testid="helm-logo-home"
     >
-      <div className={`${box} rounded-md border flex items-center justify-center shrink-0 bg-transparent border-helm-gold/50`}>
+      <div className={`${box} rounded-md border flex items-center justify-center shrink-0 bg-transparent border-helm-gold/35`}>
         <span className={`font-mono font-medium text-helm-gold ${letter}`}>H</span>
       </div>
       <div>

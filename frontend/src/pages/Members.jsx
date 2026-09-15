@@ -122,7 +122,7 @@ export default function Members() {
         <div className="flex gap-1 mb-6 p-1 rounded-lg border border-helm-line bg-helm-fg/[0.02] w-fit">
           {[{ id: "team", label: "Team" }, { id: "access", label: "Manage Access" }].map((t) => (
             <button key={t.id} type="button" data-testid={`tab-${t.id}`} onClick={() => setTab(t.id)}
-              className={cn("px-4 py-2 text-sm rounded-md transition-colors", tab === t.id ? "bg-helm-gold/15 text-helm-gold" : "text-helm-muted hover:text-helm-fg")}>
+              className={cn("px-4 py-2 text-sm rounded-md transition-colors", tab === t.id ? "bg-helm-gold/12 text-helm-gold" : "text-helm-muted hover:text-helm-fg")}>
               {t.label}
             </button>
           ))}
@@ -189,7 +189,7 @@ export default function Members() {
                                   : `Included via their ${member.legacy_department || "department"} access rule`
                               }
                               data-testid={`access-${member.membership_id}-${section.id}-${packLocked ? "pack" : "dept"}`}
-                              className="inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+                              className="inline-flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
                             >
                               <Check className="w-3 h-3" />
                               {section.label}
@@ -208,7 +208,7 @@ export default function Members() {
                             onClick={() => toggleGrant(member.membership_id, section.id, member)}
                             className={cn(
                               "inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors",
-                              on ? "border-helm-gold/40 bg-helm-gold/10 text-helm-gold" : "border-helm-line text-helm-muted hover:border-helm-fg/20",
+                              on ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold" : "border-helm-line text-helm-muted hover:border-helm-fg/20",
                             )}
                           >
                             {on ? <Check className="w-3 h-3" /> : null}
@@ -245,7 +245,7 @@ export default function Members() {
                 <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Invite a teammate</span>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex items-center gap-2 flex-1 rounded-md border border-helm-line bg-helm-card px-3 focus-within:border-helm-gold/40">
+                <div className="flex items-center gap-2 flex-1 rounded-md border border-helm-line bg-helm-card px-3 focus-within:border-helm-gold/35">
                   <Mail className="w-4 h-4 text-helm-muted" />
                   <input data-testid="invite-email-input" value={email} onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && invite()} placeholder="teammate@company.com"
@@ -300,7 +300,7 @@ export default function Members() {
                       <p className="text-xs text-helm-muted truncate">{m.email} · {formatDepartmentNames(m)}</p>
                     </div>
                     {m.status === "invited" && (
-                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-status-warning bg-helm-status-warning/10 rounded px-2 py-1">Invited</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-fg bg-helm-status-warning/12 rounded px-2 py-1">Invited</span>
                     )}
                     <span className={cn("inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wide rounded px-2 py-1 border", meta.style)}>
                       <meta.icon className="w-3 h-3" />{meta.label}

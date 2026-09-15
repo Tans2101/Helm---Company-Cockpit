@@ -48,7 +48,7 @@ export default function WorkspaceGate() {
       <div className="w-full max-w-xl">
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-md bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
               <span className="font-mono text-helm-gold font-medium">H</span>
             </div>
             <div>
@@ -66,14 +66,14 @@ export default function WorkspaceGate() {
         {!mode && (
           <div className="mt-10 grid sm:grid-cols-2 gap-4 fade-up">
             <button data-testid="gate-join-choice" onClick={() => setMode("join")}
-              className="text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] p-6 transition-colors hover:border-helm-gold/40 group">
-              <div className="w-11 h-11 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center"><KeyRound className="w-5 h-5 text-helm-gold" /></div>
+              className="text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] p-6 transition-colors hover:border-helm-gold/35 group">
+              <div className="w-11 h-11 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center"><KeyRound className="w-5 h-5 text-helm-gold" /></div>
               <h3 className="mt-4 text-lg text-helm-fg tracking-tight">Join with a code</h3>
               <p className="mt-1.5 text-sm text-helm-muted leading-relaxed">Enter the invite code your admin shared, or use your email invite link.</p>
               <span className="mt-4 inline-flex items-center gap-1.5 text-sm text-helm-gold">Enter code <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" /></span>
             </button>
             <button data-testid="gate-create-choice" onClick={() => setMode("create")}
-              className="text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] p-6 transition-colors hover:border-helm-gold/40 group">
+              className="text-left rounded-xl border border-helm-line bg-helm-fg/[0.02] p-6 transition-colors hover:border-helm-gold/35 group">
               <div className="w-11 h-11 rounded-xl bg-helm-fg/[0.04] border border-helm-line flex items-center justify-center"><Building2 className="w-5 h-5 text-helm-gold" /></div>
               <h3 className="mt-4 text-lg text-helm-fg tracking-tight">Create a company</h3>
               <p className="mt-1.5 text-sm text-helm-muted leading-relaxed">Name your company now — you'll set up the rest (stage, team, industry) on the next screen.</p>

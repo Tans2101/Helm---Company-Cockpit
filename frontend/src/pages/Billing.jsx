@@ -123,7 +123,7 @@ export default function Billing() {
 
     if (isCurrent) {
       return (
-        <div className="text-center text-xs font-mono uppercase tracking-wide text-helm-gold border border-helm-gold/30 bg-helm-gold/10 rounded-md py-2.5">
+        <div className="text-center text-xs font-mono uppercase tracking-wide text-helm-gold border border-helm-gold/35 bg-helm-gold/12 rounded-md py-2.5">
           {isPaid ? "Current plan" : "On Free"}
         </div>
       );
@@ -175,7 +175,7 @@ export default function Billing() {
       </button>
 
       {pastDue && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-helm-status-warning/30 bg-helm-status-warning/10 px-4 py-3 text-sm text-helm-status-warning" data-testid="past-due-banner">
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 px-4 py-3 text-sm text-helm-fg" data-testid="past-due-banner">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <p className="font-medium text-helm-status-warning">Payment past due</p>
@@ -190,7 +190,7 @@ export default function Billing() {
       )}
 
       {trialing && (
-        <div className="mb-6 rounded-lg border border-helm-gold/25 bg-helm-gold/10 px-4 py-3 text-sm text-helm-gold" data-testid="trialing-banner">
+        <div className="mb-6 rounded-lg border border-helm-gold/35 bg-helm-gold/12 px-4 py-3 text-sm text-helm-gold" data-testid="trialing-banner">
           You’re on a free trial — cancel anytime before it ends to avoid being charged.
         </div>
       )}
@@ -206,7 +206,7 @@ export default function Billing() {
       )}
 
       {!billingEnforced && (
-        <div className="mb-6 rounded-lg border border-helm-status-positive/25 bg-helm-status-positive/10 px-4 py-3 text-sm text-helm-status-positive" data-testid="billing-standby-banner">
+        <div className="mb-6 rounded-lg border border-helm-status-positive/35 bg-helm-status-positive/12 px-4 py-3 text-sm text-helm-fg" data-testid="billing-standby-banner">
           <p className="font-medium text-helm-status-positive">Billing is paused</p>
           <p className="text-helm-status-positive/80 mt-0.5">
             Feature gates are open while you build. Set <code className="font-mono text-xs">BILLING_ENFORCED=true</code> when ready.
@@ -265,15 +265,15 @@ export default function Billing() {
               glow={highlighted && !isCurrent}
               className={cn(
                 "p-5 fade-up flex flex-col",
-                isCurrent && "border-helm-gold/40",
-                highlighted && !isCurrent && "border-helm-gold/25",
+                isCurrent && "border-helm-gold/35",
+                highlighted && !isCurrent && "border-helm-gold/35",
               )}
               data-testid={`plan-card-${plan.id}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel>{plan.label}</SectionLabel>
                 {isCurrent && (
-                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-gold bg-helm-gold/10 border border-helm-gold/30 rounded px-1.5 py-0.5">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-gold bg-helm-gold/12 border border-helm-gold/35 rounded px-1.5 py-0.5">
                     Current
                   </span>
                 )}

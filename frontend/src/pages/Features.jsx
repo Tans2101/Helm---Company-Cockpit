@@ -45,7 +45,7 @@ export default function Features() {
       <section className="px-6 pb-12">
         <div className="mx-auto max-w-4xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}
-            className="rounded-2xl border border-helm-gold/20 bg-helm-gold/[0.04] p-6 md:p-8">
+            className="rounded-2xl border border-helm-gold/35 bg-helm-gold/12 p-6 md:p-8">
             <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-gold mb-4">Included in Helm</p>
             <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2">
               {PRO_FEATURES.map((f) => (
@@ -75,7 +75,7 @@ export default function Features() {
                     <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-gold">{mod.ceoValue}</p>
                     <h2 className="mt-2 text-xl md:text-2xl font-light tracking-tight text-helm-cream">{mod.title}</h2>
                     <p className="mt-3 text-sm text-helm-slate leading-relaxed">{mod.body}</p>
-                    <p className="mt-4 text-sm text-helm-slate italic border-l-2 border-helm-gold/30 pl-4">{mod.example}</p>
+                    <p className="mt-4 text-sm text-helm-slate italic border-l-2 border-helm-gold/35 pl-4">{mod.example}</p>
                   </motion.article>
                 );
               })}

@@ -9,11 +9,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
-  requested: { label: "Requested", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
-  approved: { label: "Approved", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
-  ordered: { label: "Ordered", className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30" },
-  delivered: { label: "Delivered", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
-  rejected: { label: "Rejected", className: "bg-helm-status-negative/15 text-helm-status-negative border-helm-status-negative/30" },
+  requested: { label: "Requested", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  approved: { label: "Approved", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  ordered: { label: "Ordered", className: "bg-helm-status-warning/12 text-helm-fg border-helm-status-warning/35" },
+  delivered: { label: "Delivered", className: "bg-helm-status-positive/12 text-helm-fg border-helm-status-positive/35" },
+  rejected: { label: "Rejected", className: "bg-helm-status-negative/12 text-helm-status-negative border-helm-status-negative/35" },
 };
 
 const CLOSED = new Set(["delivered", "rejected"]);
@@ -36,7 +36,7 @@ function PriorityBadge({ priority }) {
   return (
     <span
       data-testid="priority-high-badge"
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
     >
       High
     </span>
@@ -73,7 +73,7 @@ function BlockingProductionBadge({ orders, requestId }) {
     <span
       data-testid={`blocking-production-badge-${requestId}`}
       title={label}
-      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
     >
       Blocking: {label}
     </span>
@@ -400,7 +400,7 @@ export default function Procurement() {
                   onClick={() => setSelectedId(req.id)}
                   className={cn(
                     "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                    selectedId === req.id && "bg-helm-gold/[0.06]",
+                    selectedId === req.id && "bg-helm-gold/12",
                   )}
                 >
                   <td className="px-3 py-2.5 text-helm-fg max-w-[14rem]">
@@ -569,7 +569,7 @@ export default function Procurement() {
                   disabled={busy}
                   data-testid="procurement-approve-btn"
                   onClick={() => setStatus("approved")}
-                  className="rounded-md border border-helm-muted/40 text-helm-muted text-sm px-3 py-2 hover:bg-helm-muted/10 disabled:opacity-50"
+                  className="rounded-md border border-helm-muted/35 text-helm-muted text-sm px-3 py-2 hover:bg-helm-muted/10 disabled:opacity-50"
                 >
                   Approve
                 </button>
@@ -578,7 +578,7 @@ export default function Procurement() {
                   disabled={busy}
                   data-testid="procurement-reject-btn"
                   onClick={() => setStatus("rejected")}
-                  className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50"
+                  className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50"
                 >
                   Reject
                 </button>
@@ -590,7 +590,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-ordered-btn"
                 onClick={() => setStatus("ordered")}
-                className="rounded-md border border-helm-status-warning/40 text-helm-status-warning text-sm px-3 py-2 hover:bg-helm-status-warning/10 disabled:opacity-50"
+                className="rounded-md border border-helm-status-warning/35 text-helm-status-warning text-sm px-3 py-2 hover:bg-helm-status-warning/10 disabled:opacity-50"
               >
                 Mark ordered
               </button>
@@ -601,7 +601,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-delivered-btn"
                 onClick={() => setStatus("delivered")}
-                className="rounded-md border border-helm-status-positive/40 text-helm-status-positive text-sm px-3 py-2 hover:bg-helm-status-positive/10 disabled:opacity-50"
+                className="rounded-md border border-helm-status-positive/35 text-helm-status-positive text-sm px-3 py-2 hover:bg-helm-status-positive/10 disabled:opacity-50"
               >
                 Mark delivered
               </button>
@@ -612,7 +612,7 @@ export default function Procurement() {
                 disabled={busy}
                 data-testid="procurement-delete-btn"
                 onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>
@@ -738,7 +738,7 @@ export default function Procurement() {
                       }));
                       setVendorNote(s.price_changed ? "Price has changed since last order" : "");
                     }}
-                    className="w-full text-left rounded-md border border-helm-line px-3 py-2 text-xs text-helm-fg hover:border-helm-gold/40 hover:bg-helm-gold/[0.06]"
+                    className="w-full text-left rounded-md border border-helm-line px-3 py-2 text-xs text-helm-fg hover:border-helm-gold/35 hover:bg-helm-gold/10"
                   >
                     <span className="font-medium">{s.vendor_name}</span>
                     <span className="text-helm-muted">

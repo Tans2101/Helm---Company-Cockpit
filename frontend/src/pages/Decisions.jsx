@@ -7,10 +7,10 @@ import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyS
 import { cn } from "@/lib/utils";
 
 const statusStyle = {
-  pending: "text-helm-status-warning bg-helm-status-warning/10 border-helm-status-warning/20",
-  approved: "text-helm-status-positive bg-helm-status-positive/10 border-helm-status-positive/20",
-  rejected: "text-helm-status-negative bg-helm-status-negative/10 border-helm-status-negative/20",
-  delegated: "text-helm-muted bg-helm-muted/10 border-helm-muted/20",
+  pending: "text-helm-fg bg-helm-status-warning/12 border-helm-status-warning/35",
+  approved: "text-helm-fg bg-helm-status-positive/12 border-helm-status-positive/35",
+  rejected: "text-helm-status-negative bg-helm-status-negative/12 border-helm-status-negative/35",
+  delegated: "text-helm-fg bg-helm-muted/12 border-helm-muted/35",
 };
 const emptyForm = () => ({ title: "", category: "General", description: "", recommendation: "", due: "", impact: "Medium" });
 
@@ -166,11 +166,11 @@ export default function Decisions() {
           </div>
           <div className="space-y-3">
             {suggestions.map((s) => (
-              <GlassCard key={s.id} className="p-5 fade-up border-helm-status-warning/20 bg-helm-status-warning/[0.03]" data-testid={`suggestion-${s.id}`}>
+              <GlassCard key={s.id} className="p-5 fade-up border-helm-status-warning/35 bg-helm-status-warning/12" data-testid={`suggestion-${s.id}`}>
                 <div className="flex flex-col lg:flex-row lg:items-start gap-5">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning border border-helm-status-warning/30 rounded px-1.5 py-0.5">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning border border-helm-status-warning/35 rounded px-1.5 py-0.5">
                         AI Suggested — verify before acting
                       </span>
                       <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted border border-helm-line rounded px-1.5 py-0.5">{s.category}</span>
@@ -179,7 +179,7 @@ export default function Decisions() {
                     <h3 className="text-lg text-helm-fg font-medium tracking-tight">{s.title}</h3>
                     {s.description && <p className="text-sm text-helm-muted mt-1">{s.description}</p>}
                     {s.recommendation && (
-                      <div className="mt-4 rounded-lg border border-helm-status-warning/20 bg-helm-status-warning/[0.04] p-3">
+                      <div className="mt-4 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 p-3">
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
                           <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm recommendation</span>
@@ -238,7 +238,7 @@ export default function Decisions() {
                       <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted border border-helm-line rounded px-1.5 py-0.5">{d.category}</span>
                       <span className={cn("text-[10px] font-mono uppercase tracking-wider rounded px-1.5 py-0.5 border", statusStyle[d.status])}>{d.status}</span>
                       {isAi && (
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning/90 border border-helm-status-warning/20 rounded px-1.5 py-0.5">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning/90 border border-helm-status-warning/35 rounded px-1.5 py-0.5">
                           From Helm
                         </span>
                       )}
@@ -254,7 +254,7 @@ export default function Decisions() {
                     {d.description && <p className="text-sm text-helm-muted mt-1">{d.description}</p>}
 
                     {d.recommendation && (
-                      <div className={cn("mt-4 rounded-lg border p-3", isAi ? "border-helm-status-warning/20 bg-helm-status-warning/[0.04]" : "border-helm-gold/20 bg-helm-gold/[0.04]")}>
+                      <div className={cn("mt-4 rounded-lg border p-3", isAi ? "border-helm-status-warning/35 bg-helm-status-warning/12" : "border-helm-gold/35 bg-helm-gold/12")}>
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Sparkles className={cn("w-3.5 h-3.5", isAi ? "text-helm-status-warning" : "text-helm-gold")} />
                           <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-helm-status-warning" : "text-helm-gold")}>

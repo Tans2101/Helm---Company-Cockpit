@@ -22,7 +22,7 @@ const ICONS = {
 };
 
 const STATUS_LABELS = {
-  connected: { text: "Connected", className: "text-helm-status-positive bg-helm-status-positive/10" },
+  connected: { text: "Connected", className: "text-helm-fg bg-helm-status-positive/12" },
   not_connected: { text: "Not connected", className: "text-helm-muted border border-helm-line" },
   unavailable: { text: "Unavailable", className: "text-helm-muted border border-helm-line" },
   coming_soon: { text: "Coming soon", className: "text-helm-muted border border-helm-line" },
@@ -85,7 +85,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
       <p className="text-sm text-helm-muted mt-2 leading-relaxed flex-1 min-h-[40px]">{it.description}</p>
 
       {it.value && (
-        <p className="text-xs text-helm-muted mt-3 leading-relaxed border-l-2 border-helm-gold/30 pl-2">{it.value}</p>
+        <p className="text-xs text-helm-muted mt-3 leading-relaxed border-l-2 border-helm-gold/35 pl-2">{it.value}</p>
       )}
 
       {it.connected && it.tenant_name && (
@@ -106,7 +106,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
           type="button"
           data-testid={`reconnect-${it.id}`}
           onClick={() => onConnect(it.provider)}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm py-2 hover:bg-helm-gold/15"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm py-2 hover:bg-helm-gold/10"
         >
           <RefreshCw className="w-3.5 h-3.5" /> {it.connect_label || "Reconnect Google"}
         </button>
@@ -131,7 +131,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
           data-testid={`sync-${it.id}-btn`}
           onClick={() => onSync(it.provider)}
           disabled={syncBusy}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm py-2 hover:bg-helm-gold/15 disabled:opacity-60"
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm py-2 hover:bg-helm-gold/10 disabled:opacity-60"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", syncBusy && "animate-spin")} />
           {syncBusy
@@ -374,7 +374,7 @@ export default function Integrations() {
       </GlassCard>
 
       {data.can_manage && (data.xero_pending_tenants || []).length > 0 && (
-        <GlassCard className="p-5 mb-8 fade-up border-helm-gold/20" data-testid="xero-tenant-picker">
+        <GlassCard className="p-5 mb-8 fade-up border-helm-gold/35" data-testid="xero-tenant-picker">
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-2">Choose Xero organisation</p>
           <p className="text-sm text-helm-muted mb-4 leading-relaxed">
             Your Xero login can access more than one organisation. Pick which one Helm should sync into Financials.
@@ -387,7 +387,7 @@ export default function Integrations() {
                 data-testid={`xero-tenant-${t.tenant_id}`}
                 disabled={xeroTenantBusy}
                 onClick={() => selectXeroTenant(t.tenant_id)}
-                className="w-full text-left rounded-md border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/40 hover:bg-helm-fg/[0.04] disabled:opacity-60"
+                className="w-full text-left rounded-md border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/35 hover:bg-helm-fg/[0.04] disabled:opacity-60"
               >
                 <span className="text-sm text-helm-fg">{t.tenant_name}</span>
                 <span className="block text-[10px] font-mono text-helm-muted mt-0.5">{t.tenant_id}</span>

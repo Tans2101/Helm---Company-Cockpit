@@ -97,7 +97,7 @@ export default function Telemetry() {
         title="Telemetry"
         subtitle="Live KPIs from your integrated sources — financials, pipeline, people, and tasks."
         action={canWrite ? (
-          <button type="button" onClick={openEdit} className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15">
+          <button type="button" onClick={openEdit} className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10">
             <PenLine className="w-3.5 h-3.5" /> Edit risks
           </button>
         ) : null}
@@ -175,7 +175,7 @@ export default function Telemetry() {
         <GlassCard className="p-5 fade-up" data-testid="telemetry-risks">
           <SectionLabel className="mb-4">Risk radar</SectionLabel>
           {data.notes && !editing && (
-            <p className="text-sm text-helm-muted mb-4 leading-relaxed border-l-2 border-helm-gold/30 pl-3">{data.notes}</p>
+            <p className="text-sm text-helm-muted mb-4 leading-relaxed border-l-2 border-helm-gold/35 pl-3">{data.notes}</p>
           )}
           {!editing && data.risks?.length > 0 && (
             <div className="grid sm:grid-cols-2 gap-3">

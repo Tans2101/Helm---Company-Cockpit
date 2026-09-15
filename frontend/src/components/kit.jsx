@@ -56,14 +56,14 @@ export function Delta({ value, tone, invert }) {
 
 export function ProBadge({ className }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border border-helm-gold/40 bg-helm-gold/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-helm-gold", className)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full border border-helm-gold/35 bg-helm-gold/12 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-helm-gold", className)}>
       Active
     </span>
   );
 }
 
 export function Spinner({ className }) {
-  return <div className={cn("w-5 h-5 rounded-full border-2 border-helm-gold/30 border-t-helm-gold animate-spin", className)} />;
+  return <div className={cn("w-5 h-5 rounded-full border-2 border-helm-gold/35 border-t-helm-gold animate-spin", className)} />;
 }
 
 export function LoadingScreen({ label = "Loading" }) {
@@ -84,7 +84,7 @@ export function ErrorScreen({ label = "Something went wrong", message, onRetry }
         <button
           type="button"
           onClick={onRetry}
-          className="mt-6 rounded-md border border-helm-line bg-helm-fg/5 px-4 py-2 text-sm text-helm-fg transition-colors hover:border-helm-gold/30 hover:text-helm-fg"
+          className="mt-6 rounded-md border border-helm-line bg-helm-fg/5 px-4 py-2 text-sm text-helm-fg transition-colors hover:border-helm-gold/35 hover:text-helm-fg"
         >
           Try again
         </button>
@@ -154,7 +154,7 @@ export function ConfirmDialog({
             className={cn(
               "rounded-md text-sm font-medium px-3 py-2 disabled:opacity-50",
               destructive
-                ? "border border-helm-status-negative/40 bg-helm-status-negative/15 text-helm-status-negative hover:bg-helm-status-negative/25"
+                ? "border border-helm-status-negative/35 bg-helm-status-negative/12 text-helm-status-negative hover:bg-helm-status-negative/10"
                 : "bg-helm-gold text-helm-navy hover:bg-helm-gold-hover",
             )}
           >

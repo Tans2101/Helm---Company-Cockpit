@@ -28,7 +28,7 @@ export default function Onboarding() {
 
       <div className="mt-12 grid md:grid-cols-2 gap-5">
         <GlassCard className="p-7 flex flex-col">
-          <div className="w-11 h-11 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-helm-gold" />
           </div>
           <h3 className="mt-5 text-xl text-helm-fg tracking-tight">Explore with sample data</h3>

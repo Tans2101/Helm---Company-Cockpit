@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils";
 
 const stageStyle = {
   lead: "text-helm-fg bg-helm-fg/5",
-  qualified: "text-helm-muted bg-helm-muted/10",
-  proposal: "text-helm-fg bg-helm-gold/15",
-  negotiation: "text-helm-gold bg-helm-gold/10",
-  won: "text-helm-status-positive bg-helm-status-positive/10",
-  lost: "text-helm-status-negative bg-helm-status-negative/10",
+  qualified: "text-helm-fg bg-helm-muted/12",
+  proposal: "text-helm-fg bg-helm-gold/12",
+  negotiation: "text-helm-gold bg-helm-gold/12",
+  won: "text-helm-fg bg-helm-status-positive/12",
+  lost: "text-helm-status-negative bg-helm-status-negative/12",
 };
 const money = (n, sym = "$") => sym + (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : n);
 const emptyForm = (defaults = {}) => ({
@@ -230,7 +230,7 @@ export default function Pipeline() {
           className={cn(
             "rounded-md border px-3 py-1.5 text-sm transition-colors",
             mineOnly
-              ? "border-helm-gold/40 bg-helm-gold/10 text-helm-fg"
+              ? "border-helm-gold/35 bg-helm-gold/12 text-helm-fg"
               : "border-helm-line bg-helm-fg/5 text-helm-muted hover:text-helm-fg",
           )}
         >
@@ -307,7 +307,7 @@ export default function Pipeline() {
                 data-testid="load-more-deals-btn"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="rounded-md border border-helm-line bg-helm-fg/5 px-4 py-2 text-sm text-helm-fg transition-colors hover:border-helm-gold/30 hover:text-helm-fg disabled:opacity-60"
+                className="rounded-md border border-helm-line bg-helm-fg/5 px-4 py-2 text-sm text-helm-fg transition-colors hover:border-helm-gold/35 hover:text-helm-fg disabled:opacity-60"
               >
                 {loadingMore ? "Loading…" : "Load more deals"}
               </button>

@@ -34,7 +34,7 @@ export default function HelmHowToUse({ className }) {
   return (
     <div className={cn("w-full max-w-3xl mx-auto text-left", className)}>
       <div className="flex items-start gap-4 mb-8">
-        <div className="w-12 h-12 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center shrink-0">
           <BookOpen className="w-6 h-6 text-helm-gold" />
         </div>
         <div>
@@ -48,7 +48,7 @@ export default function HelmHowToUse({ className }) {
         </div>
       </div>
 
-      <p className="text-sm text-helm-muted leading-relaxed border-l-2 border-helm-gold/30 pl-4 mb-10">
+      <p className="text-sm text-helm-muted leading-relaxed border-l-2 border-helm-gold/35 pl-4 mb-10">
         {HOW_TO_USE_INTRO.lead}
         <span className="block mt-2 text-helm-muted italic">{TAGLINE}</span>
       </p>
@@ -66,7 +66,7 @@ export default function HelmHowToUse({ className }) {
               className={cn(
                 "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition-colors",
                 on
-                  ? "bg-helm-gold/15 text-helm-gold border border-helm-gold/30"
+                  ? "bg-helm-gold/12 text-helm-gold border border-helm-gold/35"
                   : "bg-helm-fg/[0.03] text-helm-muted border border-helm-line hover:text-helm-fg hover:border-helm-line",
               )}
             >
@@ -90,7 +90,7 @@ export default function HelmHowToUse({ className }) {
         <ol className="divide-y divide-helm-fg/[0.04]">
           {rhythm.steps.map((step, i) => (
             <li key={step.title} className="flex gap-4 px-5 py-4 hover:bg-helm-fg/[0.02] transition-colors">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-helm-gold/10 text-[11px] font-mono text-helm-gold border border-helm-gold/20">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-helm-gold/12 text-[11px] font-mono text-helm-gold border border-helm-gold/35">
                 {i + 1}
               </span>
               <div className="min-w-0 pt-0.5">
@@ -110,7 +110,7 @@ export default function HelmHowToUse({ className }) {
           return (
             <div
               key={m.nav}
-              className="group flex items-start gap-3 rounded-lg border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/20 hover:bg-helm-gold/[0.03] transition-colors"
+              className="group flex items-start gap-3 rounded-lg border border-helm-line bg-helm-fg/[0.02] px-4 py-3 hover:border-helm-gold/35 hover:bg-helm-gold/10 transition-colors"
             >
               <Icon className="w-4 h-4 text-helm-muted group-hover:text-helm-gold shrink-0 mt-0.5 transition-colors" />
               <div className="min-w-0">
@@ -126,7 +126,7 @@ export default function HelmHowToUse({ className }) {
       </div>
 
       {/* First-week checklist */}
-      <div className="rounded-xl border border-helm-gold/15 bg-helm-gold/[0.04] p-5">
+      <div className="rounded-xl border border-helm-gold/15 bg-helm-gold/12 p-5">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-gold mb-4">Your first week</p>
         <ul className="space-y-2.5">
           {HOW_TO_USE_CHECKLIST.map((item) => (

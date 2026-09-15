@@ -132,7 +132,7 @@ export default function People() {
         {data.people.map((p) => (
           <GlassCard key={p.id} className="p-4 fade-up transition-transform hover:-translate-y-0.5 group" data-testid={`person-${p.id}`}>
             <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center text-helm-gold shrink-0">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div>
+              <div className="w-11 h-11 rounded-full bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-helm-gold shrink-0">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-helm-fg text-sm">{p.name}</p>

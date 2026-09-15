@@ -138,7 +138,7 @@ export default function Security() {
               initial="hidden"
               animate="show"
               custom={0}
-              className="mx-auto inline-flex items-center gap-2 rounded-full border border-helm-gold/20 bg-helm-gold/[0.06] px-3 py-1.5"
+              className="mx-auto inline-flex items-center gap-2 rounded-full border border-helm-gold/35 bg-helm-gold/12 px-3 py-1.5"
             >
               <LockKeyhole className="h-3.5 w-3.5 text-helm-gold" />
               <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-helm-gold">
@@ -275,7 +275,7 @@ export default function Security() {
             <ul className="grid gap-3 sm:grid-cols-2">
               {PRACTICES.map((practice) => (
                 <li key={practice} className="flex gap-3 rounded-xl border border-helm-cream/[0.06] bg-helm-fg/[0.02] p-4">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-helm-gold/10">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-helm-gold/12">
                     <Check className="h-3 w-3 text-helm-gold" />
                   </span>
                   <span className="text-sm leading-relaxed text-helm-slate">{practice}</span>

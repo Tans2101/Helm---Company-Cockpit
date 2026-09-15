@@ -109,7 +109,7 @@ export default function AskHelm() {
             <div className="grid sm:grid-cols-2 gap-2">
               {SUGGESTIONS.map((s) => (
                 <button key={s} onClick={() => send(s)} data-testid="ask-suggestion"
-                  className="text-left rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3 text-sm text-helm-fg transition-colors hover:border-helm-gold/30 hover:bg-helm-fg/[0.04]">
+                  className="text-left rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3 text-sm text-helm-fg transition-colors hover:border-helm-gold/35 hover:bg-helm-fg/[0.04]">
                   {s}
                 </button>
               ))}
@@ -120,11 +120,11 @@ export default function AskHelm() {
         {messages.map((m, i) => (
           <div key={i} className={cn("flex gap-3", m.role === "user" && "flex-row-reverse")} data-testid={`msg-${m.role}`}>
             <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
-              m.role === "user" ? "bg-helm-fg/5 border-helm-line" : "bg-helm-gold/15 border-helm-gold/30")}>
+              m.role === "user" ? "bg-helm-fg/5 border-helm-line" : "bg-helm-gold/12 border-helm-gold/35")}>
               {m.role === "user" ? <User className="w-3.5 h-3.5 text-helm-muted" /> : <span className="font-mono text-helm-gold text-xs">H</span>}
             </div>
             <div className={cn("max-w-[80%] rounded-xl px-4 py-3 text-[15px] leading-relaxed",
-              m.role === "user" ? "bg-helm-gold/10 border border-helm-gold/20 text-helm-fg" : "bg-helm-card border border-helm-line text-helm-fg")}>
+              m.role === "user" ? "bg-helm-gold/12 border border-helm-gold/35 text-helm-fg" : "bg-helm-card border border-helm-line text-helm-fg")}>
               {m.content ? <p className="whitespace-pre-wrap">{m.content}</p> : <Spinner className="w-4 h-4" />}
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function AskHelm() {
       </div>
 
       <div className="mt-4 pt-4 border-t border-helm-line">
-        <div className="flex items-center gap-2 rounded-xl border border-helm-line bg-helm-card px-3 py-2 focus-within:border-helm-gold/40 transition-colors">
+        <div className="flex items-center gap-2 rounded-xl border border-helm-line bg-helm-card px-3 py-2 focus-within:border-helm-gold/35 transition-colors">
           <input
             data-testid="ask-input"
             value={input}

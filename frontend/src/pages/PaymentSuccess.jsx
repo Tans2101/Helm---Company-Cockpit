@@ -41,7 +41,7 @@ export default function PaymentSuccess() {
         )}
         {status === "paid" && (
           <>
-            <div className="w-16 h-16 rounded-full bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 rounded-full bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 className="w-8 h-8 text-helm-gold" />
             </div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Welcome to Helm</p>
@@ -55,7 +55,7 @@ export default function PaymentSuccess() {
         )}
         {(status === "failed" || status === "timeout") && (
           <>
-            <div className="w-16 h-16 rounded-full bg-helm-status-negative/10 border border-helm-status-negative/30 flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 rounded-full bg-helm-status-negative/12 border border-helm-status-negative/35 flex items-center justify-center mx-auto mb-6">
               <XCircle className="w-8 h-8 text-helm-status-negative" />
             </div>
             <h1 className="font-display text-2xl font-normal text-helm-fg">{status === "timeout" ? "Still processing" : "Payment not completed"}</h1>

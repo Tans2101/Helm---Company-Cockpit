@@ -384,7 +384,7 @@ export default function Financials() {
         data-testid="upload-bill-btn"
         disabled={uploadBusy || csvBusy}
         onClick={() => fileInputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/15 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/10 disabled:opacity-60"
       >
         <Upload className="w-4 h-4" />
         {uploadBusy ? "Reading bill…" : "Upload a bill"}
@@ -476,7 +476,7 @@ export default function Financials() {
             </div>
           )}
           {csvPreview.skipped?.length > 0 && (
-            <div className="mb-4 rounded-lg border border-helm-status-warning/20 bg-helm-status-warning/5 p-3" data-testid="csv-skipped-list">
+            <div className="mb-4 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 p-3" data-testid="csv-skipped-list">
               <p className="text-xs text-helm-status-warning mb-2">Skipped rows</p>
               <ul className="space-y-1 max-h-28 overflow-y-auto">
                 {csvPreview.skipped.map((s) => (
@@ -509,12 +509,12 @@ export default function Financials() {
           onDrop={onDrop}
           className={cn(
             "mb-6 rounded-xl border border-dashed px-5 py-6 text-center transition-colors fade-up",
-            dragOver ? "border-helm-gold/50 bg-helm-gold/[0.06]" : "border-helm-line bg-helm-fg/[0.02]",
+            dragOver ? "border-helm-gold/35 bg-helm-gold/12" : "border-helm-line bg-helm-fg/[0.02]",
             uploadBusy && "opacity-70 pointer-events-none",
           )}
         >
           <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
               <FileText className="w-5 h-5 text-helm-gold" />
             </div>
             <p className="text-sm text-helm-fg">Drop a bill, receipt, or invoice here</p>
@@ -529,7 +529,7 @@ export default function Financials() {
           action={canWrite ? (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button data-testid="empty-upload-bill-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}
-                className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-4 py-2 hover:bg-helm-gold/15 disabled:opacity-60">
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-4 py-2 hover:bg-helm-gold/10 disabled:opacity-60">
                 <Upload className="w-4 h-4" /> Upload a bill
               </button>
               <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
@@ -653,7 +653,7 @@ export default function Financials() {
                   {data.entries.map((e) => (
                     <tr key={e.id} className="border-b border-helm-fg/[0.03]" data-testid={`entry-${e.id}`}>
                       <td className="py-2.5 pr-4 font-mono text-helm-muted">{e.month}</td>
-                      <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-helm-status-positive bg-helm-status-positive/10" : "text-helm-status-negative bg-helm-status-negative/10")}>{e.type}</span></td>
+                      <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-helm-fg bg-helm-status-positive/12" : "text-helm-status-negative bg-helm-status-negative/12")}>{e.type}</span></td>
                       <td className="py-2.5 pr-4 text-helm-fg">
                         {e.name || e.category}
                         {e.recurring && e.type === "revenue" && (
@@ -707,7 +707,7 @@ export default function Financials() {
               <button onClick={() => setShowForm(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
             </div>
             {form.extract_confidence === "low" && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-helm-status-warning/30 bg-helm-status-warning/10 px-3 py-2.5 text-sm text-helm-status-warning" data-testid="low-confidence-banner">
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 px-3 py-2.5 text-sm text-helm-fg" data-testid="low-confidence-banner">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>Double-check this one — I wasn&apos;t fully sure.</span>
               </div>
@@ -728,7 +728,7 @@ export default function Financials() {
                     recurring: t === "revenue" ? true : f.recurring,
                     recurrence: f.recurrence || "monthly",
                   }))}
-                    className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-helm-gold/10 border-helm-gold/40 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{t}</button>
+                    className={cn("flex-1 rounded-md py-2 text-sm capitalize transition-colors border", form.type === t ? "bg-helm-gold/12 border-helm-gold/35 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{t}</button>
                 ))}
               </div>
               <label className="col-span-2 text-xs text-helm-muted">Category

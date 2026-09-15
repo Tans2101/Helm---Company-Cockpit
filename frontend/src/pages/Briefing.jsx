@@ -119,7 +119,7 @@ export default function Briefing() {
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
                   s.done
-                    ? "border-helm-status-positive/20 bg-helm-status-positive/[0.04]"
+                    ? "border-helm-status-positive/35 bg-helm-status-positive/12"
                     : "border-helm-line bg-helm-fg/[0.02] hover:border-helm-fg/20"
                 )}
               >
@@ -203,7 +203,7 @@ export default function Briefing() {
             )}
           </div>
           {data.gmail_needs_reconnect && (
-            <div className="mb-3 rounded-lg border border-helm-status-warning/20 bg-helm-status-warning/[0.04] p-3">
+            <div className="mb-3 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 p-3">
               <p className="text-sm text-helm-fg leading-relaxed">
                 Google is connected for Calendar. Reconnect once to enable Gmail in your briefing.
               </p>
@@ -323,7 +323,7 @@ export default function Briefing() {
                   <span
                     className={cn(
                       "inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded",
-                      d.urgency === "high" ? "text-helm-status-negative bg-helm-status-negative/10" : "text-helm-status-warning bg-helm-status-warning/10"
+                      d.urgency === "high" ? "text-helm-status-negative bg-helm-status-negative/12" : "text-helm-fg bg-helm-status-warning/12"
                     )}
                   >
                     {d.urgency} priority
@@ -392,7 +392,7 @@ export default function Briefing() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-helm-fg">{u.user_name}</span>
                   {u.blocker && (
-                    <span className="text-[10px] text-helm-status-warning bg-helm-status-warning/10 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                    <span className="text-[10px] text-helm-fg bg-helm-status-warning/12 rounded px-1.5 py-0.5 uppercase tracking-wide">
                       Blocked
                     </span>
                   )}

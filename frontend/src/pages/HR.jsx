@@ -9,9 +9,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const STEP_STATUS_META = {
-  not_started: { label: "Not started", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
-  in_progress: { label: "In progress", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
-  done: { label: "Done", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
+  not_started: { label: "Not started", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  in_progress: { label: "In progress", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  done: { label: "Done", className: "bg-helm-status-positive/12 text-helm-fg border-helm-status-positive/35" },
 };
 
 const EMPLOYEE_STATUS_META = {
@@ -522,7 +522,7 @@ export default function HR() {
                         onClick={() => setSelectedId(inst.id)}
                         className={cn(
                           "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                          selectedId === inst.id && "bg-helm-gold/[0.06]",
+                          selectedId === inst.id && "bg-helm-gold/12",
                         )}
                       >
                         <td className="px-3 py-2.5">
@@ -633,7 +633,7 @@ export default function HR() {
                     disabled={busy}
                     data-testid="hr-delete-btn"
                     onClick={deleteInstance}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Delete
                   </button>
@@ -694,7 +694,7 @@ export default function HR() {
                         onClick={() => setSelectedEmpId(emp.id)}
                         className={cn(
                           "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                          selectedEmpId === emp.id && "bg-helm-gold/[0.06]",
+                          selectedEmpId === emp.id && "bg-helm-gold/12",
                         )}
                       >
                         <td className="px-3 py-2.5 text-helm-fg">{emp.name}</td>
@@ -908,7 +908,7 @@ export default function HR() {
                       onClick={() => setSelectedOffId(inst.id)}
                       className={cn(
                         "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                        selectedOffId === inst.id && "bg-helm-gold/[0.06]",
+                        selectedOffId === inst.id && "bg-helm-gold/12",
                       )}
                     >
                       <td className="px-3 py-2.5 text-helm-fg">{inst.employee_name}</td>
@@ -997,7 +997,7 @@ export default function HR() {
                   type="button"
                   disabled={busy}
                   onClick={deleteOffInstance}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </button>

@@ -23,7 +23,7 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-helm-ink grain p-6">
           <div className="relative z-10 max-w-md w-full text-center">
-            <div className="w-12 h-12 rounded-md bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center mx-auto mb-6">
+            <div className="w-12 h-12 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center mx-auto mb-6">
               <span className="font-mono text-helm-gold font-medium">H</span>
             </div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Something went wrong</p>

@@ -11,6 +11,17 @@
  *   ink / inkCard — original near-black dark surfaces (#09090b / #121214)
  *   goldHover — derived gold for hover
  *   status* — meaning colors for deltas/errors, not brand
+ *
+ * Opacity conventions (Tailwind suffixes on helm-gold / helm-muted / helm-status-*):
+ *   /12  — light background tint (badges, chips, highlighted rows): bg-helm-*/12
+ *   /35  — border on a tinted element (or matching outline control): border-helm-*/35
+ *   /10  — hover wash on outline controls only: hover:bg-helm-*/10
+ *   /40  — focus ring on inputs only: focus:border-helm-gold/40
+ *   (no suffix) — full-strength text and solid accents: text-helm-gold, bg-helm-gold
+ *
+ * Do not invent other opacities for those purposes — pick from this list so
+ * department pages stay visually consistent. Meter fills (e.g. /70 progress)
+ * and overlay scrims (e.g. bg-helm-ink/70) are separate concerns.
  */
 const palette = require("./palette.json");
 

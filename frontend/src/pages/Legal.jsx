@@ -9,11 +9,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
-  draft: { label: "Draft", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
-  internal_review: { label: "Internal review", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
-  counterparty_review: { label: "Counterparty review", className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30" },
-  signed: { label: "Signed", className: "bg-helm-gold/15 text-helm-gold border-helm-gold/30" },
-  filed: { label: "Filed", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
+  draft: { label: "Draft", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  internal_review: { label: "Internal review", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  counterparty_review: { label: "Counterparty review", className: "bg-helm-status-warning/12 text-helm-fg border-helm-status-warning/35" },
+  signed: { label: "Signed", className: "bg-helm-gold/12 text-helm-gold border-helm-gold/35" },
+  filed: { label: "Filed", className: "bg-helm-status-positive/12 text-helm-fg border-helm-status-positive/35" },
 };
 
 const MEMBER_STATUSES = new Set(["draft", "internal_review"]);
@@ -351,7 +351,7 @@ export default function Legal() {
                   onClick={() => setSelectedId(m.id)}
                   className={cn(
                     "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                    selectedId === m.id && "bg-helm-gold/[0.06]",
+                    selectedId === m.id && "bg-helm-gold/12",
                   )}
                 >
                   <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">{m.title}</td>
@@ -575,7 +575,7 @@ export default function Legal() {
                 disabled={busy}
                 data-testid="legal-delete-btn"
                 onClick={deleteMatter}
-                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>

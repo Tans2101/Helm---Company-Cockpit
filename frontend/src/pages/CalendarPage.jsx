@@ -15,17 +15,17 @@ const GRID_END = 20;
 const DAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 const typeBlock = {
-  Sales: "bg-helm-gold/25 border-helm-gold/40 text-helm-gold",
-  Internal: "bg-helm-muted/20 border-helm-muted/35 text-helm-muted",
-  "1:1": "bg-helm-status-positive/20 border-helm-status-positive/35 text-helm-status-positive",
+  Sales: "bg-helm-gold/12 border-helm-gold/35 text-helm-gold",
+  Internal: "bg-helm-muted/12 border-helm-muted/35 text-helm-fg",
+  "1:1": "bg-helm-status-positive/12 border-helm-status-positive/35 text-helm-fg",
   Board: "bg-helm-fg/15 border-helm-fg/30 text-helm-fg",
-  Decision: "bg-helm-status-negative/15 border-helm-status-negative/30 text-helm-status-negative",
-  Task: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
-  Deadline: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
-  Production: "bg-helm-gold/20 border-helm-gold/35 text-helm-gold",
-  Procurement: "bg-helm-status-warning/15 border-helm-status-warning/30 text-helm-status-warning",
+  Decision: "bg-helm-status-negative/12 border-helm-status-negative/35 text-helm-status-negative",
+  Task: "bg-helm-status-warning/12 border-helm-status-warning/35 text-helm-fg",
+  Deadline: "bg-helm-status-warning/12 border-helm-status-warning/35 text-helm-fg",
+  Production: "bg-helm-gold/12 border-helm-gold/35 text-helm-gold",
+  Procurement: "bg-helm-status-warning/12 border-helm-status-warning/35 text-helm-fg",
   Legal: "bg-helm-fg/15 border-helm-fg/30 text-helm-fg",
-  Leave: "bg-helm-status-positive/15 border-helm-status-positive/30 text-helm-status-positive",
+  Leave: "bg-helm-status-positive/12 border-helm-status-positive/35 text-helm-fg",
 };
 
 const typeDot = {
@@ -161,7 +161,7 @@ function MiniMonth({ month, selected, weekDays, onSelectDay, onPrev, onNext }) {
                 "relative h-7 rounded text-xs font-mono transition-colors",
                 inWeek && !isSelected && "bg-helm-fg/[0.04]",
                 isSelected ? "bg-helm-gold text-helm-navy font-semibold" : "text-helm-muted hover:text-helm-fg",
-                isToday && !isSelected && "ring-1 ring-helm-gold/50",
+                isToday && !isSelected && "ring-1 ring-helm-gold/35",
               )}
             >
               {day.getDate()}
@@ -277,7 +277,7 @@ function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
               key={toIsoDate(d)}
               className={cn(
                 "px-2 py-2 text-center border-r border-helm-line last:border-r-0",
-                isSelected && "bg-helm-gold/[0.06]",
+                isSelected && "bg-helm-gold/12",
               )}
             >
               <p className="text-[10px] font-mono text-helm-muted">{DAY_LABELS[d.getDay()]}</p>
@@ -336,7 +336,7 @@ function WeekGrid({ weekDays, events, selectedDay, onEventClick }) {
                 key={toIsoDate(day)}
                 className={cn(
                   "relative border-r border-helm-line last:border-r-0",
-                  sameDay(day, selectedDay) && "bg-helm-gold/[0.03]",
+                  sameDay(day, selectedDay) && "bg-helm-gold/12",
                 )}
               >
                 {hours.map((h) => (
@@ -515,7 +515,7 @@ export default function CalendarPage() {
   const googleAvailable = data.google_available !== false;
 
   const syncBanner = !googleConnected && (
-    <GlassCard className="p-4 mb-4 mx-2 md:mx-4 fade-up border-helm-gold/20" data-testid="calendar-sync-banner">
+    <GlassCard className="p-4 mb-4 mx-2 md:mx-4 fade-up border-helm-gold/35" data-testid="calendar-sync-banner">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1">
           <p className="text-sm text-helm-fg font-medium">Sync your calendar</p>
@@ -578,7 +578,7 @@ export default function CalendarPage() {
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {!googleConnected && googleAvailable && (
             <button type="button" onClick={connectGoogle} disabled={connecting}
-              className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60">
+              className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10 disabled:opacity-60">
               <RefreshCw className={cn("w-3.5 h-3.5", connecting && "animate-spin")} />
               {connecting ? "Connecting…" : "Sync Google Calendar"}
             </button>
@@ -608,7 +608,7 @@ export default function CalendarPage() {
                 onClick={() => setView(v)}
                 className={cn(
                   "px-3 py-1.5 text-xs font-mono uppercase tracking-wider capitalize",
-                  view === v ? "bg-helm-gold/15 text-helm-gold" : "text-helm-muted hover:text-helm-fg",
+                  view === v ? "bg-helm-gold/12 text-helm-gold" : "text-helm-muted hover:text-helm-fg",
                 )}
               >
                 {v}
@@ -712,7 +712,7 @@ export default function CalendarPage() {
             </div>
             <div className="flex gap-2 mt-5">
               {editing && (
-                <button type="button" onClick={deleteEvent} disabled={busy} className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm px-4 py-2.5 hover:bg-helm-status-negative/10 disabled:opacity-60">Delete</button>
+                <button type="button" onClick={deleteEvent} disabled={busy} className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-4 py-2.5 hover:bg-helm-status-negative/10 disabled:opacity-60">Delete</button>
               )}
               <button data-testid="submit-event-btn" onClick={submitEvent} disabled={busy} className="flex-1 rounded-md bg-helm-gold text-helm-navy font-medium py-2.5 text-sm hover:bg-helm-gold-hover disabled:opacity-60">{busy ? "Saving…" : editing ? "Save event" : "Add event"}</button>
             </div>

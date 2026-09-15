@@ -8,8 +8,8 @@ import { PageHeader, GlassCard, LoadingScreen, ErrorScreen, EmptyState } from "@
 import { cn } from "@/lib/utils";
 
 const priorityStyle = {
-  High: "text-helm-status-negative bg-helm-status-negative/10",
-  Medium: "text-helm-status-warning bg-helm-status-warning/10",
+  High: "text-helm-status-negative bg-helm-status-negative/12",
+  Medium: "text-helm-fg bg-helm-status-warning/12",
   Low: "text-helm-muted bg-helm-fg/5",
 };
 
@@ -165,9 +165,9 @@ export default function Tasks() {
                   onDragStart={() => setDragId(t.id)}
                   data-testid={`task-${t.id}`}
                   className={cn(
-                    "group rounded-lg border border-helm-line bg-helm-card p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-helm-gold/30",
+                    "group rounded-lg border border-helm-line bg-helm-card p-3 cursor-grab active:cursor-grabbing transition-colors hover:border-helm-gold/35",
                     mine && "border-l-2 border-l-helm-gold/60",
-                    focusTaskId === t.id && "ring-1 ring-helm-gold/50 border-helm-gold/40",
+                    focusTaskId === t.id && "ring-1 ring-helm-gold/35 border-helm-gold/35",
                   )}>
                   <div className="flex items-start gap-2">
                     <GripVertical className="w-3.5 h-3.5 text-helm-muted mt-0.5 group-hover:text-helm-muted" />
@@ -184,7 +184,7 @@ export default function Tasks() {
                         </div>
                       )}
                       <div className="flex items-center gap-1.5 mt-2">
-                        <span className="w-4 h-4 rounded-full bg-helm-gold/20 border border-helm-gold/30 flex items-center justify-center text-[9px] text-helm-gold">{(t.assignee || "?")[0]}</span>
+                        <span className="w-4 h-4 rounded-full bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-[9px] text-helm-gold">{(t.assignee || "?")[0]}</span>
                         <span className="text-[11px] text-helm-muted">{t.assignee}{mine && " · you"}</span>
                       </div>
                     </div>

@@ -254,11 +254,11 @@ export default function Reports() {
           </p>
           <div className="grid md:grid-cols-3 gap-4">
             {drafts.map((d, i) => (
-              <GlassCard key={d.id} className="p-5 fade-up border-helm-gold/20" style={{ animationDelay: `${i * 60}ms` }} data-testid={`draft-${d.id}`}>
+              <GlassCard key={d.id} className="p-5 fade-up border-helm-gold/35" style={{ animationDelay: `${i * 60}ms` }} data-testid={`draft-${d.id}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <FileText className="w-4 h-4 text-helm-gold" />
                   <span className="text-[10px] font-mono uppercase tracking-wider text-helm-muted">{d.type} · {d.period}</span>
-                  <span className="text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto text-helm-gold bg-helm-gold/10">Draft</span>
+                  <span className="text-[9px] font-mono uppercase rounded px-1.5 py-0.5 ml-auto text-helm-gold bg-helm-gold/12">Draft</span>
                 </div>
                 <h3 className="text-helm-fg font-medium">{d.title}</h3>
                 <p className="text-sm text-helm-muted mt-2 leading-relaxed">{d.summary}</p>
@@ -338,7 +338,7 @@ export default function Reports() {
       )}
 
       {canExportFinancials && (
-        <GlassCard className="p-6 fade-up border-helm-gold/20 mb-6" data-testid="financial-export-card">
+        <GlassCard className="p-6 fade-up border-helm-gold/35 mb-6" data-testid="financial-export-card">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <SectionLabel>Financial Export</SectionLabel>
@@ -363,7 +363,7 @@ export default function Reports() {
                   type="button"
                   onClick={() => downloadFinancialExport("pdf")}
                   disabled={Boolean(finExporting)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {finExporting === "pdf" ? "Building PDF…" : "Download PDF"}
@@ -373,7 +373,7 @@ export default function Reports() {
                   type="button"
                   onClick={() => downloadFinancialExport("xlsx")}
                   disabled={Boolean(finExporting)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {finExporting === "xlsx" ? "Building Excel…" : "Download Excel"}
@@ -384,7 +384,7 @@ export default function Reports() {
         </GlassCard>
       )}
 
-      <GlassCard glow className="p-6 fade-up border-helm-gold/20">
+      <GlassCard glow className="p-6 fade-up border-helm-gold/35">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
             <SectionLabel>Weekly CEO Pack</SectionLabel>
@@ -420,7 +420,7 @@ export default function Reports() {
                   type="button"
                   onClick={downloadPdf}
                   disabled={exporting}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold text-sm px-3 py-2 hover:bg-helm-gold/10 disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {exporting ? "Building PDF…" : "Download PDF"}
@@ -488,8 +488,8 @@ function ReportCard({ report: r, index, canWrite, onEdit, onDelete, onAddToRepor
           <span className={cn(
             "text-[9px] uppercase tracking-wide rounded px-1.5 py-0.5 ml-auto",
             badge === "Auto" || badge === "Updated automatically"
-              ? "text-helm-muted bg-helm-muted/10"
-              : "text-helm-gold bg-helm-gold/10",
+              ? "text-helm-fg bg-helm-muted/12"
+              : "text-helm-gold bg-helm-gold/12",
           )}
           >
             {badge}

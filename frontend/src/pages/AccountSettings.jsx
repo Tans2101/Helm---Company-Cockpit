@@ -174,7 +174,7 @@ export default function AccountSettings() {
                 }}
                 className={`relative rounded-lg border p-3 text-left transition-colors ${
                   selected
-                    ? "border-helm-gold/50 bg-helm-gold/10"
+                    ? "border-helm-gold/35 bg-helm-gold/12"
                     : "border-helm-line bg-helm-fg/[0.02] hover:bg-helm-fg/[0.05]"
                 }`}
               >
@@ -248,14 +248,14 @@ export default function AccountSettings() {
             data-testid="export-activity-btn"
             onClick={exportActivity}
             disabled={!!busy}
-            className="rounded-md border border-helm-gold/30 bg-helm-gold/10 text-helm-gold font-medium text-sm px-4 py-2.5 transition-colors hover:bg-helm-gold/15 disabled:opacity-60"
+            className="rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-4 py-2.5 transition-colors hover:bg-helm-gold/10 disabled:opacity-60"
           >
             {busy === "activity" ? "Exporting…" : "Export activity log"}
           </button>
         </GlassCard>
       )}
 
-      <GlassCard className="p-5 mb-4 fade-up border-helm-status-negative/20">
+      <GlassCard className="p-5 mb-4 fade-up border-helm-status-negative/35">
         <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
           <Trash2 className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete account</span>
@@ -281,14 +281,14 @@ export default function AccountSettings() {
           data-testid="delete-account-btn"
           onClick={deleteAccount}
           disabled={!!busy}
-          className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
+          className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
         >
           {busy === "account" ? "Deleting…" : showAccountConfirm ? "Confirm delete account" : "Delete account"}
         </button>
       </GlassCard>
 
       {isOwner && (
-        <GlassCard className="p-5 fade-up border-helm-status-negative/20">
+        <GlassCard className="p-5 fade-up border-helm-status-negative/35">
           <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
             <AlertTriangle className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete workspace</span>
@@ -314,7 +314,7 @@ export default function AccountSettings() {
             data-testid="delete-workspace-btn"
             onClick={deleteWorkspace}
             disabled={!!busy}
-            className="rounded-md border border-helm-status-negative/40 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
+            className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
           >
             {busy === "workspace" ? "Deleting…" : showWorkspaceConfirm ? "Confirm delete workspace" : "Delete workspace"}
           </button>

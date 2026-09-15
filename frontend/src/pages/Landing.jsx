@@ -83,7 +83,7 @@ export default function Landing() {
                 {authed ? "Open your cockpit" : "Start free"}
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
-              <a href="#how" className="inline-flex items-center gap-2 rounded-lg border border-helm-cream/15 px-6 py-3 text-sm text-helm-cream transition-colors hover:border-helm-gold/50">
+              <a href="#how" className="inline-flex items-center gap-2 rounded-lg border border-helm-cream/15 px-6 py-3 text-sm text-helm-cream transition-colors hover:border-helm-gold/35">
                 See the 3-minute workflow
               </a>
             </motion.div>
@@ -204,7 +204,7 @@ export default function Landing() {
                 viewport={{ once: true }}
                 className={`rounded-2xl border p-6 flex flex-col ${
                   plan.highlighted
-                    ? "border-helm-gold/50 bg-helm-ink-card"
+                    ? "border-helm-gold/35 bg-helm-ink-card"
                     : "border-helm-cream/10 bg-helm-ink-card/50"
                 }`}
               >

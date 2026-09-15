@@ -9,10 +9,10 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
-  reported: { label: "Reported", className: "bg-helm-muted/15 text-helm-fg border-helm-muted/30" },
-  diagnosed: { label: "Diagnosed", className: "bg-helm-muted/15 text-helm-muted border-helm-muted/30" },
-  in_repair: { label: "In repair", className: "bg-helm-status-warning/15 text-helm-status-warning border-helm-status-warning/30" },
-  resolved: { label: "Resolved", className: "bg-helm-status-positive/15 text-helm-status-positive border-helm-status-positive/30" },
+  reported: { label: "Reported", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  diagnosed: { label: "Diagnosed", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
+  in_repair: { label: "In repair", className: "bg-helm-status-warning/12 text-helm-fg border-helm-status-warning/35" },
+  resolved: { label: "Resolved", className: "bg-helm-status-positive/12 text-helm-fg border-helm-status-positive/35" },
 };
 
 const PRIORITY_META = {
@@ -51,7 +51,7 @@ function BlockingProductionBadge({ orders, ticketId }) {
     <span
       data-testid={`blocking-production-badge-${ticketId}`}
       title={label}
-      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
     >
       Blocking: {label}
     </span>
@@ -65,7 +65,7 @@ function ChronicEquipmentBadge({ ticket }) {
     <span
       data-testid={`chronic-equipment-badge-${ticket.id}`}
       title={`${n} repairs in the last 90 days`}
-      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-status-warning/40 bg-helm-status-warning/10 text-helm-status-warning"
+      className="inline-flex max-w-full items-center truncate rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-helm-status-warning/35 bg-helm-status-warning/12 text-helm-fg"
     >
       {n}× in 90d
     </span>
@@ -362,7 +362,7 @@ export default function Maintenance() {
                   onClick={() => setSelectedId(t.id)}
                   className={cn(
                     "border-b border-helm-line cursor-pointer transition-colors hover:bg-helm-fg/[0.03]",
-                    selectedId === t.id && "bg-helm-gold/[0.06]",
+                    selectedId === t.id && "bg-helm-gold/12",
                   )}
                 >
                   <td className="px-3 py-2.5 text-helm-fg max-w-[16rem]">
@@ -516,7 +516,7 @@ export default function Maintenance() {
                 disabled={busy}
                 data-testid="maintenance-delete-btn"
                 onClick={deleteTicket}
-                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/30 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
+                className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </button>

@@ -175,7 +175,7 @@ export default function MyDay() {
           </div>
 
           {showNoteComposer && (
-            <GlassCard className="p-4 fade-up border-helm-gold/20" data-testid="note-composer">
+            <GlassCard className="p-4 fade-up border-helm-gold/35" data-testid="note-composer">
               <textarea
                 data-testid="note-text"
                 value={noteText}
@@ -240,7 +240,7 @@ export default function MyDay() {
                   <div className="flex items-center gap-1.5">
                     {MOODS.map((m) => (
                       <button key={m.id} onClick={() => setMood(m.id)}
-                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", mood === m.id ? "border-helm-gold/40 bg-helm-gold/10 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{m.label}</button>
+                        className={cn("text-xs rounded-full px-2.5 py-1 border transition-colors", mood === m.id ? "border-helm-gold/35 bg-helm-gold/12 text-helm-fg" : "border-helm-line text-helm-muted hover:bg-helm-fg/5")}>{m.label}</button>
                     ))}
                   </div>
                   <label className="flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
@@ -267,7 +267,7 @@ export default function MyDay() {
                 <div key={u.update_id} className="text-sm" data-testid={`team-update-${u.update_id}`}>
                   <div className="flex items-center gap-2">
                     <span className="text-helm-fg text-xs font-medium">{u.user_name}</span>
-                    {u.blocker && <span className="text-[10px] text-helm-status-warning bg-helm-status-warning/10 rounded px-1.5 py-0.5 font-mono uppercase">Blocked</span>}
+                    {u.blocker && <span className="text-[10px] text-helm-fg bg-helm-status-warning/12 rounded px-1.5 py-0.5 font-mono uppercase">Blocked</span>}
                     <span className="text-[10px] text-helm-muted ml-auto font-mono">{u.ago}</span>
                   </div>
                   <p className="text-helm-muted text-xs mt-1 leading-relaxed">{u.text}</p>

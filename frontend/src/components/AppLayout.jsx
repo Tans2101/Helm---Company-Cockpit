@@ -83,8 +83,8 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
   return (
     <div className="px-3 pt-3 relative">
       <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 rounded-md border border-helm-line bg-helm-card px-3 py-2 transition-colors hover:border-helm-gold/40">
-        <div className="w-6 h-6 rounded bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
+        className="w-full flex items-center gap-2 rounded-md border border-helm-line bg-helm-card px-3 py-2 transition-colors hover:border-helm-gold/35">
+        <div className="w-6 h-6 rounded bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
           {active.name?.[0]?.toUpperCase() || "K"}
         </div>
         <div className="flex-1 min-w-0 text-left">
@@ -125,7 +125,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
     <div className="flex flex-col h-full">
       <div className="px-6 py-6 border-b border-helm-line">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
             <span className="font-mono text-helm-gold text-sm font-medium">H</span>
           </div>
           <div>
@@ -149,7 +149,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
               cn(
                 "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
                 isActive
-                  ? "bg-helm-gold/[0.08] text-helm-fg"
+                  ? "bg-helm-gold/12 text-helm-fg"
                   : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
               )
             }
@@ -180,7 +180,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                     cn(
                       "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
                       isActive
-                        ? "bg-helm-gold/[0.08] text-helm-fg"
+                        ? "bg-helm-gold/12 text-helm-fg"
                         : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
                     )
                   }
@@ -264,7 +264,7 @@ export default function AppLayout() {
   return (
     <div className="app-shell min-h-screen">
       {pastDue && (
-        <div className="lg:pl-[260px] bg-helm-status-warning/10 border-b border-helm-status-warning/30 px-5 py-2.5 text-center text-sm text-helm-status-warning" data-testid="global-past-due-banner">
+        <div className="lg:pl-[260px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
           Payment past due — <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
         </div>
       )}
@@ -276,7 +276,7 @@ export default function AppLayout() {
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-helm-bg/95 backdrop-blur-md border-b border-helm-line">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-helm-gold/15 border border-helm-gold/40 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
             <span className="font-mono text-helm-gold text-xs">H</span>
           </div>
           <span className="text-helm-fg font-semibold text-sm">Helm</span>

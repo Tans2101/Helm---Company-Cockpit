@@ -35,7 +35,7 @@ export default function DepartmentsShowcase({ compact = false }) {
                 className="group border-b border-r border-helm-cream/[0.08] bg-helm-ink-card/40 p-6 transition-colors hover:bg-helm-cream/[0.03]"
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 border border-helm-gold/25 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 border border-helm-gold/35 flex items-center justify-center shrink-0">
                     <Icon className="w-5 h-5 text-helm-gold" aria-hidden />
                   </div>
                   <div>

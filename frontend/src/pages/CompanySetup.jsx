@@ -84,7 +84,7 @@ export default function CompanySetup({ company }) {
         <div className="w-full max-w-2xl">
           {/* Header */}
           <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 rounded-md bg-helm-gold/15 border border-helm-gold/30 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
               <span className="font-mono text-helm-gold font-medium">H</span>
             </div>
             <div>
@@ -123,7 +123,7 @@ export default function CompanySetup({ company }) {
             {step === 0 && (
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
                     <Crown className="w-5 h-5 text-helm-gold" />
                   </div>
                   <div>
@@ -144,7 +144,7 @@ export default function CompanySetup({ company }) {
                         className={cn(
                           "flex items-start gap-3 rounded-lg border px-4 py-3.5 text-left transition-colors",
                           on
-                            ? "border-helm-gold/40 bg-helm-gold/[0.06]"
+                            ? "border-helm-gold/35 bg-helm-gold/12"
                             : "border-helm-line bg-helm-fg/[0.02] hover:border-helm-fg/20",
                         )}
                       >
@@ -165,7 +165,7 @@ export default function CompanySetup({ company }) {
             {step === 1 && (
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
                     <Building2 className="w-5 h-5 text-helm-gold" />
                   </div>
                   <div>
@@ -196,7 +196,7 @@ export default function CompanySetup({ company }) {
                           className={cn(
                             "rounded-full px-3 py-1.5 text-xs transition-colors border",
                             form.industry === ind
-                              ? "border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+                              ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
                               : "border-helm-line text-helm-muted hover:border-helm-fg/20 hover:text-helm-fg",
                           )}
                         >
@@ -217,7 +217,7 @@ export default function CompanySetup({ company }) {
                           className={cn(
                             "rounded-full px-3 py-1.5 text-xs transition-colors border",
                             form.stage === st
-                              ? "border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+                              ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
                               : "border-helm-line text-helm-muted hover:border-helm-fg/20 hover:text-helm-fg",
                           )}
                         >
@@ -234,7 +234,7 @@ export default function CompanySetup({ company }) {
             {step === 2 && (
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
                     <Users className="w-5 h-5 text-helm-gold" />
                   </div>
                   <div>
@@ -255,7 +255,7 @@ export default function CompanySetup({ company }) {
                           className={cn(
                             "rounded-lg border px-3 py-2.5 text-sm transition-colors",
                             form.employees === t.value
-                              ? "border-helm-gold/40 bg-helm-gold/10 text-helm-gold"
+                              ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold"
                               : "border-helm-line text-helm-muted hover:border-helm-fg/20",
                           )}
                         >
@@ -293,7 +293,7 @@ export default function CompanySetup({ company }) {
             {step === 3 && (
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-helm-gold/10 border border-helm-gold/25 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
                     <Target className="w-5 h-5 text-helm-gold" />
                   </div>
                   <div>
