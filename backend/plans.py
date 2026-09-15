@@ -57,7 +57,7 @@ PLANS: dict[str, dict[str, Any]] = {
             "Up to 3 team members",
             "5 free AI extracts to try it, then upgrade",
             "Ask Helm (10 messages/month)",
-            "AI morning briefing",
+            "AI briefing",
             "Dashboard & decisions",
             "No QuickBooks sync",
         ],

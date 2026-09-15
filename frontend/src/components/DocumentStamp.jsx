@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Circular navy outline stamp for document/export authenticity cues only
- * (Weekly CEO Pack, financial exports). Do not use for ordinary status badges.
+ * (CEO Pack, financial exports). Do not use for ordinary status badges.
  */
 export default function DocumentStamp({ label = "Confirmed", className }) {
   return (

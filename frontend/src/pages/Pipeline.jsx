@@ -239,7 +239,7 @@ export default function Pipeline() {
       </div>
 
       {deals.length === 0 ? (
-        <EmptyState icon={TrendingUp} title={mineOnly ? "No deals assigned to you" : "No deals yet"} body={mineOnly ? "Deals you own will show up here. Ask a Sales lead to assign one, or clear the filter." : "Add your first deal — as it moves through stages, the CEO sees it in the morning briefing."}
+        <EmptyState icon={TrendingUp} title={mineOnly ? "No deals assigned to you" : "No deals yet"} body={mineOnly ? "Deals you own will show up here. Ask a Sales lead to assign one, or clear the filter." : "Add your first deal — as it moves through stages, the CEO sees it in the briefing."}
           action={!mineOnly && canWrite ? <button data-testid="empty-add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Add first deal</button> : null} />
       ) : (
         <>

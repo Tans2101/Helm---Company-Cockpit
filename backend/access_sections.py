@@ -42,7 +42,7 @@ MANAGEABLE_SECTIONS: list[dict[str, str]] = [
         "id": "reports",
         "label": "Reports",
         "perm": "reports:write",
-        "description": "Manual reports and weekly CEO pack inputs.",
+        "description": "Manual reports and CEO Pack inputs.",
     },
     {
         "id": "tasks",

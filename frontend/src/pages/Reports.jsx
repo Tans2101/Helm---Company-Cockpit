@@ -148,7 +148,7 @@ export default function Reports() {
       setPack(res.content);
       toast.success("Weekly update draft ready");
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not generate Weekly CEO Pack");
+      toast.error(e?.response?.data?.detail || "Could not generate CEO Pack");
     } finally {
       setBusy(false);
     }
@@ -265,7 +265,7 @@ export default function Reports() {
       <GlassCard className="p-4 mb-6 fade-up border-helm-line">
         <p className="text-sm text-helm-muted leading-relaxed">
           <span className="text-helm-fg">What happens here:</span> Helm tracks money, team, and completed work week over week.
-          Turn a trend card into a report when you want context on the record. Then draft the Weekly CEO Pack for a
+          Turn a trend card into a report when you want context on the record. Then draft the CEO Pack for a
           plain-English update you can share.
         </p>
       </GlassCard>
@@ -420,16 +420,16 @@ export default function Reports() {
       <GlassCard className="p-6 fade-up border-helm-line">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div>
-            <SectionLabel>Weekly CEO Pack</SectionLabel>
+            <SectionLabel>CEO Pack</SectionLabel>
             <p className="text-sm text-helm-muted max-w-xl mt-1">
-              A one-page Friday update: what happened, what needs your attention, and what to do next.
+              A one-page leadership update: what happened, what needs your attention, and what to do next.
               Helm drafts it from the week-over-week trends above and any reports your team added.
             </p>
           </div>
           {canGeneratePack ? (
             <button data-testid="generate-pack-btn" onClick={generatePack} disabled={busy}
               className="inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy text-sm font-medium px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60 shrink-0">
-              <FileText className="w-4 h-4" />{busy ? "Drafting…" : "Draft weekly update"}
+              <FileText className="w-4 h-4" />{busy ? "Drafting…" : "Draft CEO Pack"}
             </button>
           ) : (
             <p className="text-xs text-helm-muted shrink-0">Owner or executive access required to generate.</p>

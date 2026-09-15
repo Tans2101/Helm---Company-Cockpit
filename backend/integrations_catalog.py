@@ -33,7 +33,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Surface important threads in your morning briefing, and draft replies in Gmail without Helm sending mail as you.",
+        "description": "Surface important threads in your briefing, and draft replies in Gmail without Helm sending mail as you.",
         "value": "Stay on top of customer and investor email without living in your inbox.",
         "cta_route": "/app",
         "cta_label": "Open briefing",

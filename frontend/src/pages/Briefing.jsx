@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { GlassCard, LoadingScreen, ErrorScreen, Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
-import { timeGreeting } from "@/lib/greeting";
+import { dayPartGreeting } from "@/lib/greeting";
 
 const toneDot = { positive: "bg-helm-status-positive", negative: "bg-helm-status-negative", neutral: "bg-helm-muted" };
 
@@ -83,7 +83,7 @@ export default function Briefing() {
     }
   };
 
-  const { greeting: timeGreet, briefingLabel } = timeGreeting();
+  const { greeting: timeGreet, briefingLabel } = dayPartGreeting();
   const greeting = `${timeGreet}, ${company?.ceo_name?.split(" ")[0] || "CEO"}`;
   const doneCount = checklist?.steps?.filter((s) => s.done).length ?? 0;
   const stepCount = checklist?.steps?.length ?? 0;

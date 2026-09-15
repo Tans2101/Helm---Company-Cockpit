@@ -12,16 +12,16 @@ export const FOUNDER_NOTE =
   "Helm is built and run by Tansher Dhawan, CEO & Founder — a CEO making the cockpit he wished existed for running a company of this size."
 
 export const HERO_SUB =
-  "Helm gives owners one clear view of money, people, work, and decisions. Open it in the morning, see what changed, make the call, and get back to running the business.";
+  "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal — see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear daily decisions — so you run the business instead of chasing it.";
+  "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear decisions — so you run the business instead of chasing it.";
 
 export const VISION =
   "A world where running a company doesn't mean drowning in dashboards — leaders see what matters, decide fast, and delegate with confidence.";
 
 export const ABOUT_STORY =
-  "Helm started from a simple frustration: CEOs running companies of up to 50 people spend their mornings opening twelve tabs — Slack, the CRM, the finance sheet, the shop floor, email — and still walk into the morning meeting without a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the one place a CEO opens first: a cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
+  "Helm started from a simple frustration: CEOs running companies of up to 50 people waste hours opening twelve tabs — Slack, the CRM, the finance sheet, the shop floor, email — and still lack a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs — not another dashboard to maintain.";
 
 export const VALUES = [
   {
@@ -57,7 +57,7 @@ export const CEO_DAY = [
   { title: "Briefing", body: "Three columns: what changed, what to decide, what to delegate — plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
   { title: "Decision Center", body: "Pending approvals ranked by impact. Helm recommends which to tackle first and why." },
   { title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" — answered from your financials and pipeline, not the internet." },
-  { title: "Weekly CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
+  { title: "CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions — generated in one click, ready to share with your leadership team." },
 ];
 
 export const PRICING_FAQ = [
@@ -73,7 +73,7 @@ export const FEATURE_CATEGORIES = [
     id: "intelligence",
     label: "Executive intelligence",
     intro: "AI grounded in your company — not generic chatbot answers.",
-    modules: ["Morning Briefing", "Decision Center", "Ask Helm", "Weekly CEO Pack", "Gmail thread surfacing + AI draft replies"],
+    modules: ["Briefing", "Decision Center", "Ask Helm", "CEO Pack", "Gmail thread surfacing + AI draft replies"],
   },
   {
     id: "finance",
@@ -114,7 +114,7 @@ export const PLANS = [
       "Up to 3 team members",
       "5 free AI extracts to try it, then upgrade",
       "Ask Helm (10 messages/month)",
-      "AI morning briefing",
+      "AI briefing",
       "Dashboard & decisions",
       "No QuickBooks sync",
     ],
@@ -237,7 +237,7 @@ export const DEPARTMENTS_SECTION = {
     {
       name: "Sales",
       icon: "briefcase",
-      body: "Deal pipeline by stage — open value and wins roll straight into the morning briefing.",
+      body: "Deal pipeline by stage — open value and wins roll straight into the briefing.",
     },
     {
       name: "Legal",
@@ -259,10 +259,10 @@ export const DEPARTMENTS_SECTION = {
 
 export const FEATURE_MODULES = [
   {
-    title: "Morning Briefing",
-    ceoValue: "Start every day knowing what changed and what needs you.",
+    title: "Briefing",
+    ceoValue: "Know what changed and what needs you — whenever you open Helm.",
     body: "Three columns — what changed, what to decide, what to delegate — plus AI synthesis when you need the full picture.",
-    example: "Revenue is ahead of plan, but engineering capacity risk is rising. Approve the infra reservation today.",
+    example: "Revenue is ahead of plan, but engineering capacity risk is rising. Approve the infra reservation.",
   },
   {
     title: "Decision Center",
@@ -295,8 +295,8 @@ export const FEATURE_MODULES = [
     example: "What's our biggest risk this quarter? Helm answers from your actual financials and pipeline.",
   },
   {
-    title: "Weekly CEO Pack",
-    ceoValue: "Weekly synthesis in one click.",
+    title: "CEO Pack",
+    ceoValue: "Leadership synthesis in one click.",
     body: "A plain-English update covering what happened, what needs attention, and what to do next — ready for your leadership team.",
     example: "Financial snapshot, team updates, and open decisions — formatted to forward, not rebuilt in slides.",
   },
@@ -348,7 +348,7 @@ export const FEATURE_MODULES = [
 export const HOW_TO_USE_INTRO = {
   title: "How to use Helm",
   subtitle: "Your CEO operating system — open it, get the signal, decide, delegate, and get back to running the company.",
-  lead: "Helm isn't another dashboard to maintain. Open it once, get the signal, make the call, delegate the rest — then get back to building.",
+  lead: "Helm isn't another dashboard to maintain. Open it whenever you need signal, make the call, delegate the rest — then get back to building.",
 };
 
 export const HOW_TO_USE_MODULES = [
@@ -359,7 +359,7 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Telemetry", path: "/app/telemetry", tip: "Headcount, open tasks, revenue, and cash on one screen when you need a number." },
   { nav: "Financials", path: "/app/financials", tip: "Revenue, expenses, and cash position for leadership updates." },
   { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline at a glance." },
-  { nav: "Reports", path: "/app/reports", tip: "Weekly CEO Pack — one click for financials, team pulse, and open decisions to share with leadership." },
+  { nav: "Reports", path: "/app/reports", tip: "CEO Pack — one click for financials, team pulse, and open decisions to share with leadership." },
   { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more — each team its own lane." },
   { nav: "Team & Access", path: "/app/members", tip: "Invite CFO, VP Sales, and ops to contribute while you keep the synthesized view." },
   { nav: "Integrations", path: "/app/integrations", tip: "Connect Google Calendar, QuickBooks, and other tools once — signal flows in automatically." },
@@ -370,5 +370,5 @@ export const HOW_TO_USE_CHECKLIST = [
   "Clear or delegate one Decision",
   "Connect at least one integration",
   "Invite a leadership team member",
-  "Generate your first Weekly CEO Pack",
+  "Generate your first CEO Pack",
 ];

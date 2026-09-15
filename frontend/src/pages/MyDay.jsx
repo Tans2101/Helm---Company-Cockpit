@@ -6,6 +6,7 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { dayPartGreeting } from "@/lib/greeting";
 import { GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import DecisionCard from "@/components/DecisionCard";
 import SuggestionCard from "@/components/SuggestionCard";
@@ -70,6 +71,7 @@ export default function MyDay() {
   }
 
   const first = user?.name?.split(" ")[0] || "there";
+  const { greeting } = dayPartGreeting();
   const hasPosted = !!mine?.update;
   const notes = notesData.notes || [];
   const suggestions = decisionsData?.suggestions || [];
@@ -158,7 +160,7 @@ export default function MyDay() {
     <div>
       <div className="mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">My Day</p>
-        <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-helm-fg">Morning, {first}.</h1>
+        <h1 className="font-display text-3xl md:text-5xl font-normal tracking-tight text-helm-fg">{greeting}, {first}.</h1>
         <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">Your private notes, tasks, and optional team update — start with what matters to you.</p>
       </div>
 

@@ -704,7 +704,7 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
 <h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{inviter_name} invited you to<br><span style="color:#c9a962;">{workspace_name}</span></h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm — the CEO Operating System. Sign in with Google to see the morning briefing, decisions, financials and more.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm — the CEO Operating System. Sign in with Google to see the briefing, decisions, financials and more.</p>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
 <a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Helm &rarr;</a>
@@ -3315,7 +3315,7 @@ async def onboarding_checklist(principal=Depends(get_principal)):
         {"id": "financials", "label": "Add your financials", "done": has_fin, "route": "/app/financials"},
         {"id": "people", "label": "Add your team roster", "done": people_n > 0, "route": "/app/people"},
         {"id": "invite", "label": "Invite a teammate", "done": members_n > 1, "route": "/app/members"},
-        {"id": "update", "label": "Post your first daily update", "done": has_update, "route": "/app/me"},
+        {"id": "update", "label": "Post your first status update", "done": has_update, "route": "/app/me"},
     ]
     for step in steps:
         if step["done"]:

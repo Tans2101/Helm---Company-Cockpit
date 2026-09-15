@@ -52,7 +52,7 @@ export default function PaymentSuccess() {
             </div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Welcome to Helm</p>
             <h1 className="font-display text-3xl font-normal text-helm-fg">You're in command.</h1>
-            <p className="text-helm-muted mt-3">Live integrations, AI briefings and the Weekly CEO Pack are now unlocked.</p>
+            <p className="text-helm-muted mt-3">Live integrations, AI briefings and the CEO Pack are now unlocked.</p>
             <button data-testid="success-continue-btn" onClick={() => navigate("/app")}
               className="mt-8 inline-flex items-center gap-2 rounded-md bg-helm-gold text-helm-navy font-medium px-5 py-2.5 text-sm transition-colors hover:bg-helm-gold-hover">
               Enter the cockpit <ArrowRight className="w-4 h-4" />

@@ -98,7 +98,7 @@ function LoginClerk() {
             {HERO_SUB}
           </p>
         </div>
-        <p className="text-xs text-helm-muted">Know what matters before your first meeting.</p>
+        <p className="text-xs text-helm-muted">Know what matters — whenever you open Helm.</p>
       </div>
 
       <div className="flex items-center justify-center p-10 relative z-10">

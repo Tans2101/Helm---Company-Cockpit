@@ -223,8 +223,8 @@ def render_weekly_pack_pdf(
     return render_document_pdf(
         content,
         workspace_name=workspace_name,
-        kicker="Weekly CEO Pack",
+        kicker="CEO Pack",
         generated_at=generated_at,
-        pdf_title=f"Weekly CEO Pack — {workspace_name}",
+        pdf_title=f"CEO Pack — {workspace_name}",
         empty_message="Pack content is empty",
     )
