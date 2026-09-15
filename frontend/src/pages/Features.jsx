@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
@@ -7,6 +7,7 @@ import MarketingFooter from "@/components/marketing/MarketingFooter";
 import ProductScreens from "@/components/marketing/ProductScreens";
 import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
+import { goToHomeHash } from "@/lib/marketingHash";
 import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -17,6 +18,8 @@ const fade = {
 
 export default function Features() {
   const { authed, enter } = useMarketingAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const modulesByTitle = Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m]));
@@ -109,7 +112,16 @@ export default function Features() {
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
           <p className="mt-6 text-sm text-helm-slate flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-            <Link to="/#pricing" className="hover:text-helm-cream transition-colors">View pricing</Link>
+            <a
+              href="/#pricing"
+              className="hover:text-helm-cream transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                goToHomeHash(navigate, location, "pricing");
+              }}
+            >
+              View pricing
+            </a>
             <Link to="/about" className="hover:text-helm-cream transition-colors">About Helm</Link>
             <Link to="/security" className="hover:text-helm-cream transition-colors">Security</Link>
           </p>

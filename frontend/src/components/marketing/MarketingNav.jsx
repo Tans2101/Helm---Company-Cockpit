@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Menu, X } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
+import { goToHomeHash } from "@/lib/marketingHash";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", match: ["/"] },
   { to: "/features", label: "Features", match: ["/features"] },
   { to: "/about", label: "About", match: ["/about"] },
   { to: "/security", label: "Security", match: ["/security"] },
-  { to: "/#pricing", label: "Pricing", match: ["/#pricing"] },
+  { to: "/#pricing", label: "Pricing", match: ["/#pricing"], hash: "pricing" },
 ];
 
 function isActive(path, active) {
@@ -19,8 +20,33 @@ function isActive(path, active) {
 
 export default function MarketingNav({ authed, onEnter, active }) {
   const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
   const linkClass = (path) =>
     `text-sm transition-colors ${isActive(path, active) ? "text-helm-cream font-medium" : "text-helm-slate hover:text-helm-cream"}`;
+
+  const renderLink = (l, className) => {
+    if (l.hash) {
+      return (
+        <a
+          key={l.to}
+          href={l.to}
+          className={className}
+          onClick={(e) => {
+            e.preventDefault();
+            goToHomeHash(navigate, location, l.hash, () => setOpen(false));
+          }}
+        >
+          {l.label}
+        </a>
+      );
+    }
+    return (
+      <Link key={l.to} to={l.to} className={className} onClick={() => setOpen(false)}>
+        {l.label}
+      </Link>
+    );
+  };
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 border-b border-helm-cream/10 bg-helm-ink/90 backdrop-blur-md">
@@ -29,11 +55,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
           <MarketingLogo size="sm" dark />
 
           <nav className="hidden md:flex items-center gap-6" aria-label="Main">
-            {NAV_LINKS.map((l) => (
-              <Link key={l.to} to={l.to} className={linkClass(l.to)} onClick={() => setOpen(false)}>
-                {l.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((l) => renderLink(l, linkClass(l.to)))}
           </nav>
 
           <div className="flex items-center gap-2">
@@ -64,16 +86,12 @@ export default function MarketingNav({ authed, onEnter, active }) {
 
         {open && (
           <nav className="md:hidden mt-2 rounded-xl border border-helm-cream/10 bg-helm-ink-card p-4 space-y-1" aria-label="Mobile">
-            {NAV_LINKS.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setOpen(false)}
-                className={`block rounded-lg px-3 py-2.5 text-sm ${isActive(l.to, active) ? "bg-helm-cream/5 text-helm-cream" : "text-helm-slate hover:text-helm-cream"}`}
-              >
-                {l.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((l) =>
+              renderLink(
+                l,
+                `block rounded-lg px-3 py-2.5 text-sm ${isActive(l.to, active) ? "bg-helm-cream/5 text-helm-cream" : "text-helm-slate hover:text-helm-cream"}`,
+              ),
+            )}
             <div className="pt-2 border-t border-helm-cream/10 flex flex-col gap-2">
               {!authed && (
                 <Link to="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-helm-slate hover:text-helm-cream">

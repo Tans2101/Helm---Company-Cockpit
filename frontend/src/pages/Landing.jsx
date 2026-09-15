@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Check } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
@@ -52,11 +52,25 @@ function BriefingPreview() {
 
 export default function Landing() {
   const { authed, enter } = useMarketingAuth();
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  const location = useLocation();
+
+  useEffect(() => {
+    const id = (location.hash || "").replace(/^#/, "");
+    if (!id) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    const scroll = () => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    // Wait a frame so layout (and lazy sections) are ready after route entry.
+    const t = window.setTimeout(scroll, 50);
+    return () => window.clearTimeout(t);
+  }, [location.hash, location.pathname]);
 
   return (
     <div className="min-h-screen bg-helm-ink text-helm-cream overflow-x-hidden relative">
-      <MarketingNav authed={authed} onEnter={enter} active="/" />
+      <MarketingNav authed={authed} onEnter={enter} active={location.hash === "#pricing" ? "/#pricing" : "/"} />
 
       {/* Hero — flat ink, typography leads */}
       <section className="relative z-10 px-6 pt-36 md:pt-48 pb-24 bg-helm-ink">
@@ -184,7 +198,7 @@ export default function Landing() {
 
       <DepartmentsShowcase />
 
-      <section id="pricing" className="px-6 py-28 border-t border-helm-cream/[0.05]">
+      <section id="pricing" className="scroll-mt-24 px-6 py-28 border-t border-helm-cream/[0.05]">
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="mb-14 max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
