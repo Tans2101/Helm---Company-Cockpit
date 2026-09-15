@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, PenLine, Trash2, X } from "lucide-react";
+import { Plus, PenLine, Trash2, X, AlertTriangle } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, SectionLabel, LoadingScreen, ErrorScreen, EmptyState } from "@/components/kit";
 import { formatDepartmentNames } from "@/lib/departments";
 import { PACKS, hasPerm } from "@/lib/access";
+import { cn } from "@/lib/utils";
 
 const emptyForm = () => ({
   name: "",
@@ -17,6 +18,39 @@ const emptyForm = () => ({
   pack: "member",
 });
 
+const HR_STATUS_LABEL = {
+  active: "Active",
+  on_leave: "On leave",
+  departed: "Departed",
+};
+
+function formatHrMonth(iso) {
+  if (!iso) return null;
+  const raw = String(iso).slice(0, 10);
+  const d = new Date(`${raw}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function hrSecondaryLine(p) {
+  if (!p.hr_status) return null;
+  const status = HR_STATUS_LABEL[p.hr_status] || p.hr_status;
+  const since = formatHrMonth(p.hr_start_date);
+  const parts = [];
+  if (since) parts.push(`${status} since ${since}`);
+  else parts.push(status);
+  if (p.hr_manager_name) parts.push(`reports to ${p.hr_manager_name}`);
+  return parts.join(" · ");
+}
+
+function sortRoster(people) {
+  return [...(people || [])].sort((a, b) => {
+    const accessDelta = Number(Boolean(b.has_access)) - Number(Boolean(a.has_access));
+    if (accessDelta) return accessDelta;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
 export default function People() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch("/people");
@@ -24,6 +58,8 @@ export default function People() {
   const [form, setForm] = useState(emptyForm());
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const roster = useMemo(() => sortRoster(data?.people), [data?.people]);
 
   if (loading) return <LoadingScreen label="Loading roster" />;
   if (error || !data) {
@@ -40,6 +76,7 @@ export default function People() {
   const packOptions = PACKS.filter((p) => p.id !== "owner" || hasPerm(user, "members:manage"));
   const editingPerson = editing ? (data.people || []).find((p) => p.id === editing) : null;
   const assignedDeptCount = new Set((data.people || []).flatMap((p) => p.departments || [])).size;
+  const unassignedCount = Number(data.unassigned_count) || 0;
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
   const openEdit = (p) => {
@@ -127,34 +164,112 @@ export default function People() {
         </GlassCard>
       </div>
 
+      {unassignedCount > 0 && (
+        <div
+          className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-helm-status-warning/40 bg-helm-status-warning/10 px-4 py-3 fade-up"
+          data-testid="people-unassigned-callout"
+        >
+          <AlertTriangle className="w-4 h-4 text-helm-status-warning shrink-0" />
+          <p className="text-sm text-helm-fg flex-1">
+            {unassignedCount === 1
+              ? "1 person has no department — their work won't show up anywhere in Helm."
+              : `${unassignedCount} people have no department — their work won't show up anywhere in Helm.`}
+          </p>
+          <Link
+            to="/app/members"
+            className="text-sm font-medium text-helm-gold hover:underline shrink-0"
+            data-testid="people-unassigned-fix"
+          >
+            Assign in Team & Access
+          </Link>
+        </div>
+      )}
+
       <SectionLabel className="mb-4">Roster</SectionLabel>
       <div className="grid md:grid-cols-2 gap-3">
-        {data.people.map((p) => (
-          <GlassCard key={p.id} className="p-4 fade-up transition-transform hover:-translate-y-0.5 group" data-testid={`person-${p.id}`}>
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-full bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-helm-gold shrink-0">{p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-helm-fg text-sm">{p.name}</p>
-                  {p.has_access && (
-                    <span className="text-[10px] uppercase tracking-wider text-helm-muted border border-helm-line px-1.5 py-0.5 rounded" data-testid={`person-access-${p.id}`}>
-                      Team & Access
-                    </span>
+        {roster.map((p) => {
+          const hrLine = hrSecondaryLine(p);
+          const departed = p.hr_status === "departed";
+          const openCount = Number(p.open_item_count) || 0;
+          const overdueCount = Number(p.overdue_item_count) || 0;
+          const showWorkload = Boolean(p.user_id);
+          return (
+            <GlassCard
+              key={p.id}
+              className={cn(
+                "p-4 fade-up transition-transform hover:-translate-y-0.5 group",
+                departed && "opacity-70",
+              )}
+              data-testid={`person-${p.id}`}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className={cn(
+                    "w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-medium",
+                    p.has_access
+                      ? "bg-helm-gold/12 border border-helm-gold/35 text-helm-gold"
+                      : "bg-transparent border border-dashed border-helm-muted/50 text-helm-muted",
+                  )}
+                  title={p.has_access ? "Has Helm login" : "Roster only — no login"}
+                  data-testid={`person-avatar-${p.id}`}
+                >
+                  {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className={cn("text-helm-fg text-sm", departed && "line-through text-helm-muted")}>{p.name}</p>
+                    {p.has_access && (
+                      <span className="text-[10px] uppercase tracking-wider text-helm-muted border border-helm-line px-1.5 py-0.5 rounded" data-testid={`person-access-${p.id}`}>
+                        Team & Access
+                      </span>
+                    )}
+                    {!p.has_access && (
+                      <span className="text-[10px] uppercase tracking-wider text-helm-muted/80" data-testid={`person-roster-only-${p.id}`}>
+                        Roster only
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-helm-muted" data-testid={`person-depts-${p.id}`}>
+                    {p.role || "—"} · {formatDepartmentNames(p)}
+                  </p>
+                  {hrLine && (
+                    <p className="text-xs text-helm-muted mt-0.5" data-testid={`person-hr-${p.id}`}>
+                      {hrLine}
+                      {p.hr_employee_id && (
+                        <>
+                          {" · "}
+                          <Link
+                            to={`/app/departments/hr?employee=${encodeURIComponent(p.hr_employee_id)}`}
+                            className="text-helm-gold hover:underline"
+                          >
+                            View in HR
+                          </Link>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {showWorkload && (
+                    <p
+                      className={cn(
+                        "text-[11px] font-mono mt-1",
+                        overdueCount > 0 ? "text-helm-status-warning" : "text-helm-muted",
+                      )}
+                      data-testid={`person-workload-${p.id}`}
+                    >
+                      {openCount} open{overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}
+                    </p>
                   )}
                 </div>
-                <p className="text-xs text-helm-muted" data-testid={`person-depts-${p.id}`}>
-                  {p.role || "—"} · {formatDepartmentNames(p)}
-                </p>
+                {canWrite && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openEdit(p)} data-testid={`edit-person-${p.id}`} className="text-helm-muted hover:text-helm-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => del(p)} data-testid={`del-person-${p.id}`} className="text-helm-muted hover:text-helm-status-negative p-1" title={p.has_access ? "Remove from Team & Access first" : "Remove"}><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
               </div>
-              {canWrite && (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(p)} data-testid={`edit-person-${p.id}`} className="text-helm-muted hover:text-helm-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => del(p)} data-testid={`del-person-${p.id}`} className="text-helm-muted hover:text-helm-status-negative p-1" title={p.has_access ? "Remove from Team & Access first" : "Remove"}><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              )}
-            </div>
-          </GlassCard>
-        ))}
+            </GlassCard>
+          );
+        })}
       </div>
 
       {showForm && <PersonForm {...{ form, setForm, submit, busy, editing, person: editingPerson, close: () => setShowForm(false), canInvite, packOptions }} />}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, X, Users, ChevronUp, ChevronDown } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
@@ -35,6 +36,7 @@ function personLabel(p) {
 }
 
 export default function HR() {
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState("onboarding");
   const { data, loading, error, reload } = useFetch("/hr/onboarding");
   const { data: tmplData, reload: reloadTmpl } = useFetch("/hr/template");
@@ -62,6 +64,14 @@ export default function HR() {
   });
   const [tmplDraft, setTmplDraft] = useState([]);
   const [offTmplDraft, setOffTmplDraft] = useState([]);
+
+  // Deep-link from People "View in HR" → /app/departments/hr?employee=<id>
+  useEffect(() => {
+    const emp = searchParams.get("employee");
+    if (!emp) return;
+    setTab("employees");
+    setSelectedEmpId(emp);
+  }, [searchParams]);
 
   const all = useMemo(() => data?.instances || [], [data?.instances]);
   const visible = useMemo(

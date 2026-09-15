@@ -142,14 +142,13 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
 
     people = {
         "people": [
-            {"id": "p1", "name": "Maya Chen", "role": "Head of Growth", "department": "Growth", "trust_score": 94, "quality": "A", "tasks_done": 128, "tenure": "2.1y"},
-            {"id": "p2", "name": "Devin Okoro", "role": "Lead Engineer", "department": "Engineering", "trust_score": 91, "quality": "A", "tasks_done": 214, "tenure": "3.0y"},
-            {"id": "p3", "name": "Priya Nair", "role": "Infra Engineer", "department": "Engineering", "trust_score": 88, "quality": "A-", "tasks_done": 96, "tenure": "1.4y"},
-            {"id": "p4", "name": "Leo Martins", "role": "Product Designer", "department": "Product", "trust_score": 82, "quality": "B+", "tasks_done": 74, "tenure": "0.9y"},
-            {"id": "p5", "name": "Sara Kim", "role": "Account Executive", "department": "Sales", "trust_score": 86, "quality": "A-", "tasks_done": 152, "tenure": "1.8y"},
-            {"id": "p6", "name": "Tom Wells", "role": "Support Lead", "department": "Support", "trust_score": 79, "quality": "B+", "tasks_done": 189, "tenure": "1.2y"},
+            {"id": "p1", "name": "Maya Chen", "role": "Head of Growth", "department": "Growth", "tenure": "2.1y"},
+            {"id": "p2", "name": "Devin Okoro", "role": "Lead Engineer", "department": "Engineering", "tenure": "3.0y"},
+            {"id": "p3", "name": "Priya Nair", "role": "Infra Engineer", "department": "Engineering", "tenure": "1.4y"},
+            {"id": "p4", "name": "Leo Martins", "role": "Product Designer", "department": "Product", "tenure": "0.9y"},
+            {"id": "p5", "name": "Sara Kim", "role": "Account Executive", "department": "Sales", "tenure": "1.8y"},
+            {"id": "p6", "name": "Tom Wells", "role": "Support Lead", "department": "Support", "tenure": "1.2y"},
         ],
-        "avg_trust": 87,
     }
 
     integrations = integ_catalog.INTEGRATION_CATALOG
@@ -163,7 +162,7 @@ def build_workspace(workspace_id, name, owner_user_id, empty=False):
         reports = []
         team = {"members": []}
         calendar = {"meetings": [], "focus_hours": 0, "meeting_hours": 0}
-        people = {"people": [], "avg_trust": 0}
+        people = {"people": []}
 
     return {
         "workspace_id": workspace_id, "name": name, "owner_user_id": owner_user_id, "plan": "free",

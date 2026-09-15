@@ -34,10 +34,16 @@ def _ws(people=None):
         "workspace_id": "ws_test",
         "name": "Acme",
         "plan": "pro",
-        "people": people or {"people": [], "avg_trust": 0},
+        "people": people or {"people": []},
         "employees": 0,
         "section_access": {},
     }
+
+
+def _empty_cursor():
+    cursor = MagicMock()
+    cursor.to_list = AsyncMock(return_value=[])
+    return cursor
 
 
 @pytest.mark.asyncio
@@ -71,6 +77,7 @@ async def test_ensure_person_creates_and_links_by_email():
         assert person["email"] == "alex@acme.com"
         assert person["membership_id"] == "mem_alex"
         assert len(ws["people"]["people"]) == 1
+        assert "trust_score" not in person
 
         again = await server.ensure_person_for_membership("ws_test", membership, name="Alex Rivera")
         assert again["id"] == person["id"]
@@ -86,12 +93,8 @@ async def test_ensure_person_links_existing_roster_by_email():
             "role": "Engineer",
             "department": "Eng",
             "email": "alex@acme.com",
-            "trust_score": 80,
-            "quality": "B+",
-            "tasks_done": 0,
             "tenure": "New",
         }],
-        "avg_trust": 80,
     })
 
     async def persist(_q, update):
@@ -146,8 +149,7 @@ def api_client():
             return cursor
 
     mem_find_cursor = MemFind()
-    empty_cursor = MagicMock()
-    empty_cursor.to_list = AsyncMock(return_value=[])
+    empty_cursor = _empty_cursor()
     mock_db = MagicMock()
     mock_db.memberships.find_one = AsyncMock(return_value=None)
     mock_db.memberships.insert_one = AsyncMock(side_effect=insert_mem)
@@ -159,7 +161,14 @@ def api_client():
     mock_db.workspaces.update_one = AsyncMock(side_effect=update_ws)
     mock_db.workspaces.find_one = AsyncMock(return_value=ws)
     mock_db.departments.find = MagicMock(return_value=empty_cursor)
+    mock_db.departments.find_one = AsyncMock(return_value=None)
     mock_db.department_members.find = MagicMock(return_value=empty_cursor)
+    for coll in (
+        "production_work_orders", "legal_matters", "maintenance_tickets",
+        "hr_onboarding_instances", "hr_offboarding_instances", "deals",
+        "hr_employees", "procurement_requests",
+    ):
+        getattr(mock_db, coll).find = MagicMock(return_value=_empty_cursor())
 
     server.app.dependency_overrides[server.get_principal] = mock_principal
 
@@ -190,6 +199,7 @@ def test_invite_member_creates_people_row(api_client):
     alex = next(p for p in ws["people"]["people"] if p.get("email") == "alex@acme.com")
     assert alex["name"] == "Alex"
     assert alex["membership_id"] == inserted_mems[0]["membership_id"]
+    assert "trust_score" not in alex
 
 
 def test_add_person_with_invite_to_access(api_client):
@@ -220,12 +230,8 @@ def test_delete_person_blocked_when_has_access(api_client):
             "role": "",
             "department": "General",
             "membership_id": "mem_alex",
-            "trust_score": 80,
-            "quality": "B+",
-            "tasks_done": 0,
             "tenure": "New",
         }],
-        "avg_trust": 80,
     }
     mock_db.memberships.find_one = AsyncMock(return_value={"membership_id": "mem_alex"})
     r = client.delete("/api/people/p_alex")
@@ -278,9 +284,6 @@ def test_people_get_overlays_real_departments_not_stale_label(api_client):
                 "role": "AE",
                 "department": "General",
                 "user_id": "u_alex",
-                "trust_score": 80,
-                "quality": "B+",
-                "tasks_done": 0,
                 "tenure": "New",
             },
             {
@@ -288,13 +291,9 @@ def test_people_get_overlays_real_departments_not_stale_label(api_client):
                 "name": "Pat",
                 "role": "Ops",
                 "department": "Operations",
-                "trust_score": 80,
-                "quality": "B+",
-                "tasks_done": 0,
                 "tenure": "New",
             },
         ],
-        "avg_trust": 80,
     }
     depts_cursor = MagicMock()
     depts_cursor.to_list = AsyncMock(return_value=[
@@ -311,12 +310,15 @@ def test_people_get_overlays_real_departments_not_stale_label(api_client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert "departments" not in body
+    assert body["unassigned_count"] == 1
     alex = next(p for p in body["people"] if p["id"] == "p_alex")
     pat = next(p for p in body["people"] if p["id"] == "p_pat")
     assert alex["departments"] == ["Sales"]
     assert alex["department"] == "Sales"
+    assert alex["open_item_count"] == 0
     assert pat["departments"] == []
     assert pat["department"] == "Unassigned"
+    assert "open_item_count" not in pat  # no user_id → no workload fields
 
 
 def test_edit_person_does_not_write_legacy_department(api_client):
@@ -328,18 +330,13 @@ def test_edit_person_does_not_write_legacy_department(api_client):
             "role": "Engineer",
             "department": "Engineering",
             "membership_id": "mem_alex",
-            "trust_score": 80,
-            "quality": "B+",
-            "tasks_done": 0,
             "tenure": "New",
         }],
-        "avg_trust": 80,
     }
     r = client.patch("/api/people/p_alex", json={
         "name": "Alex",
         "role": "Senior Engineer",
         "department": "Sales",
-        "trust_score": 80,
     })
     assert r.status_code == 200, r.text
     stored = next(p for p in ws["people"]["people"] if p["id"] == "p_alex")

@@ -56,6 +56,7 @@ import departments_catalog as dept_catalog
 import department_access as dept_access
 import credential_crypto as cred_crypto
 import department_migrate as dept_migrate
+import work_items as helm_work_items
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -457,11 +458,6 @@ async def workspace_departments(workspace_id: str, ws: dict | None = None) -> li
     return sorted(depts, key=lambda x: (x != "General", x.lower()))
 
 
-def _avg_trust(people_list):
-    scores = [p.get("trust_score", 0) for p in people_list if isinstance(p.get("trust_score"), (int, float))]
-    return round(sum(scores) / len(scores)) if scores else 0
-
-
 def _display_name_from_email(email: str) -> str:
     local = (email or "").split("@")[0]
     cleaned = re.sub(r"[._+\-]+", " ", local).strip()
@@ -493,7 +489,7 @@ async def ensure_person_for_membership(
 ) -> dict:
     """Upsert a People roster row for a Team & Access membership. Members always appear in People."""
     ws = await get_ws(workspace_id)
-    people = dict(ws.get("people") or {"people": [], "avg_trust": 0})
+    people = dict(ws.get("people") or {"people": []})
     roster = list(people.get("people") or [])
     people["people"] = roster
 
@@ -530,9 +526,6 @@ async def ensure_person_for_membership(
             "id": f"p_{uuid.uuid4().hex[:8]}",
             "name": display_name,
             "role": "",
-            "trust_score": 80,
-            "quality": "B+",
-            "tasks_done": 0,
             "tenure": "New",
             "membership_id": membership["membership_id"],
             "email": email or None,
@@ -540,7 +533,6 @@ async def ensure_person_for_membership(
         }
         roster.append(person)
 
-    people["avg_trust"] = _avg_trust(roster)
     headcount = len(roster)
     await db.workspaces.update_one(
         {"workspace_id": workspace_id},
@@ -567,7 +559,7 @@ async def sync_members_into_people(workspace_id: str) -> dict:
 async def unlink_person_membership(workspace_id: str, membership_id: str):
     """Keep the roster person when access is revoked — just clear the login link."""
     ws = await get_ws(workspace_id)
-    people = dict(ws.get("people") or {"people": [], "avg_trust": 0})
+    people = dict(ws.get("people") or {"people": []})
     changed = False
     for p in people.get("people") or []:
         if p.get("membership_id") == membership_id:
@@ -4931,26 +4923,11 @@ async def delete_note(note_id: str, principal=Depends(get_principal)):
 # ------------------------- My Work (cross-department feed) -------------------------
 # Deep-link query params are not wired on department pages yet — URLs point at the
 # department page itself (known limitation; Tasks is the only page with ?task= today).
-_ME_WORK_URLS = {
-    dept_catalog.TYPE_PRODUCTION: "/app/departments/production",
-    dept_catalog.TYPE_PROCUREMENT: "/app/departments/procurement",
-    dept_catalog.TYPE_LEGAL: "/app/departments/legal",
-    dept_catalog.TYPE_ENGINEERING_MAINTENANCE: "/app/departments/engineering_maintenance",
-    dept_catalog.TYPE_HR: "/app/departments/hr",
-    dept_catalog.TYPE_SALES: "/app/sales",
-}
+_ME_WORK_URLS = helm_work_items.WORK_URLS
 
 
 def _me_work_due(raw, today: date) -> tuple[Optional[str], bool]:
-    """Normalize a due date string and flag overdue (past calendar day, UTC)."""
-    due = (str(raw).strip()[:10] if raw else "") or None
-    if not due:
-        return None, False
-    try:
-        d = date.fromisoformat(due)
-    except ValueError:
-        return due, False
-    return due, d < today
+    return helm_work_items.due_info(raw, today)
 
 
 def _me_work_row(
@@ -4963,20 +4940,15 @@ def _me_work_row(
     today: date,
     relationship: str = "assigned_to_me",
 ) -> dict:
-    due, overdue = _me_work_due(due_raw, today)
-    entry = dept_catalog.catalog_entry(department_type) or {}
-    return {
-        "id": item_id,
-        "department_type": department_type,
-        "title": (title or item_id).strip() or item_id,
-        "due_date": due,
-        "status": status or "",
-        "url": _ME_WORK_URLS.get(department_type) or f"/app/departments/{department_type}",
-        "relationship": relationship,
-        "overdue": overdue,
-        "icon": entry.get("icon") or "briefcase",
-        "department_name": entry.get("name") or department_type,
-    }
+    return helm_work_items.work_row(
+        item_id=item_id,
+        department_type=department_type,
+        title=title,
+        due_raw=due_raw,
+        status=status,
+        today=today,
+        relationship=relationship,
+    )
 
 
 async def _me_work_dept_ids(principal: dict, dept_type: str) -> Optional[list[str]]:
@@ -4988,163 +4960,30 @@ async def _me_work_dept_ids(principal: dict, dept_type: str) -> Optional[list[st
     if access is not None:
         return access if access else None
     # CEO bypass for membership — still require the type to be enabled in the workspace.
-    rows = await db.departments.find(
-        {
-            "workspace_id": principal["workspace_id"],
-            "type": dept_type,
-            "enabled": True,
-        },
-        {"_id": 0, "department_id": 1},
-    ).to_list(50)
-    ids = [r["department_id"] for r in rows if r.get("department_id")]
-    return ids or None
+    return await helm_work_items.enabled_department_ids(db, principal["workspace_id"], dept_type)
 
 
 @api_router.get("/me/work-items")
 async def my_work_items(principal=Depends(get_principal)):
     """Cross-department open items assigned to (or, for Procurement, requested by) me."""
-    ws = principal["workspace_id"]
-    uid = principal["user_id"]
-    today = datetime.now(timezone.utc).date()
-    items: list[dict] = []
-
-    # Production — assigned_user_ids
-    prod_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_PRODUCTION)
-    if prod_ids is not None:
-        filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": prod_ids},
-            "assigned_user_ids": uid,
-            "status": {"$nin": ["completed", "done"]},
-        }
-        rows = await db.production_work_orders.find(filt, {"_id": 0}).to_list(200)
-        for r in rows:
-            items.append(_me_work_row(
-                item_id=r.get("id") or "",
-                department_type=dept_catalog.TYPE_PRODUCTION,
-                title=r.get("reference") or r.get("product") or r.get("id") or "Work order",
-                due_raw=r.get("due_date"),
-                status=r.get("status") or "",
-                today=today,
-            ))
-
-    # Legal — assigned_to
-    legal_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_LEGAL)
-    if legal_ids is not None:
-        filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": legal_ids},
-            "assigned_to": uid,
-            "status": {"$nin": ["filed"]},
-        }
-        rows = await db.legal_matters.find(filt, {"_id": 0}).to_list(200)
-        for r in rows:
-            items.append(_me_work_row(
-                item_id=r.get("id") or "",
-                department_type=dept_catalog.TYPE_LEGAL,
-                title=r.get("title") or r.get("id") or "Matter",
-                due_raw=r.get("due_date"),
-                status=r.get("status") or "",
-                today=today,
-            ))
-
-    # Maintenance — assigned_technician (no due_date on tickets)
-    maint_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_ENGINEERING_MAINTENANCE)
-    if maint_ids is not None:
-        filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": maint_ids},
-            "assigned_technician": uid,
-            "status": {"$nin": ["resolved"]},
-        }
-        rows = await db.maintenance_tickets.find(filt, {"_id": 0}).to_list(200)
-        for r in rows:
-            items.append(_me_work_row(
-                item_id=r.get("id") or "",
-                department_type=dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
-                title=r.get("equipment_name") or r.get("description") or r.get("id") or "Ticket",
-                due_raw=None,
-                status=r.get("status") or "",
-                today=today,
-            ))
-
-    # HR onboarding / offboarding — incomplete steps assigned to me
-    hr_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_HR)
-    if hr_ids is not None:
-        hr_filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": hr_ids},
-            "overall_status": "in_progress",
-            "steps": {"$elemMatch": {"assigned_to": uid, "status": {"$ne": "done"}}},
-        }
-        for coll_name, label_key, prefix in (
-            ("hr_onboarding_instances", "hire_name", "Onboarding"),
-            ("hr_offboarding_instances", "employee_name", "Offboarding"),
-        ):
-            coll = getattr(db, coll_name)
-            rows = await coll.find(hr_filt, {"_id": 0}).to_list(200)
-            for inst in rows:
-                person = (inst.get(label_key) or "").strip() or "Employee"
-                for step in inst.get("steps") or []:
-                    if step.get("assigned_to") != uid or step.get("status") == "done":
-                        continue
-                    step_name = (step.get("name") or "Step").strip()
-                    items.append(_me_work_row(
-                        item_id=f"{inst.get('id')}:{step.get('id')}",
-                        department_type=dept_catalog.TYPE_HR,
-                        title=f"{prefix} · {person}: {step_name}",
-                        due_raw=None,
-                        status=step.get("status") or "",
-                        today=today,
-                    ))
-
-    # Sales — owner_user_id
-    sales_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_SALES)
-    if sales_ids is not None:
-        filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": sales_ids},
-            "owner_user_id": uid,
-            "stage": {"$nin": ["won", "lost"]},
-        }
-        rows = await db.deals.find(filt, {"_id": 0}).to_list(200)
-        for r in rows:
-            items.append(_me_work_row(
-                item_id=r.get("id") or "",
-                department_type=dept_catalog.TYPE_SALES,
-                title=r.get("name") or r.get("company") or r.get("id") or "Deal",
-                due_raw=r.get("next_step_date") or r.get("close_date"),
-                status=r.get("stage") or "",
-                today=today,
-            ))
-
-    # Procurement — requested_by (no individual assignee; labeled distinctly)
-    proc_ids = await _me_work_dept_ids(principal, dept_catalog.TYPE_PROCUREMENT)
-    if proc_ids is not None:
-        filt = {
-            "workspace_id": ws,
-            "department_id": {"$in": proc_ids},
-            "requested_by": uid,
-            "status": {"$nin": ["delivered", "rejected"]},
-        }
-        rows = await db.procurement_requests.find(filt, {"_id": 0}).to_list(200)
-        for r in rows:
-            items.append(_me_work_row(
-                item_id=r.get("id") or "",
-                department_type=dept_catalog.TYPE_PROCUREMENT,
-                title=r.get("item") or r.get("id") or "Request",
-                due_raw=r.get("expected_delivery_date"),
-                status=r.get("status") or "",
-                today=today,
-                relationship="requested_by_me",
-            ))
-
-    # Overdue first, then soonest due; undated last.
-    def _sort_key(it: dict):
-        due = it.get("due_date") or "9999-99-99"
-        return (0 if it.get("overdue") else 1, due, it.get("title") or "")
-
-    items.sort(key=_sort_key)
+    types = (
+        dept_catalog.TYPE_PRODUCTION,
+        dept_catalog.TYPE_LEGAL,
+        dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+        dept_catalog.TYPE_HR,
+        dept_catalog.TYPE_SALES,
+        dept_catalog.TYPE_PROCUREMENT,
+    )
+    department_ids_by_type = {
+        dtype: await _me_work_dept_ids(principal, dtype) for dtype in types
+    }
+    items = await helm_work_items.collect_for_user(
+        db,
+        principal["workspace_id"],
+        principal["user_id"],
+        department_ids_by_type=department_ids_by_type,
+        include_procurement=True,
+    )
     return {"items": items}
 
 
@@ -6129,6 +5968,8 @@ async def delete_calendar_event(event_id: str, principal=Depends(get_principal))
 async def people(principal=Depends(get_principal)):
     c = await sync_members_into_people(principal["workspace_id"])
     data = dict(c["people"])
+    roster = list(data.get("people") or [])
+    data["people"] = roster
     mem_ids = {
         m["membership_id"]
         for m in await db.memberships.find(
@@ -6136,12 +5977,60 @@ async def people(principal=Depends(get_principal)):
             {"_id": 0, "membership_id": 1},
         ).to_list(200)
     }
-    for p in data.get("people") or []:
+    for p in roster:
         mid = p.get("membership_id")
         p["has_access"] = bool(mid and mid in mem_ids)
     by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
-    for p in data.get("people") or []:
+    for p in roster:
         dept_access.attach_real_departments(p, by_user.get(p.get("user_id") or "") or [])
+    data["unassigned_count"] = sum(1 for p in roster if not (p.get("departments") or []))
+
+    # HR employment overlay (read-only) when HR is enabled.
+    hr_dept = await dept_migrate.get_enabled_department(
+        db, principal["workspace_id"], dept_catalog.TYPE_HR,
+    )
+    if hr_dept:
+        linked_uids = [p.get("user_id") for p in roster if p.get("user_id")]
+        hr_by_user: dict = {}
+        if linked_uids:
+            hr_rows = await db.hr_employees.find(
+                {
+                    "workspace_id": principal["workspace_id"],
+                    "linked_user_id": {"$in": linked_uids},
+                },
+                {"_id": 0},
+            ).to_list(2000)
+            hr_by_user = {
+                r["linked_user_id"]: r
+                for r in hr_rows
+                if r.get("linked_user_id")
+            }
+            manager_ids = [r.get("manager_user_id") for r in hr_by_user.values()]
+            managers = await _users_by_ids(manager_ids, {"_id": 0, "user_id": 1, "name": 1})
+            for p in roster:
+                hr = hr_by_user.get(p.get("user_id") or "")
+                if not hr:
+                    continue
+                p["hr_status"] = hr.get("status")
+                p["hr_start_date"] = hr.get("start_date")
+                mid = hr.get("manager_user_id")
+                mgr = managers.get(mid) if mid else None
+                p["hr_manager_name"] = ((mgr or {}).get("name") or "").strip() or None
+                p["hr_employee_id"] = hr.get("id")
+
+    # Workload badges — batched per department type, not per person.
+    workload_uids = [p.get("user_id") for p in roster if p.get("user_id")]
+    workload = await helm_work_items.workload_counts_by_user(
+        db, principal["workspace_id"], workload_uids,
+    )
+    for p in roster:
+        uid = p.get("user_id")
+        if not uid:
+            continue
+        counts = workload.get(uid) or {"open_item_count": 0, "overdue_item_count": 0}
+        p["open_item_count"] = counts["open_item_count"]
+        p["overdue_item_count"] = counts["overdue_item_count"]
+
     data["can_write"] = await can_section_write(principal, "people", "people:write")
     data["can_invite_to_access"] = "members:invite" in perms_for(principal["pack"])
     return data
@@ -6152,9 +6041,6 @@ class PersonInput(BaseModel):
     role: str = ""
     # Legacy free-text label — ignored. Real departments live in department_members.
     department: Optional[str] = None
-    trust_score: int = 80
-    quality: str = "B+"
-    tasks_done: int = 0
     tenure: str = ""
     invite_to_access: bool = False
     email: Optional[EmailStr] = None
@@ -6162,9 +6048,11 @@ class PersonInput(BaseModel):
 
 
 def _person_fields(payload: PersonInput):
-    return {"name": payload.name.strip(), "role": payload.role.strip(),
-            "trust_score": payload.trust_score, "quality": payload.quality,
-            "tasks_done": payload.tasks_done, "tenure": payload.tenure.strip() or "New"}
+    return {
+        "name": payload.name.strip(),
+        "role": payload.role.strip(),
+        "tenure": payload.tenure.strip() or "New",
+    }
 
 
 @api_router.post("/people")
@@ -6218,7 +6106,6 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
         invite_meta = {"auto_joined": bool(existing_user), "email_sent": email_result.get("sent", False)}
 
     people["people"].append(person)
-    people["avg_trust"] = _avg_trust(people["people"])
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})
@@ -6249,7 +6136,6 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
             break
     if not found:
         raise HTTPException(status_code=404, detail="Person not found")
-    people["avg_trust"] = _avg_trust(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"people": people}})
     await log_activity(principal, "people", "person.edit", f"Updated {found['name']}'s profile")
     return {"ok": True}
@@ -6271,7 +6157,6 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
                 detail="This person has Team & Access login — remove them from Team & Access first",
             )
     people["people"] = [p for p in people["people"] if p["id"] != person_id]
-    people["avg_trust"] = _avg_trust(people["people"])
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})

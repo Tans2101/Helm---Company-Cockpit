@@ -171,8 +171,7 @@ def test_people_crud_headcount_sync_and_activity(owner):
     hc_before = fin_before.get("employees", 0)
 
     r = owner.post(f"{BASE_URL}/api/people",
-                   json={"name": "TEST_Alice CRUD", "role": "Engineer", "department": "Eng",
-                         "trust_score": 90})
+                   json={"name": "TEST_Alice CRUD", "role": "Engineer", "department": "Eng"})
     assert r.status_code == 200
     pid = r.json()["person"]["id"]
 
@@ -180,10 +179,11 @@ def test_people_crud_headcount_sync_and_activity(owner):
     c1 = owner.get(f"{BASE_URL}/api/company").json()
     assert c1["employees"] == hc_before + 1
 
-    # /people returns can_write + person present + avg_trust included
+    # /people returns can_write + person present
     pl = owner.get(f"{BASE_URL}/api/people").json()
     assert pl["can_write"] is True
-    assert "avg_trust" in pl
+    assert "avg_trust" not in pl
+    assert "unassigned_count" in pl
     assert any(p["id"] == pid for p in pl["people"])
 
     # activity for add
@@ -198,7 +198,7 @@ def test_people_crud_headcount_sync_and_activity(owner):
     # PATCH edits
     r = owner.patch(f"{BASE_URL}/api/people/{pid}",
                     json={"name": "TEST_Alice CRUD", "role": "Senior Engineer",
-                          "department": "Eng", "trust_score": 92})
+                          "department": "Eng"})
     assert r.status_code == 200
     pl2 = owner.get(f"{BASE_URL}/api/people").json()
     edited = next(p for p in pl2["people"] if p["id"] == pid)
