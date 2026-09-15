@@ -4209,9 +4209,12 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
     if not finance_dept_id:
         raise HTTPException(status_code=500, detail="Finance department is not available — try again")
     # Keep writers enrolled so the new row stays visible under department filters.
-    await dept_migrate.ensure_department_member(
-        db, finance_dept_id, principal["user_id"], role="member",
-    )
+    try:
+        await dept_migrate.ensure_department_member(
+            db, finance_dept_id, principal["user_id"], role="member",
+        )
+    except Exception:
+        logger.exception("finance department enroll failed for %s", principal.get("user_id"))
     category = (payload.category or "").strip() or "Other"
     entry = {
         "id": f"fe_{uuid.uuid4().hex[:10]}",
@@ -10920,6 +10923,8 @@ if _serve_static:
 
 
 async def _ensure_indexes():
+    # Scrub legacy null external ids before (re)creating unique indexes.
+    await _scrub_null_financial_external_ids()
     specs = [
         (db.users, [("email", 1)], {"unique": True}),
         (db.users, [("google_sub", 1)], {"unique": True, "sparse": True}),
@@ -11082,7 +11087,6 @@ async def startup():
     asyncio.create_task(_ensure_indexes())
     asyncio.create_task(_run_sales_finance_migration())
     asyncio.create_task(_backfill_financial_entry_names())
-    asyncio.create_task(_scrub_null_financial_external_ids())
     asyncio.create_task(_seal_plaintext_integration_tokens())
     asyncio.create_task(clerk_auth.sync_clerk_instance())
     if clerk_auth.clerk_configured():

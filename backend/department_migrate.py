@@ -80,6 +80,8 @@ async def ensure_department_member(db, department_id: str, user_id: str, role: s
 
     Does not change role on existing rows (idempotent; preserves leads).
     """
+    from pymongo.errors import DuplicateKeyError
+
     if not user_id or not department_id:
         return False
     existing = await db.department_members.find_one(
@@ -88,12 +90,15 @@ async def ensure_department_member(db, department_id: str, user_id: str, role: s
     )
     if existing:
         return False
-    await db.department_members.insert_one({
-        "department_id": department_id,
-        "user_id": user_id,
-        "role": role if role in catalog.DEPARTMENT_MEMBER_ROLES else "member",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    try:
+        await db.department_members.insert_one({
+            "department_id": department_id,
+            "user_id": user_id,
+            "role": role if role in catalog.DEPARTMENT_MEMBER_ROLES else "member",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except DuplicateKeyError:
+        return False
     return True
 
 
