@@ -6348,12 +6348,21 @@ async def list_production_work_orders(
 @api_router.post("/production/work-orders")
 async def create_production_work_order(payload: ProductionWorkOrderCreate, principal=Depends(get_principal)):
     dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
     reference = (payload.reference or "").strip()
     if not reference:
         raise HTTPException(status_code=400, detail="reference is required")
     priority = (payload.priority or "normal").strip().lower()
     if priority not in PRODUCTION_PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
+    assignees = [u for u in (payload.assigned_user_ids or []) if u]
+    if assignees and not _can_lead_production(principal, membership):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a production lead or CEO can assign work orders",
+        )
     linked = (payload.linked_procurement_request_id or "").strip() or None
     linked_req = None
     if linked:
@@ -6392,7 +6401,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "linked_procurement_request_id": linked,
         "linked_maintenance_ticket_id": linked_mt,
         "source_deal_id": (payload.source_deal_id or "").strip() or None,
-        "assigned_user_ids": [u for u in (payload.assigned_user_ids or []) if u],
+        "assigned_user_ids": assignees,
         "notes": (payload.notes or "").strip()[:2000],
         "created_at": now,
         "updated_at": now,
@@ -6447,8 +6456,10 @@ async def patch_production_work_order(
         upd["notes"] = payload.notes.strip()[:2000]
     if payload.assigned_user_ids is not None:
         if not _can_lead_production(principal, membership):
-            # Members may update assignees only if already allowed to edit the order
-            pass
+            raise HTTPException(
+                status_code=403,
+                detail="Only a production lead or CEO can change assignees",
+            )
         upd["assigned_user_ids"] = [u for u in payload.assigned_user_ids if u]
     linked_req = None
     link_cleared = False

@@ -46,6 +46,15 @@ MEMBER = {
     "pack": "member",
 }
 
+LEAD = {
+    "user_id": "u_lead",
+    "email": "lead@acme.com",
+    "name": "Lead",
+    "workspace_id": "ws_test",
+    "role": "member",
+    "pack": "member",
+}
+
 PROD_DEPT = {
     "department_id": "dept_prod",
     "workspace_id": "ws_test",
@@ -164,15 +173,18 @@ def prod_api():
     async def as_member():
         return MEMBER
 
+    async def as_lead():
+        return LEAD
+
     server.app.dependency_overrides[server.get_principal] = as_ceo
     with patch.object(server, "db", mock_db):
         client = TestClient(server.app)
-        yield client, orders, procurement, maintenance, as_ceo, as_outsider, as_member
+        yield client, orders, procurement, maintenance, as_ceo, as_outsider, as_member, as_lead
     server.app.dependency_overrides.clear()
 
 
 def test_outsider_gets_403(prod_api):
-    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member = prod_api
+    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member, as_lead = prod_api
     server.app.dependency_overrides[server.get_principal] = as_outsider
     assert client.get("/api/production/work-orders").status_code == 403
     assert client.post("/api/production/work-orders", json={"reference": "X"}).status_code == 403
@@ -216,7 +228,7 @@ def test_stages_endpoints_removed(prod_api):
 
 
 def test_member_can_update_status_and_notes(prod_api):
-    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member = prod_api
+    client, orders, procurement, maintenance, as_ceo, as_outsider, as_member, as_lead = prod_api
     wo = client.post("/api/production/work-orders", json={"reference": "Order #1"}).json()["work_order"]
 
     server.app.dependency_overrides[server.get_principal] = as_member
@@ -328,7 +340,7 @@ def test_list_filter_by_status(prod_api):
 
 
 def test_delete_work_order(prod_api):
-    client, orders, _procurement, _maintenance, as_ceo, as_outsider, as_member = prod_api
+    client, orders, _procurement, _maintenance, as_ceo, as_outsider, as_member, as_lead = prod_api
     wo = client.post("/api/production/work-orders", json={"reference": "Drop me"}).json()["work_order"]
     wid = wo["id"]
 
@@ -358,6 +370,56 @@ def test_delete_work_order(prod_api):
     server.app.dependency_overrides[server.get_principal] = as_ceo
     ok_ceo = client.delete(f"/api/production/work-orders/{wo2['id']}")
     assert ok_ceo.status_code == 200, ok_ceo.text
+
+
+def test_member_cannot_set_assignees_on_create_or_patch(prod_api):
+    client, orders, _procurement, _maintenance, as_ceo, as_outsider, as_member, as_lead = prod_api
+
+    server.app.dependency_overrides[server.get_principal] = as_member
+    create_denied = client.post(
+        "/api/production/work-orders",
+        json={"reference": "Hijack", "assigned_user_ids": ["u_mem"]},
+    )
+    assert create_denied.status_code == 403, create_denied.text
+    assert "assign" in create_denied.json()["detail"].lower()
+
+    # Empty assignees still allowed for members
+    create_ok = client.post("/api/production/work-orders", json={"reference": "Open seat"})
+    assert create_ok.status_code == 200, create_ok.text
+    wid = create_ok.json()["work_order"]["id"]
+
+    patch_denied = client.patch(
+        f"/api/production/work-orders/{wid}",
+        json={"assigned_user_ids": ["u_mem", "u_ceo"]},
+    )
+    assert patch_denied.status_code == 403, patch_denied.text
+    assert "assign" in patch_denied.json()["detail"].lower()
+
+    # Lead can assign on create and reassign on patch
+    server.app.dependency_overrides[server.get_principal] = as_lead
+    lead_create = client.post(
+        "/api/production/work-orders",
+        json={"reference": "Lead assigns", "assigned_user_ids": ["u_mem"]},
+    )
+    assert lead_create.status_code == 200, lead_create.text
+    assert lead_create.json()["work_order"]["assigned_user_ids"] == ["u_mem"]
+    lead_id = lead_create.json()["work_order"]["id"]
+
+    lead_patch = client.patch(
+        f"/api/production/work-orders/{lead_id}",
+        json={"assigned_user_ids": ["u_ceo"]},
+    )
+    assert lead_patch.status_code == 200, lead_patch.text
+    assert lead_patch.json()["work_order"]["assigned_user_ids"] == ["u_ceo"]
+
+    # CEO can still assign
+    server.app.dependency_overrides[server.get_principal] = as_ceo
+    ceo_create = client.post(
+        "/api/production/work-orders",
+        json={"reference": "CEO assigns", "assigned_user_ids": ["u_lead"]},
+    )
+    assert ceo_create.status_code == 200, ceo_create.text
+    assert ceo_create.json()["work_order"]["assigned_user_ids"] == ["u_lead"]
 
 
 def test_patch_link_sets_awaiting_materials_and_unlink_resumes(prod_api):
