@@ -23,7 +23,7 @@ function BriefingPreview() {
     <div className="relative rounded-lg border border-helm-cream/10 bg-helm-ink-card p-5 md:p-7">
       <div className="flex items-center justify-between border-b border-helm-cream/[0.06] pb-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-helm-slate">Briefing</p>
-        <span className="text-[10px] text-helm-slate">Live workspace data</span>
+        <span className="text-[10px] text-helm-slate">Sample briefing</span>
       </div>
       <p className="font-display text-helm-cream text-2xl md:text-3xl font-medium mt-6 leading-snug tracking-tight">Welcome back, Alex.</p>
       <p className="text-helm-slate text-sm mt-3 leading-relaxed">Revenue is ahead of plan. Engineering capacity needs a decision today.</p>
