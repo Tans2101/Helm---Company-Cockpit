@@ -313,14 +313,6 @@ function QuickNavPalette({ open, onOpenChange }) {
         icon: <Plug className="w-4 h-4" />,
       },
       {
-        id: "settings-integrations-card",
-        label: "Integrations (Settings)",
-        to: "/app/settings#integrations",
-        description: "Settings",
-        keywords: ["google", "quickbooks", "connect"],
-        icon: <Plug className="w-4 h-4" />,
-      },
-      {
         id: "settings-export",
         label: "Export data",
         to: "/app/settings#export-data",
