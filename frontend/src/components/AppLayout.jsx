@@ -147,8 +147,8 @@ function SidebarContent({ onNavigate, billingEnforced }) {
     <div className="flex flex-col h-full">
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        <SmoothTab orientation="vertical" variant="pill" activeId={activeMainId} className="space-y-0.5">
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+        <SmoothTab orientation="vertical" variant="pill" activeId={activeMainId}>
           {mainNav.map((item) => (
             <SmoothTabItem key={item.id} id={item.id}>
               <NavLink
@@ -158,7 +158,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                 data-testid={`sidebar-nav-${item.id}`}
                 className={({ isActive }) =>
                   cn(
-                    "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
+                    "group relative flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-200",
                     isActive
                       ? "text-helm-navy"
                       : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
@@ -167,7 +167,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
               >
                 {({ isActive }) => (
                   <>
-                    <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
+                    <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
                     <span className="truncate">{item.label}</span>
                   </>
                 )}
@@ -179,7 +179,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
         {deptNav.length > 0 && (
           <div className="pt-3 mt-2 border-t border-helm-line">
             <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
-            <SmoothTab orientation="vertical" variant="pill" activeId={activeDeptId} className="space-y-0.5">
+            <SmoothTab orientation="vertical" variant="pill" activeId={activeDeptId}>
               {deptNav.map((dept) => {
                 const Icon = departmentIcon(dept.icon);
                 const to = departmentNavTo(dept.type);
@@ -191,7 +191,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                       data-testid={`sidebar-dept-${dept.type}`}
                       className={({ isActive }) =>
                         cn(
-                          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
+                          "group relative flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-200",
                           isActive
                             ? "text-helm-navy"
                             : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
@@ -200,7 +200,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                     >
                       {({ isActive }) => (
                         <>
-                          <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
+                          <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
                           <span className="truncate">{dept.name}</span>
                         </>
                       )}
