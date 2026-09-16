@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { COMPANY_LOCATION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
 
 export default function Privacy() {
   return (
@@ -23,8 +24,8 @@ export default function Privacy() {
               operated by <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>,
               collects and uses information when you use <span className="text-helm-cream">Helm</span>, our company cockpit product.
               Contact:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>.
-              Postal address: BGC, Taguig, Philippines.
+              <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>.
+              Postal address: {COMPANY_LOCATION}.
             </p>
           </section>
 
@@ -202,8 +203,8 @@ export default function Privacy() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Privacy questions:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· Helm Control · BGC, Taguig, Philippines.
+              <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
+              {" "}· Helm Control · {COMPANY_LOCATION}.
             </p>
           </section>
         </div>

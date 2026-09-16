@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { COMPANY_LOCATION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
 
 export default function Terms() {
   return (
@@ -24,8 +25,8 @@ export default function Terms() {
               <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>. If you use Helm on behalf of a company,
               you represent that you have authority to bind that company.
               Contact:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· BGC, Taguig, Philippines.
+              <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
+              {" "}· {COMPANY_LOCATION}.
             </p>
           </section>
 
@@ -134,8 +135,8 @@ export default function Terms() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Questions about these Terms:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· Helm Control · BGC, Taguig, Philippines.
+              <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
+              {" "}· Helm Control · {COMPANY_LOCATION}.
             </p>
           </section>
         </div>

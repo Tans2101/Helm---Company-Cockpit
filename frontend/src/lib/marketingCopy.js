@@ -8,6 +8,12 @@ export const FOUNDER_ROLE = "CEO & Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
 export const PUBLIC_CONTACT_EMAIL = "contact@helmcontrol.online";
 export const PUBLIC_CONTACT_MAILTO = `mailto:${PUBLIC_CONTACT_EMAIL}`;
+export const FOUNDED_DATE = "September 2026";
+export const COMPANY_LOCATION = "BGC, Taguig, Philippines";
+export const WHAT_HELM_IS =
+  "Helm brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.";
+export const ABOUT_PROBLEM =
+  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Helm exists to close that gap.";
 export const FOUNDER_NOTE =
   "Helm is built and run by Tansher Dhawan, CEO & Founder, a CEO making the cockpit he wished existed for running a company of this size."
 
@@ -18,7 +24,9 @@ export const MISSION =
   "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear decisions, so you run the business instead of chasing it.";
 
 export const VISION =
-  "A world where running a company doesn't mean drowning in dashboards. Leaders see what matters, decide fast, and delegate with confidence.";
+  "We are building toward a cockpit where leaders see what matters and delegate the rest, without maintaining another dashboard.";
+export const ABOUT_DIFFERENTIATOR =
+  "Helm turns your existing data into briefings and decision cards, not another chart library. Your team contributes through role-based access; synthesis and the decision queue stay oriented to the person running the company.";
 
 export const ABOUT_STORY =
   "Helm started from a simple frustration: CEOs running companies of up to 50 people waste hours opening twelve tabs (Slack, the CRM, the finance sheet, the shop floor, email) and still lack a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs, not another dashboard to maintain.";
