@@ -122,15 +122,35 @@ function AppRouter() {
     const exact = titles[path] || titles[location.pathname];
     if (exact) {
       document.title = exact;
-      return;
-    }
-    if (path.startsWith("/app/")) {
+    } else if (path.startsWith("/app/")) {
       const segment = path.split("/")[2] || "app";
       const label = segment.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       document.title = `${label} · Helm`;
-      return;
+    } else {
+      document.title = "Helm";
     }
-    document.title = "Helm";
+
+    const origin = "https://www.helmcontrol.online";
+    const canonicalPath = path.startsWith("/app") ? "/" : path;
+    const canonicalHref = `${origin}${canonicalPath === "/" ? "/" : canonicalPath}`;
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", canonicalHref);
+
+    const setMeta = (attr, key, value) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", value);
+    };
+    setMeta("property", "og:url", canonicalHref);
   }, [location.pathname]);
   const { clerkEnabled, configLoading } = useClerkMode();
   const Protected = configLoading

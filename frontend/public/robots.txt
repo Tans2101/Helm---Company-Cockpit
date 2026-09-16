@@ -2,6 +2,8 @@ User-agent: *
 Allow: /
 Allow: /about
 Allow: /features
+Allow: /help
+Allow: /security
 Allow: /terms
 Allow: /privacy
 Allow: /refunds

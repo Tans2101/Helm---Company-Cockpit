@@ -2,7 +2,8 @@
   "build": {
     "env": {
       "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online",
-      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA"
+      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA",
+      "REACT_APP_GOOGLE_SITE_VERIFICATION": ""
     }
   },
   "redirects": [
@@ -19,7 +20,7 @@
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/|__clerk|robots\\.txt|sitemap\\.xml).*)",
+      "source": "/((?!api/|__clerk|robots\\.txt|sitemap\\.xml|google[0-9a-z]+\\.html).*)",
       "destination": "/index.html"
     }
   ]
