@@ -1,6 +1,9 @@
 import { Check, X, Sparkles } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { GlassCard } from "@/components/kit";
 import { ConfidenceBadge } from "@/components/DecisionCard";
+
+const LIST_MOTION = { duration: 0.22, ease: [0.4, 0, 0.2, 1] };
 
 export default function SuggestionCard({
   s,
@@ -9,7 +12,16 @@ export default function SuggestionCard({
   onAcceptSuggestion,
   onDismissSuggestion,
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
+    <motion.div
+      layout
+      initial={false}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginBottom: 0, overflow: "hidden" }}
+      transition={LIST_MOTION}
+      className="overflow-hidden"
+    >
     <GlassCard className="p-5 fade-up border-helm-status-warning/35" data-testid={`suggestion-${s.id}`}>
       <div className="flex flex-col lg:flex-row lg:items-start gap-5">
         <div className="flex-1">
@@ -60,5 +72,6 @@ export default function SuggestionCard({
         )}
       </div>
     </GlassCard>
+    </motion.div>
   );
 }

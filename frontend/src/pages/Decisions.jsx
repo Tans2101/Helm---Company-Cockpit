@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, RefreshCw, X, Sparkles } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { useDecisionActions, buildDelegateOptions, isOpenDecision } from "@/hooks/useDecisionActions";
 import { api } from "@/lib/api";
@@ -113,14 +114,16 @@ export default function Decisions() {
     <div>
       <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals. You confirm before anything becomes a real call." action={addBtn} />
 
-      {suggestions.length > 0 && (
-        <div className="mb-8" data-testid="suggested-decisions">
+      <div className={cn(suggestions.length > 0 && "mb-8")} data-testid="suggested-decisions">
+        {suggestions.length > 0 && (
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-4 h-4 text-helm-status-warning" />
             <SectionLabel>Suggested by Helm</SectionLabel>
             <span className="font-mono text-xs text-helm-status-warning/80">{suggestions.length}</span>
           </div>
-          <div className="space-y-3">
+        )}
+        <div className={cn(suggestions.length > 0 && "space-y-3")}>
+          <AnimatePresence mode="popLayout" initial={false}>
             {suggestions.map((s) => (
               <SuggestionCard
                 key={s.id}
@@ -131,9 +134,9 @@ export default function Decisions() {
                 onDismissSuggestion={dismissSuggestion}
               />
             ))}
-          </div>
+          </AnimatePresence>
         </div>
-      )}
+      </div>
 
       {decisions.length === 0 && suggestions.length === 0 ? (
         <EmptyState title="No decisions yet" body="Log the calls that need to be made, or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
@@ -142,22 +145,24 @@ export default function Decisions() {
         <>
           {pending.length > 0 && <SectionLabel className="mb-4">Open decisions</SectionLabel>}
           <div className="space-y-4">
-            {pending.map((d) => (
-              <DecisionCard
-                key={d.id}
-                d={d}
-                canAct={canAct}
-                busy={busy}
-                onApprove={(id) => act(id, "approved")}
-                onReject={(id) => act(id, "rejected")}
-                onDelegate={(id, owner) => act(id, "delegated", owner)}
-                delegateMembers={delegateMembers}
-                selfMember={selfMember}
-                selfLabel={selfLabel}
-                onEdit={openEdit}
-                onDelete={del}
-              />
-            ))}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {pending.map((d) => (
+                <DecisionCard
+                  key={d.id}
+                  d={d}
+                  canAct={canAct}
+                  busy={busy}
+                  onApprove={(id) => act(id, "approved")}
+                  onReject={(id) => act(id, "rejected")}
+                  onDelegate={(id, owner) => act(id, "delegated", owner)}
+                  delegateMembers={delegateMembers}
+                  selfMember={selfMember}
+                  selfLabel={selfLabel}
+                  onEdit={openEdit}
+                  onDelete={del}
+                />
+              ))}
+            </AnimatePresence>
           </div>
 
           {resolved.length > 0 && (

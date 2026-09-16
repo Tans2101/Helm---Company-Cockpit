@@ -1,6 +1,10 @@
 import { Check, X, Sparkles, PenLine, Trash2 } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { GlassCard } from "@/components/kit";
 import { cn } from "@/lib/utils";
+
+/** Match chart hover/exit timing (heatmap inactive tween). */
+const LIST_MOTION = { duration: 0.22, ease: [0.4, 0, 0.2, 1] };
 
 const statusStyle = {
   pending: "text-helm-fg bg-helm-status-warning/12 border-helm-status-warning/35",
@@ -32,8 +36,16 @@ export default function DecisionCard({
   onDelete,
 }) {
   const isAi = d.source === "ai_suggested";
+  const reduceMotion = useReducedMotion();
 
   return (
+    <motion.div
+      layout
+      initial={false}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, marginBottom: 0, overflow: "hidden" }}
+      transition={LIST_MOTION}
+      className="overflow-hidden"
+    >
     <GlassCard className="p-5 fade-up" data-testid={`decision-${d.id}`}>
       <div className="flex flex-col lg:flex-row lg:items-start gap-5">
         <div className="flex-1">
@@ -106,6 +118,7 @@ export default function DecisionCard({
         </div>
       </div>
     </GlassCard>
+    </motion.div>
   );
 }
 

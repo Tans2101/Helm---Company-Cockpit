@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { DEPARTMENTS_SECTION } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
