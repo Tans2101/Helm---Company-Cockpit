@@ -105,8 +105,7 @@ export default function SmoothTab({
         <motion.div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute z-[1] bg-helm-gold",
-            resolvedVariant === "pill" ? "rounded-full" : "rounded-full",
+            "pointer-events-none absolute z-[1] rounded-full bg-helm-gold",
             indicatorClassName,
           )}
           initial={false}
