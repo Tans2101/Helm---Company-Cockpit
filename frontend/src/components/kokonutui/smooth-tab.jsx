@@ -15,7 +15,7 @@ const SmoothTabContext = React.createContext(null);
  * Sliding indicator track. Wrap nav items with <SmoothTabItem id="…">.
  * @param {"vertical"|"horizontal"} orientation
  * @param {string|null} activeId
- * @param {"bar"|"underline"} variant — vertical bar (sidebar) or bottom underline (marketing)
+ * @param {"bar"|"underline"|"pill"} variant — thin bar, bottom underline, or full-row solid pill
  */
 export default function SmoothTab({
   orientation = "horizontal",
@@ -68,21 +68,29 @@ export default function SmoothTab({
   }, [measure, children]);
 
   const indicatorAnimate =
-    resolvedVariant === "bar"
+    resolvedVariant === "pill"
       ? {
-          x: 0,
-          y: box.top + Math.max(0, (box.height - 20) / 2),
-          width: 2,
-          height: 20,
+          x: box.left,
+          y: box.top,
+          width: box.width,
+          height: box.height,
           opacity: box.visible ? 1 : 0,
         }
-      : {
-          x: box.left,
-          y: box.top + box.height - 2,
-          width: box.width,
-          height: 2,
-          opacity: box.visible ? 1 : 0,
-        };
+      : resolvedVariant === "bar"
+        ? {
+            x: 0,
+            y: box.top + Math.max(0, (box.height - 20) / 2),
+            width: 2,
+            height: 20,
+            opacity: box.visible ? 1 : 0,
+          }
+        : {
+            x: box.left,
+            y: box.top + box.height - 2,
+            width: box.width,
+            height: 2,
+            opacity: box.visible ? 1 : 0,
+          };
 
   return (
     <SmoothTabContext.Provider value={{ register }}>
@@ -90,7 +98,8 @@ export default function SmoothTab({
         <motion.div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute z-[1] rounded-full bg-helm-gold",
+            "pointer-events-none absolute z-[1] bg-helm-gold",
+            resolvedVariant === "pill" ? "rounded-md" : "rounded-full",
             indicatorClassName,
           )}
           initial={false}
