@@ -348,14 +348,20 @@ export default function AccountSettings() {
 
   const tabs = useMemo(() => {
     const list = [
-      { id: "profile", title: "Profile & Security", content: profileContent },
+      {
+        id: "profile",
+        title: "Profile & Security",
+        content: (
+          <div className="space-y-4">
+            {profileContent}
+            {!isOwner && <DepartmentsSettings />}
+          </div>
+        ),
+      },
       { id: "appearance", title: "Appearance", content: appearanceContent },
     ];
     if (isOwner) {
       list.push({ id: "team", title: "Team", content: teamContent });
-    } else {
-      // DepartmentsSettings is visible to every member; keep a Team tab for non-owners too
-      list.push({ id: "team", title: "Team", content: <DepartmentsSettings /> });
     }
     list.push({ id: "data", title: "Data & Privacy", content: dataContent });
     return list;
