@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
-import { GlassCard, ErrorScreen, Delta, PageHeaderSkeleton, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
+import { GlassCard, ErrorScreen, PageHeaderSkeleton, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 import { dayPartGreeting } from "@/lib/greeting";
+import BentoGrid from "@/components/kokonutui/bento-grid";
 
 const toneDot = { positive: "bg-helm-status-positive", negative: "bg-helm-status-negative", neutral: "bg-helm-muted" };
 
@@ -152,35 +153,7 @@ export default function Briefing() {
         </section>
       )}
 
-      {metrics.length > 0 && (
-        <div className={cn(
-          "grid gap-3 md:gap-4 mb-6",
-          metrics.length === 1 && "grid-cols-1 max-w-xs",
-          metrics.length === 2 && "grid-cols-2 max-w-xl",
-          metrics.length === 3 && "grid-cols-2 lg:grid-cols-3",
-          metrics.length >= 4 && "grid-cols-2 lg:grid-cols-4",
-        )}>
-          {metrics.map((m, i) => (
-            <div
-              key={m.label}
-              className="rounded-xl border border-helm-fg/[0.08] bg-helm-card p-4 fade-up"
-              style={{ animationDelay: `${i * 60}ms` }}
-              data-testid={`briefing-metric-${i}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-helm-muted">{m.label}</span>
-                <span className={cn("w-1.5 h-1.5 rounded-full", toneDot[m.tone])} />
-              </div>
-              <div className="mt-3 flex items-end justify-between gap-2">
-                <span className={cn("text-2xl md:text-3xl tabular-nums tracking-tight", m.missing ? "text-helm-muted" : "text-helm-fg")}>
-                  {m.value}
-                </span>
-                <Delta value={m.delta} tone={m.tone} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {metrics.length > 0 && <BentoGrid metrics={metrics} />}
 
       <section className="mb-6 fade-up rounded-xl border border-helm-fg/[0.08] bg-helm-card p-5 md:p-6">
         <div className="flex items-center justify-between gap-3 mb-3">

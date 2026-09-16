@@ -1,9 +1,9 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, KanbanSquare,
   FileText, Calendar, Contact, MessageSquareText, Plug,
-  LogOut, Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet,
+  Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 import { departmentPath } from "@/lib/departmentRoutes";
+import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
+import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -54,8 +56,7 @@ function departmentNavTo(type) {
 
 function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const { data, reload } = useFetch("/workspaces");
+  const { data } = useFetch("/workspaces");
   const [open, setOpen] = useState(false);
   const list = data?.workspaces || [];
   const active = list.find((w) => w.active) || list[0];
@@ -126,6 +127,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
   const { data: deptData } = useFetch("/departments");
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
   const deptNav = (deptData?.departments || []).filter((d) => departmentNavVisible(d));
+  const canManageBilling = (user?.perms || []).includes("billing:manage");
 
   return (
     <div className="flex flex-col h-full">
@@ -206,43 +208,60 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       </nav>
 
       <div className="px-3 pb-4">
-        <div className="flex items-center gap-3 rounded-md px-2 py-2">
-          {user?.picture ? (
-            <img src={user.picture} alt="" className="w-8 h-8 rounded-full object-cover border border-helm-line" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-helm-fg/10 flex items-center justify-center text-xs text-helm-fg">
-              {user?.name?.[0] || "C"}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-helm-fg truncate">{user?.name || "CEO"}</p>
-            {(user?.perms || []).includes("billing:manage") ? (
-              <button
-                type="button"
-                data-testid="sidebar-billing-link"
-                onClick={() => { navigate("/app/billing"); onNavigate?.(); }}
-                className="text-[10px] text-helm-muted truncate hover:text-helm-gold transition-colors text-left"
-              >
-                {helmPlanLabel(company?.plan, isPro, billingEnforced)} · Billing
-              </button>
-            ) : (
-              <p className="text-[10px] text-helm-muted truncate">{helmPlanLabel(company?.plan, isPro, billingEnforced)}</p>
-            )}
-          </div>
-          <button
-            data-testid="settings-link"
-            onClick={() => { navigate("/app/settings"); onNavigate?.(); }}
-            className="text-helm-muted hover:text-helm-fg transition-colors text-[10px] font-mono uppercase tracking-wide"
-            title="Settings"
-          >
-            Settings
-          </button>
-          <button data-testid="logout-btn" onClick={logout} className="text-helm-muted hover:text-helm-fg transition-colors">
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+        <ProfileDropdown
+          name={user?.name || "CEO"}
+          picture={user?.picture}
+          planLabel={helmPlanLabel(company?.plan, isPro, billingEnforced)}
+          showBilling={canManageBilling}
+          onBilling={() => { navigate("/app/billing"); onNavigate?.(); }}
+          onSettings={() => { navigate("/app/settings"); onNavigate?.(); }}
+          onLogout={logout}
+        />
       </div>
     </div>
+  );
+}
+
+function QuickNavPalette() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { data: deptData } = useFetch("/departments");
+  const [open, setOpen] = useState(false);
+
+  const actions = useMemo(() => {
+    const navActions = NAV.filter((item) => navItemVisible(item, user)).map((item) => {
+      const Icon = item.icon;
+      return {
+        id: item.id,
+        label: item.label,
+        to: item.to,
+        icon: <Icon className="w-4 h-4" />,
+      };
+    });
+    const deptActions = (deptData?.departments || [])
+      .filter((d) => departmentNavVisible(d))
+      .map((dept) => {
+        const Icon = departmentIcon(dept.icon);
+        return {
+          id: `dept-${dept.type}`,
+          label: dept.name,
+          to: departmentNavTo(dept.type),
+          description: "Department",
+          icon: <Icon className="w-4 h-4" />,
+        };
+      });
+    return [...navActions, ...deptActions];
+  }, [user, deptData]);
+
+  return (
+    <ActionSearchBar
+      open={open}
+      onOpenChange={setOpen}
+      actions={actions}
+      onSelect={(action) => {
+        if (action?.to) navigate(action.to);
+      }}
+    />
   );
 }
 
@@ -303,6 +322,8 @@ export default function AppLayout() {
           </div>
         </div>
       )}
+
+      <QuickNavPalette />
 
       <main className="lg:pl-[260px] relative z-10">
         <div className="px-5 md:px-10 py-8 md:py-12 max-w-[1500px]">
