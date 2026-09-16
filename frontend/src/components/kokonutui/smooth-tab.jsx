@@ -106,7 +106,7 @@ export default function SmoothTab({
           aria-hidden
           className={cn(
             "pointer-events-none absolute z-[1] bg-helm-gold",
-            resolvedVariant === "pill" ? "rounded-lg" : "rounded-full",
+            resolvedVariant === "pill" ? "rounded-full" : "rounded-full",
             indicatorClassName,
           )}
           initial={false}

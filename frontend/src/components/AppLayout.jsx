@@ -148,7 +148,12 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-        <SmoothTab orientation="vertical" variant="pill" activeId={activeMainId} className="gap-0.5">
+        <SmoothTab
+          orientation="vertical"
+          variant="pill"
+          activeId={activeDeptId ? `dept-${activeDeptId}` : activeMainId}
+          className="gap-1"
+        >
           {mainNav.map((item) => (
             <SmoothTabItem key={item.id} id={item.id}>
               <NavLink
@@ -158,59 +163,51 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                 data-testid={`sidebar-nav-${item.id}`}
                 className={({ isActive }) =>
                   cn(
-                    "group relative inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-sm transition-colors duration-200",
+                    "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
                     isActive
                       ? "text-helm-navy"
-                      : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
+                      : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.04]"
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
+                    <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
                     <span>{item.label}</span>
                   </>
                 )}
               </NavLink>
             </SmoothTabItem>
           ))}
+          {deptNav.map((dept) => {
+            const Icon = departmentIcon(dept.icon);
+            const to = departmentNavTo(dept.type);
+            return (
+              <SmoothTabItem key={dept.type} id={`dept-${dept.type}`}>
+                <NavLink
+                  to={to}
+                  onClick={onNavigate}
+                  data-testid={`sidebar-dept-${dept.type}`}
+                  className={({ isActive }) =>
+                    cn(
+                      "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
+                      isActive
+                        ? "text-helm-navy"
+                        : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.04]"
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
+                      <span>{dept.name}</span>
+                    </>
+                  )}
+                </NavLink>
+              </SmoothTabItem>
+            );
+          })}
         </SmoothTab>
-
-        {deptNav.length > 0 && (
-          <div className="pt-3 mt-2 border-t border-helm-line">
-            <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
-            <SmoothTab orientation="vertical" variant="pill" activeId={activeDeptId} className="gap-0.5">
-              {deptNav.map((dept) => {
-                const Icon = departmentIcon(dept.icon);
-                const to = departmentNavTo(dept.type);
-                return (
-                  <SmoothTabItem key={dept.type} id={dept.type}>
-                    <NavLink
-                      to={to}
-                      onClick={onNavigate}
-                      data-testid={`sidebar-dept-${dept.type}`}
-                      className={({ isActive }) =>
-                        cn(
-                          "group relative inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-sm transition-colors duration-200",
-                          isActive
-                            ? "text-helm-navy"
-                            : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
-                          <span>{dept.name}</span>
-                        </>
-                      )}
-                    </NavLink>
-                  </SmoothTabItem>
-                );
-              })}
-            </SmoothTab>
-          </div>
-        )}
       </nav>
 
       <div className="px-3 pb-4">
