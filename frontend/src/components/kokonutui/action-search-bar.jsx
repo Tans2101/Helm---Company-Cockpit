@@ -43,7 +43,17 @@ export default function ActionSearchBar({
   const filtered = useMemo(() => {
     if (!debouncedQuery.trim()) return actions;
     const q = debouncedQuery.toLowerCase().trim();
-    return actions.filter((a) => a.label.toLowerCase().includes(q));
+    return actions.filter((a) => {
+      const haystack = [
+        a.label,
+        a.description,
+        ...(Array.isArray(a.keywords) ? a.keywords : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
   }, [actions, debouncedQuery]);
 
   useEffect(() => {

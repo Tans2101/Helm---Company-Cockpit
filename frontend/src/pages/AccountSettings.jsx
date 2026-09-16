@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck, Plug } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 export default function AccountSettings() {
   const { user, setUser, logout } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const location = useLocation();
   const { data: company } = useFetch("/company");
   const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
@@ -29,6 +30,15 @@ export default function AccountSettings() {
     return d.toISOString().slice(0, 10);
   });
   const [actEnd, setActEnd] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    const hash = location.hash?.replace(/^#/, "");
+    if (!hash) return undefined;
+    const t = window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [location.hash, location.pathname]);
 
   const emailConfirm = (user?.email || "").trim().toLowerCase();
   const workspaceConfirm = (company?.name || "").trim();
@@ -134,7 +144,7 @@ export default function AccountSettings() {
         subtitle="Appearance, departments, integrations, referrals, data export, and account controls."
       />
 
-      <GlassCard className="p-5 mb-4 fade-up">
+      <GlassCard id="settings-security" className="p-5 mb-4 fade-up scroll-mt-24">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <ShieldCheck className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
@@ -150,7 +160,7 @@ export default function AccountSettings() {
         </Link>
       </GlassCard>
 
-      <GlassCard className="p-5 mb-4 fade-up" data-testid="appearance-settings">
+      <GlassCard id="appearance" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="appearance-settings">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Sun className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
@@ -216,7 +226,7 @@ export default function AccountSettings() {
       {isOwner && <InviteCeoCard />}
       <DepartmentsSettings />
 
-      <GlassCard className="p-5 mb-4 fade-up" data-testid="settings-integrations-card">
+      <GlassCard id="integrations" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="settings-integrations-card">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Plug className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Integrations</span>
@@ -233,7 +243,7 @@ export default function AccountSettings() {
         </Link>
       </GlassCard>
 
-      <GlassCard className="p-5 mb-4 fade-up">
+      <GlassCard id="export-data" className="p-5 mb-4 fade-up scroll-mt-24">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Download className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export data</span>
@@ -261,7 +271,7 @@ export default function AccountSettings() {
       </GlassCard>
 
       {canExportActivity && (
-        <GlassCard className="p-5 mb-4 fade-up" data-testid="export-activity-card">
+        <GlassCard id="export-activity" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="export-activity-card">
           <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
             <ScrollText className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export activity log</span>
@@ -290,7 +300,7 @@ export default function AccountSettings() {
         </GlassCard>
       )}
 
-      <GlassCard className="p-5 mb-4 fade-up border-helm-status-negative/35">
+      <GlassCard id="delete-account" className="p-5 mb-4 fade-up scroll-mt-24 border-helm-status-negative/35">
         <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
           <Trash2 className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete account</span>
@@ -323,7 +333,7 @@ export default function AccountSettings() {
       </GlassCard>
 
       {isOwner && (
-        <GlassCard className="p-5 fade-up border-helm-status-negative/35">
+        <GlassCard id="delete-workspace" className="p-5 fade-up scroll-mt-24 border-helm-status-negative/35">
           <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
             <AlertTriangle className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete workspace</span>

@@ -4,6 +4,8 @@ import {
   LayoutDashboard, GitBranch, Activity, KanbanSquare,
   FileText, Calendar, Contact, MessageSquareText,
   Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet, Search,
+  HelpCircle, Shield, Scale, Settings, Plug, Download, ScrollText,
+  Trash2, Building2, CreditCard, ShieldCheck, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -240,6 +242,9 @@ function QuickNavPalette({ open, onOpenChange }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: deptData } = useFetch("/departments");
+  const isOwner = user?.role === "owner" || user?.pack === "owner";
+  const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
+  const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
 
   const actions = useMemo(() => {
     const navActions = NAV.filter((item) => navItemVisible(item, user)).map((item) => {
@@ -248,6 +253,7 @@ function QuickNavPalette({ open, onOpenChange }) {
         id: item.id,
         label: item.label,
         to: item.to,
+        description: "App",
         icon: <Icon className="w-4 h-4" />,
       };
     });
@@ -260,11 +266,146 @@ function QuickNavPalette({ open, onOpenChange }) {
           label: dept.name,
           to: departmentNavTo(dept.type),
           description: "Department",
+          keywords: ["department", dept.type],
           icon: <Icon className="w-4 h-4" />,
         };
       });
-    return [...navActions, ...deptActions];
-  }, [user, deptData]);
+
+    const settingsActions = [
+      {
+        id: "settings",
+        label: "Settings",
+        to: "/app/settings",
+        description: "Settings",
+        keywords: ["account", "preferences"],
+        icon: <Settings className="w-4 h-4" />,
+      },
+      {
+        id: "settings-appearance",
+        label: "Appearance",
+        to: "/app/settings#appearance",
+        description: "Settings",
+        keywords: ["theme", "dark", "light", "system"],
+        icon: <Sun className="w-4 h-4" />,
+      },
+      {
+        id: "settings-security",
+        label: "Security overview",
+        to: "/app/settings#settings-security",
+        description: "Settings",
+        keywords: ["encryption", "privacy", "protect"],
+        icon: <ShieldCheck className="w-4 h-4" />,
+      },
+      {
+        id: "settings-departments",
+        label: "Departments",
+        to: "/app/settings#manage-departments",
+        description: "Settings",
+        keywords: ["team", "lanes", "manage departments"],
+        icon: <Building2 className="w-4 h-4" />,
+      },
+      {
+        id: "settings-integrations",
+        label: "Integrations",
+        to: "/app/integrations",
+        description: "Settings",
+        keywords: ["google", "quickbooks", "calendar", "connect", "oauth"],
+        icon: <Plug className="w-4 h-4" />,
+      },
+      {
+        id: "settings-integrations-card",
+        label: "Integrations (Settings)",
+        to: "/app/settings#integrations",
+        description: "Settings",
+        keywords: ["google", "quickbooks", "connect"],
+        icon: <Plug className="w-4 h-4" />,
+      },
+      {
+        id: "settings-export",
+        label: "Export data",
+        to: "/app/settings#export-data",
+        description: "Settings",
+        keywords: ["download", "backup", "json"],
+        icon: <Download className="w-4 h-4" />,
+      },
+      {
+        id: "settings-delete-account",
+        label: "Delete account",
+        to: "/app/settings#delete-account",
+        description: "Settings",
+        keywords: ["remove", "close account"],
+        icon: <Trash2 className="w-4 h-4" />,
+      },
+    ];
+
+    if (canExportActivity) {
+      settingsActions.push({
+        id: "settings-activity",
+        label: "Export activity log",
+        to: "/app/settings#export-activity",
+        description: "Settings",
+        keywords: ["audit", "csv", "activity"],
+        icon: <ScrollText className="w-4 h-4" />,
+      });
+    }
+    if (isOwner) {
+      settingsActions.push({
+        id: "settings-delete-workspace",
+        label: "Delete workspace",
+        to: "/app/settings#delete-workspace",
+        description: "Settings",
+        keywords: ["company", "remove workspace"],
+        icon: <AlertTriangle className="w-4 h-4" />,
+      });
+    }
+    if (canManageBilling) {
+      settingsActions.push({
+        id: "billing",
+        label: "Billing",
+        to: "/app/billing",
+        description: "Account",
+        keywords: ["plan", "subscription", "payment"],
+        icon: <CreditCard className="w-4 h-4" />,
+      });
+    }
+
+    const siteActions = [
+      {
+        id: "help",
+        label: "Help",
+        to: "/help",
+        description: "Site",
+        keywords: ["docs", "how to", "guide", "faq"],
+        icon: <HelpCircle className="w-4 h-4" />,
+      },
+      {
+        id: "security-page",
+        label: "Security",
+        to: "/security",
+        description: "Site",
+        keywords: ["trust", "encryption", "privacy"],
+        icon: <Shield className="w-4 h-4" />,
+      },
+      {
+        id: "terms",
+        label: "Terms of Service",
+        to: "/terms",
+        description: "Site",
+        keywords: ["tos", "legal", "terms"],
+        icon: <FileText className="w-4 h-4" />,
+      },
+      {
+        id: "privacy",
+        label: "Privacy Policy",
+        to: "/privacy",
+        description: "Site",
+        keywords: ["legal", "data", "gdpr"],
+        icon: <Scale className="w-4 h-4" />,
+      },
+    ];
+
+    return [...navActions, ...deptActions, ...settingsActions, ...siteActions];
+  }, [user, deptData, isOwner, canManageBilling, canExportActivity]);
 
   return (
     <ActionSearchBar
@@ -272,7 +413,15 @@ function QuickNavPalette({ open, onOpenChange }) {
       onOpenChange={onOpenChange}
       actions={actions}
       onSelect={(action) => {
-        if (action?.to) navigate(action.to);
+        if (!action?.to) return;
+        navigate(action.to);
+        // Re-trigger hash scroll when already on settings with a new hash.
+        if (action.to.includes("#")) {
+          const hash = action.to.split("#")[1];
+          window.setTimeout(() => {
+            document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 120);
+        }
       }}
     />
   );
