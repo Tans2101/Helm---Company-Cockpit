@@ -4,7 +4,7 @@
  * @website: https://kokonutui.com
  */
 
-import { CreditCard, LogOut, Settings, ChevronUp } from "lucide-react";
+import { CreditCard, LogOut, Plug, Settings, ChevronUp } from "lucide-react";
 import * as React from "react";
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ export default function ProfileDropdown({
   planLabel,
   showBilling = false,
   onBilling,
+  onIntegrations,
   onSettings,
   onLogout,
   className,
@@ -76,6 +77,14 @@ export default function ProfileDropdown({
               Billing
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            data-testid="sidebar-integrations-link"
+            className="cursor-pointer gap-2 rounded-sm px-2 py-2 text-sm text-helm-fg focus:bg-helm-fg/5 focus:text-helm-fg"
+            onSelect={() => onIntegrations?.()}
+          >
+            <Plug className="h-4 w-4 text-helm-muted" />
+            Integrations
+          </DropdownMenuItem>
           <DropdownMenuItem
             data-testid="settings-link"
             className="cursor-pointer gap-2 rounded-sm px-2 py-2 text-sm text-helm-fg focus:bg-helm-fg/5 focus:text-helm-fg"

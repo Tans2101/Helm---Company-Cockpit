@@ -468,7 +468,7 @@ export const HOW_TO_USE_STEPS = [
   {
     title: "Connect an integration (owners and admins)",
     body:
-      "If you manage the workspace, open Integrations (/app/integrations) and connect Google Calendar, QuickBooks, or another available tool when it helps. Skip this if you are an invited teammate without that access, or if your company prefers manual entry for now.",
+      "If you manage the workspace, open Settings and go to Integrations, then connect Google Calendar, QuickBooks, or another available tool when it helps. Skip this if you are an invited teammate without that access, or if your company prefers manual entry for now.",
     audience: "owner",
   },
   {
@@ -530,5 +530,5 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Reports", path: "/app/reports", tip: "Written context and shareable CEO Pack." },
   { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more." },
   { nav: "Team & Access", path: "/app/members", tip: "Invite people and choose what each person can open." },
-  { nav: "Integrations", path: "/app/integrations", tip: "Optional connections such as Google Calendar or QuickBooks." },
+  { nav: "Integrations", path: "/app/integrations", tip: "Now under Settings → Integrations. Optional connections such as Google Calendar or QuickBooks." },
 ];

@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {
   LayoutDashboard, GitBranch, Activity, KanbanSquare,
-  FileText, Calendar, Contact, MessageSquareText, Plug,
+  FileText, Calendar, Contact, MessageSquareText,
   Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet, Search,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -33,7 +33,6 @@ const NAV = [
   { to: "/app/people", label: "People", icon: Contact, id: "people" },
   { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
   { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:invite" },
-  { to: "/app/integrations", label: "Integrations", icon: Plug, id: "integrations" },
 ];
 
 function navItemVisible(item, user) {
@@ -228,6 +227,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
           planLabel={helmPlanLabel(company?.plan, isPro, billingEnforced)}
           showBilling={canManageBilling}
           onBilling={() => { navigate("/app/billing"); onNavigate?.(); }}
+          onIntegrations={() => { navigate("/app/integrations"); onNavigate?.(); }}
           onSettings={() => { navigate("/app/settings"); onNavigate?.(); }}
           onLogout={logout}
         />

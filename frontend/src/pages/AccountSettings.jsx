@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck } from "lucide-react";
+import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck, Plug } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -131,7 +131,7 @@ export default function AccountSettings() {
     <div className="max-w-2xl">
       <PageHeader
         title="Account settings"
-        subtitle="Appearance, departments, referrals, data export, and account controls."
+        subtitle="Appearance, departments, integrations, referrals, data export, and account controls."
       />
 
       <GlassCard className="p-5 mb-4 fade-up">
@@ -215,6 +215,23 @@ export default function AccountSettings() {
 
       {isOwner && <InviteCeoCard />}
       <DepartmentsSettings />
+
+      <GlassCard className="p-5 mb-4 fade-up" data-testid="settings-integrations-card">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
+          <Plug className="w-4 h-4" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Integrations</span>
+        </div>
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
+          Connect Google Calendar, QuickBooks, and other tools Helm can pull data from automatically.
+        </p>
+        <Link
+          to="/app/integrations"
+          data-testid="settings-integrations-link"
+          className="inline-flex items-center text-sm text-helm-gold hover:text-helm-gold-hover"
+        >
+          Manage integrations →
+        </Link>
+      </GlassCard>
 
       <GlassCard className="p-5 mb-4 fade-up">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
