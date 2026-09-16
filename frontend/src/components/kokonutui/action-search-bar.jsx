@@ -102,7 +102,7 @@ export default function ActionSearchBar({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100]" data-testid="action-search-bar">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" data-testid="action-search-bar">
           <motion.div
             className="absolute inset-0 bg-helm-ink/60"
             initial={reduceMotion ? false : { opacity: 0 }}
@@ -115,10 +115,10 @@ export default function ActionSearchBar({
           <motion.div
             role="dialog"
             aria-label="Quick navigation"
-            className="absolute left-1/2 top-[18%] w-[min(100%-2rem,28rem)] -translate-x-1/2 rounded-lg border border-helm-line bg-helm-card shadow-2xl overflow-hidden"
-            initial={reduceMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
+            className="relative z-[1] w-[min(100%,28rem)] rounded-lg border border-helm-line bg-helm-card shadow-2xl overflow-hidden"
+            initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className="relative border-b border-helm-line">
