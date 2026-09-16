@@ -145,6 +145,14 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
 
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
 
+  const navBtn = ({ isActive }) =>
+    cn(
+      "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
+      isActive
+        ? "text-helm-navy border border-transparent"
+        : "text-helm-muted border border-helm-line bg-helm-fg/[0.03] hover:text-helm-fg hover:bg-helm-fg/[0.06] hover:border-helm-fg/15",
+    );
+
   return (
     <div className="flex flex-col h-full">
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
@@ -154,11 +162,11 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
           type="button"
           data-testid="nav-search-btn"
           onClick={() => onOpenSearch?.()}
-          className="inline-flex w-full max-w-full items-center gap-2.5 rounded-full px-4 py-2.5 text-sm text-helm-muted transition-colors hover:text-helm-fg hover:bg-helm-fg/[0.04]"
+          className="inline-flex w-full max-w-full items-center gap-2.5 rounded-full border border-helm-line bg-helm-fg/[0.03] px-4 py-2.5 text-sm text-helm-muted transition-colors hover:text-helm-fg hover:bg-helm-fg/[0.06] hover:border-helm-fg/15"
         >
           <Search className="w-[18px] h-[18px] shrink-0" />
           <span className="flex-1 text-left truncate">Search</span>
-          <kbd className="hidden sm:inline font-mono text-[10px] text-helm-muted border border-helm-line rounded px-1.5 py-0.5 shrink-0">
+          <kbd className="hidden sm:inline font-mono text-[10px] text-helm-muted border border-helm-line rounded-full px-1.5 py-0.5 shrink-0">
             {isMac ? "⌘K" : "Ctrl+K"}
           </kbd>
         </button>
@@ -178,14 +186,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
                 end={item.end}
                 onClick={onNavigate}
                 data-testid={`sidebar-nav-${item.id}`}
-                className={({ isActive }) =>
-                  cn(
-                    "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
-                    isActive
-                      ? "text-helm-navy"
-                      : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.04]"
-                  )
-                }
+                className={navBtn}
               >
                 {({ isActive }) => (
                   <>
@@ -205,14 +206,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
                   to={to}
                   onClick={onNavigate}
                   data-testid={`sidebar-dept-${dept.type}`}
-                  className={({ isActive }) =>
-                    cn(
-                      "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
-                      isActive
-                        ? "text-helm-navy"
-                        : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.04]"
-                    )
-                  }
+                  className={navBtn}
                 >
                   {({ isActive }) => (
                     <>
@@ -311,12 +305,12 @@ export default function AppLayout() {
   return (
     <div className="app-shell min-h-screen">
       {pastDue && (
-        <div className="lg:pl-[240px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
+        <div className="lg:pl-[220px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
           Payment past due: <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
         </div>
       )}
       {/* Desktop nav rail — same surface as the page, no enclosed panel */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[240px] flex-col z-40 px-2">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[220px] flex-col z-40 px-2">
         <SidebarContent billingEnforced={billingEnforced} onOpenSearch={openSearch} />
       </aside>
 
@@ -362,8 +356,8 @@ export default function AppLayout() {
 
       <QuickNavPalette open={searchOpen} onOpenChange={setSearchOpen} />
 
-      <main className="lg:pl-[240px] relative z-10">
-        <div className="px-5 md:px-10 py-8 md:py-12 max-w-[1500px]">
+      <main className="lg:pl-[220px] relative z-10">
+        <div className="w-full px-5 md:px-8 lg:px-10 py-8 md:py-10">
           {onBilling ? (
             <Outlet />
           ) : (
