@@ -29,12 +29,12 @@ export default function ProfileDropdown({
   const initial = name?.[0] || "C";
 
   return (
-    <div className={cn("relative w-full", className)} {...props}>
+    <div className={cn("relative w-fit max-w-full", className)} {...props}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="w-full flex items-center gap-3 rounded-md border border-helm-line bg-helm-card px-2 py-2 text-left transition-colors hover:border-helm-gold/35 focus:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold/40"
+            className="inline-flex max-w-full items-center gap-2.5 rounded-full px-3 py-2 text-left transition-colors hover:bg-helm-fg/[0.04] focus:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold/40"
             aria-label="Account menu"
           >
             {picture ? (
@@ -48,7 +48,7 @@ export default function ProfileDropdown({
                 {initial}
               </div>
             )}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <p className="text-xs text-helm-fg truncate">{name}</p>
               {planLabel ? (
                 <p className="text-[10px] text-helm-muted truncate font-mono uppercase tracking-wide">

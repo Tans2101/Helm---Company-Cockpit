@@ -94,20 +94,20 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
 
   if (!active) return null;
   return (
-    <div className="px-3 pt-4 relative">
+    <div className="relative px-1 pt-2">
       <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 rounded-md border border-helm-line bg-helm-card px-3 py-2 transition-colors hover:border-helm-gold/35">
-        <div className="w-6 h-6 rounded bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
+        className="inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-left transition-colors hover:bg-helm-fg/[0.04]">
+        <div className="w-6 h-6 rounded-full bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
           {active.name?.[0]?.toUpperCase() || "K"}
         </div>
-        <div className="flex-1 min-w-0 text-left">
+        <div className="min-w-0 text-left">
           <p className="text-xs text-helm-fg truncate">{active.name}</p>
           <p className="text-[10px] text-helm-muted uppercase font-mono tracking-wide">{active.role} · {helmWorkspacePlanLabel(active.plan, billingEnforced)}</p>
         </div>
-        <ChevronDown className={cn("w-4 h-4 text-helm-muted transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 text-helm-muted shrink-0 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute left-3 right-3 mt-1 z-50 rounded-md border border-helm-line bg-helm-card shadow-xl overflow-hidden">
+        <div className="absolute left-1 right-1 mt-1 z-50 rounded-xl border border-helm-line bg-helm-card shadow-xl overflow-hidden">
           {list.map((w) => (
             <button key={w.workspace_id} onClick={() => switchWs(w.workspace_id)}
               data-testid={`ws-option-${w.workspace_id}`}
@@ -147,12 +147,12 @@ function SidebarContent({ onNavigate, billingEnforced }) {
     <div className="flex flex-col h-full">
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
-      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+      <nav className="flex-1 overflow-y-auto px-1 py-4" aria-label="App">
         <SmoothTab
           orientation="vertical"
           variant="pill"
           activeId={activeDeptId ? `dept-${activeDeptId}` : activeMainId}
-          className="gap-1"
+          className="gap-2"
         >
           {mainNav.map((item) => (
             <SmoothTabItem key={item.id} id={item.id}>
@@ -210,7 +210,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
         </SmoothTab>
       </nav>
 
-      <div className="px-3 pb-4">
+      <div className="px-1 pb-4">
         <ProfileDropdown
           name={user?.name || "CEO"}
           picture={user?.picture}
@@ -292,12 +292,12 @@ export default function AppLayout() {
   return (
     <div className="app-shell min-h-screen">
       {pastDue && (
-        <div className="lg:pl-[260px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
+        <div className="lg:pl-[240px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
           Payment past due: <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
         </div>
       )}
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] flex-col bg-helm-bg border-r border-helm-line z-40">
+      {/* Desktop nav rail — same surface as the page, no enclosed panel */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[240px] flex-col z-40 px-2">
         <SidebarContent billingEnforced={billingEnforced} />
       </aside>
 
@@ -317,7 +317,7 @@ export default function AppLayout() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-helm-ink/70" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[280px] bg-helm-bg border-r border-helm-line">
+          <div className="absolute inset-y-0 left-0 w-[280px] bg-helm-bg px-2 pt-10">
             <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 text-helm-muted z-10">
               <X className="w-5 h-5" />
             </button>
@@ -328,7 +328,7 @@ export default function AppLayout() {
 
       <QuickNavPalette />
 
-      <main className="lg:pl-[260px] relative z-10">
+      <main className="lg:pl-[240px] relative z-10">
         <div className="px-5 md:px-10 py-8 md:py-12 max-w-[1500px]">
           {onBilling ? (
             <Outlet />
