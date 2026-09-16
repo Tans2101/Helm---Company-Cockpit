@@ -98,7 +98,7 @@ export default function SmoothTab({
         ref={containerRef}
         className={cn(
           "relative",
-          orientation === "vertical" && "flex flex-col items-start",
+          orientation === "vertical" && "flex w-full flex-col items-stretch",
           className,
         )}
       >
@@ -129,7 +129,7 @@ export function SmoothTabItem({ id, className, children, as: Comp = "div", ...pr
   return (
     <Comp
       ref={(el) => ctx?.register?.(id, el)}
-      className={cn("relative z-[2] inline-flex w-fit", className)}
+      className={cn("relative z-[2] flex w-full", className)}
       {...props}
     >
       {children}

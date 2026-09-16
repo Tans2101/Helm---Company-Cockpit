@@ -147,7 +147,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
 
   const navBtn = ({ isActive }) =>
     cn(
-      "group relative inline-flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
+      "group relative flex w-full items-center gap-2.5 rounded-full px-4 py-2.5 text-sm transition-colors duration-200",
       isActive
         ? "text-helm-navy border border-transparent"
         : "text-helm-muted border border-helm-line bg-helm-fg/[0.03] hover:text-helm-fg hover:bg-helm-fg/[0.06] hover:border-helm-fg/15",
