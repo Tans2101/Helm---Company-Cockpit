@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -9,7 +9,6 @@ import { PageHeader, GlassCard } from "@/components/kit";
 import DepartmentsSettings from "@/components/DepartmentsSettings";
 import InviteCeoCard from "@/components/InviteCeoCard";
 import { useTheme } from "@/context/ThemeContext";
-import SmoothTab from "@/components/kokonutui/smooth-tab";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { cn } from "@/lib/utils";
 
@@ -128,100 +127,96 @@ export default function AccountSettings() {
     }
   };
 
-  const profileContent = (
-    <GlassCard className="p-5 fade-up">
-      <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
-        <ShieldCheck className="w-4 h-4" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
-      </div>
-      <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-        How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.
-      </p>
-      <Link
-        to="/security"
-        className="inline-flex items-center text-sm text-helm-gold hover:text-helm-gold-hover"
-      >
-        Read how Helm protects company data →
-      </Link>
-    </GlassCard>
-  );
+  return (
+    <div className="max-w-2xl">
+      <PageHeader
+        title="Account settings"
+        subtitle="Appearance, departments, referrals, data export, and account controls."
+      />
 
-  const appearanceContent = (
-    <GlassCard className="p-5 fade-up" data-testid="appearance-settings">
-      <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
-        <Sun className="w-4 h-4" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
-      </div>
-      <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-        Choose how the Helm cockpit looks. Light mode is the default for reading dense data.
-        Your choice is saved to your account and follows you across devices.
-      </p>
-      <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Color theme">
-        <SwitchButton
-          mode={theme === "system" ? resolvedTheme : theme}
-          resolvedMode={resolvedTheme}
-          data-testid={
-            (theme === "system" ? resolvedTheme : theme) === "dark" ? "theme-dark" : "theme-light"
-          }
-          onToggle={() => {
-            const current = theme === "system" ? resolvedTheme : theme;
-            applyTheme(current === "dark" ? "light" : "dark");
-          }}
-        />
-        {/* Hidden counterparts so both light and dark testids remain selectable */}
-        {(theme === "system" ? resolvedTheme : theme) === "dark" ? (
-          <button
-            type="button"
-            data-testid="theme-light"
-            className="sr-only"
-            onClick={() => applyTheme("light")}
-          >
-            Light
-          </button>
-        ) : (
-          <button
-            type="button"
-            data-testid="theme-dark"
-            className="sr-only"
-            onClick={() => applyTheme("dark")}
-          >
-            Dark
-          </button>
-        )}
-        <button
-          type="button"
-          data-testid="theme-system"
-          aria-pressed={theme === "system"}
-          onClick={() => applyTheme("system")}
-          className={cn(
-            "inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm transition-colors",
-            theme === "system"
-              ? "border-helm-gold/35 bg-helm-gold/12 text-helm-fg"
-              : "border-helm-line bg-helm-card text-helm-muted hover:text-helm-fg hover:border-helm-gold/35",
-          )}
-        >
-          <Monitor className={cn("h-4 w-4", theme === "system" ? "text-helm-gold" : "text-helm-muted")} />
-          System
-        </button>
-      </div>
-      {theme === "system" && (
-        <p className="mt-3 text-xs text-helm-muted">
-          This device is currently using {resolvedTheme} mode.
+      <GlassCard className="p-5 mb-4 fade-up">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
+          <ShieldCheck className="w-4 h-4" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
+        </div>
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
+          How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.
         </p>
-      )}
-    </GlassCard>
-  );
+        <Link
+          to="/security"
+          className="inline-flex items-center text-sm text-helm-gold hover:text-helm-gold-hover"
+        >
+          Read how Helm protects company data →
+        </Link>
+      </GlassCard>
 
-  const teamContent = (
-    <div className="space-y-4">
+      <GlassCard className="p-5 mb-4 fade-up" data-testid="appearance-settings">
+        <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
+          <Sun className="w-4 h-4" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
+        </div>
+        <p className="text-sm text-helm-muted mb-4 leading-relaxed">
+          Choose how the Helm cockpit looks. Light mode is the default for reading dense data.
+          Your choice is saved to your account and follows you across devices.
+        </p>
+        <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Color theme">
+          <SwitchButton
+            mode={theme === "system" ? resolvedTheme : theme}
+            resolvedMode={resolvedTheme}
+            data-testid={
+              (theme === "system" ? resolvedTheme : theme) === "dark" ? "theme-dark" : "theme-light"
+            }
+            onToggle={() => {
+              const current = theme === "system" ? resolvedTheme : theme;
+              applyTheme(current === "dark" ? "light" : "dark");
+            }}
+          />
+          {(theme === "system" ? resolvedTheme : theme) === "dark" ? (
+            <button
+              type="button"
+              data-testid="theme-light"
+              className="sr-only"
+              onClick={() => applyTheme("light")}
+            >
+              Light
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="theme-dark"
+              className="sr-only"
+              onClick={() => applyTheme("dark")}
+            >
+              Dark
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="theme-system"
+            aria-pressed={theme === "system"}
+            onClick={() => applyTheme("system")}
+            className={cn(
+              "inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm transition-colors",
+              theme === "system"
+                ? "border-helm-gold/35 bg-helm-gold/12 text-helm-fg"
+                : "border-helm-line bg-helm-card text-helm-muted hover:text-helm-fg hover:border-helm-gold/35",
+            )}
+          >
+            <Monitor className={cn("h-4 w-4", theme === "system" ? "text-helm-gold" : "text-helm-muted")} />
+            System
+          </button>
+        </div>
+        {theme === "system" && (
+          <p className="mt-3 text-xs text-helm-muted">
+            This device is currently using {resolvedTheme} mode.
+          </p>
+        )}
+      </GlassCard>
+
       {isOwner && <InviteCeoCard />}
       <DepartmentsSettings />
-    </div>
-  );
 
-  const dataContent = (
-    <div className="space-y-4">
-      <GlassCard className="p-5 fade-up">
+      <GlassCard className="p-5 mb-4 fade-up">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
           <Download className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export data</span>
@@ -249,7 +244,7 @@ export default function AccountSettings() {
       </GlassCard>
 
       {canExportActivity && (
-        <GlassCard className="p-5 fade-up" data-testid="export-activity-card">
+        <GlassCard className="p-5 mb-4 fade-up" data-testid="export-activity-card">
           <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
             <ScrollText className="w-4 h-4" />
             <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Export activity log</span>
@@ -278,7 +273,7 @@ export default function AccountSettings() {
         </GlassCard>
       )}
 
-      <GlassCard className="p-5 fade-up border-helm-status-negative/35">
+      <GlassCard className="p-5 mb-4 fade-up border-helm-status-negative/35">
         <div className="flex items-center gap-1.5 mb-2 text-helm-status-negative">
           <Trash2 className="w-4 h-4" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Delete account</span>
@@ -343,54 +338,6 @@ export default function AccountSettings() {
           </button>
         </GlassCard>
       )}
-    </div>
-  );
-
-  const tabs = useMemo(() => {
-    const list = [
-      {
-        id: "profile",
-        title: "Profile & Security",
-        content: (
-          <div className="space-y-4">
-            {profileContent}
-            {!isOwner && <DepartmentsSettings />}
-          </div>
-        ),
-      },
-      { id: "appearance", title: "Appearance", content: appearanceContent },
-    ];
-    if (isOwner) {
-      list.push({ id: "team", title: "Team", content: teamContent });
-    }
-    list.push({ id: "data", title: "Data & Privacy", content: dataContent });
-    return list;
-    // Content closures intentionally refresh with parent state (busy, confirms, theme).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isOwner,
-    theme,
-    resolvedTheme,
-    busy,
-    showAccountConfirm,
-    showWorkspaceConfirm,
-    confirmAccount,
-    confirmWorkspace,
-    actStart,
-    actEnd,
-    canExportActivity,
-    user,
-    company,
-  ]);
-
-  return (
-    <div className="max-w-2xl">
-      <PageHeader
-        title="Account settings"
-        subtitle="Appearance, departments, referrals, data export, and account controls."
-      />
-
-      <SmoothTab items={tabs} defaultTabId="profile" />
     </div>
   );
 }

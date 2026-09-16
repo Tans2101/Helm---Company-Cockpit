@@ -1,156 +1,123 @@
 /**
  * @author: @kokonutui / Helm
- * @description: Smooth Tab — sliding tab bar (KokonutUI, restyled)
+ * @description: Smooth Tab — sliding active indicator (KokonutUI, restyled)
+ * Vertical or horizontal track for nav active-state indication.
  * @website: https://kokonutui.com
  */
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const slideVariants = {
-  enter: (direction) => ({
-    x: direction > 0 ? 24 : -24,
-    opacity: 0,
-  }),
-  center: {
-    x: 0,
-    opacity: 1,
-  },
-  exit: (direction) => ({
-    x: direction < 0 ? 24 : -24,
-    opacity: 0,
-  }),
-};
+const SmoothTabContext = React.createContext(null);
 
+/**
+ * Sliding indicator track. Wrap nav items with <SmoothTabItem id="…">.
+ * @param {"vertical"|"horizontal"} orientation
+ * @param {string|null} activeId
+ * @param {"bar"|"underline"} variant — vertical bar (sidebar) or bottom underline (marketing)
+ */
 export default function SmoothTab({
-  items = [],
-  defaultTabId,
-  value,
+  orientation = "horizontal",
+  activeId = null,
+  variant,
   className,
-  onChange,
-  panelClassName,
+  indicatorClassName,
+  children,
 }) {
   const reduceMotion = useReducedMotion();
-  const initialId = value ?? defaultTabId ?? items[0]?.id;
-  const [selected, setSelected] = React.useState(initialId);
-  const [direction, setDirection] = React.useState(0);
-  const [dimensions, setDimensions] = React.useState({ width: 0, left: 0 });
-  const buttonRefs = React.useRef(new Map());
   const containerRef = React.useRef(null);
+  const itemRefs = React.useRef(new Map());
+  const [box, setBox] = React.useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    visible: false,
+  });
 
-  const activeId = value !== undefined ? value : selected;
+  const resolvedVariant = variant || (orientation === "vertical" ? "bar" : "underline");
 
-  React.useEffect(() => {
-    if (value !== undefined) setSelected(value);
-  }, [value]);
+  const register = React.useCallback((id, el) => {
+    if (el) itemRefs.current.set(id, el);
+    else itemRefs.current.delete(id);
+  }, []);
+
+  const measure = React.useCallback(() => {
+    const container = containerRef.current;
+    const el = activeId ? itemRefs.current.get(activeId) : null;
+    if (!container || !el) {
+      setBox((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      return;
+    }
+    const c = container.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    setBox({
+      top: r.top - c.top,
+      left: r.left - c.left,
+      width: r.width,
+      height: r.height,
+      visible: true,
+    });
+  }, [activeId]);
 
   React.useLayoutEffect(() => {
-    const updateDimensions = () => {
-      const selectedButton = buttonRefs.current.get(activeId);
-      const container = containerRef.current;
-      if (selectedButton && container) {
-        const rect = selectedButton.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        setDimensions({
-          width: rect.width,
-          left: rect.left - containerRect.left,
-        });
-      }
-    };
-    requestAnimationFrame(updateDimensions);
-    window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
-  }, [activeId, items]);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure, children]);
 
-  const handleTabClick = (tabId) => {
-    const currentIndex = items.findIndex((item) => item.id === activeId);
-    const newIndex = items.findIndex((item) => item.id === tabId);
-    setDirection(newIndex > currentIndex ? 1 : -1);
-    if (value === undefined) setSelected(tabId);
-    onChange?.(tabId);
-  };
-
-  const selectedItem = items.find((item) => item.id === activeId);
+  const indicatorAnimate =
+    resolvedVariant === "bar"
+      ? {
+          x: 0,
+          y: box.top + Math.max(0, (box.height - 20) / 2),
+          width: 2,
+          height: 20,
+          opacity: box.visible ? 1 : 0,
+        }
+      : {
+          x: box.left,
+          y: box.top + box.height - 2,
+          width: box.width,
+          height: 2,
+          opacity: box.visible ? 1 : 0,
+        };
 
   return (
-    <div className={cn("flex flex-col gap-4", className)}>
-      <div
-        aria-label="Settings sections"
-        className={cn(
-          "relative flex w-full max-w-full overflow-x-auto",
-          "rounded-md border border-helm-line bg-helm-card p-1",
-        )}
-        ref={containerRef}
-        role="tablist"
-      >
+    <SmoothTabContext.Provider value={{ register }}>
+      <div ref={containerRef} className={cn("relative", className)}>
         <motion.div
           aria-hidden
-          animate={{
-            width: Math.max(0, dimensions.width - 4),
-            x: dimensions.left + 2,
-            opacity: dimensions.width ? 1 : 0,
-          }}
-          className="absolute z-[1] rounded-sm bg-helm-gold/20 border border-helm-gold/35"
+          className={cn(
+            "pointer-events-none absolute z-[1] rounded-full bg-helm-gold",
+            indicatorClassName,
+          )}
           initial={false}
-          style={{ height: "calc(100% - 8px)", top: "4px" }}
+          animate={indicatorAnimate}
           transition={
             reduceMotion
               ? { duration: 0 }
-              : { type: "spring", stiffness: 400, damping: 30 }
+              : { type: "spring", stiffness: 420, damping: 32 }
           }
+          style={{ left: 0, top: 0 }}
         />
-
-        <div
-          className="relative z-[2] flex w-full gap-0.5"
-          style={{ minWidth: `${items.length * 5.5}rem` }}
-        >
-          {items.map((item) => {
-            const isSelected = activeId === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                aria-controls={`panel-${item.id}`}
-                id={`tab-${item.id}`}
-                data-testid={item.testId}
-                tabIndex={isSelected ? 0 : -1}
-                className={cn(
-                  "relative flex flex-1 items-center justify-center rounded-sm px-3 py-2",
-                  "font-mono text-[10px] uppercase tracking-[0.14em] transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold/40",
-                  isSelected ? "text-helm-fg" : "text-helm-muted hover:text-helm-fg",
-                )}
-                onClick={() => handleTabClick(item.id)}
-                ref={(el) => {
-                  if (el) buttonRefs.current.set(item.id, el);
-                  else buttonRefs.current.delete(item.id);
-                }}
-              >
-                <span className="truncate">{item.title}</span>
-              </button>
-            );
-          })}
-        </div>
+        {children}
       </div>
+    </SmoothTabContext.Provider>
+  );
+}
 
-      <div className={cn("relative min-h-[12rem]", panelClassName)} role="tabpanel" id={`panel-${activeId}`}>
-        <AnimatePresence mode="wait" custom={direction} initial={false}>
-          <motion.div
-            key={activeId}
-            custom={direction}
-            variants={reduceMotion ? undefined : slideVariants}
-            initial={reduceMotion ? false : "enter"}
-            animate="center"
-            exit={reduceMotion ? undefined : "exit"}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {selectedItem?.content ?? null}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
+/** Registers an item in the nearest SmoothTab track for indicator measurement. */
+export function SmoothTabItem({ id, className, children, as: Comp = "div", ...props }) {
+  const ctx = React.useContext(SmoothTabContext);
+  return (
+    <Comp
+      ref={(el) => ctx?.register?.(id, el)}
+      className={cn("relative z-[2]", className)}
+      {...props}
+    >
+      {children}
+    </Comp>
   );
 }

@@ -19,6 +19,7 @@ import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 import { departmentPath } from "@/lib/departmentRoutes";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
+import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -52,6 +53,11 @@ function departmentNavVisible(dept) {
 
 function departmentNavTo(type) {
   return departmentPath(type);
+}
+
+function pathMatches(to, pathname, end) {
+  if (end) return pathname === to;
+  return pathname === to || pathname.startsWith(`${to}/`);
 }
 
 function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
@@ -123,11 +129,19 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
 function SidebarContent({ onNavigate, billingEnforced }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: company } = useFetch("/company");
   const { data: deptData } = useFetch("/departments");
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
+  const mainNav = NAV.filter((item) => navItemVisible(item, user));
   const deptNav = (deptData?.departments || []).filter((d) => departmentNavVisible(d));
   const canManageBilling = (user?.perms || []).includes("billing:manage");
+
+  // Prefer a department match when on a dept route so the main track stays quiet.
+  const activeDeptId = deptNav.find((d) => pathMatches(departmentNavTo(d.type), location.pathname, false))?.type || null;
+  const activeMainId = activeDeptId
+    ? null
+    : (mainNav.find((item) => pathMatches(item.to, location.pathname, item.end))?.id || null);
 
   return (
     <div className="flex flex-col h-full">
@@ -146,63 +160,67 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV.filter((item) => navItemVisible(item, user)).map((item) => (
-          <NavLink
-            key={item.id}
-            to={item.to}
-            end={item.end}
-            onClick={onNavigate}
-            data-testid={`sidebar-nav-${item.id}`}
-            className={({ isActive }) =>
-              cn(
-                "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
-                isActive
-                  ? "bg-helm-gold/12 text-helm-fg"
-                  : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-helm-gold" />}
-                <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
-                <span className="truncate">{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
+        <SmoothTab orientation="vertical" variant="bar" activeId={activeMainId} className="space-y-0.5">
+          {mainNav.map((item) => (
+            <SmoothTabItem key={item.id} id={item.id}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                onClick={onNavigate}
+                data-testid={`sidebar-nav-${item.id}`}
+                className={({ isActive }) =>
+                  cn(
+                    "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
+                    isActive
+                      ? "bg-helm-gold/12 text-helm-fg"
+                      : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
+                    <span className="truncate">{item.label}</span>
+                  </>
+                )}
+              </NavLink>
+            </SmoothTabItem>
+          ))}
+        </SmoothTab>
 
         {deptNav.length > 0 && (
           <div className="pt-3 mt-2 border-t border-helm-line">
             <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
-            {deptNav.map((dept) => {
-              const Icon = departmentIcon(dept.icon);
-              const to = departmentNavTo(dept.type);
-              return (
-                <NavLink
-                  key={dept.type}
-                  to={to}
-                  onClick={onNavigate}
-                  data-testid={`sidebar-dept-${dept.type}`}
-                  className={({ isActive }) =>
-                    cn(
-                      "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
-                      isActive
-                        ? "bg-helm-gold/12 text-helm-fg"
-                        : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
-                    )
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-helm-gold" />}
-                      <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
-                      <span className="truncate">{dept.name}</span>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
+            <SmoothTab orientation="vertical" variant="bar" activeId={activeDeptId} className="space-y-0.5">
+              {deptNav.map((dept) => {
+                const Icon = departmentIcon(dept.icon);
+                const to = departmentNavTo(dept.type);
+                return (
+                  <SmoothTabItem key={dept.type} id={dept.type}>
+                    <NavLink
+                      to={to}
+                      onClick={onNavigate}
+                      data-testid={`sidebar-dept-${dept.type}`}
+                      className={({ isActive }) =>
+                        cn(
+                          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-200",
+                          isActive
+                            ? "bg-helm-gold/12 text-helm-fg"
+                            : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon className={cn("w-[18px] h-[18px] shrink-0", isActive ? "text-helm-gold" : "text-helm-muted group-hover:text-helm-fg")} />
+                          <span className="truncate">{dept.name}</span>
+                        </>
+                      )}
+                    </NavLink>
+                  </SmoothTabItem>
+                );
+              })}
+            </SmoothTab>
           </div>
         )}
       </nav>

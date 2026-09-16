@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Menu, X } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
 import { goToHomeHash } from "@/lib/marketingHash";
+import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
+import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", match: ["/"] },
@@ -22,8 +24,8 @@ export default function MarketingNav({ authed, onEnter, active }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const linkClass = (path) =>
-    `text-sm transition-colors ${isActive(path, active) ? "text-helm-cream font-medium" : "text-helm-slate hover:text-helm-cream"}`;
+
+  const activeId = NAV_LINKS.find((l) => isActive(l.to, active))?.to || null;
 
   const renderLink = (l, className) => {
     if (l.hash) {
@@ -54,8 +56,27 @@ export default function MarketingNav({ authed, onEnter, active }) {
         <div className="flex h-16 items-center justify-between">
           <MarketingLogo size="sm" dark />
 
-          <nav className="hidden md:flex items-center gap-6" aria-label="Main">
-            {NAV_LINKS.map((l) => renderLink(l, linkClass(l.to)))}
+          <nav className="hidden md:block" aria-label="Main">
+            <SmoothTab
+              orientation="horizontal"
+              variant="underline"
+              activeId={activeId}
+              className="flex items-center gap-6"
+            >
+              {NAV_LINKS.map((l) => (
+                <SmoothTabItem key={l.to} id={l.to} className="pb-0.5">
+                  {renderLink(
+                    l,
+                    cn(
+                      "text-sm transition-colors",
+                      isActive(l.to, active)
+                        ? "text-helm-cream font-medium"
+                        : "text-helm-slate hover:text-helm-cream",
+                    ),
+                  )}
+                </SmoothTabItem>
+              ))}
+            </SmoothTab>
           </nav>
 
           <div className="flex items-center gap-2">
