@@ -94,7 +94,7 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
 
   if (!active) return null;
   return (
-    <div className="px-3 pt-3 relative">
+    <div className="px-3 pt-4 relative">
       <button data-testid="workspace-switcher" onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 rounded-md border border-helm-line bg-helm-card px-3 py-2 transition-colors hover:border-helm-gold/35">
         <div className="w-6 h-6 rounded bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center text-[11px] text-helm-gold font-mono shrink-0">
@@ -145,18 +145,6 @@ function SidebarContent({ onNavigate, billingEnforced }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-6 border-b border-helm-line">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-            <span className="font-mono text-helm-gold text-sm font-medium">H</span>
-          </div>
-          <div>
-            <p className="text-helm-fg text-[15px] font-semibold leading-none tracking-tight">Helm</p>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-helm-muted mt-1">Company cockpit</p>
-          </div>
-        </div>
-      </div>
-
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
