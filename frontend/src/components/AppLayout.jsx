@@ -148,7 +148,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
       <WorkspaceSwitcher onNavigate={onNavigate} billingEnforced={billingEnforced} />
 
       <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-        <SmoothTab orientation="vertical" variant="pill" activeId={activeMainId}>
+        <SmoothTab orientation="vertical" variant="pill" activeId={activeMainId} className="gap-0.5">
           {mainNav.map((item) => (
             <SmoothTabItem key={item.id} id={item.id}>
               <NavLink
@@ -158,7 +158,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                 data-testid={`sidebar-nav-${item.id}`}
                 className={({ isActive }) =>
                   cn(
-                    "group relative flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-200",
+                    "group relative inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-sm transition-colors duration-200",
                     isActive
                       ? "text-helm-navy"
                       : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
@@ -168,7 +168,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                 {({ isActive }) => (
                   <>
                     <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
-                    <span className="truncate">{item.label}</span>
+                    <span>{item.label}</span>
                   </>
                 )}
               </NavLink>
@@ -179,7 +179,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
         {deptNav.length > 0 && (
           <div className="pt-3 mt-2 border-t border-helm-line">
             <p className="px-3 mb-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-helm-muted">Departments</p>
-            <SmoothTab orientation="vertical" variant="pill" activeId={activeDeptId}>
+            <SmoothTab orientation="vertical" variant="pill" activeId={activeDeptId} className="gap-0.5">
               {deptNav.map((dept) => {
                 const Icon = departmentIcon(dept.icon);
                 const to = departmentNavTo(dept.type);
@@ -191,7 +191,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                       data-testid={`sidebar-dept-${dept.type}`}
                       className={({ isActive }) =>
                         cn(
-                          "group relative flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-200",
+                          "group relative inline-flex items-center gap-2.5 rounded-lg px-4 py-2 text-sm transition-colors duration-200",
                           isActive
                             ? "text-helm-navy"
                             : "text-helm-muted hover:text-helm-fg hover:bg-helm-fg/[0.03]"
@@ -201,7 +201,7 @@ function SidebarContent({ onNavigate, billingEnforced }) {
                       {({ isActive }) => (
                         <>
                           <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-helm-navy" : "text-helm-muted group-hover:text-helm-fg")} />
-                          <span className="truncate">{dept.name}</span>
+                          <span>{dept.name}</span>
                         </>
                       )}
                     </NavLink>

@@ -94,12 +94,19 @@ export default function SmoothTab({
 
   return (
     <SmoothTabContext.Provider value={{ register }}>
-      <div ref={containerRef} className={cn("relative", className)}>
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative",
+          orientation === "vertical" && "flex flex-col items-start",
+          className,
+        )}
+      >
         <motion.div
           aria-hidden
           className={cn(
             "pointer-events-none absolute z-[1] bg-helm-gold",
-            "rounded-full",
+            resolvedVariant === "pill" ? "rounded-lg" : "rounded-full",
             indicatorClassName,
           )}
           initial={false}
@@ -123,7 +130,7 @@ export function SmoothTabItem({ id, className, children, as: Comp = "div", ...pr
   return (
     <Comp
       ref={(el) => ctx?.register?.(id, el)}
-      className={cn("relative z-[2]", className)}
+      className={cn("relative z-[2] inline-flex w-fit", className)}
       {...props}
     >
       {children}
