@@ -64,7 +64,7 @@ export default function MarketingNav({ authed, onEnter, active }) {
               className="flex items-center gap-6"
             >
               {NAV_LINKS.map((l) => (
-                <SmoothTabItem key={l.to} id={l.to} className="pb-0.5">
+                <SmoothTabItem key={l.to} id={l.to} className="w-fit shrink-0 pb-0.5">
                   {renderLink(
                     l,
                     cn(
