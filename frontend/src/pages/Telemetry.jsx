@@ -254,7 +254,22 @@ export default function Telemetry() {
 
         {funnelStages.length > 0 && (
           <GlassCard className="p-5 fade-up" data-testid="sales-funnel">
-            <SectionLabel className="mb-4">Sales Funnel</SectionLabel>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <SectionLabel className="mb-0">Sales Funnel</SectionLabel>
+              {data.funnel_is_sample && (
+                <span
+                  className="shrink-0 text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded border border-helm-status-warning/35 bg-helm-status-warning/12 text-helm-status-warning"
+                  data-testid="funnel-sample-badge"
+                >
+                  Sample data
+                </span>
+              )}
+            </div>
+            {data.funnel_is_sample && (
+              <p className="text-xs text-helm-status-warning mb-3 leading-relaxed" data-testid="funnel-sample-note">
+                This funnel is demo sample data, not your live pipeline. Add deals to replace it.
+              </p>
+            )}
             <FunnelChart
               data={funnelStages}
               color={GOLD}
@@ -274,7 +289,22 @@ export default function Telemetry() {
 
       {(data.risks?.length > 0 || data.notes || canWrite || suggestedRisks.length > 0) && (
         <GlassCard className="p-5 fade-up" data-testid="telemetry-risks">
-          <SectionLabel className="mb-4">Risk radar</SectionLabel>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <SectionLabel className="mb-0">Risk radar</SectionLabel>
+            {data.risks_is_sample && (
+              <span
+                className="shrink-0 text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded border border-helm-status-warning/35 bg-helm-status-warning/12 text-helm-status-warning"
+                data-testid="risks-sample-badge"
+              >
+                Sample data
+              </span>
+            )}
+          </div>
+          {data.risks_is_sample && (
+            <p className="text-xs text-helm-status-warning mb-3 leading-relaxed" data-testid="risks-sample-note">
+              These risk cards are demo sample data. Edit telemetry to replace them with risks you&apos;re actually watching.
+            </p>
+          )}
           {data.notes && !editing && (
             <p className="text-sm text-helm-muted mb-4 leading-relaxed border-l-2 border-helm-gold/35 pl-3">{data.notes}</p>
           )}

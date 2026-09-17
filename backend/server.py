@@ -2768,6 +2768,7 @@ def _briefing_what_to_decide(c: dict) -> list:
             "due": d.get("due") or "",
             "source": d.get("source") or "manual",
             "confidence": d.get("confidence"),
+            "confidence_unavailable": bool(d.get("confidence_unavailable")),
         })
     for s in c.get("decision_suggestions") or []:
         if s.get("status") != "suggested":
@@ -2781,6 +2782,7 @@ def _briefing_what_to_decide(c: dict) -> list:
             "due": s.get("due") or "",
             "source": "ai_suggested",
             "confidence": s.get("confidence"),
+            "confidence_unavailable": bool(s.get("confidence_unavailable")),
         })
 
     def sort_key(x):
@@ -3211,6 +3213,7 @@ async def approve_decision_suggestion(suggestion_id: str, principal=Depends(requ
         "description": sug.get("description") or "",
         "recommendation": sug.get("recommendation") or "",
         "confidence": sug.get("confidence"),
+        "confidence_unavailable": bool(sug.get("confidence_unavailable")),
         "status": "pending",
         "owner": None,
         "due": sug.get("due") or "—",
@@ -4034,6 +4037,68 @@ async def _activity_heatmap_for_workspace(workspace_id: str, weeks: int = 12) ->
     return {"columns": columns, "total": total}
 
 
+def _resolve_telemetry_funnel_and_risks(
+    *,
+    template: str | None,
+    tel: dict,
+    manual: dict,
+    metrics: dict | None,
+) -> tuple[list, bool, list, bool]:
+    """Funnel + risks for Telemetry UI.
+
+    Seed funnel/risks from build_workspace(empty=False) are only served when
+    template == \"sample\". Non-sample workspaces get a real empty state until
+    deals exist or the user edits telemetry_manual.risks.
+    """
+    is_sample = (template or "") == "sample"
+    funnel: list = []
+    funnel_is_sample = False
+    if metrics:
+        funnel = [
+            {"stage": row["label"], "value": row["count"]}
+            for row in metrics["by_stage"]
+            if row["count"] > 0
+        ]
+    elif is_sample and tel.get("funnel"):
+        funnel = list(tel.get("funnel") or [])
+        funnel_is_sample = True
+
+    risks_is_sample = False
+    if manual.get("risks") is not None:
+        risks = list(manual.get("risks") or [])
+    elif is_sample and tel.get("risks"):
+        risks = list(tel.get("risks") or [])
+        risks_is_sample = bool(risks)
+    else:
+        risks = []
+    return funnel, funnel_is_sample, risks, risks_is_sample
+
+
+async def _scrub_orphaned_seed_telemetry(workspace_id: str, c: dict) -> None:
+    """Backfill: clear seed funnel/risks left on non-sample workspaces.
+
+    New signups use empty=True (no seed). Sample template workspaces keep seed
+    data intentionally. Any other workspace that still carries seed arrays in
+    telemetry gets scrubbed so the empty state is durable, not only at read time.
+    """
+    if (c.get("template") or "") == "sample":
+        return
+    tel = c.get("telemetry") or {}
+    manual = c.get("telemetry_manual") or {}
+    sets: dict = {}
+    if tel.get("funnel"):
+        sets["telemetry.funnel"] = []
+    # Only clear seed risks when the user has never taken ownership via manual.
+    if tel.get("risks") and manual.get("risks") is None:
+        sets["telemetry.risks"] = []
+    if not sets:
+        return
+    try:
+        await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": sets})
+    except Exception:
+        logger.exception("scrub orphaned seed telemetry failed for %s", workspace_id)
+
+
 @api_router.get("/telemetry")
 async def telemetry(principal=Depends(require_section("telemetry", "telemetry:write"))):
     c = await get_ws(principal["workspace_id"])
@@ -4071,17 +4136,21 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
     manual = c.get("telemetry_manual") or {}
     targets = _normalize_telemetry_targets(manual.get("targets"))
     revenue_trend = _revenue_trend_with_targets(fin.get("revenue_series") or [], targets)
-    funnel = []
-    if metrics:
-        funnel = [{"stage": row["label"], "value": row["count"]} for row in metrics["by_stage"] if row["count"] > 0]
-    elif tel.get("funnel"):
-        funnel = tel["funnel"]
+    funnel, funnel_is_sample, risks, risks_is_sample = _resolve_telemetry_funnel_and_risks(
+        template=c.get("template"),
+        tel=tel,
+        manual=manual,
+        metrics=metrics,
+    )
+    if funnel_is_sample:
         sources.append({"label": "Sales Funnel", "detail": "Sample funnel. Add deals for live pipeline stages", "freshness": "sample"})
-    risks = manual.get("risks") if manual.get("risks") is not None else (tel.get("risks") or [])
-    if risks and not metrics and not manual.get("risks"):
+    if risks_is_sample:
         sources.append({"label": "Risks", "detail": "Sample risk radar. Edit risks below or connect integrations", "freshness": "sample"})
-    elif manual.get("risks"):
+    elif manual.get("risks") is not None:
         sources.append({"label": "Risks", "detail": "Manually maintained risk radar", "freshness": "live"})
+    # Durable empty state for any non-sample workspace still carrying seed arrays.
+    if (c.get("template") or "") != "sample" and (tel.get("funnel") or (tel.get("risks") and manual.get("risks") is None)):
+        await _scrub_orphaned_seed_telemetry(c["workspace_id"], c)
     qb = c.get("quickbooks_tokens")
     if cred_crypto.credentials_present(qb):
         sources.append({"label": "QuickBooks", "detail": "Accounting sync when connected", "freshness": "hourly"})
@@ -4107,6 +4176,8 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
         logger.exception("telemetry activity heatmap failed for %s", c.get("workspace_id"))
     return {
         "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
+        "funnel_is_sample": funnel_is_sample,
+        "risks_is_sample": risks_is_sample,
         "suggested_risks": suggested_risks,
         "expense_breakdown": fin["expense_breakdown"],
         "data_as_of": now.isoformat(),

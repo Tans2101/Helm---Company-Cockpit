@@ -327,7 +327,9 @@ export default function Briefing() {
                   </span>
                   {d.source === "ai_suggested" && (
                     <span className="inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded text-helm-muted bg-helm-fg/[0.04]">
-                      Suggested{d.confidence != null ? ` · ${d.confidence}%` : ""}
+                      {d.confidence_unavailable || d.confidence == null
+                        ? "Suggested (confidence unavailable)"
+                        : `Suggested · ${d.confidence}%`}
                     </span>
                   )}
                 </div>

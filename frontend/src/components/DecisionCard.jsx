@@ -13,7 +13,14 @@ const statusStyle = {
   delegated: "text-helm-fg bg-helm-muted/12 border-helm-muted/35",
 };
 
-function ConfidenceBadge({ confidence, ai }) {
+function ConfidenceBadge({ confidence, confidenceUnavailable, ai }) {
+  if (confidenceUnavailable || (ai && (confidence == null || confidence === ""))) {
+    return (
+      <span className={cn("ml-auto font-mono text-xs", ai ? "text-helm-status-warning" : "text-helm-muted")}>
+        confidence unavailable
+      </span>
+    );
+  }
   if (confidence == null || confidence === "") return null;
   return (
     <span className={cn("ml-auto font-mono text-xs", ai ? "text-helm-status-warning" : "text-helm-gold")}>
@@ -85,10 +92,14 @@ export default function DecisionCard({
                 <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-helm-status-warning" : "text-helm-gold")}>
                   {isAi ? "Helm recommendation" : "Recommendation"}
                 </span>
-                <ConfidenceBadge confidence={d.confidence} ai={isAi} />
+                <ConfidenceBadge
+                  confidence={d.confidence}
+                  confidenceUnavailable={d.confidence_unavailable}
+                  ai={isAi}
+                />
               </div>
               <p className="text-sm text-helm-fg leading-relaxed">{d.recommendation}</p>
-              {d.confidence != null && (
+              {d.confidence != null && !d.confidence_unavailable && (
                 <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden">
                   <div className={cn("h-full rounded-full", isAi ? "bg-helm-status-warning/70" : "bg-helm-gold")} style={{ width: `${d.confidence}%` }} />
                 </div>

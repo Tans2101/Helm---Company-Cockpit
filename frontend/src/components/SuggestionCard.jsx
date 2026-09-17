@@ -39,10 +39,14 @@ export default function SuggestionCard({
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
                 <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm recommendation</span>
-                <ConfidenceBadge confidence={s.confidence} ai />
+                <ConfidenceBadge
+                  confidence={s.confidence}
+                  confidenceUnavailable={s.confidence_unavailable}
+                  ai
+                />
               </div>
               <p className="text-sm text-helm-fg leading-relaxed">{s.recommendation}</p>
-              {s.confidence != null && (
+              {s.confidence != null && !s.confidence_unavailable && (
                 <div className="mt-2 h-1 rounded-full bg-helm-fg/5 overflow-hidden">
                   <div className="h-full bg-helm-status-warning/70 rounded-full" style={{ width: `${s.confidence}%` }} />
                 </div>

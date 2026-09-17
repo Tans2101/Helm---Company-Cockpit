@@ -446,8 +446,31 @@ def test_validate_decision_draft_clamps_confidence_and_impact():
         signal,
     )
     assert out["confidence"] == 100
+    assert out["confidence_unavailable"] is False
     assert out["impact"] == "High"
     assert out["title"] == "Cut burn"
+
+
+def test_validate_decision_draft_missing_confidence_is_unavailable_not_sixty():
+    signal = {"summary": "Cash risk", "detail": "Runway 3mo", "severity": "high"}
+    for bad in (None, "", "n/a", "high", {}, []):
+        out = helm_llm._validate_decision_draft(
+            {"title": "Cut burn", "description": "d", "recommendation": "r", "confidence": bad, "impact": "High", "category": "Finance"},
+            signal,
+        )
+        assert out["confidence"] is None, bad
+        assert out["confidence_unavailable"] is True, bad
+        assert out["confidence"] != 60
+
+
+def test_validate_decision_draft_omitted_confidence_is_unavailable():
+    signal = {"summary": "Cash risk", "detail": "Runway 3mo", "severity": "medium"}
+    out = helm_llm._validate_decision_draft(
+        {"title": "Review", "description": "d", "recommendation": "r", "impact": "Medium", "category": "Ops"},
+        signal,
+    )
+    assert out["confidence"] is None
+    assert out["confidence_unavailable"] is True
 
 
 def test_validate_delegate_draft_uses_signal_owner_not_invented():

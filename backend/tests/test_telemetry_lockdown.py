@@ -12,9 +12,11 @@ if str(ROOT) not in sys.path:
 
 from server import (  # noqa: E402
     _normalize_telemetry_targets,
+    _resolve_telemetry_funnel_and_risks,
     _revenue_trend_with_targets,
     _telemetry_risk_suggestions_from_signals,
 )
+import seed_data  # noqa: E402
 
 
 def test_targets_default_off_and_clamp_pct():
@@ -65,3 +67,79 @@ def test_risk_suggestions_dedupe_by_type_and_cap():
     rb = next(s for s in out if s["source_signal"] == "recurring_blocker")
     assert rb["category"] == "People"
     assert "2 teammates" in rb["name"]
+
+
+def test_empty_workspace_seed_has_no_funnel_or_risks():
+    empty = seed_data.build_workspace("ws_empty", "Acme", "u1", empty=True)
+    assert empty["template"] == "empty"
+    assert empty["telemetry"]["funnel"] == []
+    assert empty["telemetry"]["risks"] == []
+
+
+def test_sample_workspace_seed_has_funnel_and_risks():
+    sample = seed_data.build_workspace("ws_sample", "Northwind", "u1", empty=False)
+    assert sample["template"] == "sample"
+    assert len(sample["telemetry"]["funnel"]) >= 1
+    assert len(sample["telemetry"]["risks"]) >= 1
+
+
+def test_non_sample_never_inherits_seed_funnel_or_risks():
+    sample = seed_data.build_workspace("ws_sample", "Northwind", "u1", empty=False)
+    tel = sample["telemetry"]
+    funnel, funnel_is_sample, risks, risks_is_sample = _resolve_telemetry_funnel_and_risks(
+        template="empty",
+        tel=tel,
+        manual={},
+        metrics=None,
+    )
+    assert funnel == []
+    assert funnel_is_sample is False
+    assert risks == []
+    assert risks_is_sample is False
+
+    # Missing template must not fall back to serving seed as live data.
+    funnel2, f2, risks2, r2 = _resolve_telemetry_funnel_and_risks(
+        template=None, tel=tel, manual={}, metrics=None,
+    )
+    assert funnel2 == [] and f2 is False and risks2 == [] and r2 is False
+
+
+def test_sample_template_serves_seed_with_sample_flags():
+    sample = seed_data.build_workspace("ws_sample", "Northwind", "u1", empty=False)
+    tel = sample["telemetry"]
+    funnel, funnel_is_sample, risks, risks_is_sample = _resolve_telemetry_funnel_and_risks(
+        template="sample",
+        tel=tel,
+        manual={},
+        metrics=None,
+    )
+    assert funnel == tel["funnel"]
+    assert funnel_is_sample is True
+    assert risks == tel["risks"]
+    assert risks_is_sample is True
+
+
+def test_manual_risks_override_seed_even_on_sample():
+    sample = seed_data.build_workspace("ws_sample", "Northwind", "u1", empty=False)
+    manual = {"risks": [{"id": "mine", "name": "Real risk", "likelihood": 2, "impact": 2, "category": "Ops"}]}
+    _funnel, _fis, risks, risks_is_sample = _resolve_telemetry_funnel_and_risks(
+        template="sample",
+        tel=sample["telemetry"],
+        manual=manual,
+        metrics=None,
+    )
+    assert risks == manual["risks"]
+    assert risks_is_sample is False
+
+
+def test_live_deal_metrics_override_sample_funnel():
+    sample = seed_data.build_workspace("ws_sample", "Northwind", "u1", empty=False)
+    metrics = {"by_stage": [{"label": "Qualified", "count": 3}, {"label": "Empty", "count": 0}]}
+    funnel, funnel_is_sample, _risks, _ris = _resolve_telemetry_funnel_and_risks(
+        template="sample",
+        tel=sample["telemetry"],
+        manual={},
+        metrics=metrics,
+    )
+    assert funnel == [{"stage": "Qualified", "value": 3}]
+    assert funnel_is_sample is False

@@ -295,11 +295,17 @@ def _validate_decision_draft(data: dict, signal: dict) -> dict:
         recommendation = "Review the signal and choose a course of action."
 
     conf_raw = data.get("confidence")
+    confidence = None
+    confidence_unavailable = False
     try:
+        if conf_raw is None or conf_raw == "":
+            raise TypeError("missing")
         confidence = int(round(float(conf_raw)))
+        confidence = max(0, min(100, confidence))
     except (TypeError, ValueError):
-        confidence = 60
-    confidence = max(0, min(100, confidence))
+        # Never invent a percentage — surface that the model omitted a real estimate.
+        confidence = None
+        confidence_unavailable = True
 
     impact = data.get("impact")
     if impact not in _VALID_IMPACT:
@@ -312,6 +318,7 @@ def _validate_decision_draft(data: dict, signal: dict) -> dict:
         "description": description,
         "recommendation": recommendation,
         "confidence": confidence,
+        "confidence_unavailable": confidence_unavailable,
         "category": category or "General",
         "impact": impact,
     }
