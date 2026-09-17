@@ -11,6 +11,7 @@ import InviteCeoCard from "@/components/InviteCeoCard";
 import { useTheme } from "@/context/ThemeContext";
 import SwitchButton from "@/components/kokonutui/switch-button";
 import { cn } from "@/lib/utils";
+import { canManageBilling } from "@/lib/access";
 
 export default function AccountSettings() {
   const { user, setUser, logout } = useAuth();
@@ -18,6 +19,7 @@ export default function AccountSettings() {
   const location = useLocation();
   const { data: company } = useFetch("/company");
   const isOwner = user?.role === "owner" || user?.pack === "owner";
+  const canBilling = canManageBilling(user);
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
   const [busy, setBusy] = useState(null);
   const [confirmAccount, setConfirmAccount] = useState("");
@@ -259,7 +261,7 @@ export default function AccountSettings() {
         >
           {busy === "export" ? "Exporting…" : "Export data"}
         </button>
-        {(user?.perms || []).includes("billing:manage") && (
+        {canBilling && (
           <a
             href="/app/billing"
             data-testid="settings-billing-link"

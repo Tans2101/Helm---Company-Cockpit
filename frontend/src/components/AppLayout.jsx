@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 import { departmentPath } from "@/lib/departmentRoutes";
+import { canManageBilling } from "@/lib/access";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
@@ -136,7 +137,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
   const mainNav = NAV.filter((item) => navItemVisible(item, user));
   const deptNav = (deptData?.departments || []).filter((d) => departmentNavVisible(d));
-  const canManageBilling = (user?.perms || []).includes("billing:manage");
+  const canBilling = canManageBilling(user);
 
   // Prefer a department match when on a dept route so the main track stays quiet.
   const activeDeptId = deptNav.find((d) => pathMatches(departmentNavTo(d.type), location.pathname, false))?.type || null;
@@ -227,7 +228,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
           name={user?.name || "CEO"}
           picture={user?.picture}
           planLabel={helmPlanLabel(company?.plan, isPro, billingEnforced)}
-          showBilling={canManageBilling}
+          showBilling={canBilling}
           onBilling={() => { navigate("/app/billing"); onNavigate?.(); }}
           onIntegrations={() => { navigate("/app/integrations"); onNavigate?.(); }}
           onSettings={() => { navigate("/app/settings"); onNavigate?.(); }}
@@ -243,7 +244,7 @@ function QuickNavPalette({ open, onOpenChange }) {
   const navigate = useNavigate();
   const { data: deptData } = useFetch("/departments");
   const isOwner = user?.role === "owner" || user?.pack === "owner";
-  const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
+  const canBilling = canManageBilling(user);
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
 
   const actions = useMemo(() => {
@@ -350,7 +351,7 @@ function QuickNavPalette({ open, onOpenChange }) {
         icon: <AlertTriangle className="w-4 h-4" />,
       });
     }
-    if (canManageBilling) {
+    if (canBilling) {
       settingsActions.push({
         id: "billing",
         label: "Billing",
@@ -397,7 +398,7 @@ function QuickNavPalette({ open, onOpenChange }) {
     ];
 
     return [...navActions, ...deptActions, ...settingsActions, ...siteActions];
-  }, [user, deptData, isOwner, canManageBilling, canExportActivity]);
+  }, [user, deptData, isOwner, canBilling, canExportActivity]);
 
   return (
     <ActionSearchBar
@@ -430,7 +431,7 @@ export default function AppLayout() {
   const pastDue = billingEnforced && billing?.subscription_status === "past_due";
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
   const onBilling = location.pathname.startsWith("/app/billing");
-  const canManageBilling = user?.role === "owner" || (user?.perms || []).includes("billing:manage");
+  const canBilling = canManageBilling(user);
   const needsCompanySetup = company?.role === "owner" && company?.company_setup_done === false;
 
   if (companyLoading && !company) {
@@ -502,7 +503,7 @@ export default function AppLayout() {
           {onBilling ? (
             <Outlet />
           ) : (
-            <SubscriptionGate isPro={isPro} canManageBilling={canManageBilling}>
+            <SubscriptionGate isPro={isPro} canManageBilling={canBilling}>
               <Outlet />
             </SubscriptionGate>
           )}

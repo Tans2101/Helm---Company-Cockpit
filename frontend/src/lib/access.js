@@ -13,3 +13,10 @@ export const PACKS = [
 
 export const packMeta = (id) => PACKS.find((p) => p.id === id) || PACKS[PACKS.length - 1];
 export const hasPerm = (user, perm) => Array.isArray(user?.perms) && user.perms.includes(perm);
+
+/** Who can open Billing / fix past-due — owners always, or anyone with billing:manage. */
+export function canManageBilling(user) {
+  if (!user) return false;
+  if (user.role === "owner" || user.pack === "owner") return true;
+  return hasPerm(user, "billing:manage");
+}
