@@ -99,6 +99,16 @@ export default function AccountSettings() {
     }
   };
 
+  const cancelAccountConfirm = () => {
+    setShowAccountConfirm(false);
+    setConfirmAccount("");
+  };
+
+  const cancelWorkspaceConfirm = () => {
+    setShowWorkspaceConfirm(false);
+    setConfirmWorkspace("");
+  };
+
   const deleteAccount = async () => {
     if (!showAccountConfirm) {
       setShowAccountConfirm(true);
@@ -116,6 +126,8 @@ export default function AccountSettings() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not delete account");
       setBusy(null);
+      // Leave confirm open for retry, but clear the typed value so it isn't half-stale.
+      setConfirmAccount("");
     }
   };
 
@@ -136,6 +148,7 @@ export default function AccountSettings() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not delete workspace");
       setBusy(null);
+      setConfirmWorkspace("");
     }
   };
 
@@ -319,19 +332,34 @@ export default function AccountSettings() {
               data-testid="confirm-account-input"
               value={confirmAccount}
               onChange={(e) => setConfirmAccount(e.target.value)}
-              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+              disabled={!!busy}
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-60"
               placeholder={user?.email}
             />
           </div>
         )}
-        <button
-          data-testid="delete-account-btn"
-          onClick={deleteAccount}
-          disabled={!!busy}
-          className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
-        >
-          {busy === "account" ? "Deleting…" : showAccountConfirm ? "Confirm delete account" : "Delete account"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            data-testid="delete-account-btn"
+            onClick={deleteAccount}
+            disabled={!!busy}
+            className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
+          >
+            {busy === "account" ? "Deleting…" : showAccountConfirm ? "Confirm delete account" : "Delete account"}
+          </button>
+          {showAccountConfirm && (
+            <button
+              type="button"
+              data-testid="cancel-delete-account-btn"
+              onClick={cancelAccountConfirm}
+              disabled={!!busy}
+              className="rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </GlassCard>
 
       {isOwner && (
@@ -352,19 +380,34 @@ export default function AccountSettings() {
                 data-testid="confirm-workspace-input"
                 value={confirmWorkspace}
                 onChange={(e) => setConfirmWorkspace(e.target.value)}
-                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg"
+                disabled={!!busy}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-60"
                 placeholder={company?.name}
               />
             </div>
           )}
-          <button
-            data-testid="delete-workspace-btn"
-            onClick={deleteWorkspace}
-            disabled={!!busy}
-            className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
-          >
-            {busy === "workspace" ? "Deleting…" : showWorkspaceConfirm ? "Confirm delete workspace" : "Delete workspace"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-testid="delete-workspace-btn"
+              onClick={deleteWorkspace}
+              disabled={!!busy}
+              className="rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm font-medium px-4 py-2.5 transition-colors hover:bg-helm-status-negative/10 disabled:opacity-60"
+            >
+              {busy === "workspace" ? "Deleting…" : showWorkspaceConfirm ? "Confirm delete workspace" : "Delete workspace"}
+            </button>
+            {showWorkspaceConfirm && (
+              <button
+                type="button"
+                data-testid="cancel-delete-workspace-btn"
+                onClick={cancelWorkspaceConfirm}
+                disabled={!!busy}
+                className="rounded-md border border-helm-line text-helm-fg text-sm px-4 py-2.5 hover:bg-helm-fg/5 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </GlassCard>
       )}
     </div>
