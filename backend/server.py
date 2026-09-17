@@ -9546,7 +9546,7 @@ async def delete_hr_offboarding(instance_id: str, principal=Depends(get_principa
 
 
 HR_LEAVE_TYPES = frozenset({"vacation", "sick", "personal", "other"})
-HR_LEAVE_STATUSES = frozenset({"pending", "approved", "denied"})
+HR_LEAVE_STATUSES = frozenset({"pending", "approved", "denied", "canceled"})
 HR_LEAVE_TYPE_LABELS = {
     "vacation": "Vacation",
     "sick": "Sick",
@@ -9688,13 +9688,12 @@ async def patch_hr_leave_request(
     payload: HrLeavePatch,
     principal=Depends(get_principal),
 ):
-    """Approve or deny a leave request — HR lead / CEO only."""
+    """Approve/deny (HR lead/CEO) or cancel own pending request (requester)."""
     dept = await _hr_department(principal)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
-    if not _can_lead_hr(principal, membership):
-        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can approve or deny leave")
+    is_lead = _can_lead_hr(principal, membership)
     row = await db.hr_leave_requests.find_one(
         {"id": request_id, "department_id": dept["department_id"]},
         {"_id": 0},
@@ -9702,9 +9701,33 @@ async def patch_hr_leave_request(
     if not row:
         raise HTTPException(status_code=404, detail="Leave request not found")
     st = (payload.status or "").strip().lower()
-    if st not in ("approved", "denied"):
-        raise HTTPException(status_code=400, detail="status must be approved or denied")
     now = datetime.now(timezone.utc).isoformat()
+
+    if st == "canceled":
+        if row.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Only pending leave requests can be canceled")
+        is_requester = row.get("requested_by") == principal["user_id"]
+        if not is_requester:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only cancel your own leave request",
+            )
+        upd = {
+            "status": "canceled",
+            "updated_at": now,
+        }
+        await db.hr_leave_requests.update_one(
+            {"id": request_id, "department_id": dept["department_id"]},
+            {"$set": upd},
+        )
+        return {"ok": True, "request": {**row, **upd}}
+
+    if st not in ("approved", "denied"):
+        raise HTTPException(status_code=400, detail="status must be approved, denied, or canceled")
+    if not is_lead:
+        raise HTTPException(status_code=403, detail="Only an HR lead or the CEO can approve or deny leave")
+    if row.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Only pending leave requests can be decided")
     upd = {
         "status": st,
         "decided_by": principal["user_id"],

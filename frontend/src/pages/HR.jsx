@@ -364,7 +364,13 @@ export default function HR() {
     setBusy(true);
     try {
       await api.patch(`/hr/leave-requests/${req.id}`, { status });
-      toast.success(status === "approved" ? "Leave approved" : "Leave denied");
+      toast.success(
+        status === "approved"
+          ? "Leave approved"
+          : status === "canceled"
+            ? "Leave request canceled"
+            : "Leave denied",
+      );
       await reloadLeave();
       await reloadSummary();
     } catch (e) {
@@ -857,26 +863,41 @@ export default function HR() {
                         {req.status}
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {isLead && req.status === "pending" && (
+                        {req.status === "pending" && (
                           <span className="inline-flex gap-2">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              data-testid={`hr-leave-approve-${req.id}`}
-                              onClick={() => decideLeave(req, "approved")}
-                              className="text-xs text-helm-status-positive hover:underline disabled:opacity-50"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              data-testid={`hr-leave-deny-${req.id}`}
-                              onClick={() => decideLeave(req, "denied")}
-                              className="text-xs text-helm-status-negative hover:underline disabled:opacity-50"
-                            >
-                              Deny
-                            </button>
+                            {isLead && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  data-testid={`hr-leave-approve-${req.id}`}
+                                  onClick={() => decideLeave(req, "approved")}
+                                  className="text-xs text-helm-status-positive hover:underline disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  data-testid={`hr-leave-deny-${req.id}`}
+                                  onClick={() => decideLeave(req, "denied")}
+                                  className="text-xs text-helm-status-negative hover:underline disabled:opacity-50"
+                                >
+                                  Deny
+                                </button>
+                              </>
+                            )}
+                            {req.requested_by === myId && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                data-testid={`hr-leave-cancel-${req.id}`}
+                                onClick={() => decideLeave(req, "canceled")}
+                                className="text-xs text-helm-muted hover:text-helm-fg hover:underline disabled:opacity-50"
+                              >
+                                Cancel request
+                              </button>
+                            )}
                           </span>
                         )}
                       </td>

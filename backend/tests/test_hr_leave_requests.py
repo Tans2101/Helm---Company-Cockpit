@@ -212,6 +212,65 @@ def test_member_cannot_approve(leave_api):
     assert leaves.rows[0]["status"] == "pending"
 
 
+def test_member_can_cancel_own_pending_leave(leave_api):
+    client, employees, leaves, as_ceo, as_member, as_lead, mock_db = leave_api
+    leaves.rows.append({
+        "id": "hrleave_own",
+        "department_id": "dept_hr",
+        "employee_id": "hremp_ada",
+        "status": "pending",
+        "start_date": "2026-09-20",
+        "end_date": "2026-09-22",
+        "type": "vacation",
+        "title": "Ada Lovelace — Vacation",
+        "requested_by": "u_mem",
+        "workspace_id": "ws_test",
+    })
+    server.app.dependency_overrides[server.get_principal] = as_member
+    r = client.patch("/api/hr/leave-requests/hrleave_own", json={"status": "canceled"})
+    assert r.status_code == 200, r.text
+    assert leaves.rows[0]["status"] == "canceled"
+
+
+def test_member_cannot_cancel_someone_elses_leave(leave_api):
+    client, employees, leaves, as_ceo, as_member, as_lead, mock_db = leave_api
+    leaves.rows.append({
+        "id": "hrleave_other",
+        "department_id": "dept_hr",
+        "employee_id": "hremp_bob",
+        "status": "pending",
+        "start_date": "2026-09-20",
+        "end_date": "2026-09-22",
+        "type": "vacation",
+        "title": "Bob — Vacation",
+        "requested_by": "u_lead",
+        "workspace_id": "ws_test",
+    })
+    server.app.dependency_overrides[server.get_principal] = as_member
+    r = client.patch("/api/hr/leave-requests/hrleave_other", json={"status": "canceled"})
+    assert r.status_code == 403
+    assert leaves.rows[0]["status"] == "pending"
+
+
+def test_member_cannot_cancel_already_decided_leave(leave_api):
+    client, employees, leaves, as_ceo, as_member, as_lead, mock_db = leave_api
+    leaves.rows.append({
+        "id": "hrleave_done",
+        "department_id": "dept_hr",
+        "employee_id": "hremp_ada",
+        "status": "approved",
+        "start_date": "2026-09-20",
+        "end_date": "2026-09-22",
+        "type": "vacation",
+        "requested_by": "u_mem",
+        "workspace_id": "ws_test",
+    })
+    server.app.dependency_overrides[server.get_principal] = as_member
+    r = client.patch("/api/hr/leave-requests/hrleave_done", json={"status": "canceled"})
+    assert r.status_code == 400
+    assert leaves.rows[0]["status"] == "approved"
+
+
 def test_lead_can_approve_and_deny(leave_api):
     client, employees, leaves, as_ceo, as_member, as_lead, mock_db = leave_api
     leaves.rows.append({
