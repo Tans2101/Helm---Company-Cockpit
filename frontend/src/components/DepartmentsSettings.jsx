@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Building2, Trash2, UserPlus, User } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useDepartmentsQuery } from "@/hooks/useDepartmentsQuery";
 import { api } from "@/lib/api";
 import { GlassCard, SectionLabel, ErrorScreen, SkeletonCardList } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
@@ -13,7 +14,7 @@ import { departmentPath } from "@/lib/departmentRoutes";
  * Enable / disable / member assignment only when GET /departments says can_manage (CEO).
  */
 export default function DepartmentsSettings() {
-  const { data, loading, error, reload } = useFetch("/departments");
+  const { data, loading, error, reload } = useDepartmentsQuery();
   const { data: membersData } = useFetch("/members");
   const [busyType, setBusyType] = useState(null);
   const [expanded, setExpanded] = useState(null);

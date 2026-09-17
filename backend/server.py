@@ -9,6 +9,7 @@ import hashlib
 import secrets
 import asyncio
 import logging
+import time
 from pathlib import Path
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
@@ -572,16 +573,27 @@ async def unlink_person_membership(workspace_id: str, membership_id: str):
         )
 
 
-async def can_section_write(principal: dict, section_id: str, pack_perm: str) -> bool:
-    """Pack permission OR CEO-granted member/department access for a section."""
+async def can_section_write(
+    principal: dict,
+    section_id: str,
+    pack_perm: str,
+    *,
+    membership: Optional[dict] = None,
+    workspace: Optional[dict] = None,
+) -> bool:
+    """Pack permission OR CEO-granted member/department access for a section.
+
+    Pass already-loaded membership/workspace when calling in a loop (e.g. /auth/me)
+    so each section check does not re-hit Mongo.
+    """
     if pack_perm in perms_for(principal["pack"]):
         return True
-    membership = await _membership_for(principal)
+    membership = membership if membership is not None else await _membership_for(principal)
     # Per-member grants (preferred)
     if section_id in sec_access.normalize_section_grants(membership.get("section_grants")):
         return True
     # Legacy department grants
-    ws = await get_ws(principal["workspace_id"])
+    ws = workspace if workspace is not None else await get_ws(principal["workspace_id"])
     dept = (membership.get("department") or "General").strip()
     allowed = (ws.get("section_access") or {}).get(section_id) or []
     return dept in allowed
@@ -1327,15 +1339,54 @@ async def _enforce_document_rate_limit(principal, action: str, limit: int, messa
 
 
 # ------------------------- Financials (computed from entries) -------------------------
+# Short in-process TTL so briefing / telemetry / decisions share one ledger pass.
+_FINANCIALS_CACHE: dict[str, tuple[float, dict, list]] = {}
+_FINANCIALS_CACHE_TTL_SECONDS = 90.0
+
+
+def _financials_cache_key(workspace_id: str, department_ids: Optional[list] = None) -> str:
+    if department_ids:
+        return f"{workspace_id}|{','.join(sorted(str(d) for d in department_ids))}"
+    return workspace_id
+
+
+def invalidate_financials_cache(workspace_id: str) -> None:
+    """Drop all cached compute_financials results for a workspace (any dept scope)."""
+    if not workspace_id:
+        return
+    prefix = f"{workspace_id}|"
+    dead = [k for k in _FINANCIALS_CACHE if k == workspace_id or k.startswith(prefix)]
+    for k in dead:
+        _FINANCIALS_CACHE.pop(k, None)
+
+
 async def _workspace_currency(workspace_id: str) -> str:
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
     settings = (ws or {}).get("financial_settings") or {}
     return normalize_currency(settings.get("currency"))
 
 
-async def compute_financials(workspace_id: str, department_ids: Optional[list] = None):
+async def compute_financials(
+    workspace_id: str,
+    department_ids: Optional[list] = None,
+    *,
+    return_entries: bool = False,
+    bypass_cache: bool = False,
+):
     from collections import defaultdict
     import finance_recurrence as fin_recur
+
+    cache_key = _financials_cache_key(workspace_id, department_ids)
+    now = time.monotonic()
+    if not bypass_cache:
+        hit = _FINANCIALS_CACHE.get(cache_key)
+        if hit and hit[0] > now:
+            fin_cached, entries_cached = hit[1], hit[2]
+            if return_entries:
+                out = dict(fin_cached)
+                out["entries"] = list(entries_cached)
+                return out
+            return dict(fin_cached)
 
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
     settings = dict((ws or {}).get("financial_settings") or {})
@@ -1402,7 +1453,7 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
         if prev_r > 0:
             mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
-    return {
+    result = {
         "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
         "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
         "runway_months": runway,
@@ -1426,6 +1477,16 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         "months": months,
         "latest_month": latest,
     }
+    _FINANCIALS_CACHE[cache_key] = (
+        now + _FINANCIALS_CACHE_TTL_SECONDS,
+        dict(result),
+        list(entries),
+    )
+    if return_entries:
+        out = dict(result)
+        out["entries"] = entries
+        return out
+    return result
 
 
 RUNWAY_NO_BURN_LABEL = "No burn — cash growing"
@@ -2012,8 +2073,17 @@ async def _user_session_payload(user: dict) -> dict:
         "pack": pack,
     }
     granted_sections = []
+    # Hoist membership + workspace once — can_section_write used to re-fetch both
+    # per MANAGEABLE_SECTIONS item (16 sequential round-trips on every /auth/me).
+    ws_for_grants = await get_ws(membership["workspace_id"])
     for item in sec_access.MANAGEABLE_SECTIONS:
-        if await can_section_write(principal_like, item["id"], item["perm"]):
+        if await can_section_write(
+            principal_like,
+            item["id"],
+            item["perm"],
+            membership=membership,
+            workspace=ws_for_grants,
+        ):
             granted_sections.append(item["id"])
     payload = {
         **base,
@@ -2585,6 +2655,7 @@ async def apply_template(payload: TemplateInput, principal=Depends(require("work
             for e in samples:
                 e["department_id"] = finance_dept_id
         await db.financial_entries.insert_many(samples)
+        invalidate_financials_cache(ws_id)
     else:
         await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"onboarding_done": True}})
     return {"ok": True}
@@ -2864,9 +2935,9 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
         return {"skipped": "ai_unconfigured"}
 
     c = await get_ws(workspace_id)
-    fin = await compute_financials(workspace_id)
+    fin = await compute_financials(workspace_id, return_entries=True)
     currency = fin.get("currency") or "usd"
-    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    entries = fin.pop("entries", None) or []
     expense_by_month = decision_engine.expense_totals_by_month_category(entries)
     deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
     tasks = list((c.get("tasks") or {}).get("items") or [])
@@ -3671,6 +3742,7 @@ async def _ensure_deal_won_revenue_entry(deal: dict, principal: dict) -> tuple[O
             )
             return existing, False
         raise
+    invalidate_financials_cache(ws)
     entry.pop("_id", None)
     return entry, True
 
@@ -3969,9 +4041,13 @@ async def _workspace_live_signals(
 ) -> list:
     """Same detector path Decisions/Briefing use — reuse, don't reimplement."""
     c = c or await get_ws(workspace_id)
-    fin = fin if fin is not None else await compute_financials(workspace_id)
+    if fin is None:
+        fin = await compute_financials(workspace_id, return_entries=True)
     currency = fin.get("currency") or "usd"
-    entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
+    # Prefer entries already loaded by compute_financials (or a prior caller).
+    entries = fin.pop("entries", None) if isinstance(fin, dict) else None
+    if entries is None:
+        entries = await db.financial_entries.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(5000)
     expense_by_month = decision_engine.expense_totals_by_month_category(entries)
     if deals is None:
         deals = await db.deals.find({"workspace_id": workspace_id}, {"_id": 0}).to_list(500)
@@ -4102,7 +4178,7 @@ async def _scrub_orphaned_seed_telemetry(workspace_id: str, c: dict) -> None:
 @api_router.get("/telemetry")
 async def telemetry(principal=Depends(require_section("telemetry", "telemetry:write"))):
     c = await get_ws(principal["workspace_id"])
-    fin = await compute_financials(c["workspace_id"])
+    fin = await compute_financials(c["workspace_id"], return_entries=True)
     items = c["tasks"]["items"]
     open_tasks = len([t for t in items if t.get("column") != "done"])
     headcount = c.get("employees") or len(c["people"]["people"])
@@ -4673,6 +4749,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
             status_code=409,
             detail="Could not save this entry: a matching ledger row already exists. Refresh and try again.",
         ) from exc
+    invalidate_financials_cache(principal["workspace_id"])
     entry.pop("_id", None)
     if source_document_id:
         await db.documents.update_one(
@@ -4714,6 +4791,7 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
                   "note": (payload.note or "").strip()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Entry not found")
+    invalidate_financials_cache(principal["workspace_id"])
     await log_activity(principal, "financials", "entry.edit",
                        f"Updated a {payload.type} entry · {entry_name} ({payload.month})")
     return {"ok": True}
@@ -4723,6 +4801,7 @@ async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depend
 async def delete_fin_entry(entry_id: str, principal=Depends(require_section("financials", "finance:write"))):
     doc = await db.financial_entries.find_one({"id": entry_id, "workspace_id": principal["workspace_id"]}, {"_id": 0})
     await db.financial_entries.delete_one({"id": entry_id, "workspace_id": principal["workspace_id"]})
+    invalidate_financials_cache(principal["workspace_id"])
     if doc:
         label = normalize_entry_name(doc.get("name"), doc.get("category"))
         await log_activity(principal, "financials", "entry.delete",
@@ -4751,6 +4830,7 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     if currency is not None:
         sets["financial_settings.currency"] = currency
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": sets})
+    invalidate_financials_cache(principal["workspace_id"])
     fin = await compute_financials(principal["workspace_id"])
     runway = fin["runway_months"]
     cur = fin.get("currency") or "usd"
@@ -4846,6 +4926,7 @@ async def import_financials_csv_confirm(
     if not docs:
         raise HTTPException(status_code=400, detail="No valid entries to import")
     await db.financial_entries.insert_many(docs)
+    invalidate_financials_cache(principal["workspace_id"])
     for d in docs:
         d.pop("_id", None)
     await log_activity(
@@ -6661,7 +6742,7 @@ async def _department_in_workspace(department_id: str, workspace_id: str) -> dic
 
 
 @api_router.get("/departments")
-async def list_departments(principal=Depends(get_principal)):
+async def list_departments(response: Response, principal=Depends(get_principal)):
     """Catalog of all 7 types with enabled + current-user membership annotations."""
     ws_id = principal["workspace_id"]
     enabled_rows = await db.departments.find(
@@ -6693,6 +6774,8 @@ async def list_departments(principal=Depends(get_principal)):
             "member_role": (membership or {}).get("role"),
             "visible_in_nav": bool(enabled_doc) and (is_ceo or bool(membership)),
         })
+    # Private short cache — catalog/membership churn is low; never public/shared.
+    response.headers["Cache-Control"] = "private, max-age=30"
     return {
         "departments": out,
         "is_ceo": is_ceo,
@@ -10538,6 +10621,8 @@ async def _upsert_accounting_sync_entries(
             }
             await db.financial_entries.insert_one(entry)
         synced_count += 1
+    if synced_count:
+        invalidate_financials_cache(ws_id)
     return synced_count
 
 
@@ -10989,7 +11074,9 @@ async def get_billing_status(workspace_id: str, pack: str):
 
 
 @api_router.get("/billing/plans")
-async def billing_plans(principal=Depends(get_principal)):
+async def billing_plans(response: Response, principal=Depends(get_principal)):
+    # Plan limits + billing snapshot: private short cache only (never public).
+    response.headers["Cache-Control"] = "private, max-age=30"
     return await get_billing_status(principal["workspace_id"], principal["pack"])
 
 

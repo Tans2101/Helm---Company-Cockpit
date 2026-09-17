@@ -5,6 +5,7 @@ import { Link, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
+import { useCompanyQuery } from "@/hooks/useCompanyQuery";
 import { PageHeader, GlassCard } from "@/components/kit";
 import DepartmentsSettings from "@/components/DepartmentsSettings";
 import InviteCeoCard from "@/components/InviteCeoCard";
@@ -17,7 +18,7 @@ export default function AccountSettings() {
   const { user, setUser, logout } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const location = useLocation();
-  const { data: company } = useFetch("/company");
+  const { data: company } = useCompanyQuery();
   const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canBilling = canManageBilling(user);
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");

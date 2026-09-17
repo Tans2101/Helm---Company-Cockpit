@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
+import { useCompanyQuery } from "@/hooks/useCompanyQuery";
+import { useDepartmentsQuery } from "@/hooks/useDepartmentsQuery";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import SubscriptionGate from "@/components/SubscriptionGate";
@@ -132,8 +134,8 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: company } = useFetch("/company");
-  const { data: deptData } = useFetch("/departments");
+  const { data: company } = useCompanyQuery();
+  const { data: deptData } = useDepartmentsQuery();
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);
   const mainNav = NAV.filter((item) => navItemVisible(item, user));
   const deptNav = (deptData?.departments || []).filter((d) => departmentNavVisible(d));
@@ -242,7 +244,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
 function QuickNavPalette({ open, onOpenChange }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: deptData } = useFetch("/departments");
+  const { data: deptData } = useDepartmentsQuery();
   const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canBilling = canManageBilling(user);
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
@@ -426,7 +428,7 @@ export default function AppLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const { data: billing } = useFetch("/billing/plans");
-  const { data: company, loading: companyLoading } = useFetch("/company");
+  const { data: company, loading: companyLoading } = useCompanyQuery();
   const billingEnforced = billing?.billing_enforced === true;
   const pastDue = billingEnforced && billing?.subscription_status === "past_due";
   const isPro = helmHasFullAccess(company?.plan, billingEnforced);

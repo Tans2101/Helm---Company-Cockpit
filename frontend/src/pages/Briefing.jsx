@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useCompanyQuery } from "@/hooks/useCompanyQuery";
 import { api } from "@/lib/api";
 import { GlassCard, ErrorScreen, PageHeaderSkeleton, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ function BriefLabel({ children, className }) {
 
 export default function Briefing() {
   const { data, loading: briefingLoading, error: briefingError, reload: reloadBriefing, setData } = useFetch("/briefing");
-  const { data: company, loading: companyLoading, error: companyError, reload: reloadCompany } = useFetch("/company");
+  const { data: company, loading: companyLoading, error: companyError, reload: reloadCompany } = useCompanyQuery();
   const { data: checklist } = useFetch("/onboarding/checklist");
   const [genLoading, setGenLoading] = useState(false);
   const [delegateBusy, setDelegateBusy] = useState(null);

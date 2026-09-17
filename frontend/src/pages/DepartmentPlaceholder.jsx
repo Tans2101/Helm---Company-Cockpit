@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useDepartmentsQuery } from "@/hooks/useDepartmentsQuery";
 import { api } from "@/lib/api";
 import { PageHeader, ErrorScreen, EmptyState, GlassCard, PageHeaderSkeleton, SkeletonCardList } from "@/components/kit";
 import { departmentIcon } from "@/lib/departmentIcons";
@@ -13,7 +14,7 @@ export default function DepartmentPlaceholder() {
     deptType ? `/departments/by-type/${encodeURIComponent(deptType)}` : null,
   );
   // Catalog flags (can_manage / name) for the not-enabled case
-  const { data: catalog, reload: reloadCatalog } = useFetch("/departments");
+  const { data: catalog, reload: reloadCatalog } = useDepartmentsQuery();
   const [enabling, setEnabling] = useState(false);
 
   if (loading) {

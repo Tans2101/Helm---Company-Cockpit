@@ -1,6 +1,6 @@
 """Unit tests for Manage Access section helpers and can_section_write grants."""
 import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -53,10 +53,58 @@ async def test_can_section_write_honors_member_grants():
         "section_grants": ["decisions"],
     }
 
-    with patch.object(server, "_membership_for", new=AsyncMock(return_value=membership)):
-        with patch.object(server, "get_ws", new=AsyncMock(return_value={"section_access": {}})):
+    with patch.object(server, "_membership_for", new=AsyncMock(return_value=membership)) as mem_mock:
+        with patch.object(server, "get_ws", new=AsyncMock(return_value={"section_access": {}})) as ws_mock:
             assert await server.can_section_write(principal, "decisions", "decisions:act") is True
             assert await server.can_section_write(principal, "tasks", "tasks:assign") is False
+            # Preloaded objects skip both fetchers entirely.
+            assert await server.can_section_write(
+                principal, "decisions", "decisions:act",
+                membership=membership, workspace={"section_access": {}},
+            ) is True
+            assert mem_mock.await_count == 2  # only the two calls without preload
+            assert ws_mock.await_count == 1  # only the tasks miss that needs legacy dept check
+
+
+@pytest.mark.asyncio
+async def test_auth_me_section_loop_fetches_ws_once_not_per_section():
+    """granted_sections must not scale Mongo round-trips with MANAGEABLE_SECTIONS."""
+    import server
+    import access_sections as sec_access
+
+    user = {
+        "user_id": "u1",
+        "email": "a@b.co",
+        "name": "Ada",
+        "age_confirmed": True,
+        "active_workspace_id": "ws_1",
+    }
+    membership = {
+        "user_id": "u1",
+        "workspace_id": "ws_1",
+        "role": "member",
+        "pack": "member",
+        "status": "active",
+        "department": "Engineering",
+        "section_grants": ["tasks"],
+    }
+    ws = {"workspace_id": "ws_1", "section_access": {}}
+
+    mock_db = MagicMock()
+    mock_db.memberships.find_one = AsyncMock(return_value=membership)
+
+    with patch.object(server, "db", mock_db), \
+         patch.object(server, "get_ws", new=AsyncMock(return_value=ws)) as ws_mock, \
+         patch.object(server, "_membership_for", new=AsyncMock(return_value=membership)) as mem_mock, \
+         patch.object(server.dept_access, "department_names_by_user_id", new=AsyncMock(return_value={})), \
+         patch.object(server.dept_access, "attach_real_departments", new=lambda payload, _names: payload):
+        out = await server._user_session_payload(user)
+        assert "tasks" in out["granted_sections"]
+        assert ws_mock.await_count == 1
+        # Preloaded membership/workspace — loop must not call _membership_for per section.
+        assert mem_mock.await_count == 0
+        assert len(sec_access.MANAGEABLE_SECTIONS) >= 2
+        assert ws_mock.await_count < len(sec_access.MANAGEABLE_SECTIONS)
 
 
 @pytest.mark.asyncio

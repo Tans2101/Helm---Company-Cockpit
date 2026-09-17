@@ -18,13 +18,14 @@ def _entries_cursor(rows):
 
 
 def _run_compute(entries, settings):
+    server._FINANCIALS_CACHE.clear()
     mock_db = MagicMock()
     mock_db.workspaces.find_one = AsyncMock(
         return_value={"financial_settings": settings},
     )
     mock_db.financial_entries.find = MagicMock(return_value=_entries_cursor(entries))
     with patch.object(server, "db", mock_db):
-        return asyncio.run(server.compute_financials("ws_test"))
+        return asyncio.run(server.compute_financials("ws_test", bypass_cache=True))
 
 
 def test_format_runway_display_states():
@@ -160,3 +161,85 @@ def test_synthesis_marks_revenue_not_entered():
     )
     assert "revenue_not_entered" in payload["unknown_fields"]
     assert payload["mrr"] is None
+
+
+def test_compute_financials_cache_hit_skips_second_db_read():
+    server._FINANCIALS_CACHE.clear()
+    entries = [
+        {
+            "type": "revenue",
+            "category": "Subscriptions",
+            "amount": 1000,
+            "month": "2026-09",
+            "recurring": True,
+        },
+    ]
+    mock_db = MagicMock()
+    mock_db.workspaces.find_one = AsyncMock(
+        return_value={"financial_settings": {"cash": 50000, "currency": "usd"}},
+    )
+    find_mock = MagicMock(return_value=_entries_cursor(entries))
+    mock_db.financial_entries.find = find_mock
+    with patch.object(server, "db", mock_db):
+        first = asyncio.run(server.compute_financials("ws_cache"))
+        second = asyncio.run(server.compute_financials("ws_cache"))
+    assert first["mrr_known"] is True
+    assert second["mrr"] == first["mrr"]
+    assert find_mock.call_count == 1
+
+
+def test_invalidate_financials_cache_forces_recompute():
+    server._FINANCIALS_CACHE.clear()
+    entries = [
+        {
+            "type": "expense",
+            "category": "Cloud",
+            "amount": 100,
+            "month": "2026-09",
+            "recurring": True,
+        },
+    ]
+    mock_db = MagicMock()
+    mock_db.workspaces.find_one = AsyncMock(
+        return_value={"financial_settings": {"cash": 1000, "currency": "usd"}},
+    )
+    find_mock = MagicMock(return_value=_entries_cursor(entries))
+    mock_db.financial_entries.find = find_mock
+    with patch.object(server, "db", mock_db):
+        asyncio.run(server.compute_financials("ws_inv"))
+        server.invalidate_financials_cache("ws_inv")
+        asyncio.run(server.compute_financials("ws_inv"))
+    assert find_mock.call_count == 2
+
+
+def test_compute_financials_return_entries_reused_by_live_signals():
+    server._FINANCIALS_CACHE.clear()
+    entries = [
+        {
+            "type": "expense",
+            "category": "Cloud",
+            "amount": 250,
+            "month": "2026-09",
+            "recurring": True,
+        },
+    ]
+    mock_db = MagicMock()
+    mock_db.workspaces.find_one = AsyncMock(
+        return_value={"financial_settings": {"cash": 10000, "currency": "usd"}},
+    )
+    find_mock = MagicMock(return_value=_entries_cursor(entries))
+    mock_db.financial_entries.find = find_mock
+    mock_db.deals.find = MagicMock(return_value=_entries_cursor([]))
+
+    async def _run():
+        with patch.object(server, "db", mock_db), \
+             patch.object(server, "get_ws", new=AsyncMock(return_value={
+                 "workspace_id": "ws_sig", "tasks": {"items": []}, "people": {"people": []},
+             })), \
+             patch.object(server, "_recent_updates", new=AsyncMock(return_value=[])), \
+             patch.object(server, "_department_signal_inputs", new=AsyncMock(return_value=[])):
+            await server._workspace_live_signals("ws_sig")
+
+    asyncio.run(_run())
+    # One financial_entries read inside compute_financials — not a second for signals.
+    assert find_mock.call_count == 1
