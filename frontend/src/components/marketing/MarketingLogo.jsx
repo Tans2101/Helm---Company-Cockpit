@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { CATEGORY } from "@/lib/marketingCopy";
+import helmMark from "@/assets/helm-mark.svg";
+import helmMarkNavy from "@/assets/helm-mark-navy.svg";
 
 /** Clickable Helm mark — always routes to the marketing home page. */
 export default function MarketingLogo({ size = "md", showTagline = false, className = "", dark = false }) {
   const box = size === "sm" ? "w-7 h-7" : "w-9 h-9";
-  const letter = size === "sm" ? "text-sm" : "text-base";
   const name = size === "sm" ? "text-sm" : "text-base";
 
   return (
@@ -13,9 +14,14 @@ export default function MarketingLogo({ size = "md", showTagline = false, classN
       className={`inline-flex items-center gap-2.5 group transition-opacity hover:opacity-90 ${className}`}
       data-testid="helm-logo-home"
     >
-      <div className={`${box} rounded-md border flex items-center justify-center shrink-0 bg-transparent border-helm-gold/35`}>
-        <span className={`font-mono font-medium text-helm-gold ${letter}`}>H</span>
-      </div>
+      <img
+        src={dark ? helmMarkNavy : helmMark}
+        alt=""
+        width={size === "sm" ? 28 : 36}
+        height={size === "sm" ? 28 : 36}
+        className={`${box} shrink-0 rounded-md`}
+        draggable={false}
+      />
       <div>
         <p className={`font-semibold tracking-tight leading-none ${name} ${dark ? "text-helm-cream" : "text-helm-navy"}`}>Helm</p>
         {showTagline && (

@@ -1,14 +1,13 @@
 import { Link } from "react-router-dom";
 import { COMPANY_LOCATION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
+import HelmMark from "@/components/HelmMark";
 
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-helm-ink text-helm-cream">
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-helm-slate hover:text-helm-cream transition-colors mb-10">
-          <span className="w-6 h-6 rounded bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-            <span className="font-mono text-helm-gold text-xs">H</span>
-          </span>
+          <HelmMark size={24} className="rounded" />
           Back to Helm
         </Link>
 

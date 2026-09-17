@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
+import HelmMark from "@/components/HelmMark";
 
 export default function WorkspaceGate() {
   const { user, logout } = useAuth();
@@ -48,9 +49,7 @@ export default function WorkspaceGate() {
       <div className="w-full max-w-xl">
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-              <span className="font-mono text-helm-gold font-medium">H</span>
-            </div>
+            <HelmMark size={36} className="rounded-md" />
             <div>
               <p className="text-helm-fg font-semibold tracking-tight leading-none">Helm</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Company Workspace</p>

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   FOUNDER_ROLES, COMPANY_STAGES, INDUSTRIES, TEAM_SIZES, SETUP_STEPS,
 } from "@/lib/companySetupCopy";
+import HelmMark from "@/components/HelmMark";
 
 const ROLE_ICONS = {
   CEO: Crown,
@@ -84,9 +85,7 @@ export default function CompanySetup({ company }) {
         <div className="w-full max-w-2xl">
           {/* Header */}
           <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-              <span className="font-mono text-helm-gold font-medium">H</span>
-            </div>
+            <HelmMark size={36} className="rounded-md" />
             <div>
               <p className="text-helm-fg font-semibold tracking-tight leading-none">Helm</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Set up your company</p>

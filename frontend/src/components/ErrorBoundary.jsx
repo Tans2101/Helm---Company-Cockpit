@@ -1,4 +1,5 @@
 import { Component } from "react";
+import HelmMark from "@/components/HelmMark";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -23,9 +24,7 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-helm-ink grain p-6">
           <div className="relative z-10 max-w-md w-full text-center">
-            <div className="w-12 h-12 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center mx-auto mb-6">
-              <span className="font-mono text-helm-gold font-medium">H</span>
-            </div>
+            <HelmMark size={48} className="rounded-md mx-auto mb-6" />
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Something went wrong</p>
             <h1 className="font-display text-2xl font-normal text-helm-fg tracking-tight">This screen hit an unexpected error.</h1>
             <p className="text-sm text-helm-muted mt-3 leading-relaxed">

@@ -25,6 +25,7 @@ import { canManageBilling } from "@/lib/access";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
+import HelmMark from "@/components/HelmMark";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -469,9 +470,7 @@ export default function AppLayout() {
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-helm-bg/95 backdrop-blur-md border-b border-helm-line">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-            <span className="font-mono text-helm-gold text-xs">H</span>
-          </div>
+          <HelmMark size={28} className="rounded-md" />
           <span className="text-helm-fg font-semibold text-sm">Helm</span>
         </div>
         <div className="flex items-center gap-1">
