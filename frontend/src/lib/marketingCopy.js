@@ -26,15 +26,15 @@ export const MISSION =
 export const VISION =
   "The near direction is to deepen that same cockpit across every lane operators already run in Helm (Briefing, Decisions, Financials, Production, Procurement, Legal, HR, Maintenance, Sales) so the morning open is the company, not another reconstruction project.";
 export const ABOUT_DIFFERENTIATOR =
-  "Helm is grounded in the workspace's live data, not a generic chart library. Ask Helm answers from actual financials and pipeline; Financials refuses to dress missing cash or runway up as $0; department activity can surface as draft reports for review. Across those paths, synthesis is meant to stay honest: when the data is not there yet, Helm says so instead of inventing a confident answer.";
+  "Helm is grounded in the workspace's live data, not a generic chart library. Ask Helm answers from actual financials and pipeline; Financials refuses to dress missing cash or runway up as $0; Decision Center keeps the call and its outcome visible instead of letting approvals vanish into chat; department status rolls into the Briefing so the morning picture is company-wide, not one lane at a time.";
 
 export const ABOUT_STORY =
-  "Helm started by watching a real manufacturing company get buried in 10+ scattered daily reports by email: inventory counts, commodity and input prices, shipment updates, and other one-off files that were never the same template twice. That was the spark. It showed a deeper problem: an owner's picture of their own business was scattered across formats, people, and tools, with no synthesis. The same gap showed up as decisions waiting in separate queues, financials living apart from the floor, and department status nobody could see in one place. The first feature work, the Reports Digest, fixed the visible symptom. What got built after that is the bigger fix: a CEO operating system with Briefing, Decision Center, Financials and runway, Ask Helm, and department workflows for Production, Procurement, Legal, HR, Maintenance, and Sales, synthesized into what needs the owner's attention.";
+  "Running a company means your financials, your open decisions, your team's day-to-day work, and what is happening in each department all live in different places: a spreadsheet here, a person's head there, a chat thread nobody can find again. You are not choosing between competing dashboards. You do not have a single one that is honest about what needs you right now versus what can wait. Nobody has the whole picture, least of all the person responsible for it. That is the gap Helm was built to close: pull money, decisions, people, and work into one place that shows what changed and what to decide, instead of making you assemble the picture yourself every time. What got built is a CEO operating system — Briefing, Decision Center, Financials and runway, Ask Helm, and department workflows for Production, Procurement, Legal, HR, Maintenance, and Sales — synthesized into what needs the owner's attention.";
 
 export const VALUES = [
   {
     title: "Signal over noise",
-    body: "Briefing surfaces what changed; Decision Center ranks what needs a call; department lanes (Production, Procurement, Legal, and the rest) keep operational detail where it belongs. The cockpit exists to help you decide or delegate, not to keep you scrolling.",
+    body: "Briefing surfaces what changed across the company; Decision Center ranks what needs a call; department lanes keep operational detail where it belongs. The cockpit exists to help you decide or delegate, not to keep you scrolling through more charts.",
   },
   {
     title: "Quiet control",
@@ -42,7 +42,7 @@ export const VALUES = [
   },
   {
     title: "Honest synthesis",
-    body: "Missing cash, MRR, burn, or runway on Financials show as \"Add data,\" not $0. Ask Helm is instructed to answer from live workspace data and admit gaps instead of inventing figures. Department-sourced report drafts turn raw lane activity into something reviewable, without pretending the draft is more than it is.",
+    body: "Missing cash, MRR, burn, or runway on Financials show as \"Add data,\" not $0. Ask Helm answers from live workspace data and is told to admit gaps instead of inventing figures. Decision Center tracks real outcomes so a call does not disappear after you make it.",
   },
 ];
 
