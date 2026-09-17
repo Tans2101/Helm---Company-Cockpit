@@ -5,7 +5,7 @@ import {
   FileText, Calendar, Contact, MessageSquareText,
   Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet, Search,
   HelpCircle, Shield, Scale, Settings, Plug, Download, ScrollText,
-  Trash2, Building2, CreditCard, ShieldCheck, AlertTriangle,
+  Trash2, Building2, CreditCard, ShieldCheck, AlertTriangle, FolderOpen,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -306,6 +306,14 @@ function QuickNavPalette({ open, onOpenChange }) {
         description: "Settings",
         keywords: ["team", "lanes", "manage departments"],
         icon: <Building2 className="w-4 h-4" />,
+      },
+      {
+        id: "settings-documents",
+        label: "Documents",
+        to: "/app/settings#documents-library",
+        description: "Settings",
+        keywords: ["files", "pdf", "library", "uploads"],
+        icon: <FolderOpen className="w-4 h-4" />,
       },
       {
         id: "settings-integrations",

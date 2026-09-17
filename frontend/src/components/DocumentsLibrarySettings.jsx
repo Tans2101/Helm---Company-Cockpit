@@ -1,0 +1,155 @@
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { FileText, FolderOpen, ExternalLink } from "lucide-react";
+import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { api } from "@/lib/api";
+import { GlassCard, ErrorScreen, SkeletonCardList } from "@/components/kit";
+
+const CONTEXT_LABELS = {
+  financial: "Financial",
+  reports: "Reports",
+  legal: "Legal",
+};
+
+const CONTEXT_ORDER = ["financial", "reports", "legal"];
+
+/**
+ * Settings card: every document the signed-in user may open, grouped by context.
+ * Opening always goes through the existing per-context GET (presigned URL) — never raw.
+ */
+export default function DocumentsLibrarySettings() {
+  const { data, loading, error, reload } = useFetch("/documents/library");
+  const [openingId, setOpeningId] = useState(null);
+
+  const grouped = useMemo(() => {
+    const docs = data?.documents || [];
+    const out = { financial: [], reports: [], legal: [] };
+    for (const d of docs) {
+      const key = d.context in out ? d.context : null;
+      if (key) out[key].push(d);
+    }
+    return out;
+  }, [data]);
+
+  const openDocument = async (doc) => {
+    const path = (doc.open_path || "").replace(/^\//, "");
+    if (!path) {
+      toast.error("No open path for this document");
+      return;
+    }
+    const key = `${doc.context}:${doc.id || doc.matter_id}`;
+    setOpeningId(key);
+    try {
+      const { data: res } = await api.get(`/${path}`);
+      if (res?.presigned_url) {
+        window.open(res.presigned_url, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("Could not open document");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not open document");
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <GlassCard id="documents-library" className="p-5 mb-4 fade-up scroll-mt-24">
+        <SkeletonCardList count={2} />
+      </GlassCard>
+    );
+  }
+
+  if (error) {
+    return (
+      <GlassCard id="documents-library" className="p-5 mb-4 fade-up scroll-mt-24">
+        <ErrorScreen
+          label="Could not load documents"
+          message={fetchErrorMessage(error, "Document library is unavailable.")}
+          onRetry={reload}
+        />
+      </GlassCard>
+    );
+  }
+
+  const total = data?.count ?? (data?.documents || []).length;
+
+  return (
+    <GlassCard
+      id="documents-library"
+      className="p-5 mb-4 fade-up scroll-mt-24"
+      data-testid="settings-documents-card"
+    >
+      <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
+        <FolderOpen className="w-4 h-4" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Documents</span>
+      </div>
+      <p className="text-sm text-helm-muted mb-4 leading-relaxed">
+        Files you already have access to across Financials, Reports, and Legal.
+        Opening a file uses the same permission-checked download as each section.
+      </p>
+
+      {total === 0 ? (
+        <p className="text-sm text-helm-muted" data-testid="documents-library-empty">
+          No documents available for your access.
+        </p>
+      ) : (
+        <div className="space-y-5">
+          {CONTEXT_ORDER.map((ctx) => {
+            const rows = grouped[ctx] || [];
+            if (!rows.length) return null;
+            return (
+              <div key={ctx} data-testid={`documents-group-${ctx}`}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <FileText className="w-3.5 h-3.5 text-helm-muted" />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-helm-muted">
+                    {CONTEXT_LABELS[ctx]}
+                  </span>
+                  <span className="text-[10px] text-helm-muted/70">({rows.length})</span>
+                </div>
+                <ul className="divide-y divide-helm-line/60 border border-helm-line/60 rounded-md overflow-hidden">
+                  {rows.map((doc) => {
+                    const rowKey = `${doc.context}:${doc.id || doc.matter_id}`;
+                    const busy = openingId === rowKey;
+                    return (
+                      <li
+                        key={rowKey}
+                        className="flex items-center justify-between gap-3 px-3 py-2.5 bg-helm-card/40"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm text-helm-fg truncate">
+                            {doc.filename || "Untitled"}
+                          </p>
+                          <p className="text-xs text-helm-muted truncate">
+                            {doc.matter_title
+                              ? `Matter · ${doc.matter_title}`
+                              : doc.report_date
+                                ? `Report date · ${doc.report_date}`
+                                : doc.uploaded_at
+                                  ? `Uploaded · ${String(doc.uploaded_at).slice(0, 10)}`
+                                  : CONTEXT_LABELS[ctx]}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          data-testid={`documents-open-${doc.id || doc.matter_id}`}
+                          onClick={() => openDocument(doc)}
+                          disabled={busy}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-helm-line px-2.5 py-1.5 text-xs text-helm-gold hover:border-helm-gold/40 disabled:opacity-60"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          {busy ? "Opening…" : "Open"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </GlassCard>
+  );
+}

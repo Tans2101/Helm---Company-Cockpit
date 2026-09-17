@@ -4477,6 +4477,113 @@ async def _read_validated_report_document(file: UploadFile) -> bytes:
     return data
 
 
+@api_router.get("/documents/library")
+async def documents_library(principal=Depends(get_principal)):
+    """List every document the caller may open — filtered by each context's own permission bar.
+
+    Returns metadata + open_path only (no presigned URLs). Opening a file still goes through
+    the existing per-context GET endpoint.
+    """
+    ws_id = principal["workspace_id"]
+    items: list[dict] = []
+
+    if await can_section_write(principal, "financials", "finance:write"):
+        fin_docs = await db.documents.find(
+            {"workspace_id": ws_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "filename": 1,
+                "content_type": 1,
+                "uploaded_at": 1,
+                "uploaded_by": 1,
+                "status": 1,
+            },
+        ).sort("uploaded_at", -1).to_list(500)
+        for d in fin_docs:
+            items.append({
+                "id": d.get("id"),
+                "context": "financial",
+                "filename": d.get("filename") or "document",
+                "content_type": d.get("content_type"),
+                "uploaded_at": d.get("uploaded_at"),
+                "uploaded_by": d.get("uploaded_by"),
+                "status": d.get("status"),
+                "open_path": f"/documents/{d.get('id')}",
+            })
+
+    if await can_section_write(principal, "reports", "reports:write"):
+        report_docs = await db.report_documents.find(
+            {"workspace_id": ws_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "filename": 1,
+                "content_type": 1,
+                "uploaded_at": 1,
+                "uploaded_by": 1,
+                "report_date": 1,
+                "status": 1,
+            },
+        ).sort("uploaded_at", -1).to_list(500)
+        for d in report_docs:
+            items.append({
+                "id": d.get("id"),
+                "context": "reports",
+                "filename": d.get("filename") or "report",
+                "content_type": d.get("content_type"),
+                "uploaded_at": d.get("uploaded_at"),
+                "uploaded_by": d.get("uploaded_by"),
+                "report_date": d.get("report_date"),
+                "status": d.get("status"),
+                "open_path": f"/reports/documents/{d.get('id')}",
+            })
+
+    try:
+        dept = await _legal_department(principal)
+    except HTTPException:
+        dept = None
+    if dept:
+        membership = await dept_access.get_department_membership(
+            db, dept["department_id"], principal["user_id"],
+        )
+        is_lead = _can_lead_legal(principal, membership)
+        matters = await db.legal_matters.find(
+            {
+                "department_id": dept["department_id"],
+                "document_ref.storage_key": {"$exists": True, "$nin": [None, ""]},
+            },
+            {"_id": 0},
+        ).sort("updated_at", -1).to_list(500)
+        for matter in matters:
+            if not (is_lead or matter.get("assigned_to") == principal["user_id"]):
+                continue
+            ref = matter.get("document_ref") if isinstance(matter.get("document_ref"), dict) else {}
+            if not ref.get("storage_key"):
+                continue
+            mid = matter.get("id")
+            items.append({
+                "id": ref.get("document_id") or mid,
+                "context": "legal",
+                "matter_id": mid,
+                "matter_title": matter.get("title"),
+                "filename": ref.get("filename") or "document",
+                "content_type": ref.get("content_type"),
+                "uploaded_at": ref.get("uploaded_at"),
+                "uploaded_by": ref.get("uploaded_by"),
+                "open_path": f"/legal/matters/{mid}/document",
+            })
+
+    await log_activity(
+        principal,
+        "documents",
+        "document.library.view",
+        f"Viewed document library · {len(items)} item{'s' if len(items) != 1 else ''}",
+        {"count": len(items)},
+    )
+    return {"documents": items, "count": len(items)}
+
+
 @api_router.post("/documents/upload")
 async def upload_financial_document(
     file: UploadFile = File(...),
@@ -4605,6 +4712,13 @@ async def get_financial_document(
     except Exception as exc:
         logger.exception("presigned url failed for %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
+    await log_activity(
+        principal,
+        "financials",
+        "document.download",
+        f"Opened bill · {doc.get('filename') or document_id}",
+        {"document_id": document_id},
+    )
     return {**doc, "presigned_url": presigned_url}
 
 
@@ -5802,6 +5916,36 @@ async def summarize_report_document_route(
             {"$set": {"status": "failed"}},
         )
         raise HTTPException(status_code=500, detail="Could not summarize report") from exc
+
+
+@api_router.get("/reports/documents/{document_id}")
+async def get_report_document(
+    document_id: str,
+    principal=Depends(require_section("reports", "reports:write")),
+):
+    """Return metadata + presigned URL for a report document (same bar as upload)."""
+    doc = await db.report_documents.find_one(
+        {"id": document_id, "workspace_id": principal["workspace_id"]}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.get("storage_key"):
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc_storage.r2_configured():
+        raise HTTPException(status_code=503, detail="Document storage is not configured")
+    try:
+        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, doc["storage_key"])
+    except Exception as exc:
+        logger.exception("presigned url failed for report %s", document_id)
+        raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
+    await log_activity(
+        principal,
+        "reports",
+        "document.download",
+        f"Opened report · {doc.get('filename') or document_id}",
+        {"document_id": document_id},
+    )
+    return {**doc, "presigned_url": presigned_url}
 
 
 @api_router.get("/reports/digest")
@@ -8535,14 +8679,27 @@ async def upload_legal_matter_document(
 
 @api_router.get("/legal/matters/{matter_id}/document")
 async def get_legal_matter_document(matter_id: str, principal=Depends(get_principal)):
-    """Return metadata + presigned URL for the matter's current document."""
+    """Return metadata + presigned URL for the matter's current document.
+
+    Same access bar as upload: Legal department access plus lead or assignee.
+    """
     dept = await _legal_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    is_lead = _can_lead_legal(principal, membership)
     matter = await db.legal_matters.find_one(
         {"id": matter_id, "department_id": dept["department_id"]},
         {"_id": 0},
     )
     if not matter:
         raise HTTPException(status_code=404, detail="Matter not found")
+    is_assignee = matter.get("assigned_to") == principal["user_id"]
+    if not (is_lead or is_assignee):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only open documents on matters assigned to you",
+        )
     doc_ref = matter.get("document_ref")
     if not isinstance(doc_ref, dict) or not doc_ref.get("storage_key"):
         raise HTTPException(status_code=404, detail="No document attached")
@@ -8555,6 +8712,13 @@ async def get_legal_matter_document(matter_id: str, principal=Depends(get_princi
     except Exception as exc:
         logger.exception("presigned url failed for legal matter %s", matter_id)
         raise HTTPException(status_code=500, detail="Could not generate download URL") from exc
+    await log_activity(
+        principal,
+        "legal",
+        "document.download",
+        f"Opened legal document · {doc_ref.get('filename') or matter_id}",
+        {"matter_id": matter_id, "document_id": doc_ref.get("document_id")},
+    )
     return {
         "document_id": doc_ref.get("document_id"),
         "filename": doc_ref.get("filename"),

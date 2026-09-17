@@ -8,6 +8,7 @@ import { useFetch, blobErrorDetail } from "@/hooks/useFetch";
 import { useCompanyQuery } from "@/hooks/useCompanyQuery";
 import { PageHeader, GlassCard } from "@/components/kit";
 import DepartmentsSettings from "@/components/DepartmentsSettings";
+import DocumentsLibrarySettings from "@/components/DocumentsLibrarySettings";
 import InviteCeoCard from "@/components/InviteCeoCard";
 import { useTheme } from "@/context/ThemeContext";
 import SwitchButton from "@/components/kokonutui/switch-button";
@@ -157,7 +158,7 @@ export default function AccountSettings() {
     <div className="max-w-2xl">
       <PageHeader
         title="Account settings"
-        subtitle="Appearance, departments, integrations, referrals, data export, and account controls."
+        subtitle="Appearance, departments, documents, integrations, referrals, data export, and account controls."
       />
 
       <GlassCard id="settings-security" className="p-5 mb-4 fade-up scroll-mt-24">
@@ -241,6 +242,7 @@ export default function AccountSettings() {
 
       {isOwner && <InviteCeoCard />}
       <DepartmentsSettings />
+      <DocumentsLibrarySettings />
 
       <GlassCard id="integrations" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="settings-integrations-card">
         <div className="flex items-center gap-1.5 mb-2 text-helm-gold">

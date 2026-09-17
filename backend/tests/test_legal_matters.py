@@ -293,10 +293,37 @@ def test_document_presigned(legal_api):
         "content_type": "application/pdf",
     }
     with patch.object(server.doc_storage, "r2_configured", return_value=True), \
-         patch.object(server.doc_storage, "get_presigned_url", return_value="https://example.com/doc"):
+         patch.object(server.doc_storage, "get_presigned_url", return_value="https://example.com/doc"), \
+         patch.object(server, "log_activity", new_callable=AsyncMock) as log:
         r = client.get(f"/api/legal/matters/{mid}/document")
         assert r.status_code == 200
         assert r.json()["presigned_url"] == "https://example.com/doc"
+        log.assert_awaited()
+        assert log.await_args.args[2] == "document.download"
+
+
+def test_non_assignee_cannot_download_document(legal_api):
+    """Legal department members who are neither lead nor assignee get 403 on GET."""
+    client, store, as_ceo, as_member, as_other, as_lead, as_outsider, depts = legal_api
+    client.post("/api/legal/matters", json={"title": "NDA"})
+    mid = store.rows[0]["id"]
+    store.rows[0]["document_ref"] = {
+        "document_id": "ldoc_1",
+        "storage_key": "ws/key.pdf",
+        "filename": "nda.pdf",
+        "content_type": "application/pdf",
+    }
+    # as_other is a Legal member but not assignee (matter is assigned to u_mem) and not lead.
+    server.app.dependency_overrides[server.get_principal] = as_other
+    with patch.object(server.doc_storage, "r2_configured", return_value=True), \
+         patch.object(server.doc_storage, "get_presigned_url", return_value="https://example.com/doc") as signed:
+        r = client.get(f"/api/legal/matters/{mid}/document")
+        assert r.status_code == 403
+        signed.assert_not_called()
+        # Matter list metadata remains visible to Legal members.
+        listed = client.get("/api/legal/matters")
+        assert listed.status_code == 200
+        assert any(m["id"] == mid for m in listed.json().get("matters") or [])
 
 
 def test_delete_lead_only_removes_doc(legal_api):
