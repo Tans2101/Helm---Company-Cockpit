@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Send, Sparkles, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
-import { API, getApiAuthHeaders } from "@/lib/api";
+import { API, getApiAuthHeaders, apiErrorMessage, apiForbiddenReason } from "@/lib/api";
 import { PageHeader } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
@@ -45,16 +45,37 @@ export default function AskHelm() {
         body: JSON.stringify({ message: q }),
       });
       if (res.status === 403) {
+        let body = null;
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+        const reason = apiForbiddenReason(body) || "plan";
+        const message = apiErrorMessage(
+          body,
+          reason === "permission"
+            ? "You don't have access to Ask Helm. Ask a workspace owner if you need it."
+            : "Ask Helm isn't included in your plan",
+        );
+        if (reason === "permission") {
+          setMessages((m) => {
+            const copy = [...m];
+            copy[copy.length - 1] = { role: "assistant", content: message };
+            return copy;
+          });
+          return;
+        }
         setMessages((m) => m.slice(0, -2));
         setStreaming(false);
-        navigate("/app/billing");
+        navigate("/app/billing", { state: { billingNotice: message } });
         return;
       }
       if (res.status === 429) {
         let detail = "You've used your Ask Helm messages this month. Upgrade to continue.";
         try {
           const body = await res.json();
-          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : detail;
+          if (body?.detail) detail = apiErrorMessage(body, detail);
         } catch {
           /* keep default */
         }

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { Check, ArrowLeft, ShieldCheck, ExternalLink, AlertTriangle } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
@@ -47,6 +47,14 @@ export default function Billing() {
   const { data, loading, error, reload } = useFetch("/billing/plans");
   const [busy, setBusy] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const notice = location.state?.billingNotice;
+    if (!notice) return;
+    toast.message(String(notice));
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, location.pathname, navigate]);
 
   if (loading) {
     return (

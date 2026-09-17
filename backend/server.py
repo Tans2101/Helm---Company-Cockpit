@@ -1157,7 +1157,10 @@ def require_feature(feature: str):
         if not workspace_allows(c, feature):
             raise HTTPException(
                 status_code=403,
-                detail=f"Upgrade your plan to use this feature ({feature.replace('_', ' ')})",
+                detail={
+                    "reason": "plan",
+                    "message": f"Upgrade your plan to use this feature ({feature.replace('_', ' ')})",
+                },
             )
         return principal
     return dep
@@ -1167,14 +1170,24 @@ def require_pro_perm(action: str):
     """Pack permission + optional plan feature gate (Free keeps core cockpit writes)."""
     async def dep(principal=Depends(get_principal)):
         if action not in perms_for(principal["pack"]):
-            raise HTTPException(status_code=403, detail="You do not have permission for this action")
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "reason": "permission",
+                    "message": "You do not have permission for this action",
+                },
+            )
         feature = helm_plans.feature_for_action(action)
         if feature and BILLING_ENFORCED:
             c = await get_ws(principal["workspace_id"])
             if not workspace_allows(c, feature):
+                if action == "ask:use":
+                    plan_message = "Ask Helm isn't included in your plan"
+                else:
+                    plan_message = "Upgrade your plan to use this feature"
                 raise HTTPException(
                     status_code=403,
-                    detail="Upgrade your plan to use this feature",
+                    detail={"reason": "plan", "message": plan_message, "feature": feature},
                 )
         return principal
     return dep

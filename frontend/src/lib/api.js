@@ -10,6 +10,38 @@ export const api = axios.create({
   timeout: 20000,
 });
 
+/** Normalize FastAPI `detail` (string | {message, reason} | validation list) for UI copy. */
+export function apiErrorMessage(detailOrError, fallback = "Something went wrong") {
+  const detail = detailOrError?.response?.data?.detail ?? detailOrError?.detail ?? detailOrError;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") {
+    if (typeof detail.message === "string" && detail.message.trim()) return detail.message;
+    if (Array.isArray(detail)) {
+      const parts = detail
+        .map((item) => (typeof item === "string" ? item : item?.msg || item?.message))
+        .filter(Boolean);
+      if (parts.length) return parts.join("; ");
+    }
+  }
+  if (typeof detailOrError?.message === "string" && detailOrError.message.trim()) {
+    return detailOrError.message;
+  }
+  return fallback;
+}
+
+/** `permission` | `plan` | null from a 403 body (Ask Helm, billing gates). */
+export function apiForbiddenReason(detailOrBody) {
+  const detail = detailOrBody?.detail ?? detailOrBody?.response?.data?.detail ?? detailOrBody;
+  if (detail && typeof detail === "object" && !Array.isArray(detail) && detail.reason) {
+    return String(detail.reason);
+  }
+  if (typeof detail === "string") {
+    if (/permission/i.test(detail)) return "permission";
+    if (/plan|upgrade|isn't included/i.test(detail)) return "plan";
+  }
+  return null;
+}
+
 let clerkGetToken = null;
 
 const BOOTSTRAP_PATHS = ["/auth/me", "/auth/config"];
@@ -59,6 +91,24 @@ api.interceptors.request.use(async (config) => {
     return Promise.reject(new Error(msg === "clerk-token-timeout" ? msg : "clerk-token-timeout"));
   }
 });
+
+// Structured 403 bodies ({reason, message}) stay toast-friendly as a string detail.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const data = error?.response?.data;
+    const detail = data?.detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail) && typeof detail.message === "string") {
+      error.response.data = {
+        ...data,
+        detail: detail.message,
+        reason: detail.reason ?? data.reason,
+        feature: detail.feature ?? data.feature,
+      };
+    }
+    return Promise.reject(error);
+  },
+);
 
 /** Fetch auth config without Clerk token (bootstrap). */
 export async function fetchAuthConfig() {
