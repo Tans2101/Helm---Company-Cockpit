@@ -94,11 +94,11 @@ export default function Landing() {
               className="mt-8 text-lg text-helm-slate leading-relaxed max-w-xl">{HERO_SUB}</motion.p>
             <motion.div variants={fade} initial="hidden" animate="show" custom={3} className="mt-10 flex flex-wrap items-center gap-3 relative z-10">
               <button data-testid="hero-cta-btn" onClick={enter} type="button"
-                className="group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-6 py-3 transition-colors hover:bg-helm-gold">
+                className="group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-6 py-3 transition-colors hover:bg-helm-gold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">
                 {authed ? "Open your cockpit" : "Start free"}
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
-              <a href="#how" className="inline-flex items-center gap-2 rounded-md border border-helm-cream/15 px-6 py-3 text-sm text-helm-cream transition-colors hover:border-helm-cream/30">
+              <a href="#how" className="inline-flex items-center gap-2 rounded-md border border-helm-cream/15 px-6 py-3 text-sm text-helm-cream transition-colors hover:border-helm-cream/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">
                 See the 3-minute workflow
               </a>
             </motion.div>
@@ -233,7 +233,7 @@ export default function Landing() {
                   ))}
                 </ul>
                 <button type="button" onClick={enter} data-testid={`pricing-cta-${plan.id}`}
-                  className={`mt-8 w-full rounded-md font-medium py-3 transition-colors ${
+                  className={`mt-8 w-full rounded-md font-medium py-3 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold ${
                     plan.highlighted
                       ? "bg-helm-cream text-helm-navy hover:bg-helm-gold"
                       : "border border-helm-cream/15 text-helm-cream hover:border-helm-cream/30"
@@ -263,7 +263,7 @@ export default function Landing() {
           <p className="mt-6 text-helm-slate">Quiet control for the CEO everyone&apos;s counting on.</p>
           <div className="mt-10">
             <button data-testid="footer-cta-btn" onClick={enter} type="button"
-              className="group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-7 py-3 transition-colors hover:bg-helm-gold">
+              className="group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-7 py-3 transition-colors hover:bg-helm-gold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">
               {authed ? "Open your cockpit" : "Get started"}
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>

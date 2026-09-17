@@ -74,8 +74,9 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build && node scripts/verify-auth-build.mjs",
-    "test": "craco test"
+    "build": "craco build && node scripts/verify-auth-build.mjs && node scripts/prerender-marketing.mjs",
+    "test": "craco test",
+    "prerender": "node scripts/prerender-marketing.mjs"
   },
   "browserslist": {
     "production": [

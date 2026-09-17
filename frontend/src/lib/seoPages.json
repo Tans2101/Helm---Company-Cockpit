@@ -1,0 +1,54 @@
+{
+  "origin": "https://www.helmcontrol.online",
+  "ogImage": "https://www.helmcontrol.online/og-image.png",
+  "pages": {
+    "/": {
+      "title": "Helm — Run the business. Don't chase it.",
+      "description": "Helm — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people.",
+      "ogTitle": "Helm — Run the business. Don't chase it.",
+      "ogDescription": "Helm — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people."
+    },
+    "/about": {
+      "title": "About Helm — CEO Operating System",
+      "description": "Why Helm exists: money, decisions, people, and department work in one cockpit for CEOs running companies of up to 50 people.",
+      "ogTitle": "About Helm",
+      "ogDescription": "Helm pulls financials, decisions, and day-to-day work into one place so CEOs see what needs them — not another dashboard to chase."
+    },
+    "/features": {
+      "title": "Features · Helm",
+      "description": "Briefing, Decision Center, Financials, Ask Helm, and department lanes — the full Helm cockpit for operators.",
+      "ogTitle": "Helm Features",
+      "ogDescription": "See what Helm includes: briefing, decisions, runway, Ask Helm, and department workflows in one CEO operating system."
+    },
+    "/help": {
+      "title": "Help · Helm",
+      "description": "How to get started with Helm and where to find support.",
+      "ogTitle": "Helm Help",
+      "ogDescription": "Guides and answers for using Helm, the CEO operating system."
+    },
+    "/security": {
+      "title": "Security at Helm",
+      "description": "How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.",
+      "ogTitle": "Security at Helm",
+      "ogDescription": "Workspace isolation, private document storage, and encryption — how Helm protects company data."
+    },
+    "/privacy": {
+      "title": "Privacy Policy · Helm",
+      "description": "How Helm collects, uses, and protects personal and company data.",
+      "ogTitle": "Privacy Policy · Helm",
+      "ogDescription": "Helm privacy policy — what we collect and how we use it."
+    },
+    "/terms": {
+      "title": "Terms of Service · Helm",
+      "description": "Terms governing use of the Helm CEO operating system.",
+      "ogTitle": "Terms of Service · Helm",
+      "ogDescription": "Helm terms of service."
+    },
+    "/refunds": {
+      "title": "Refunds · Helm",
+      "description": "Helm billing, trials, and refund policy.",
+      "ogTitle": "Refunds · Helm",
+      "ogDescription": "How trials, cancellations, and refunds work on Helm."
+    }
+  }
+}

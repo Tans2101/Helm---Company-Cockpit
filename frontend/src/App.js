@@ -21,6 +21,7 @@ import SignUpPage from "@/pages/SignUp";
 import { LoadingScreen } from "@/components/kit";
 import { useTheme } from "@/context/ThemeContext";
 import palette from "@/design/palette.json";
+import { seoForPath, canonicalForPath, DEFAULT_OG_IMAGE } from "@/lib/seoPages";
 
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
@@ -97,17 +98,11 @@ function AppRouter() {
     persistReferralFromSearch(location.search);
   }, [location.search]);
   useEffect(() => {
+    const path = location.pathname.replace(/\/$/, "") || "/";
+    const page = seoForPath(path);
     const titles = {
-      "/": "Helm · Run the business. Don't chase it.",
       "/login": "Sign in · Helm",
       "/sign-up": "Create account · Helm",
-      "/features": "Features · Helm",
-      "/about": "About · Helm",
-      "/help": "Help · Helm",
-      "/security": "Security · Helm",
-      "/privacy": "Privacy · Helm",
-      "/terms": "Terms · Helm",
-      "/refunds": "Refunds · Helm",
       "/app": "Briefing · Helm",
       "/app/ask": "Ask Helm",
       "/app/financials": "Financials · Helm",
@@ -116,10 +111,10 @@ function AppRouter() {
       "/app/members": "Team & Access · Helm",
       "/app/integrations": "Integrations · Helm",
     };
-    const path = location.pathname.replace(/\/$/, "") || "/";
-    const exact = titles[path] || titles[location.pathname];
-    if (exact) {
-      document.title = exact;
+    if (page) {
+      document.title = page.title;
+    } else if (titles[path] || titles[location.pathname]) {
+      document.title = titles[path] || titles[location.pathname];
     } else if (path.startsWith("/app/")) {
       const segment = path.split("/")[2] || "app";
       const label = segment.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -128,9 +123,7 @@ function AppRouter() {
       document.title = "Helm";
     }
 
-    const origin = "https://www.helmcontrol.online";
-    const canonicalPath = path.startsWith("/app") ? "/" : path;
-    const canonicalHref = `${origin}${canonicalPath === "/" ? "/" : canonicalPath}`;
+    const canonicalHref = canonicalForPath(path);
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
       canonical = document.createElement("link");
@@ -140,6 +133,7 @@ function AppRouter() {
     canonical.setAttribute("href", canonicalHref);
 
     const setMeta = (attr, key, value) => {
+      if (!value) return;
       let el = document.querySelector(`meta[${attr}="${key}"]`);
       if (!el) {
         el = document.createElement("meta");
@@ -148,7 +142,17 @@ function AppRouter() {
       }
       el.setAttribute("content", value);
     };
+
+    if (page) {
+      setMeta("name", "description", page.description);
+      setMeta("property", "og:title", page.ogTitle || page.title);
+      setMeta("property", "og:description", page.ogDescription || page.description);
+      setMeta("name", "twitter:title", page.ogTitle || page.title);
+      setMeta("name", "twitter:description", page.ogDescription || page.description);
+    }
     setMeta("property", "og:url", canonicalHref);
+    setMeta("property", "og:image", DEFAULT_OG_IMAGE);
+    setMeta("name", "twitter:image", DEFAULT_OG_IMAGE);
   }, [location.pathname]);
   const { clerkEnabled, configLoading } = useClerkMode();
   const Protected = configLoading
