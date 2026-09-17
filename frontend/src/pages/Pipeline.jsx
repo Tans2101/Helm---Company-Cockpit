@@ -49,6 +49,7 @@ export default function Pipeline() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
+  const [confirmDeleteDeal, setConfirmDeleteDeal] = useState(null);
   const [productionPrompt, setProductionPrompt] = useState(null);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
 
@@ -197,10 +198,20 @@ export default function Pipeline() {
       toast.error(e?.response?.data?.detail || "Could not update stage");
     }
   };
-  const del = async (d) => {
-    if (!window.confirm(`Delete ${d.name}?`)) return;
-    try { await api.delete(`/deals/${d.id}`); reload(); toast.success("Deal removed"); }
-    catch (e) { toast.error("Could not delete"); }
+  const del = async () => {
+    const d = confirmDeleteDeal;
+    if (!d) return;
+    setBusy(true);
+    try {
+      await api.delete(`/deals/${d.id}`);
+      setConfirmDeleteDeal(null);
+      reload();
+      toast.success("Deal removed");
+    } catch (e) {
+      toast.error("Could not delete");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const confirmCreateWorkOrder = async () => {
@@ -299,7 +310,7 @@ export default function Pipeline() {
                       {canWrite && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEdit(d)} data-testid={`edit-deal-${d.id}`} className="text-helm-muted hover:text-helm-gold p-1"><PenLine className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => del(d)} data-testid={`del-deal-${d.id}`} className="text-helm-muted hover:text-helm-status-negative p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setConfirmDeleteDeal(d)} data-testid={`del-deal-${d.id}`} className="text-helm-muted hover:text-helm-status-negative p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
                     </GlassCard>
@@ -401,6 +412,17 @@ export default function Pipeline() {
           </GlassCard>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteDeal)}
+        title={`Delete ${confirmDeleteDeal?.name || "deal"}?`}
+        description="This permanently removes the deal from the pipeline. This can’t be undone."
+        confirmLabel="Delete deal"
+        busy={busy}
+        onCancel={() => setConfirmDeleteDeal(null)}
+        onConfirm={del}
+        testId="delete-deal-confirm"
+      />
 
       <ConfirmDialog
         open={Boolean(productionPrompt)}

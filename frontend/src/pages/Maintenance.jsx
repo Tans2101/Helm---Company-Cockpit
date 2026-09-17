@@ -4,7 +4,7 @@ import { Plus, Trash2, X, Wrench } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -89,6 +89,7 @@ export default function Maintenance() {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [equipmentHistory, setEquipmentHistory] = useState(null);
   const [form, setForm] = useState({
     equipment_name: "",
@@ -252,11 +253,11 @@ export default function Maintenance() {
 
   const deleteTicket = async () => {
     if (!selected) return;
-    if (!window.confirm(`Delete ticket for “${selected.equipment_name}”?`)) return;
     setBusy(true);
     try {
       await api.delete(`/maintenance/tickets/${selected.id}`);
       toast.success("Ticket deleted");
+      setConfirmDelete(false);
       setSelectedId(null);
       await reload();
     } catch (e) {
@@ -524,7 +525,7 @@ export default function Maintenance() {
                 type="button"
                 disabled={busy}
                 data-testid="maintenance-delete-btn"
-                onClick={deleteTicket}
+                onClick={() => setConfirmDelete(true)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -533,6 +534,17 @@ export default function Maintenance() {
           </div>
         </GlassCard>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete && Boolean(selected)}
+        title={`Delete ticket for “${selected?.equipment_name || ""}”?`}
+        description="This permanently removes the maintenance ticket. This can’t be undone."
+        confirmLabel="Delete ticket"
+        busy={busy}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={deleteTicket}
+        testId="delete-maintenance-confirm"
+      />
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

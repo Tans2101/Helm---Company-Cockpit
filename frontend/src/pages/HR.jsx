@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,9 @@ export default function HR() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addingLeave, setAddingLeave] = useState(false);
+  const [confirmDeleteOnboarding, setConfirmDeleteOnboarding] = useState(false);
+  const [confirmStartOffboarding, setConfirmStartOffboarding] = useState(null);
+  const [confirmDeleteOffboarding, setConfirmDeleteOffboarding] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(false);
   const [editingOffTemplate, setEditingOffTemplate] = useState(false);
   const [form, setForm] = useState({ hire_name: "", hire_email: "" });
@@ -209,11 +212,11 @@ export default function HR() {
 
   const deleteInstance = async () => {
     if (!selected) return;
-    if (!window.confirm(`Delete onboarding for “${selected.hire_name}”?`)) return;
     setBusy(true);
     try {
       await api.delete(`/hr/onboarding/${selected.id}`);
       toast.success("Onboarding deleted");
+      setConfirmDeleteOnboarding(false);
       setSelectedId(null);
       await reload();
     } catch (e) {
@@ -273,13 +276,14 @@ export default function HR() {
     setDraft(next);
   };
 
-  const startOffboarding = async (employee) => {
+  const startOffboarding = async () => {
+    const employee = confirmStartOffboarding;
     if (!employee) return;
-    if (!window.confirm(`Start offboarding for “${employee.name}”? Status becomes departed only after every step is done.`)) return;
     setBusy(true);
     try {
       const { data: res } = await api.post("/hr/offboarding", { employee_id: employee.id });
       toast.success("Offboarding started");
+      setConfirmStartOffboarding(null);
       await reloadOff();
       setTab("offboarding");
       if (res?.instance?.id) setSelectedOffId(res.instance.id);
@@ -312,11 +316,11 @@ export default function HR() {
 
   const deleteOffInstance = async () => {
     if (!selectedOff) return;
-    if (!window.confirm(`Delete offboarding for “${selectedOff.employee_name}”?`)) return;
     setBusy(true);
     try {
       await api.delete(`/hr/offboarding/${selectedOff.id}`);
       toast.success("Offboarding deleted");
+      setConfirmDeleteOffboarding(false);
       setSelectedOffId(null);
       await reloadOff();
     } catch (e) {
@@ -651,7 +655,7 @@ export default function HR() {
                     type="button"
                     disabled={busy}
                     data-testid="hr-delete-btn"
-                    onClick={deleteInstance}
+                    onClick={() => setConfirmDeleteOnboarding(true)}
                     className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -770,7 +774,7 @@ export default function HR() {
                   type="button"
                   disabled={busy}
                   data-testid="hr-start-offboarding-btn"
-                  onClick={() => startOffboarding(selectedEmp)}
+                  onClick={() => setConfirmStartOffboarding(selectedEmp)}
                   className="rounded-md border border-helm-fg/15 text-helm-fg text-sm px-3 py-2 hover:bg-helm-fg/5 disabled:opacity-50"
                 >
                   Start offboarding
@@ -1015,7 +1019,8 @@ export default function HR() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={deleteOffInstance}
+                  data-testid="hr-delete-offboarding-btn"
+                  onClick={() => setConfirmDeleteOffboarding(true)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-1.5 hover:bg-helm-status-negative/10 disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -1025,6 +1030,39 @@ export default function HR() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOnboarding && Boolean(selected)}
+        title={`Delete onboarding for “${selected?.hire_name || ""}”?`}
+        description="This permanently removes the onboarding checklist. This can’t be undone."
+        confirmLabel="Delete onboarding"
+        busy={busy}
+        onCancel={() => setConfirmDeleteOnboarding(false)}
+        onConfirm={deleteInstance}
+        testId="delete-hr-onboarding-confirm"
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmStartOffboarding)}
+        title={`Start offboarding for “${confirmStartOffboarding?.name || ""}”?`}
+        description="Status becomes departed only after every offboarding step is done."
+        confirmLabel="Start offboarding"
+        busy={busy}
+        onCancel={() => setConfirmStartOffboarding(null)}
+        onConfirm={startOffboarding}
+        testId="start-hr-offboarding-confirm"
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOffboarding && Boolean(selectedOff)}
+        title={`Delete offboarding for “${selectedOff?.employee_name || ""}”?`}
+        description="This permanently removes the offboarding checklist. This can’t be undone."
+        confirmLabel="Delete offboarding"
+        busy={busy}
+        onCancel={() => setConfirmDeleteOffboarding(false)}
+        onConfirm={deleteOffInstance}
+        testId="delete-hr-offboarding-confirm"
+      />
 
       {addingLeave && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

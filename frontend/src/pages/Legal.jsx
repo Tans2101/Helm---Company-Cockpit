@@ -4,7 +4,7 @@ import { Plus, Trash2, X, Scale, FileText, Upload } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import {
-  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState,
+  PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,7 @@ export default function Legal() {
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({ title: "", matter_type: "contract", assigned_to: "", notes: "", due_date: "", recurrence: "", counterparty: "" });
   const [counterpartySuggestions, setCounterpartySuggestions] = useState([]);
   const fileRef = useRef(null);
@@ -240,11 +241,11 @@ export default function Legal() {
 
   const deleteMatter = async () => {
     if (!selected) return;
-    if (!window.confirm(`Delete matter “${selected.title}”?`)) return;
     setBusy(true);
     try {
       await api.delete(`/legal/matters/${selected.id}`);
       toast.success("Matter deleted");
+      setConfirmDelete(false);
       setSelectedId(null);
       await reload();
     } catch (e) {
@@ -583,7 +584,7 @@ export default function Legal() {
                 type="button"
                 disabled={busy}
                 data-testid="legal-delete-btn"
-                onClick={deleteMatter}
+                onClick={() => setConfirmDelete(true)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-helm-status-negative/35 text-helm-status-negative text-sm px-3 py-2 hover:bg-helm-status-negative/10 disabled:opacity-50 ml-auto"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -592,6 +593,17 @@ export default function Legal() {
           </div>
         </GlassCard>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete && Boolean(selected)}
+        title={`Delete matter “${selected?.title || ""}”?`}
+        description="This permanently removes the legal matter and its documents. This can’t be undone."
+        confirmLabel="Delete matter"
+        busy={busy}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={deleteMatter}
+        testId="delete-legal-confirm"
+      />
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
