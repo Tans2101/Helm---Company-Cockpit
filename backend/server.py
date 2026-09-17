@@ -1277,6 +1277,7 @@ async def get_ws(workspace_id: str):
         )
         ws["plan"] = "starter"
         ws["plan_migrated_from"] = "pro"
+        invalidate_plan_cache(workspace_id)
     # Apply scheduled downgrade when the billing period ends
     pending = ws.get("pending_plan")
     effective_at = plan_usage.parse_dt(ws.get("pending_plan_effective_at"))
@@ -1292,6 +1293,7 @@ async def get_ws(workspace_id: str):
         ws["plan"] = target
         ws.pop("pending_plan", None)
         ws.pop("pending_plan_effective_at", None)
+        invalidate_plan_cache(workspace_id)
     return ws
 
 
