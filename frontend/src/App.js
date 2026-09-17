@@ -43,8 +43,6 @@ const AskHelm = lazy(() => import("@/pages/AskHelm"));
 const Members = lazy(() => import("@/pages/Members"));
 const Integrations = lazy(() => import("@/pages/Integrations"));
 const Billing = lazy(() => import("@/pages/Billing"));
-const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
-const PaymentCancel = lazy(() => import("@/pages/PaymentCancel"));
 const AccountSettings = lazy(() => import("@/pages/AccountSettings"));
 const DepartmentPlaceholder = lazy(() => import("@/pages/DepartmentPlaceholder"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -177,8 +175,6 @@ function AppRouter() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/refunds" element={<Refunds />} />
-        <Route path="/payment/success" element={<PaymentSuccess />} />
-        <Route path="/payment/cancel" element={<PaymentCancel />} />
         <Route path="/app" element={<Protected />}>
           <Route index element={<Briefing />} />
           <Route path="me" element={<MyDay />} />

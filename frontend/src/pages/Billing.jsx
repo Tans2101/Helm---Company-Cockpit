@@ -16,6 +16,23 @@ import palette from "@/design/palette.json";
 
 const PLAN_RANK = { free: 0, starter: 1, growth: 2, business: 3 };
 
+/** Poll until webhook has applied the purchased plan (or give up cleanly). */
+async function waitForBillingPlan(targetPlan, { maxAttempts = 20, intervalMs = 1500 } = {}) {
+  const target = normalizePlan(targetPlan);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const { data: status } = await api.get("/billing/status");
+      if (normalizePlan(status?.current_plan) === target) return true;
+    } catch {
+      /* webhook may still be in flight */
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+  return false;
+}
+
 function usageToneColor(pct) {
   if (pct >= 100) return palette.statusNegative;
   if (pct >= 80) return palette.statusWarning;
@@ -113,10 +130,20 @@ export default function Billing() {
     try {
       const { data: cfg } = await api.post("/billing/paddle/config", { plan: planId });
       const Paddle = await initPaddle(cfg.client_token, cfg.environment, (ev) => {
-        if (ev?.name === "checkout.completed") {
-          toast.success("Payment received. Activating your plan…");
-          setTimeout(() => window.location.reload(), 4500);
-        }
+        if (ev?.name !== "checkout.completed") return;
+        toast.success("Payment received. Activating your plan…");
+        setBusy(planId);
+        void (async () => {
+          const activated = await waitForBillingPlan(cfg.plan || planId);
+          if (activated) {
+            toast.success("Plan activated");
+            window.location.reload();
+            return;
+          }
+          setBusy(null);
+          toast.message("Payment received — this can take a minute to reflect. Refresh shortly.");
+          reload();
+        })();
       });
       Paddle.Checkout.open({
         settings: { displayMode: "overlay", theme: "dark" },
