@@ -260,14 +260,6 @@ export default function DepartmentsSettings() {
                         </ul>
                       )}
 
-                      {(() => {
-                        const onRoster = new Set(
-                          (roster[dept.department_id] || []).map((m) => m.user_id),
-                        );
-                        const availableMembers = workspaceMembers.filter(
-                          (m) => m.user_id && !onRoster.has(m.user_id),
-                        );
-                        return (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <select
                           data-testid={`dept-add-user-${dept.type}`}
@@ -303,8 +295,6 @@ export default function DepartmentsSettings() {
                           <UserPlus className="w-3.5 h-3.5" /> Add
                         </button>
                       </div>
-                        );
-                      })()}
                     </div>
                   )}
                 </div>
