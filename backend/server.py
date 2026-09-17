@@ -18,7 +18,7 @@ from collections import defaultdict
 import httpx
 import jwt
 import resend
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse, RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -4478,17 +4478,33 @@ async def _read_validated_report_document(file: UploadFile) -> bytes:
 
 
 @api_router.get("/documents/library")
-async def documents_library(principal=Depends(get_principal)):
+async def documents_library(
+    background_tasks: BackgroundTasks,
+    principal=Depends(get_principal),
+):
     """List every document the caller may open — filtered by each context's own permission bar.
 
     Returns metadata + open_path only (no presigned URLs). Opening a file still goes through
     the existing per-context GET endpoint.
     """
     ws_id = principal["workspace_id"]
-    items: list[dict] = []
+    uid = principal["user_id"]
+    # Hoist membership + workspace once — can_section_write would re-fetch both otherwise.
+    membership = await _membership_for(principal)
+    workspace = await get_ws(ws_id)
+    can_fin, can_rep = await asyncio.gather(
+        can_section_write(
+            principal, "financials", "finance:write",
+            membership=membership, workspace=workspace,
+        ),
+        can_section_write(
+            principal, "reports", "reports:write",
+            membership=membership, workspace=workspace,
+        ),
+    )
 
-    if await can_section_write(principal, "financials", "finance:write"):
-        fin_docs = await db.documents.find(
+    async def _load_financial() -> list[dict]:
+        rows = await db.documents.find(
             {"workspace_id": ws_id},
             {
                 "_id": 0,
@@ -4500,20 +4516,25 @@ async def documents_library(principal=Depends(get_principal)):
                 "status": 1,
             },
         ).sort("uploaded_at", -1).to_list(500)
-        for d in fin_docs:
-            items.append({
-                "id": d.get("id"),
+        out = []
+        for d in rows:
+            doc_id = d.get("id")
+            if not doc_id:
+                continue
+            out.append({
+                "id": doc_id,
                 "context": "financial",
                 "filename": d.get("filename") or "document",
                 "content_type": d.get("content_type"),
                 "uploaded_at": d.get("uploaded_at"),
                 "uploaded_by": d.get("uploaded_by"),
                 "status": d.get("status"),
-                "open_path": f"/documents/{d.get('id')}",
+                "open_path": f"/documents/{doc_id}",
             })
+        return out
 
-    if await can_section_write(principal, "reports", "reports:write"):
-        report_docs = await db.report_documents.find(
+    async def _load_reports() -> list[dict]:
+        rows = await db.report_documents.find(
             {"workspace_id": ws_id},
             {
                 "_id": 0,
@@ -4526,9 +4547,13 @@ async def documents_library(principal=Depends(get_principal)):
                 "status": 1,
             },
         ).sort("uploaded_at", -1).to_list(500)
-        for d in report_docs:
-            items.append({
-                "id": d.get("id"),
+        out = []
+        for d in rows:
+            doc_id = d.get("id")
+            if not doc_id:
+                continue
+            out.append({
+                "id": doc_id,
                 "context": "reports",
                 "filename": d.get("filename") or "report",
                 "content_type": d.get("content_type"),
@@ -4536,33 +4561,49 @@ async def documents_library(principal=Depends(get_principal)):
                 "uploaded_by": d.get("uploaded_by"),
                 "report_date": d.get("report_date"),
                 "status": d.get("status"),
-                "open_path": f"/reports/documents/{d.get('id')}",
+                "open_path": f"/reports/documents/{doc_id}",
             })
+        return out
 
-    try:
-        dept = await _legal_department(principal)
-    except HTTPException:
-        dept = None
-    if dept:
-        membership = await dept_access.get_department_membership(
-            db, dept["department_id"], principal["user_id"],
+    async def _load_legal() -> list[dict]:
+        try:
+            dept = await _legal_department(principal)
+        except HTTPException:
+            return []
+        dept_membership = await dept_access.get_department_membership(
+            db, dept["department_id"], uid,
         )
-        is_lead = _can_lead_legal(principal, membership)
+        is_lead = _can_lead_legal(principal, dept_membership)
+        filt: dict = {
+            "department_id": dept["department_id"],
+            "document_ref.storage_key": {"$type": "string", "$ne": ""},
+        }
+        # Non-leads: push assignee filter into Mongo instead of scanning every matter.
+        if not is_lead:
+            filt["assigned_to"] = uid
         matters = await db.legal_matters.find(
+            filt,
             {
-                "department_id": dept["department_id"],
-                "document_ref.storage_key": {"$exists": True, "$nin": [None, ""]},
+                "_id": 0,
+                "id": 1,
+                "title": 1,
+                "assigned_to": 1,
+                "document_ref.document_id": 1,
+                "document_ref.filename": 1,
+                "document_ref.content_type": 1,
+                "document_ref.uploaded_at": 1,
+                "document_ref.uploaded_by": 1,
             },
-            {"_id": 0},
         ).sort("updated_at", -1).to_list(500)
+        out = []
         for matter in matters:
-            if not (is_lead or matter.get("assigned_to") == principal["user_id"]):
+            if not is_lead and matter.get("assigned_to") != uid:
                 continue
             ref = matter.get("document_ref") if isinstance(matter.get("document_ref"), dict) else {}
-            if not ref.get("storage_key"):
-                continue
             mid = matter.get("id")
-            items.append({
+            if not mid:
+                continue
+            out.append({
                 "id": ref.get("document_id") or mid,
                 "context": "legal",
                 "matter_id": mid,
@@ -4573,8 +4614,19 @@ async def documents_library(principal=Depends(get_principal)):
                 "uploaded_by": ref.get("uploaded_by"),
                 "open_path": f"/legal/matters/{mid}/document",
             })
+        return out
 
-    await log_activity(
+    loads = []
+    if can_fin:
+        loads.append(_load_financial())
+    if can_rep:
+        loads.append(_load_reports())
+    loads.append(_load_legal())
+    chunks = await asyncio.gather(*loads)
+    items = [row for chunk in chunks for row in chunk]
+
+    background_tasks.add_task(
+        _audit_document_access,
         principal,
         "documents",
         "document.library.view",
@@ -4582,6 +4634,21 @@ async def documents_library(principal=Depends(get_principal)):
         {"count": len(items)},
     )
     return {"documents": items, "count": len(items)}
+
+
+async def _audit_document_access(principal, module: str, action: str, summary: str, patch=None) -> None:
+    """Best-effort activity log for document access — never raises to the caller."""
+    try:
+        await log_activity(principal, module, action, summary, patch)
+    except Exception:
+        logger.exception("document access audit failed action=%s", action)
+
+
+def _document_response_without_storage(doc: dict, *, presigned_url: str) -> dict:
+    """Presigned GET payloads must not echo the private R2 object key."""
+    out = {k: v for k, v in doc.items() if k not in ("_id", "storage_key")}
+    out["presigned_url"] = presigned_url
+    return out
 
 
 @api_router.post("/documents/upload")
@@ -4700,6 +4767,7 @@ async def extract_financial_document_route(
 @api_router.get("/documents/{document_id}")
 async def get_financial_document(
     document_id: str,
+    background_tasks: BackgroundTasks,
     principal=Depends(require_section("financials", "finance:write")),
 ):
     doc = await db.documents.find_one(
@@ -4707,19 +4775,23 @@ async def get_financial_document(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    storage_key = doc.get("storage_key")
+    if not storage_key:
+        raise HTTPException(status_code=404, detail="Document not found")
     try:
-        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, doc["storage_key"])
+        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, storage_key)
     except Exception as exc:
         logger.exception("presigned url failed for %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
-    await log_activity(
+    background_tasks.add_task(
+        _audit_document_access,
         principal,
         "financials",
         "document.download",
         f"Opened bill · {doc.get('filename') or document_id}",
         {"document_id": document_id},
     )
-    return {**doc, "presigned_url": presigned_url}
+    return _document_response_without_storage(doc, presigned_url=presigned_url)
 
 
 class DriveImportInput(BaseModel):
@@ -5921,6 +5993,7 @@ async def summarize_report_document_route(
 @api_router.get("/reports/documents/{document_id}")
 async def get_report_document(
     document_id: str,
+    background_tasks: BackgroundTasks,
     principal=Depends(require_section("reports", "reports:write")),
 ):
     """Return metadata + presigned URL for a report document (same bar as upload)."""
@@ -5929,23 +6002,25 @@ async def get_report_document(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not doc.get("storage_key"):
+    storage_key = doc.get("storage_key")
+    if not storage_key:
         raise HTTPException(status_code=404, detail="Document not found")
     if not doc_storage.r2_configured():
         raise HTTPException(status_code=503, detail="Document storage is not configured")
     try:
-        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, doc["storage_key"])
+        presigned_url = await asyncio.to_thread(doc_storage.get_presigned_url, storage_key)
     except Exception as exc:
         logger.exception("presigned url failed for report %s", document_id)
         raise HTTPException(status_code=500, detail="Could not generate document URL") from exc
-    await log_activity(
+    background_tasks.add_task(
+        _audit_document_access,
         principal,
         "reports",
         "document.download",
         f"Opened report · {doc.get('filename') or document_id}",
         {"document_id": document_id},
     )
-    return {**doc, "presigned_url": presigned_url}
+    return _document_response_without_storage(doc, presigned_url=presigned_url)
 
 
 @api_router.get("/reports/digest")
@@ -8678,7 +8753,11 @@ async def upload_legal_matter_document(
 
 
 @api_router.get("/legal/matters/{matter_id}/document")
-async def get_legal_matter_document(matter_id: str, principal=Depends(get_principal)):
+async def get_legal_matter_document(
+    matter_id: str,
+    background_tasks: BackgroundTasks,
+    principal=Depends(get_principal),
+):
     """Return metadata + presigned URL for the matter's current document.
 
     Same access bar as upload: Legal department access plus lead or assignee.
@@ -8712,7 +8791,8 @@ async def get_legal_matter_document(matter_id: str, principal=Depends(get_princi
     except Exception as exc:
         logger.exception("presigned url failed for legal matter %s", matter_id)
         raise HTTPException(status_code=500, detail="Could not generate download URL") from exc
-    await log_activity(
+    background_tasks.add_task(
+        _audit_document_access,
         principal,
         "legal",
         "document.download",
@@ -12347,9 +12427,11 @@ async def _ensure_indexes():
             "partialFilterExpression": {"source_deal_id": {"$type": "string"}},
         }),
         (db.documents, [("workspace_id", 1)], {}),
+        (db.documents, [("workspace_id", 1), ("uploaded_at", -1)], {}),
         (db.documents, [("id", 1)], {"unique": True}),
         (db.documents, [("status", 1), ("uploaded_at", 1)], {}),
         (db.report_documents, [("workspace_id", 1), ("report_date", 1)], {}),
+        (db.report_documents, [("workspace_id", 1), ("uploaded_at", -1)], {}),
         (db.report_documents, [("id", 1)], {"unique": True}),
         (db.report_digests, [("workspace_id", 1), ("date", 1)], {"unique": True}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
@@ -12389,6 +12471,8 @@ async def _ensure_indexes():
         (db.legal_matters, [("department_id", 1), ("status", 1)], {}),
         (db.legal_matters, [("workspace_id", 1)], {}),
         (db.legal_matters, [("department_id", 1), ("due_date", 1)], {}),
+        (db.legal_matters, [("department_id", 1), ("assigned_to", 1)], {}),
+        (db.legal_matters, [("department_id", 1), ("updated_at", -1)], {}),
         (db.maintenance_tickets, [("id", 1)], {"unique": True}),
         (db.maintenance_tickets, [("department_id", 1), ("status", 1)], {}),
         (db.maintenance_tickets, [("department_id", 1), ("priority", 1)], {}),

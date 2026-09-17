@@ -108,17 +108,37 @@ def library_client():
     mock_db.departments.find_one = AsyncMock(return_value=None)
     mock_db.activities = MagicMock()
     mock_db.activities.insert_one = AsyncMock()
+    mock_db.memberships = MagicMock()
+    mock_db.memberships.find_one = AsyncMock(return_value={
+        "user_id": "u_reports",
+        "workspace_id": "ws_lib",
+        "status": "active",
+        "pack": "member",
+        "section_grants": {"reports": True},
+    })
+    mock_db.workspaces = MagicMock()
+    mock_db.workspaces.find_one = AsyncMock(return_value={
+        "workspace_id": "ws_lib",
+        "plan": "growth",
+        "section_access": {},
+    })
 
     async def section_write(principal, section_id, pack_perm, **_kwargs):
         if principal["user_id"] == "u_owner":
             return True
-        # reports-only pack member: only reports:write
         return section_id == "reports" and pack_perm == "reports:write"
 
     server.app.dependency_overrides[server.get_principal] = as_reports
     with (
         patch.object(server, "db", mock_db),
         patch.object(server, "can_section_write", side_effect=section_write),
+        patch.object(server, "_membership_for", new=AsyncMock(return_value={
+            "user_id": "u_reports", "workspace_id": "ws_lib", "pack": "member",
+            "section_grants": {},
+        })),
+        patch.object(server, "get_ws", new=AsyncMock(return_value={
+            "workspace_id": "ws_lib", "section_access": {},
+        })),
         patch.object(server, "log_activity", new_callable=AsyncMock) as log,
     ):
         client = TestClient(server.app)
@@ -165,7 +185,6 @@ def test_library_owner_sees_all_contexts_without_presigned_urls():
             "assigned_to": "u_owner",
             "document_ref": {
                 "document_id": "ldoc_1",
-                "storage_key": "k",
                 "filename": "nda.pdf",
                 "uploaded_at": "2026-09-03",
                 "uploaded_by": "u_owner",
@@ -183,6 +202,8 @@ def test_library_owner_sees_all_contexts_without_presigned_urls():
     with (
         patch.object(server, "db", mock_db),
         patch.object(server, "can_section_write", new=AsyncMock(return_value=True)),
+        patch.object(server, "_membership_for", new=AsyncMock(return_value={"pack": "owner"})),
+        patch.object(server, "get_ws", new=AsyncMock(return_value={"workspace_id": "ws_lib"})),
         patch.object(server.dept_access, "can_access_department", new=AsyncMock(return_value=True)),
         patch.object(server.dept_access, "get_department_membership", new=AsyncMock(return_value={"role": "lead"})),
         patch.object(server, "log_activity", new_callable=AsyncMock),
@@ -227,7 +248,9 @@ def test_financial_document_get_logs_download():
     server.app.dependency_overrides.clear()
 
     assert r.status_code == 200
-    assert r.json()["presigned_url"] == "https://signed.example/x"
+    body = r.json()
+    assert body["presigned_url"] == "https://signed.example/x"
+    assert "storage_key" not in body
     assert log.await_args.args[2] == "document.download"
     assert log.await_args.args[0]["user_id"] == "u_owner"
 
@@ -258,5 +281,7 @@ def test_report_document_get_logs_download():
     server.app.dependency_overrides.clear()
 
     assert r.status_code == 200
-    assert r.json()["presigned_url"].startswith("https://")
+    body = r.json()
+    assert body["presigned_url"].startswith("https://")
+    assert "storage_key" not in body
     assert log.await_args.args[2] == "document.download"

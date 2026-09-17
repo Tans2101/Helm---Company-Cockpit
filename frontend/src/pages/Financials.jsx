@@ -255,11 +255,19 @@ export default function Financials() {
   };
 
   const openDocument = async (docId) => {
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
     try {
       const { data: doc } = await api.get(`/documents/${docId}`);
-      if (doc?.presigned_url) window.open(doc.presigned_url, "_blank", "noopener,noreferrer");
-      else toast.error("Could not open document");
+      if (doc?.presigned_url) {
+        if (tab) tab.location.href = doc.presigned_url;
+        else window.open(doc.presigned_url, "_blank", "noopener,noreferrer");
+      } else {
+        tab?.close();
+        toast.error("Could not open document");
+      }
     } catch {
+      tab?.close();
       toast.error("Could not open document");
     }
   };

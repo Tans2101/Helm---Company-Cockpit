@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { FileText, FolderOpen, ExternalLink } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { GlassCard, ErrorScreen, SkeletonCardList } from "@/components/kit";
 
 const CONTEXT_LABELS = {
@@ -13,6 +13,18 @@ const CONTEXT_LABELS = {
 
 const CONTEXT_ORDER = ["financial", "reports", "legal"];
 
+const ALLOWED_OPEN_PREFIXES = [
+  "/documents/",
+  "/reports/documents/",
+  "/legal/matters/",
+];
+
+function openPathIsSafe(path) {
+  if (!path || typeof path !== "string" || !path.startsWith("/")) return false;
+  if (path.includes("://") || path.includes("..")) return false;
+  return ALLOWED_OPEN_PREFIXES.some((p) => path.startsWith(p));
+}
+
 /**
  * Settings card: every document the signed-in user may open, grouped by context.
  * Opening always goes through the existing per-context GET (presigned URL) — never raw.
@@ -21,33 +33,35 @@ export default function DocumentsLibrarySettings() {
   const { data, loading, error, reload } = useFetch("/documents/library");
   const [openingId, setOpeningId] = useState(null);
 
-  const grouped = useMemo(() => {
-    const docs = data?.documents || [];
-    const out = { financial: [], reports: [], legal: [] };
-    for (const d of docs) {
-      const key = d.context in out ? d.context : null;
-      if (key) out[key].push(d);
-    }
-    return out;
-  }, [data]);
+  const grouped = { financial: [], reports: [], legal: [] };
+  for (const d of data?.documents || []) {
+    if (d.context in grouped) grouped[d.context].push(d);
+  }
 
   const openDocument = async (doc) => {
-    const path = (doc.open_path || "").replace(/^\//, "");
-    if (!path) {
+    const path = doc.open_path || "";
+    if (!openPathIsSafe(path)) {
       toast.error("No open path for this document");
       return;
     }
     const key = `${doc.context}:${doc.id || doc.matter_id}`;
     setOpeningId(key);
+    // Open synchronously so browsers do not treat the post-await navigation as a popup.
+    // Do not pass "noopener" in features — that makes window.open return null and blocks href updates.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
     try {
-      const { data: res } = await api.get(`/${path}`);
+      const { data: res } = await api.get(path);
       if (res?.presigned_url) {
-        window.open(res.presigned_url, "_blank", "noopener,noreferrer");
+        if (tab) tab.location.href = res.presigned_url;
+        else window.open(res.presigned_url, "_blank", "noopener,noreferrer");
       } else {
+        tab?.close();
         toast.error("Could not open document");
       }
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not open document");
+      tab?.close();
+      toast.error(apiErrorMessage(e, "Could not open document"));
     } finally {
       setOpeningId(null);
     }
