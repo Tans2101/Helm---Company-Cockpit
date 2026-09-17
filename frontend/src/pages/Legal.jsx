@@ -225,14 +225,19 @@ export default function Legal() {
   const viewDocument = async () => {
     if (!selected) return;
     setBusy(true);
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
     try {
       const { data: res } = await api.get(`/legal/matters/${selected.id}/document`);
       if (res?.presigned_url) {
-        window.open(res.presigned_url, "_blank", "noopener,noreferrer");
+        if (tab) tab.location.href = res.presigned_url;
+        else window.open(res.presigned_url, "_blank", "noopener,noreferrer");
       } else {
+        tab?.close();
         toast.error("No download URL available");
       }
     } catch (e) {
+      tab?.close();
       toast.error(e?.response?.data?.detail || "Could not open document");
     } finally {
       setBusy(false);
