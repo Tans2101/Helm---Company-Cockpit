@@ -109,8 +109,11 @@ export default function DepartmentsSettings() {
     }
     setMemberBusy(true);
     try {
-      await api.post(`/departments/${departmentId}/members`, { user_id: addUserId, role: addRole });
-      toast.success("Member added");
+      const { data: res } = await api.post(`/departments/${departmentId}/members`, {
+        user_id: addUserId,
+        role: addRole,
+      });
+      toast.success(res?.updated ? "Role updated" : "Member added");
       setAddUserId("");
       await loadMembers(departmentId);
       await reload();
@@ -152,6 +155,10 @@ export default function DepartmentsSettings() {
         {departments.map((dept) => {
           const Icon = departmentIcon(dept.icon);
           const busy = busyType === dept.type;
+          const onRoster = new Set((roster[dept.department_id] || []).map((m) => m.user_id));
+          const availableMembers = workspaceMembers.filter(
+            (m) => m.user_id && !onRoster.has(m.user_id),
+          );
           return (
             <div
               key={dept.type}
@@ -253,6 +260,14 @@ export default function DepartmentsSettings() {
                         </ul>
                       )}
 
+                      {(() => {
+                        const onRoster = new Set(
+                          (roster[dept.department_id] || []).map((m) => m.user_id),
+                        );
+                        const availableMembers = workspaceMembers.filter(
+                          (m) => m.user_id && !onRoster.has(m.user_id),
+                        );
+                        return (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <select
                           data-testid={`dept-add-user-${dept.type}`}
@@ -260,8 +275,10 @@ export default function DepartmentsSettings() {
                           onChange={(e) => setAddUserId(e.target.value)}
                           className="flex-1 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                         >
-                          <option value="">Select teammate…</option>
-                          {workspaceMembers.map((m) => (
+                          <option value="">
+                            {availableMembers.length ? "Select teammate…" : "Everyone is already on this department"}
+                          </option>
+                          {availableMembers.map((m) => (
                             <option key={m.user_id} value={m.user_id}>
                               {m.name || m.email}
                             </option>
@@ -279,13 +296,15 @@ export default function DepartmentsSettings() {
                         <button
                           type="button"
                           data-testid={`dept-add-btn-${dept.type}`}
-                          disabled={memberBusy}
+                          disabled={memberBusy || !availableMembers.length}
                           onClick={() => addMember(dept.department_id)}
                           className="inline-flex items-center justify-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-60"
                         >
                           <UserPlus className="w-3.5 h-3.5" /> Add
                         </button>
                       </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
