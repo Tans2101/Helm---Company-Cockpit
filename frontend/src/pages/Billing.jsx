@@ -33,18 +33,28 @@ async function waitForBillingPlan(targetPlan, { maxAttempts = 20, intervalMs = 1
   return false;
 }
 
-function usageToneColor(pct) {
-  if (pct >= 100) return palette.statusNegative;
-  if (pct >= 80) return palette.statusWarning;
+function usageToneColor(used, limit) {
+  if (!(limit > 0)) return palette.gold;
+  if (used > limit) return palette.statusNegative;
+  if (used >= limit || used / limit >= 0.8) return palette.statusWarning;
   return palette.gold;
 }
 
-function UsageRing({ label, used, limit, color, testId }) {
+function UsageRing({ label, used, limit, unit, testId }) {
   const safeLimit = Math.max(Number(limit) || 0, 1);
   const safeUsed = Math.max(0, Number(used) || 0);
-  const data = [{ label, value: safeUsed, maxValue: safeLimit, color }];
+  const over = Number(limit) > 0 && safeUsed > Number(limit);
+  const atLimit = Number(limit) > 0 && safeUsed === Number(limit);
+  // Ring stays full when over — do not let the chart overflow past 100%.
+  const ringValue = Math.min(safeUsed, safeLimit);
+  const color = usageToneColor(safeUsed, Number(limit));
+  const unitLabel = unit || label.toLowerCase();
+  const caption = over
+    ? `${safeUsed} / ${limit} ${unitLabel} (over limit)`
+    : `${safeUsed} / ${limit} ${unitLabel}`;
+  const data = [{ label, value: ringValue, maxValue: safeLimit, color }];
   return (
-    <div className="flex flex-col items-center gap-1" data-testid={testId}>
+    <div className="flex flex-col items-center gap-1.5" data-testid={testId}>
       <RingChart
         data={data}
         size={88}
@@ -56,6 +66,15 @@ function UsageRing({ label, used, limit, color, testId }) {
         <Ring index={0} showGlow={false} animate />
         <RingCenter defaultLabel={label} />
       </RingChart>
+      <p
+        className={cn(
+          "text-xs font-mono text-center max-w-[9.5rem] leading-snug",
+          over ? "text-helm-status-negative" : atLimit ? "text-helm-status-warning" : "text-helm-muted",
+        )}
+        data-testid={`${testId}-caption`}
+      >
+        {caption}
+      </p>
     </div>
   );
 }
@@ -112,12 +131,10 @@ export default function Billing() {
   const trialing = data.subscription_status === "trialing";
   const extractsUsed = data.ai_extracts_used ?? 0;
   const extractsLimit = data.ai_extracts_limit ?? 0;
-  const extractPct = extractsLimit > 0 ? Math.min(100, Math.round((extractsUsed / extractsLimit) * 100)) : 0;
   const seatsUsed = data.seats_used ?? 0;
   const seatsLimit = data.seats_limit;
-  const seatsPct = seatsLimit > 0 ? Math.min(100, Math.round((seatsUsed / seatsLimit) * 100)) : 0;
-  const extractColor = usageToneColor(extractPct);
-  const seatColor = usageToneColor(seatsPct);
+  const seatsOver = seatsLimit > 0 && seatsUsed > seatsLimit;
+  const extractsOver = extractsLimit > 0 && extractsUsed > extractsLimit;
 
   const activatePaddle = async (planId) => {
     if (planId === "free") return;
@@ -314,18 +331,29 @@ export default function Billing() {
             <SectionLabel>
               {data.ai_extracts_kind === "lifetime" ? "Free AI extracts (one-time)" : "Usage this billing period"}
             </SectionLabel>
-            <p className="text-sm text-helm-muted mt-1">
+            <p className={cn("text-sm mt-1", extractsOver ? "text-helm-status-negative" : "text-helm-muted")}>
               {data.ai_extracts_kind === "lifetime"
-                ? `${extractsUsed} of ${extractsLimit} free AI extracts used, then upgrade to continue`
+                ? extractsOver
+                  ? `${extractsUsed} / ${extractsLimit} free AI extracts (over limit)`
+                  : `${extractsUsed} of ${extractsLimit} free AI extracts used, then upgrade to continue`
                 : extractsLimit > 0
-                  ? `${extractsUsed} of ${extractsLimit} document uploads used`
+                  ? extractsOver
+                    ? `${extractsUsed} / ${extractsLimit} document uploads (over limit)`
+                    : `${extractsUsed} of ${extractsLimit} document uploads used`
                   : currentPlan === "free"
                     ? "5 free AI extracts to try it, then upgrade"
                     : "No document upload quota on this plan"}
             </p>
           </div>
-          <p className="text-xs font-mono text-helm-muted">
-            Seats {data.seats_used ?? 0}/{data.seats_limit ?? "—"}
+          <p
+            className={cn(
+              "text-xs font-mono",
+              seatsOver ? "text-helm-status-negative" : "text-helm-muted",
+            )}
+          >
+            {seatsOver
+              ? `Seats ${seatsUsed} / ${seatsLimit} (over limit)`
+              : `Seats ${seatsUsed}/${seatsLimit ?? "—"}`}
           </p>
         </div>
         {(seatsLimit > 0 || extractsLimit > 0) && (
@@ -333,18 +361,18 @@ export default function Billing() {
             {seatsLimit > 0 && (
               <UsageRing
                 label="Seats"
+                unit="seats"
                 used={seatsUsed}
                 limit={seatsLimit}
-                color={seatColor}
                 testId="seats-usage-ring"
               />
             )}
             {extractsLimit > 0 && (
               <UsageRing
                 label="Extracts"
+                unit="extracts"
                 used={extractsUsed}
                 limit={extractsLimit}
-                color={extractColor}
                 testId="usage-bar"
               />
             )}
