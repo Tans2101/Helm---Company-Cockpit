@@ -747,8 +747,17 @@ async def send_invite_email(to_email: str, inviter_name: str, workspace_name: st
         return {"sent": False, "reason": "error"}
 
 
-async def send_resend_email(*, to: list, subject: str, html: str) -> dict:
-    """Shared Resend send helper (best-effort). `to` may include multiple recipients in one send."""
+async def send_resend_email(
+    *,
+    to: list,
+    subject: str,
+    html: str,
+    attachments: Optional[list] = None,
+) -> dict:
+    """Shared Resend send helper (best-effort). `to` may include multiple recipients in one send.
+
+    attachments: optional list of {"filename": str, "content": bytes, "content_type": optional str}.
+    """
     recipients = [e for e in (to or []) if e and "@" in str(e)]
     if not recipients:
         return {"sent": False, "reason": "no_recipients"}
@@ -757,6 +766,22 @@ async def send_resend_email(*, to: list, subject: str, html: str) -> dict:
         return {"sent": False, "reason": "no_key"}
     resend.api_key = RESEND_API_KEY
     params = {"from": SENDER_EMAIL, "to": recipients, "subject": subject, "html": html}
+    if attachments:
+        packed = []
+        for att in attachments:
+            raw = att.get("content")
+            if raw is None or not att.get("filename"):
+                continue
+            if isinstance(raw, (bytes, bytearray)):
+                content = list(raw)
+            else:
+                content = raw
+            row = {"filename": att["filename"], "content": content}
+            if att.get("content_type"):
+                row["content_type"] = att["content_type"]
+            packed.append(row)
+        if packed:
+            params["attachments"] = packed
     try:
         email = await asyncio.to_thread(resend.Emails.send, params)
         logger.info("resend sent subject=%r to=%s id=%s", subject, recipients, (email or {}).get("id"))
@@ -5897,33 +5922,7 @@ def _build_weekly_pack_context(c, fin, items, ups, headcount, prior=None) -> dic
     }
 
 
-@api_router.post("/reports/weekly-pack")
-async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
-    c = await get_ws(principal["workspace_id"])
-    if not helm_llm.anthropic_configured():
-        raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
-    fin = await compute_financials(c["workspace_id"])
-    items = c["tasks"]["items"]
-    day = datetime.now(timezone.utc).date().isoformat()
-    ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).to_list(200)
-    headcount = c.get("employees") or len(c["people"]["people"])
-    current = _report_metric_snapshot(fin, items, ups, headcount)
-    baseline = await _apply_report_snapshot(c["workspace_id"], current)
-    context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
-    recent = await db.financial_entries.find(
-        {"workspace_id": c["workspace_id"], "type": "expense"},
-        {"_id": 0, "name": 1, "category": 1, "amount": 1, "month": 1},
-    ).sort("month", -1).to_list(12)
-    context["recent_expenses"] = [
-        {
-            "name": normalize_entry_name(e.get("name"), e.get("category")),
-            "category": (e.get("category") or "Other"),
-            "amount": e.get("amount"),
-            "month": e.get("month"),
-        }
-        for e in recent
-    ]
-    system = """You are a sharp chief of staff briefing the founder in person about this week.
+_WEEKLY_PACK_SYSTEM = """You are a sharp chief of staff briefing the founder in person about this week.
 
 Write the way you would speak in a short hallway update: clear prose, natural sentence rhythm,
 no synthesized-report voice. Use only facts in the supplied data. It must sound like a thoughtful
@@ -5961,12 +5960,50 @@ Style (hard rules):
 - Financial figures are monthly. Never describe monthly burn or revenue as money earned or spent "this week".
 - Follow instructions_for_missing_data exactly. Missing cash is a data-entry gap, not evidence of financial distress.
 """
+
+
+async def _generate_weekly_pack_content(workspace_id: str) -> dict:
+    """Build weekly pack markdown for a workspace. Shared by the API endpoint and weekly digest cron."""
+    if not helm_llm.anthropic_configured():
+        raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
+    c = await get_ws(workspace_id)
+    fin = await compute_financials(workspace_id)
+    items = c["tasks"]["items"]
+    day = datetime.now(timezone.utc).date().isoformat()
+    ups = await db.updates.find({"workspace_id": workspace_id, "day": day}, {"_id": 0}).to_list(200)
+    headcount = c.get("employees") or len(c["people"]["people"])
+    current = _report_metric_snapshot(fin, items, ups, headcount)
+    baseline = await _apply_report_snapshot(workspace_id, current)
+    context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
+    recent = await db.financial_entries.find(
+        {"workspace_id": workspace_id, "type": "expense"},
+        {"_id": 0, "name": 1, "category": 1, "amount": 1, "month": 1},
+    ).sort("month", -1).to_list(12)
+    context["recent_expenses"] = [
+        {
+            "name": normalize_entry_name(e.get("name"), e.get("category")),
+            "category": (e.get("category") or "Other"),
+            "amount": e.get("amount"),
+            "month": e.get("month"),
+        }
+        for e in recent
+    ]
     text = await helm_llm.complete(
-        system,
+        _WEEKLY_PACK_SYSTEM,
         f"Company data:\n{json.dumps(context, indent=2)}\n\n"
         "Write this week's briefing note now. Let the structure follow what is actually notable.",
     )
-    return {"content": text}
+    return {
+        "content": text,
+        "workspace_name": c.get("name") or "Company",
+        "workspace_id": workspace_id,
+    }
+
+
+@api_router.post("/reports/weekly-pack")
+async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
+    result = await _generate_weekly_pack_content(principal["workspace_id"])
+    return {"content": result["content"]}
 
 
 class WeeklyPackExportInput(BaseModel):
@@ -11840,6 +11877,150 @@ async def cleanup_orphaned_documents_admin(request: Request):
     return await document_cleanup.cleanup_orphaned_documents(db)
 
 
+# Cap for proactive cron sweeps (same order as retention / department drafts).
+MAX_PROACTIVE_CRON_WORKSPACES = 400
+
+
+async def run_daily_alerts_cron() -> dict:
+    """Cron: regenerate insights for every workspace and fire high-severity email/Slack.
+
+    Uses _generate_insights(..., raise_on_rate_limit=False), which already calls
+    _notify_high_severity_alerts and respects notified_signal_ids debounce.
+    One workspace failure does not stop the rest of the run.
+    """
+    workspaces = await db.workspaces.find(
+        {},
+        {"_id": 0, "workspace_id": 1, "name": 1},
+    ).to_list(MAX_PROACTIVE_CRON_WORKSPACES)
+    stats = {
+        "workspaces_scanned": len(workspaces),
+        "ok": 0,
+        "skipped": 0,
+        "errors": 0,
+        "new_alerts": 0,
+    }
+    for ws in workspaces:
+        wid = (ws.get("workspace_id") or "").strip()
+        if not wid:
+            continue
+        try:
+            result = await _generate_insights(wid, raise_on_rate_limit=False)
+            if result.get("skipped"):
+                stats["skipped"] += 1
+                continue
+            stats["ok"] += 1
+            notify = result.get("notifications") or {}
+            stats["new_alerts"] += int(notify.get("new_alerts") or 0)
+        except Exception:
+            stats["errors"] += 1
+            logger.exception("daily alerts cron failed for workspace %s", wid)
+    return stats
+
+
+def _iso_week_key(now: datetime | None = None) -> str:
+    """UTC ISO week id for weekly digest debounce (e.g. 2026-W38)."""
+    now = now or datetime.now(timezone.utc)
+    return now.strftime("%G-W%V")
+
+
+def _weekly_digest_email_html(*, workspace_name: str, app_url: str) -> str:
+    name = html.escape(workspace_name or "your company")
+    link = html.escape((app_url or "").rstrip("/") + "/app/reports", quote=True)
+    return f"""\
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
+<tr><td align="center">
+<table width="480" cellpadding="0" cellspacing="0" style="background:#121214;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;">
+<tr><td style="padding:32px 36px 8px 36px;">
+<p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0;">Weekly pack</p>
+<h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">This week's briefing for<br><span style="color:#c9a962;">{name}</span></h1>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">Your Helm weekly pack is attached as a PDF. No need to log in to read it — open the attachment, or review it in the app when you are ready.</p>
+<table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
+<td style="background:#c9a962;border-radius:8px;">
+<a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Reports in Helm &rarr;</a>
+</td></tr></table>
+</td></tr>
+<tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
+<p style="color:#52525b;font-size:12px;margin:0;line-height:1.6;">Know what matters before your first meeting.</p>
+</td></tr>
+</table>
+</td></tr></table></body></html>"""
+
+
+async def run_weekly_digest_cron() -> dict:
+    """Cron: generate weekly pack PDF and email it to CEO/owner recipients.
+
+    Kept as a separate runner (and Render cron) from daily alerts so schedules stay
+    independent — daily at a fixed UTC morning hour, weekly on Mondays.
+    Debounces with weekly_digest_emailed_week (ISO week) so a re-run the same week
+    does not re-send. Respects the same plan gate as /api/reports/weekly-pack.
+    """
+    import weekly_pack_export as pack_pdf
+
+    workspaces = await db.workspaces.find({}, {"_id": 0}).to_list(MAX_PROACTIVE_CRON_WORKSPACES)
+    week = _iso_week_key()
+    app_url = _app_base_url()
+    stats = {
+        "workspaces_scanned": len(workspaces),
+        "week": week,
+        "sent": 0,
+        "skipped_already": 0,
+        "skipped_plan": 0,
+        "skipped_no_recipients": 0,
+        "skipped_empty": 0,
+        "send_failed": 0,
+        "errors": 0,
+    }
+    for c in workspaces:
+        wid = (c.get("workspace_id") or "").strip()
+        if not wid:
+            continue
+        try:
+            if (c.get("weekly_digest_emailed_week") or "") == week:
+                stats["skipped_already"] += 1
+                continue
+            if not workspace_allows(c, helm_plans.FEATURE_ADVANCED_REPORTS):
+                stats["skipped_plan"] += 1
+                continue
+            recipients = await _alert_recipient_emails(wid)
+            if not recipients:
+                stats["skipped_no_recipients"] += 1
+                continue
+            pack = await _generate_weekly_pack_content(wid)
+            content = (pack.get("content") or "").strip()
+            if not content:
+                stats["skipped_empty"] += 1
+                continue
+            ws_name = pack.get("workspace_name") or c.get("name") or "Company"
+            pdf = pack_pdf.render_weekly_pack_pdf(content, workspace_name=ws_name)
+            filename = pack_pdf.pdf_filename(ws_name)
+            email_result = await send_resend_email(
+                to=recipients,
+                subject=f"Your Helm weekly pack: {ws_name}",
+                html=_weekly_digest_email_html(workspace_name=ws_name, app_url=app_url),
+                attachments=[{
+                    "filename": filename,
+                    "content": pdf,
+                    "content_type": "application/pdf",
+                }],
+            )
+            if email_result.get("sent"):
+                await db.workspaces.update_one(
+                    {"workspace_id": wid},
+                    {"$set": {
+                        "weekly_digest_emailed_week": week,
+                        "weekly_digest_emailed_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                stats["sent"] += 1
+            else:
+                stats["send_failed"] += 1
+        except Exception:
+            stats["errors"] += 1
+            logger.exception("weekly digest cron failed for workspace %s", wid)
+    return stats
+
+
 @api_router.post("/internal/run-retention-checks")
 async def internal_run_retention_checks(request: Request):
     """Daily Render cron: trial-ending reminder + inactivity nudge. Shared-secret header required."""
@@ -11865,6 +12046,23 @@ async def internal_run_accounting_sync(request: Request):
     """Hourly Render cron: pull QuickBooks/Xero transactions into Financials. Shared-secret header required."""
     _require_internal_cron(request)
     return await run_accounting_auto_sync()
+
+
+@api_router.post("/internal/run-daily-alerts")
+async def internal_run_daily_alerts(request: Request):
+    """Daily Render cron: refresh insights + high-severity email/Slack. Shared-secret header required.
+
+    Schedule is fixed UTC (not yet per-workspace timezone).
+    """
+    _require_internal_cron(request)
+    return await run_daily_alerts_cron()
+
+
+@api_router.post("/internal/run-weekly-digest")
+async def internal_run_weekly_digest(request: Request):
+    """Weekly Render cron: email weekly pack PDF to CEO/owner. Shared-secret header required."""
+    _require_internal_cron(request)
+    return await run_weekly_digest_cron()
 
 
 @api_router.get("/internal/analytics-summary")

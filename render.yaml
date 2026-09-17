@@ -158,3 +158,42 @@ services:
         sync: false
       - key: ACCOUNTING_SYNC_CRON_URL
         value: https://www.helmcontrol.online/api/internal/run-accounting-sync
+
+  # Daily insights refresh + high-severity email/Slack.
+  # Fixed 12:00 UTC for a first pass (not yet per-workspace timezone).
+  - type: cron
+    name: helm-daily-alerts
+    runtime: python
+    plan: starter
+    repo: https://github.com/Tans2101/Helm---Company-Cockpit
+    branch: main
+    rootDir: backend
+    schedule: "0 12 * * *"
+    buildCommand: pip install --upgrade pip
+    startCommand: python scripts/run_daily_alerts_cron.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: INTERNAL_CRON_SECRET
+        sync: false
+      - key: DAILY_ALERTS_CRON_URL
+        value: https://www.helmcontrol.online/api/internal/run-daily-alerts
+
+  # Weekly pack PDF emailed to CEO/owner (separate from daily alerts).
+  - type: cron
+    name: helm-weekly-digest
+    runtime: python
+    plan: starter
+    repo: https://github.com/Tans2101/Helm---Company-Cockpit
+    branch: main
+    rootDir: backend
+    schedule: "0 14 * * 1"
+    buildCommand: pip install --upgrade pip
+    startCommand: python scripts/run_weekly_digest_cron.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: INTERNAL_CRON_SECRET
+        sync: false
+      - key: WEEKLY_DIGEST_CRON_URL
+        value: https://www.helmcontrol.online/api/internal/run-weekly-digest
