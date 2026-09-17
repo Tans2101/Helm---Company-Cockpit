@@ -68,6 +68,7 @@ def test_auth_me_member_pack_and_perms(member):
     perms = set(d["perms"])
     for p in ("finance:write", "people:write", "members:manage", "decisions:act"):
         assert p not in perms, f"member should NOT have {p}"
+    assert "calendar:write" not in perms
     for p in ("read", "tasks:move", "ask:use"):
         assert p in perms
 

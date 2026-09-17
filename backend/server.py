@@ -352,13 +352,13 @@ PACK_PERMS = {
     "ops": BASE_PERMS | {"ops:write", "telemetry:write"},
     "exec": BASE_PERMS | {
         "decisions:act", "briefing:generate", "reports:pack", "reports:write",
-        "telemetry:write",
+        "telemetry:write", "calendar:write",
         "members:invite", "tasks:assign",
     },
     "owner": BASE_PERMS | {
         "finance:write", "people:write", "sales:write", "ops:write",
         "decisions:act", "briefing:generate", "reports:pack", "reports:write",
-        "telemetry:write",
+        "telemetry:write", "calendar:write",
         "integrations:manage", "billing:manage",
         "members:invite", "members:manage", "tasks:assign", "workspace:edit",
     },
@@ -6166,7 +6166,7 @@ async def calendar(
                     events.append(ev)
                     existing_ids.add(ev.get("id"))
         data["events"] = events
-    data["can_write"] = True
+    data["can_write"] = await can_section_write(principal, "calendar", "calendar:write")
     data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     tokens = _integration_tokens(c, "google_tokens") if data["google_connected"] else None
@@ -6249,7 +6249,10 @@ async def _maybe_push_google_event(
 
 
 @api_router.post("/calendar/events")
-async def create_calendar_event(payload: CalendarEventInput, principal=Depends(get_principal)):
+async def create_calendar_event(
+    payload: CalendarEventInput,
+    principal=Depends(require_section("calendar", "calendar:write")),
+):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -6265,7 +6268,11 @@ async def create_calendar_event(payload: CalendarEventInput, principal=Depends(g
 
 
 @api_router.patch("/calendar/events/{event_id}")
-async def edit_calendar_event(event_id: str, payload: CalendarEventInput, principal=Depends(get_principal)):
+async def edit_calendar_event(
+    event_id: str,
+    payload: CalendarEventInput,
+    principal=Depends(require_section("calendar", "calendar:write")),
+):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     c = await get_ws(principal["workspace_id"])
@@ -6298,7 +6305,10 @@ async def edit_calendar_event(event_id: str, payload: CalendarEventInput, princi
 
 
 @api_router.delete("/calendar/events/{event_id}")
-async def delete_calendar_event(event_id: str, principal=Depends(get_principal)):
+async def delete_calendar_event(
+    event_id: str,
+    principal=Depends(require_section("calendar", "calendar:write")),
+):
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
     existing = [e for e in (cal.get("helm_events") or []) if e.get("id") == event_id]

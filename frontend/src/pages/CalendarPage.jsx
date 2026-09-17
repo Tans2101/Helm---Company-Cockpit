@@ -522,7 +522,7 @@ export default function CalendarPage() {
   }
 
   const hasEvents = events.length > 0;
-  const canWrite = data.can_write !== false;
+  const canWrite = data.can_write === true;
   const googleConnected = data.google_connected || data.live || data.source === "google_calendar";
   const googleAvailable = data.google_available !== false;
 

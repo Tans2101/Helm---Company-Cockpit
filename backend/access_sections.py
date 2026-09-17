@@ -62,6 +62,12 @@ MANAGEABLE_SECTIONS: list[dict[str, str]] = [
         "perm": "telemetry:write",
         "description": "KPI notes, risk radar, and manual telemetry inputs.",
     },
+    {
+        "id": "calendar",
+        "label": "Calendar",
+        "perm": "calendar:write",
+        "description": "Add, edit, and delete shared Helm calendar events.",
+    },
 ]
 
 
