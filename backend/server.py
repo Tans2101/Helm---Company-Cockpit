@@ -137,7 +137,7 @@ DB_NAME = os.environ["DB_NAME"]
 # Environment configuration
 #
 # ENVIRONMENT=production enforces the go-live checklist below. Keep in sync with
-# DEPLOY.md § "Deploy API on Render" and README.md § "Go-live checklist".
+# docs/DEPLOY.md § "Deploy API on Render" and README.md § "Go-live checklist".
 #
 # Required before ENVIRONMENT=production:
 #   MONGO_URL          Atlas URI (or MONGO_HOST / helm-mongo on Render blueprint)
@@ -183,7 +183,7 @@ if is_stale_deploy_url(FRONTEND_URL):
     FRONTEND_URL = HELM_CANONICAL_ORIGIN
 ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
 DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "false").lower() in ("1", "true", "yes")
-# HTTPS cookies: default false for local dev; set true on Render (see DEPLOY.md).
+# HTTPS cookies: default false for local dev; set true on Render (see docs/DEPLOY.md).
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
 # Default lax — correct when Vercel rewrites /api to Render (browser sees same-origin).
 # If REACT_APP_BACKEND_URL points at Render directly, set COOKIE_SAMESITE=none and COOKIE_SECURE=true.
@@ -261,7 +261,7 @@ def _enforce_production_config() -> None:
         raise RuntimeError(
             "Production configuration invalid (ENVIRONMENT=production):\n"
             + "\n".join(f"  - {p}" for p in problems)
-            + "\nSee DEPLOY.md and the config header in server.py."
+            + "\nSee docs/DEPLOY.md and the config header in server.py."
         )
 
 
@@ -1257,7 +1257,7 @@ async def get_ws(workspace_id: str):
     ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0})
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    # Conscious migration: legacy plan=pro → starter (see DEPLOY.md)
+    # Conscious migration: legacy plan=pro → starter (see docs/DEPLOY.md)
     if ws.get("plan") == "pro":
         await db.workspaces.update_one(
             {"workspace_id": workspace_id, "plan": "pro"},

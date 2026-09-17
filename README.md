@@ -32,7 +32,7 @@ Production fix in this codebase:
 
 ## Deploy (Render + Vercel)
 
-**Follow [DEPLOY.md](./DEPLOY.md)** — the exact checklist of what you must configure in Atlas, Google Cloud, Render, Vercel, Anthropic, and Paddle.
+**Follow [DEPLOY.md](./docs/DEPLOY.md)** — the exact checklist of what you must configure in Atlas, Google Cloud, Render, Vercel, Anthropic, and Paddle.
 
 Quick pointers:
 

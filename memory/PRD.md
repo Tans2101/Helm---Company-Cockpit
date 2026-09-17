@@ -48,7 +48,7 @@ CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finan
 ## Ops
 - `GET /api/health` — Mongo ping
 - Indexes: users, memberships, workspaces (`join_code`), sessions (`session_token` + TTL on `expires_at`), paddle_events
-- Deploy: see `DEPLOY.md`, `docs/RENDER_SETUP.md`, `docs/CLERK_SETUP.md`, `docs/ATLAS_SETUP.md`
+- Deploy: see `docs/DEPLOY.md`, `docs/RENDER_SETUP.md`, `docs/CLERK_SETUP.md`, `docs/ATLAS_SETUP.md`
 
 ## Out of scope (current)
 - Stripe (removed)
