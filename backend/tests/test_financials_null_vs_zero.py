@@ -18,7 +18,8 @@ def _entries_cursor(rows):
 
 
 def _run_compute(entries, settings):
-    server._FINANCIALS_CACHE.clear()
+    import simple_cache
+    simple_cache.clear()
     mock_db = MagicMock()
     mock_db.workspaces.find_one = AsyncMock(
         return_value={"financial_settings": settings},
@@ -164,7 +165,8 @@ def test_synthesis_marks_revenue_not_entered():
 
 
 def test_compute_financials_cache_hit_skips_second_db_read():
-    server._FINANCIALS_CACHE.clear()
+    import simple_cache
+    simple_cache.clear()
     entries = [
         {
             "type": "revenue",
@@ -186,10 +188,12 @@ def test_compute_financials_cache_hit_skips_second_db_read():
     assert first["mrr_known"] is True
     assert second["mrr"] == first["mrr"]
     assert find_mock.call_count == 1
+    assert simple_cache.stats()["hits"] >= 1
 
 
 def test_invalidate_financials_cache_forces_recompute():
-    server._FINANCIALS_CACHE.clear()
+    import simple_cache
+    simple_cache.clear()
     entries = [
         {
             "type": "expense",
@@ -213,7 +217,8 @@ def test_invalidate_financials_cache_forces_recompute():
 
 
 def test_compute_financials_return_entries_reused_by_live_signals():
-    server._FINANCIALS_CACHE.clear()
+    import simple_cache
+    simple_cache.clear()
     entries = [
         {
             "type": "expense",

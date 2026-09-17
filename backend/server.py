@@ -9,7 +9,6 @@ import hashlib
 import secrets
 import asyncio
 import logging
-import time
 from pathlib import Path
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
@@ -49,6 +48,7 @@ from finance_entry import normalize_entry_name, require_entry_name
 import access_sections as sec_access
 import plans as helm_plans
 import plan_usage
+import simple_cache
 import retention as helm_retention
 import product_analytics as helm_analytics
 import referrals as helm_referrals
@@ -1339,25 +1339,66 @@ async def _enforce_document_rate_limit(principal, action: str, limit: int, messa
 
 
 # ------------------------- Financials (computed from entries) -------------------------
-# Short in-process TTL so briefing / telemetry / decisions share one ledger pass.
-_FINANCIALS_CACHE: dict[str, tuple[float, dict, list]] = {}
 _FINANCIALS_CACHE_TTL_SECONDS = 90.0
 
 
 def _financials_cache_key(workspace_id: str, department_ids: Optional[list] = None) -> str:
     if department_ids:
-        return f"{workspace_id}|{','.join(sorted(str(d) for d in department_ids))}"
-    return workspace_id
+        return f"financials:{workspace_id}:{','.join(sorted(str(d) for d in department_ids))}"
+    return f"financials:{workspace_id}"
 
 
 def invalidate_financials_cache(workspace_id: str) -> None:
     """Drop all cached compute_financials results for a workspace (any dept scope)."""
     if not workspace_id:
         return
-    prefix = f"{workspace_id}|"
-    dead = [k for k in _FINANCIALS_CACHE if k == workspace_id or k.startswith(prefix)]
-    for k in dead:
-        _FINANCIALS_CACHE.pop(k, None)
+    simple_cache.invalidate(f"financials:{workspace_id}")
+    simple_cache.invalidate_prefix(f"financials:{workspace_id}:")
+
+
+def invalidate_departments_cache(workspace_id: str) -> None:
+    if not workspace_id:
+        return
+    simple_cache.invalidate_prefix(f"departments:{workspace_id}:")
+
+
+def invalidate_plan_cache(workspace_id: str) -> None:
+    if not workspace_id:
+        return
+    simple_cache.invalidate(f"planmeta:{workspace_id}")
+
+
+async def get_workspace_plan_limits(workspace_id: str, *, bypass_cache: bool = False) -> dict:
+    """Workspace plan id + static limits from plans.py (60s TTL).
+
+    Live usage counts (extracts used, seats used) are NOT cached here — only
+    the plan metadata / limit ceilings that change when billing updates plan.
+    """
+    key = f"planmeta:{workspace_id}"
+
+    async def loader():
+        c = await db.workspaces.find_one(
+            {"workspace_id": workspace_id},
+            {"_id": 0, "plan": 1, "pending_plan": 1},
+        ) or {}
+        plan = workspace_plan_id(c)
+        pdef = helm_plans.plan_def(plan)
+        return {
+            "plan": plan,
+            "plan_label": pdef["label"],
+            "features": dict(pdef["features"]),
+            "seats_limit": int(pdef.get("seats") or 0),
+            "ai_extracts_mo": int(pdef.get("ai_extracts_mo") or 0),
+            "ai_extracts_lifetime": int(pdef.get("ai_extracts_lifetime") or 0),
+            "ask_helm_mo": int(pdef.get("ask_helm_mo") or 0),
+            "price": pdef.get("price"),
+            "is_paid": helm_plans.is_paid_plan(plan),
+            "pending_plan": c.get("pending_plan"),
+        }
+
+    if bypass_cache:
+        simple_cache.invalidate(key)
+    return await simple_cache.get_or_set(key, 60.0, loader)
 
 
 async def _workspace_currency(workspace_id: str) -> str:
@@ -1377,116 +1418,109 @@ async def compute_financials(
     import finance_recurrence as fin_recur
 
     cache_key = _financials_cache_key(workspace_id, department_ids)
-    now = time.monotonic()
-    if not bypass_cache:
-        hit = _FINANCIALS_CACHE.get(cache_key)
-        if hit and hit[0] > now:
-            fin_cached, entries_cached = hit[1], hit[2]
-            if return_entries:
-                out = dict(fin_cached)
-                out["entries"] = list(entries_cached)
-                return out
-            return dict(fin_cached)
 
-    ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
-    settings = dict((ws or {}).get("financial_settings") or {})
-    if not settings.get("currency"):
-        settings["currency"] = "usd"
+    async def loader():
+        ws = await db.workspaces.find_one({"workspace_id": workspace_id}, {"_id": 0, "financial_settings": 1})
+        settings = dict((ws or {}).get("financial_settings") or {})
+        if not settings.get("currency"):
+            settings["currency"] = "usd"
+        else:
+            settings["currency"] = normalize_currency(settings.get("currency"))
+        currency = settings["currency"]
+        entry_filt = dept_access.apply_department_filter(
+            {"workspace_id": workspace_id}, department_ids,
+        )
+        entries = await db.financial_entries.find(entry_filt, {"_id": 0}).to_list(5000)
+        # Drop clearly invalid months so one bad CSV row cannot 500 the page
+        entries = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
+        horizon = fin_recur.resolve_expense_horizon(entries)
+        rev_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="revenue", horizon_end=horizon))
+        exp_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="expense", horizon_end=horizon))
+        # Recurring-only revenue by month (for MRR) — never mix one-time sales into MRR
+        rec_entries = [e for e in entries if e.get("type") == "revenue" and e.get("recurring")]
+        rec_by = defaultdict(float, fin_recur.expand_entries_by_month(rec_entries, entry_type="revenue", horizon_end=horizon))
+        exp_cat = defaultdict(float)
+        cat_totals = fin_recur.expand_expense_category_totals(entries, horizon)
+        for _month, cats in cat_totals.items():
+            for cat, amt in cats.items():
+                exp_cat[cat] += amt
+        months = sorted(set(list(rev_by) + list(exp_by)))
+        last = months[-6:]
+
+        def lbl(m):
+            return datetime.strptime(m, "%Y-%m").strftime("%b")
+
+        revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
+        burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
+        latest = months[-1] if months else None
+        # MRR needs revenue specifically — expense-only ledgers must not look like confirmed $0 MRR
+        has_ledger = bool(entries)
+        has_revenue = any(e.get("type") == "revenue" for e in entries)
+        mrr_known = has_revenue
+        # MRR is recurring revenue only — never fall back to one-time sales
+        mrr_val = float(rec_by[latest]) if latest and mrr_known else 0.0
+        cash_val = entered_cash_amount(settings)
+        cash_entered = cash_val is not None
+        net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
+        avg_burn = sum(net) / len(net) if net else 0
+        burn_known = has_ledger
+        # Distinct from missing data: entered ledger + cash with non-positive burn = profitable/breakeven
+        runway_no_burn = bool(cash_entered and burn_known and avg_burn <= 0)
+        runway = round(cash_val / avg_burn, 1) if cash_entered and avg_burn > 0 else None
+        burn_val = (exp_by[latest] - rev_by[latest]) if latest else 0
+        total_exp = sum(exp_cat.values())
+        expense_breakdown = ([{"name": k, "value": round(v / total_exp * 100)} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])] if total_exp else [])
+        gm = settings.get("gross_margin")
+        scenarios = []
+        if cash_entered and avg_burn > 0:
+            scenarios = [
+                {"name": "Base", "runway": runway, "desc": "Current net burn held."},
+                {"name": "Efficient", "runway": round(cash_val / (avg_burn * 0.8), 1), "desc": "Trim burn 20%."},
+                {"name": "Aggressive Hire", "runway": round(cash_val / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
+            ]
+        mrr_delta = 0
+        rec_months = sorted(rec_by.keys())
+        if mrr_known and len(rec_months) >= 2:
+            prev_m, curr_m = rec_months[-2], rec_months[-1]
+            prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
+            if prev_r > 0:
+                mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
+        result = {
+            "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
+            "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
+            "runway_months": runway,
+            "runway_no_burn": runway_no_burn,
+            "burn": fmt_money(burn_val, currency) if burn_known else "—",
+            "cash": fmt_money(cash_val, currency) if cash_entered else "—",
+            "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
+            "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
+            "expense_breakdown": expense_breakdown, "settings": settings,
+            "currency": currency, "currency_symbol": currency_symbol(currency),
+            "mrr_delta": mrr_delta if mrr_known else 0,
+            "spark": [r["revenue"] for r in revenue_series],
+            "burn_tone": "negative" if burn_known and burn_val > 0 else "positive",
+            "has_data": has_ledger,
+            "mrr_known": mrr_known,
+            "burn_known": burn_known,
+            "cash_entered": cash_entered,
+            "cash_value": cash_val,
+            "mrr_value": round(float(mrr_val or 0)) if mrr_known else None,
+            "burn_value": round(float(burn_val or 0)) if burn_known else None,
+            "months": months,
+            "latest_month": latest,
+        }
+        return {"fin": result, "entries": list(entries)}
+
+    if bypass_cache:
+        simple_cache.invalidate(cache_key)
+        payload = await loader()
     else:
-        settings["currency"] = normalize_currency(settings.get("currency"))
-    currency = settings["currency"]
-    entry_filt = dept_access.apply_department_filter(
-        {"workspace_id": workspace_id}, department_ids,
-    )
-    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).to_list(5000)
-    # Drop clearly invalid months so one bad CSV row cannot 500 the page
-    entries = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
-    horizon = fin_recur.resolve_expense_horizon(entries)
-    rev_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="revenue", horizon_end=horizon))
-    exp_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="expense", horizon_end=horizon))
-    # Recurring-only revenue by month (for MRR) — never mix one-time sales into MRR
-    rec_entries = [e for e in entries if e.get("type") == "revenue" and e.get("recurring")]
-    rec_by = defaultdict(float, fin_recur.expand_entries_by_month(rec_entries, entry_type="revenue", horizon_end=horizon))
-    exp_cat = defaultdict(float)
-    cat_totals = fin_recur.expand_expense_category_totals(entries, horizon)
-    for _month, cats in cat_totals.items():
-        for cat, amt in cats.items():
-            exp_cat[cat] += amt
-    months = sorted(set(list(rev_by) + list(exp_by)))
-    last = months[-6:]
+        payload = await simple_cache.get_or_set(cache_key, _FINANCIALS_CACHE_TTL_SECONDS, loader)
 
-    def lbl(m):
-        return datetime.strptime(m, "%Y-%m").strftime("%b")
-
-    revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
-    burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
-    latest = months[-1] if months else None
-    # MRR needs revenue specifically — expense-only ledgers must not look like confirmed $0 MRR
-    has_ledger = bool(entries)
-    has_revenue = any(e.get("type") == "revenue" for e in entries)
-    mrr_known = has_revenue
-    # MRR is recurring revenue only — never fall back to one-time sales
-    mrr_val = float(rec_by[latest]) if latest and mrr_known else 0.0
-    cash_val = entered_cash_amount(settings)
-    cash_entered = cash_val is not None
-    net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
-    avg_burn = sum(net) / len(net) if net else 0
-    burn_known = has_ledger
-    # Distinct from missing data: entered ledger + cash with non-positive burn = profitable/breakeven
-    runway_no_burn = bool(cash_entered and burn_known and avg_burn <= 0)
-    runway = round(cash_val / avg_burn, 1) if cash_entered and avg_burn > 0 else None
-    burn_val = (exp_by[latest] - rev_by[latest]) if latest else 0
-    total_exp = sum(exp_cat.values())
-    expense_breakdown = ([{"name": k, "value": round(v / total_exp * 100)} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])] if total_exp else [])
-    gm = settings.get("gross_margin")
-    scenarios = []
-    if cash_entered and avg_burn > 0:
-        scenarios = [
-            {"name": "Base", "runway": runway, "desc": "Current net burn held."},
-            {"name": "Efficient", "runway": round(cash_val / (avg_burn * 0.8), 1), "desc": "Trim burn 20%."},
-            {"name": "Aggressive Hire", "runway": round(cash_val / (avg_burn * 1.4), 1), "desc": "Scale spend 40%."},
-        ]
-    mrr_delta = 0
-    rec_months = sorted(rec_by.keys())
-    if mrr_known and len(rec_months) >= 2:
-        prev_m, curr_m = rec_months[-2], rec_months[-1]
-        prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
-        if prev_r > 0:
-            mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
-    result = {
-        "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
-        "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
-        "runway_months": runway,
-        "runway_no_burn": runway_no_burn,
-        "burn": fmt_money(burn_val, currency) if burn_known else "—",
-        "cash": fmt_money(cash_val, currency) if cash_entered else "—",
-        "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
-        "revenue_series": revenue_series, "burn_series": burn_series, "scenarios": scenarios,
-        "expense_breakdown": expense_breakdown, "settings": settings,
-        "currency": currency, "currency_symbol": currency_symbol(currency),
-        "mrr_delta": mrr_delta if mrr_known else 0,
-        "spark": [r["revenue"] for r in revenue_series],
-        "burn_tone": "negative" if burn_known and burn_val > 0 else "positive",
-        "has_data": has_ledger,
-        "mrr_known": mrr_known,
-        "burn_known": burn_known,
-        "cash_entered": cash_entered,
-        "cash_value": cash_val,
-        "mrr_value": round(float(mrr_val or 0)) if mrr_known else None,
-        "burn_value": round(float(burn_val or 0)) if burn_known else None,
-        "months": months,
-        "latest_month": latest,
-    }
-    _FINANCIALS_CACHE[cache_key] = (
-        now + _FINANCIALS_CACHE_TTL_SECONDS,
-        dict(result),
-        list(entries),
-    )
+    fin = dict(payload["fin"])
     if return_entries:
-        out = dict(result)
-        out["entries"] = entries
-        return out
-    return result
+        fin["entries"] = list(payload["entries"])
+    return fin
 
 
 RUNWAY_NO_BURN_LABEL = "No burn — cash growing"
@@ -6745,42 +6779,49 @@ async def _department_in_workspace(department_id: str, workspace_id: str) -> dic
 async def list_departments(response: Response, principal=Depends(get_principal)):
     """Catalog of all 7 types with enabled + current-user membership annotations."""
     ws_id = principal["workspace_id"]
-    enabled_rows = await db.departments.find(
-        {"workspace_id": ws_id, "enabled": True},
-        {"_id": 0},
-    ).to_list(50)
-    by_type = {d["type"]: d for d in enabled_rows}
-    my_rows = await db.department_members.find(
-        {"user_id": principal["user_id"]},
-        {"_id": 0},
-    ).to_list(100)
-    my_by_dept = {m["department_id"]: m for m in my_rows}
-    is_ceo = dept_access.is_workspace_ceo(principal)
+    user_id = principal["user_id"]
+    cache_key = f"departments:{ws_id}:user:{user_id}"
 
-    out = []
-    for entry in dept_catalog.DEPARTMENT_CATALOG:
-        dtype = entry["type"]
-        enabled_doc = by_type.get(dtype)
-        membership = None
-        if enabled_doc:
-            membership = my_by_dept.get(enabled_doc["department_id"])
-        out.append({
-            "type": dtype,
-            "name": entry["name"],
-            "icon": entry["icon"],
-            "enabled": bool(enabled_doc),
-            "department_id": enabled_doc["department_id"] if enabled_doc else None,
-            "is_member": bool(membership),
-            "member_role": (membership or {}).get("role"),
-            "visible_in_nav": bool(enabled_doc) and (is_ceo or bool(membership)),
-        })
+    async def loader():
+        enabled_rows = await db.departments.find(
+            {"workspace_id": ws_id, "enabled": True},
+            {"_id": 0},
+        ).to_list(50)
+        by_type = {d["type"]: d for d in enabled_rows}
+        my_rows = await db.department_members.find(
+            {"user_id": user_id},
+            {"_id": 0},
+        ).to_list(100)
+        my_by_dept = {m["department_id"]: m for m in my_rows}
+        is_ceo = dept_access.is_workspace_ceo(principal)
+
+        out = []
+        for entry in dept_catalog.DEPARTMENT_CATALOG:
+            dtype = entry["type"]
+            enabled_doc = by_type.get(dtype)
+            membership = None
+            if enabled_doc:
+                membership = my_by_dept.get(enabled_doc["department_id"])
+            out.append({
+                "type": dtype,
+                "name": entry["name"],
+                "icon": entry["icon"],
+                "enabled": bool(enabled_doc),
+                "department_id": enabled_doc["department_id"] if enabled_doc else None,
+                "is_member": bool(membership),
+                "member_role": (membership or {}).get("role"),
+                "visible_in_nav": bool(enabled_doc) and (is_ceo or bool(membership)),
+            })
+        return {
+            "departments": out,
+            "is_ceo": is_ceo,
+            "can_manage": is_ceo,
+        }
+
+    data = await simple_cache.get_or_set(cache_key, 60.0, loader)
     # Private short cache — catalog/membership churn is low; never public/shared.
     response.headers["Cache-Control"] = "private, max-age=30"
-    return {
-        "departments": out,
-        "is_ceo": is_ceo,
-        "can_manage": is_ceo,
-    }
+    return data
 
 
 @api_router.post("/departments")
@@ -6819,6 +6860,7 @@ async def enable_department(payload: EnableDepartmentInput, principal=Depends(ge
         helm_analytics.EVENT_DEPARTMENT_ENABLED,
         {"department": dtype, "department_id": department_id},
     )
+    invalidate_departments_cache(principal["workspace_id"])
     return {
         "ok": True,
         "department": {
@@ -6845,6 +6887,7 @@ async def disable_department(department_id: str, principal=Depends(get_principal
         {"department_id": department_id, "workspace_id": principal["workspace_id"]},
         {"$set": {"enabled": False, "disabled_at": now}},
     )
+    invalidate_departments_cache(principal["workspace_id"])
     return {"ok": True, "type": doc.get("type"), "cleared": cleared}
 
 
@@ -6913,6 +6956,7 @@ async def add_department_member(
             {"department_id": department_id, "user_id": user_id},
             {"$set": {"role": role}},
         )
+        invalidate_departments_cache(principal["workspace_id"])
         return {"ok": True, "updated": True, "role": role}
     await db.department_members.insert_one({
         "department_id": department_id,
@@ -6920,6 +6964,7 @@ async def add_department_member(
         "role": role,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
+    invalidate_departments_cache(principal["workspace_id"])
     return {"ok": True, "updated": False, "role": role}
 
 
@@ -6939,6 +6984,7 @@ async def remove_department_member(
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Membership not found")
+    invalidate_departments_cache(principal["workspace_id"])
     return {"ok": True}
 
 
@@ -11017,22 +11063,22 @@ async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_pri
 # ------------------------- Payments -------------------------
 async def get_billing_status(workspace_id: str, pack: str):
     c = await get_ws(workspace_id)
-    plan = workspace_plan_id(c)
-    pdef = helm_plans.plan_def(plan)
+    limits = await get_workspace_plan_limits(workspace_id)
+    plan = limits["plan"]
     sub_status = c.get("subscription_status") or c.get("billing_status")
     has_customer = bool(c.get("paddle_customer_id"))
     period = plan_usage.current_usage_period(c)
-    lifetime_limit = helm_plans.ai_extracts_lifetime_limit(plan)
+    lifetime_limit = limits["ai_extracts_lifetime"]
     if lifetime_limit > 0:
         extracts_used = plan_usage.get_lifetime_extract_count(c)
         extracts_limit = lifetime_limit
         extracts_kind = "lifetime"
     else:
         extracts_used = await plan_usage.get_period_extract_count(db, workspace_id, period["key"])
-        extracts_limit = helm_plans.ai_extracts_limit(plan)
+        extracts_limit = limits["ai_extracts_mo"]
         extracts_kind = "period"
     seats_used = await _seat_count(workspace_id)
-    seats_limit = helm_plans.seats_limit(plan)
+    seats_limit = limits["seats_limit"]
     plans = helm_plans.public_plan_list()
     client_ready = bool(PADDLE_CLIENT_TOKEN)
     for row in plans:
@@ -11042,22 +11088,22 @@ async def get_billing_status(workspace_id: str, pack: str):
     return {
         "current_plan": plan,
         "legacy_plan": c.get("plan"),
-        "plan_label": pdef["label"],
-        "is_paid": helm_plans.is_paid_plan(plan),
+        "plan_label": limits["plan_label"],
+        "is_paid": limits["is_paid"],
         "pro_only": False,
         "billing_enforced": BILLING_ENFORCED,
         "requires_activation": False,
         "trial_days": TRIAL_DAYS,
-        "pro_price": pdef["price"] if helm_plans.is_paid_plan(plan) else helm_plans.PLANS[helm_plans.PLAN_STARTER]["price"],
-        "price": pdef["price"],
+        "pro_price": limits["price"] if limits["is_paid"] else helm_plans.PLANS[helm_plans.PLAN_STARTER]["price"],
+        "price": limits["price"],
         "plans": plans,
-        "features": dict(pdef["features"]),
+        "features": dict(limits["features"]),
         "seats_used": seats_used,
         "seats_limit": seats_limit,
         "ai_extracts_used": extracts_used,
         "ai_extracts_limit": extracts_limit,
         "ai_extracts_kind": extracts_kind,
-        "ask_helm_mo": helm_plans.ask_helm_monthly_limit(plan),
+        "ask_helm_mo": limits["ask_helm_mo"],
         "usage_period_key": period["key"],
         "usage_period_start": period["start"].isoformat(),
         "usage_period_end": period["end"].isoformat(),
@@ -11100,6 +11146,7 @@ async def schedule_plan_change(payload: SchedulePlanInput, principal=Depends(req
             {"workspace_id": principal["workspace_id"]},
             {"$unset": {"pending_plan": "", "pending_plan_effective_at": ""}},
         )
+        invalidate_plan_cache(principal["workspace_id"])
         return {"ok": True, "current_plan": current, "pending_plan": None}
     if helm_plans.is_upgrade(current, target):
         raise HTTPException(
@@ -11112,6 +11159,7 @@ async def schedule_plan_change(payload: SchedulePlanInput, principal=Depends(req
         {"workspace_id": principal["workspace_id"]},
         {"$set": {"pending_plan": target, "pending_plan_effective_at": effective_at}},
     )
+    invalidate_plan_cache(principal["workspace_id"])
     return {
         "ok": True,
         "current_plan": current,
@@ -11132,6 +11180,7 @@ async def reset_plan(principal=Depends(require("billing:manage"))):
             "pending_plan": "", "pending_plan_effective_at": "",
         },
     })
+    invalidate_plan_cache(principal["workspace_id"])
     return {"ok": True}
 
 
@@ -11301,6 +11350,7 @@ async def _paddle_provision(event, status: str = "active"):
     await db.workspaces.update_one({"workspace_id": workspace_id}, {"$set": set_fields, "$unset": {
         "canceled_at": "", "pending_plan": "", "pending_plan_effective_at": "",
     }})
+    invalidate_plan_cache(workspace_id)
     await db.paddle_intents.update_one({"_id": nonce}, {"$set": {"used": True}})
     await helm_analytics.emit_billing_funnel(
         db, workspace_id, user_id,
@@ -11333,7 +11383,8 @@ async def _paddle_downgrade(event, status: str):
         await db.workspaces.update_one(filt, {
             "$set": {"subscription_status": status, "billing_status": status, "paddle_last_event_at": now},
         })
-    if prev:
+    if prev and prev.get("workspace_id"):
+        invalidate_plan_cache(prev["workspace_id"])
         await helm_analytics.emit_billing_funnel(
             db, prev.get("workspace_id"), None,
             prev.get("subscription_status"), status, prev.get("plan"),
@@ -11824,7 +11875,12 @@ async def internal_analytics_summary(principal=Depends(require_analytics_admin))
 async def health():
     """Liveness probe for Render — must return 200 within 5s even when Mongo is down."""
     mongo_ok = await _mongo_ping()
-    return {"status": "ok", "mongo": mongo_ok, "mongo_source": MONGO_SOURCE}
+    return {
+        "status": "ok",
+        "mongo": mongo_ok,
+        "mongo_source": MONGO_SOURCE,
+        "cache": simple_cache.stats(),
+    }
 
 
 @api_router.get("/")
