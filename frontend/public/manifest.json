@@ -8,17 +8,17 @@
   "theme_color": "#F5F0E6",
   "icons": [
     {
-      "src": "/favicon-16x16.png",
+      "src": "/helm-favicon-16.png",
       "sizes": "16x16",
       "type": "image/png"
     },
     {
-      "src": "/favicon-32x32.png",
+      "src": "/helm-favicon-32.png",
       "sizes": "32x32",
       "type": "image/png"
     },
     {
-      "src": "/apple-touch-icon.png",
+      "src": "/helm-apple-touch.png",
       "sizes": "180x180",
       "type": "image/png"
     },
