@@ -13,7 +13,7 @@ export const COMPANY_LOCATION = "BGC, Taguig, Philippines";
 export const WHAT_HELM_IS =
   "Helm brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.";
 export const ABOUT_PROBLEM =
-  "Operators running companies of this size still get the day's reality as scattered emails and one-off files: inventory counts, input prices, shipment updates, and more. Opening each one is work. Seeing them together is usually impossible. Helm exists to close that gap.";
+  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Helm exists to close that gap.";
 export const FOUNDER_NOTE =
   "Tansher Dhawan built Helm himself: he writes the code and still does the day-to-day department redesigns and fixes. There is no separate product team behind the curtain. What you see in the cockpit is what he is actively shipping.";
 
@@ -21,28 +21,28 @@ export const HERO_SUB =
   "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Helm exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes and attachments every morning.";
+  "Helm exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes, spreadsheets, and status chases every morning.";
 
 export const VISION =
-  "The near direction is practical, not abstract: make that morning picture cover every department lane operators already run in Helm (reports, production, procurement, legal, and the rest) so scattered email files stop being the system of record.";
+  "The near direction is to deepen that same cockpit across every lane operators already run in Helm (Briefing, Decisions, Financials, Production, Procurement, Legal, HR, Maintenance, Sales) so the morning open is the company, not another reconstruction project.";
 export const ABOUT_DIFFERENTIATOR =
-  "Ask Helm answers from the company's live financials and pipeline in the workspace, not from a generic chart library or the public internet. When a figure has not been entered yet, it is instructed to say it does not have that information rather than invent a number.";
+  "Helm is grounded in the workspace's live data, not a generic chart library. Ask Helm answers from actual financials and pipeline; Financials refuses to dress missing cash or runway up as $0; department activity can surface as draft reports for review. Across those paths, synthesis is meant to stay honest: when the data is not there yet, Helm says so instead of inventing a confident answer.";
 
 export const ABOUT_STORY =
-  "Helm started by watching a real manufacturing company get buried in 10+ scattered daily reports by email: inventory counts, commodity and input prices, shipment updates, and other one-off files that were never the same template twice. There was no single place to read them together or in context, only attachments to open one by one. The first real feature work, the Reports Digest, came directly from that problem: upload the day's files and get one readable synthesis instead of another tab marathon. Helm grew from that observed gap into a cockpit for money, decisions, and department work, not from an invented persona.";
+  "Helm started by watching a real manufacturing company get buried in 10+ scattered daily reports by email: inventory counts, commodity and input prices, shipment updates, and other one-off files that were never the same template twice. That was the spark. It showed a deeper problem: an owner's picture of their own business was scattered across formats, people, and tools, with no synthesis. The same gap showed up as decisions waiting in separate queues, financials living apart from the floor, and department status nobody could see in one place. The first feature work, the Reports Digest, fixed the visible symptom. What got built after that is the bigger fix: a CEO operating system with Briefing, Decision Center, Financials and runway, Ask Helm, and department workflows for Production, Procurement, Legal, HR, Maintenance, and Sales, synthesized into what needs the owner's attention.";
 
 export const VALUES = [
   {
     title: "Signal over noise",
-    body: "The Briefing and Decision Center are built around what changed, what needs a call, and what can be handed off. Screens exist to help you decide or delegate, not to keep you scrolling.",
+    body: "Briefing surfaces what changed; Decision Center ranks what needs a call; department lanes (Production, Procurement, Legal, and the rest) keep operational detail where it belongs. The cockpit exists to help you decide or delegate, not to keep you scrolling.",
   },
   {
     title: "Quiet control",
-    body: "Helm does not run engagement loops or notification spam. You open the cockpit when you need the picture; the product is not designed to chase your attention through the day.",
+    body: "Helm does not run engagement loops or notification spam. You open Financials, Decisions, or a department board when you need them; the product is not designed to chase your attention through the day.",
   },
   {
     title: "Honest synthesis",
-    body: "On Financials, missing cash, MRR, burn, or runway show as \"Add data,\" not $0. Ask Helm and other synthesis paths are told the same rule: unknown is unknown. Helm would rather admit a gap than invent a confident wrong number.",
+    body: "Missing cash, MRR, burn, or runway on Financials show as \"Add data,\" not $0. Ask Helm is instructed to answer from live workspace data and admit gaps instead of inventing figures. Department-sourced report drafts turn raw lane activity into something reviewable, without pretending the draft is more than it is.",
   },
 ];
 
