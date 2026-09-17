@@ -1357,16 +1357,20 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
     revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
     burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
     latest = months[-1] if months else None
-    # MRR is recurring revenue only — never fall back to one-time sales
+    # MRR needs revenue specifically — expense-only ledgers must not look like confirmed $0 MRR
     has_ledger = bool(entries)
-    mrr_known = has_ledger
-    mrr_val = float(rec_by[latest]) if latest else 0.0
+    has_revenue = any(e.get("type") == "revenue" for e in entries)
+    mrr_known = has_revenue
+    # MRR is recurring revenue only — never fall back to one-time sales
+    mrr_val = float(rec_by[latest]) if latest and mrr_known else 0.0
     cash_val = entered_cash_amount(settings)
     cash_entered = cash_val is not None
     net = [max(exp_by[m] - rev_by[m], 0) for m in months[-3:]]
     avg_burn = sum(net) / len(net) if net else 0
-    runway = round(cash_val / avg_burn, 1) if cash_entered and avg_burn > 0 else None
     burn_known = has_ledger
+    # Distinct from missing data: entered ledger + cash with non-positive burn = profitable/breakeven
+    runway_no_burn = bool(cash_entered and burn_known and avg_burn <= 0)
+    runway = round(cash_val / avg_burn, 1) if cash_entered and avg_burn > 0 else None
     burn_val = (exp_by[latest] - rev_by[latest]) if latest else 0
     total_exp = sum(exp_cat.values())
     expense_breakdown = ([{"name": k, "value": round(v / total_exp * 100)} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])] if total_exp else [])
@@ -1380,7 +1384,7 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         ]
     mrr_delta = 0
     rec_months = sorted(rec_by.keys())
-    if len(rec_months) >= 2:
+    if mrr_known and len(rec_months) >= 2:
         prev_m, curr_m = rec_months[-2], rec_months[-1]
         prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
         if prev_r > 0:
@@ -1389,6 +1393,7 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
         "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
         "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
         "runway_months": runway,
+        "runway_no_burn": runway_no_burn,
         "burn": fmt_money(burn_val, currency) if burn_known else "—",
         "cash": fmt_money(cash_val, currency) if cash_entered else "—",
         "gross_margin": ((f"{int(gm)}%" if float(gm).is_integer() else f"{gm}%") if gm is not None else "—"),
@@ -1410,20 +1415,33 @@ async def compute_financials(workspace_id: str, department_ids: Optional[list] =
     }
 
 
+RUNWAY_NO_BURN_LABEL = "No burn — cash growing"
+
+
+def format_runway_display(fin: dict, *, missing: str = "Add data") -> str:
+    """Human runway label: months, profitable/breakeven, or missing-data copy."""
+    if fin.get("runway_months") is not None:
+        return f"{fin['runway_months']}mo"
+    if fin.get("runway_no_burn"):
+        return RUNWAY_NO_BURN_LABEL
+    return missing
+
+
 def financials_for_synthesis(fin: dict) -> dict:
     """Numbers for AI prompts: missing fields stay null instead of looking like $0."""
     cash_entered = bool(fin.get("cash_entered"))
     mrr_known = bool(fin.get("mrr_known"))
     burn_known = bool(fin.get("burn_known"))
     runway = fin.get("runway_months")
+    runway_no_burn = bool(fin.get("runway_no_burn"))
     unknown = []
     if not cash_entered:
         unknown.append("cash_balance_not_entered")
     if not mrr_known:
-        unknown.append("revenue_and_expenses_not_entered")
+        unknown.append("revenue_not_entered")
     if not burn_known:
         unknown.append("burn_not_entered")
-    if runway is None:
+    if runway is None and not runway_no_burn:
         unknown.append("runway_not_computable")
     return {
         "cash": fin.get("cash_value") if cash_entered else None,
@@ -1433,6 +1451,7 @@ def financials_for_synthesis(fin: dict) -> dict:
         "burn": fin.get("burn_value") if burn_known else None,
         "burn_known": burn_known,
         "runway_months": runway,
+        "runway_no_burn": runway_no_burn,
         "currency": fin.get("currency") or "usd",
         "unknown_fields": unknown,
         "instructions_for_missing_data": (
@@ -1441,8 +1460,11 @@ def financials_for_synthesis(fin: dict) -> dict:
             "to get an accurate runway picture. Never say they are out of runway, have "
             "zero cash, or are technically out of money when cash was not entered. "
             "Urgent out-of-runway language is allowed only when cash_entered is true and "
-            "runway_months is a real number (including 0). If mrr_known or burn_known is "
-            "false, say those figures are not in Helm yet."
+            "runway_months is a real number (including 0). If runway_no_burn is true, "
+            "net burn is zero or negative with cash entered — say cash is growing / no "
+            "burn, not that runway is missing. If mrr_known is false, revenue was never "
+            "logged (expense-only data is not confirmed $0 MRR). If burn_known is false, "
+            "say burn is not in Helm yet."
         ),
     }
 
@@ -2617,10 +2639,10 @@ async def briefing(principal=Depends(get_principal)):
             },
             {
                 "label": "Runway",
-                "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "Add data",
+                "value": format_runway_display(fin),
                 "delta": 0,
-                "tone": "neutral",
-                "missing": fin["runway_months"] is None,
+                "tone": "positive" if fin.get("runway_no_burn") else "neutral",
+                "missing": fin["runway_months"] is None and not fin.get("runway_no_burn"),
             },
             {
                 "label": "Burn",
@@ -4014,7 +4036,7 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
             {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"],
              "tone": "positive" if fin["mrr_delta"] >= 0 else "negative", "spark": fin["spark"]},
             {"label": "ARR", "value": fin["arr"], "delta": 0, "tone": "neutral", "spark": fin["spark"]},
-            {"label": "Runway", "value": f"{fin['runway_months']}mo" if fin["runway_months"] is not None else "—",
+            {"label": "Runway", "value": format_runway_display(fin, missing="—"),
              "delta": 0, "tone": "neutral", "spark": []},
             {"label": "Net Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"],
              "spark": [b["burn"] for b in fin["burn_series"]]},
@@ -4454,7 +4476,7 @@ async def export_financials_to_sheets(principal=Depends(require_section("financi
         ["ARR", fin.get("arr") or "—"],
         ["Cash", fin.get("cash") or "—"],
         ["Burn", fin.get("burn") or "—"],
-        ["Runway (months)", fin.get("runway_months") if fin.get("runway_months") is not None else "—"],
+        ["Runway (months)", format_runway_display(fin, missing="—")],
         ["Gross margin", fin.get("gross_margin") or "—"],
     ]
     entry_rows = [["Month", "Type", "Name", "Category", "Amount", "Recurring", "Note"]]
@@ -5228,7 +5250,10 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None, *, include
              "summary": fin_summary,
              "metrics": [
                  {"label": "Monthly recurring revenue", "value": fin["mrr"], "change": mrr_change},
-                 {"label": "Cash runway", "value": f"{fin['runway_months']} months" if fin["runway_months"] is not None else "Not available", "change": runway_change},
+                 {"label": "Cash runway", "value": (
+                     f"{fin['runway_months']} months" if fin["runway_months"] is not None
+                     else (RUNWAY_NO_BURN_LABEL if fin.get("runway_no_burn") else "Not available")
+                 ), "change": runway_change},
                  {"label": "Net burn this month", "value": fin["burn"], "change": burn_change},
              ],
              "baseline_at": baseline_at, "source": "auto"},

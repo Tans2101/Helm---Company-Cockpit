@@ -406,10 +406,21 @@ export default function Financials() {
   const headline = [
     { label: "MRR", value: data.mrr_known === false ? "Add data" : data.mrr },
     { label: "ARR", value: data.mrr_known === false ? "Add data" : data.arr },
-    { label: "Runway", value: data.runway_months != null ? `${data.runway_months}mo` : "Add data" },
+    {
+      label: "Runway",
+      value:
+        data.runway_months != null
+          ? `${data.runway_months}mo`
+          : data.runway_no_burn
+            ? "No burn — cash growing"
+            : "Add data",
+    },
     { label: "Net Burn", value: data.burn_known === false ? "Add data" : data.burn },
     { label: "Cash", value: data.cash_entered === false ? "Add data" : data.cash },
-    { label: "Gross Margin", value: data.gross_margin },
+    {
+      label: "Gross Margin",
+      value: !data.gross_margin || data.gross_margin === "—" ? "Add data" : data.gross_margin,
+    },
   ];
 
   const actions = canWrite ? (
