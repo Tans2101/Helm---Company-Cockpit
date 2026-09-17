@@ -13,36 +13,36 @@ export const COMPANY_LOCATION = "BGC, Taguig, Philippines";
 export const WHAT_HELM_IS =
   "Helm brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.";
 export const ABOUT_PROBLEM =
-  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Helm exists to close that gap.";
+  "Operators running companies of this size still get the day's reality as scattered emails and one-off files: inventory counts, input prices, shipment updates, and more. Opening each one is work. Seeing them together is usually impossible. Helm exists to close that gap.";
 export const FOUNDER_NOTE =
-  "Helm is built and run by Tansher Dhawan, CEO & Founder, a CEO making the cockpit he wished existed for running a company of this size."
+  "Tansher Dhawan built Helm himself: he writes the code and still does the day-to-day department redesigns and fixes. There is no separate product team behind the curtain. What you see in the cockpit is what he is actively shipping.";
 
 export const HERO_SUB =
   "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Helm makes leadership less chaotic. We give CEOs quiet control by turning scattered company data into clear decisions, so you run the business instead of chasing it.";
+  "Helm exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes and attachments every morning.";
 
 export const VISION =
-  "We are building toward a cockpit where leaders see what matters and delegate the rest, without maintaining another dashboard.";
+  "The near direction is practical, not abstract: make that morning picture cover every department lane operators already run in Helm (reports, production, procurement, legal, and the rest) so scattered email files stop being the system of record.";
 export const ABOUT_DIFFERENTIATOR =
-  "Helm turns your existing data into briefings and decision cards, not another chart library. Your team contributes through role-based access; synthesis and the decision queue stay oriented to the person running the company.";
+  "Ask Helm answers from the company's live financials and pipeline in the workspace, not from a generic chart library or the public internet. When a figure has not been entered yet, it is instructed to say it does not have that information rather than invent a number.";
 
 export const ABOUT_STORY =
-  "Helm started from a simple frustration: CEOs running companies of up to 50 people waste hours opening twelve tabs (Slack, the CRM, the finance sheet, the shop floor, email) and still lack a clear picture of what actually needs them. The data exists. The synthesis doesn't. We built Helm to be the cockpit that pulls signal in, ranks what matters, and turns it into decisions and handoffs, not another dashboard to maintain.";
+  "Helm started by watching a real manufacturing company get buried in 10+ scattered daily reports by email: inventory counts, commodity and input prices, shipment updates, and other one-off files that were never the same template twice. There was no single place to read them together or in context, only attachments to open one by one. The first real feature work, the Reports Digest, came directly from that problem: upload the day's files and get one readable synthesis instead of another tab marathon. Helm grew from that observed gap into a cockpit for money, decisions, and department work, not from an invented persona.";
 
 export const VALUES = [
   {
     title: "Signal over noise",
-    body: "Every screen in Helm answers one question: what does the CEO need to know or do right now? If it doesn't help you decide or delegate, it doesn't belong.",
+    body: "The Briefing and Decision Center are built around what changed, what needs a call, and what can be handed off. Screens exist to help you decide or delegate, not to keep you scrolling.",
   },
   {
     title: "Quiet control",
-    body: "No engagement loops, no notification spam. Helm respects that your attention is the company's scarcest resource.",
+    body: "Helm does not run engagement loops or notification spam. You open the cockpit when you need the picture; the product is not designed to chase your attention through the day.",
   },
   {
     title: "Honest synthesis",
-    body: "AI recommendations cite your real numbers: cash, pipeline, and team load, not generic advice. When data is missing, Helm says so.",
+    body: "On Financials, missing cash, MRR, burn, or runway show as \"Add data,\" not $0. Ask Helm and other synthesis paths are told the same rule: unknown is unknown. Helm would rather admit a gap than invent a confident wrong number.",
   },
 ];
 
