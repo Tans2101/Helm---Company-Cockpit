@@ -89,8 +89,16 @@ export default function About() {
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
           <h2 className="font-display text-3xl font-medium tracking-tight">Why we built Helm</h2>
           <p className="mt-5 text-helm-slate leading-relaxed">{ABOUT_STORY}</p>
-          <p className="mt-8 text-helm-cream/80 leading-relaxed" data-testid="founder-credit">{FOUNDER_NOTE}</p>
-          <p className="mt-3 font-mono text-xs uppercase tracking-[0.2em] text-helm-slate">{FOUNDER_CREDIT}</p>
+        </div>
+      </section>
+
+      <section className="px-6 py-20 border-t border-helm-cream/[0.05]" data-testid="about-founder">
+        <div className="mx-auto max-w-3xl">
+          <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
+          <h2 className="font-display text-3xl font-medium tracking-tight">Who&apos;s behind Helm</h2>
+          <p className="mt-5 text-helm-cream/80 leading-relaxed" data-testid="founder-credit">{FOUNDER_NOTE}</p>
+          <p className="mt-4 font-mono text-xs uppercase tracking-[0.2em] text-helm-slate">{FOUNDER_CREDIT}</p>
+          <p className="mt-2 text-sm text-helm-slate">Based in {COMPANY_LOCATION}.</p>
         </div>
       </section>
 

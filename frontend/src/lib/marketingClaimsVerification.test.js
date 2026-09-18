@@ -3,7 +3,15 @@
  * Source of truth for About / pricing FAQ accuracy vs shipped product.
  * Update this file when claims or product behavior change.
  */
-import { VALUES, CEO_DAY, PRICING_FAQ, FEATURE_MODULES, PLANS, paidPlanRenewalDisclosure } from "./marketingCopy";
+import {
+  VALUES,
+  CEO_DAY,
+  PRICING_FAQ,
+  FEATURE_MODULES,
+  PLANS,
+  paidPlanRenewalDisclosure,
+  FOUNDER_NOTE,
+} from "./marketingCopy";
 
 describe("marketing claim verification log", () => {
   test("About Honest synthesis claims remain present", () => {
@@ -45,5 +53,11 @@ describe("marketing claim verification log", () => {
       expect(text).toMatch(/Paddle customer portal/i);
       expect(text).toMatch(/Billing/i);
     }
+  });
+
+  test("founder note stays factual and short (no new personal details)", () => {
+    expect(FOUNDER_NOTE).toMatch(/built Helm himself/i);
+    expect(FOUNDER_NOTE).toMatch(/no separate product team/i);
+    expect(FOUNDER_NOTE.toLowerCase()).not.toMatch(/\b(age|student|family|linkedin|photo)\b/);
   });
 });
