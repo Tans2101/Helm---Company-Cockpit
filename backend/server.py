@@ -3184,7 +3184,18 @@ async def briefing(principal=Depends(get_principal)):
     freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
     b["data_as_of"] = freshness.get("data_as_of")
     b["data_freshness_sources"] = freshness.get("sources") or {}
-    return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
+    # Free includes AI briefing — do not strip the stored summary just because
+    # the workspace is not on a paid tier (legacy is_pro gate was wrong).
+    can_ai_briefing = workspace_allows(c, helm_plans.FEATURE_AI_BRIEFING)
+    can_generate = (
+        can_ai_briefing and "briefing:generate" in perms_for(principal.get("pack") or "member")
+    )
+    return {
+        **b,
+        "is_pro": is_pro,
+        "ai_summary": b.get("ai_summary") if can_ai_briefing else None,
+        "can_generate_ai_summary": can_generate,
+    }
 
 
 async def _briefing_email_threads(workspace: dict, principal: dict | None = None) -> tuple[list, dict]:
