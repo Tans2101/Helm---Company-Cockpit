@@ -6855,8 +6855,17 @@ async def calendar(
                     existing_ids.add(ev.get("id"))
         data["events"] = events
     data["can_write"] = await can_section_write(principal, "calendar", "calendar:write")
+    if data["can_write"] and not _has_pack_calendar_write(principal):
+        member_depts = await _principal_calendar_department_ids(principal)
+        annotate_depts = set() if member_depts is None else set(member_depts)
+    else:
+        # Pack writers (owner/exec) manage everything; no department overlap needed.
+        annotate_depts = set()
     data["events"] = _annotate_helm_event_permissions(
-        principal, data.get("events") or [], can_write=data["can_write"],
+        principal,
+        data.get("events") or [],
+        can_write=data["can_write"],
+        accessible_department_ids=annotate_depts,
     )
     data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
@@ -6881,30 +6890,88 @@ def _helm_event_creator_id(event: dict | None) -> Optional[str]:
     return (event.get("created_by") or event.get("created_by_user_id") or "").strip() or None
 
 
+def _helm_event_department_ids(event: dict | None) -> set[str]:
+    if not event:
+        return set()
+    out: set[str] = set()
+    one = (event.get("department_id") or "").strip()
+    if one:
+        out.add(one)
+    for raw in event.get("department_ids") or []:
+        value = str(raw or "").strip()
+        if value:
+            out.add(value)
+    return out
+
+
 def _has_pack_calendar_write(principal: dict) -> bool:
     """Owner/exec (and any pack with calendar:write) — full calendar manage, all events."""
     return "calendar:write" in perms_for(principal.get("pack") or "")
 
 
-def can_manage_helm_calendar_event(principal: dict, event: dict | None) -> bool:
+async def _principal_calendar_department_ids(principal: dict) -> Optional[set[str]]:
+    """Department ids the principal may treat as their calendar scope.
+
+    ``None`` means CEO/owner (all departments). Empty set means no memberships.
+    """
+    if dept_access.is_workspace_ceo(principal):
+        return None
+    enabled = await db.departments.find(
+        {"workspace_id": principal["workspace_id"], "enabled": True},
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    enabled_ids = [d["department_id"] for d in enabled if d.get("department_id")]
+    if not enabled_ids:
+        return set()
+    mine = await db.department_members.find(
+        {"user_id": principal["user_id"], "department_id": {"$in": enabled_ids}},
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    return {m["department_id"] for m in mine if m.get("department_id")}
+
+
+def can_manage_helm_calendar_event(
+    principal: dict,
+    event: dict | None,
+    *,
+    accessible_department_ids: Optional[set[str]] = None,
+) -> bool:
     """Whether principal may edit/delete this Helm calendar event.
 
     Pack calendar:write (CEO/owner/exec) → any helm event.
-    Section-grant writers → only events they personally created.
-    Legacy events with no creator stay editable by anyone who already has
-    calendar write (pack or grant), so older workspaces are not locked out.
+    Otherwise (with calendar section grant already required by the route):
+      - events they personally created, or
+      - events tied to a department they belong to.
+    Legacy unscoped events (no creator, no department) stay editable by anyone
+    who already has calendar write, so older workspaces are not locked out.
     """
     if not event or event.get("source") not in (None, "helm"):
         return False
     if _has_pack_calendar_write(principal):
         return True
     creator = _helm_event_creator_id(event)
+    if creator and creator == principal.get("user_id"):
+        return True
+    event_depts = _helm_event_department_ids(event)
+    if event_depts:
+        if accessible_department_ids is None:
+            # Caller didn't load memberships — treat as no department overlap.
+            return False
+        if event_depts & accessible_department_ids:
+            return True
+        return False
     if not creator:
         return True
-    return creator == principal.get("user_id")
+    return False
 
 
-def _annotate_helm_event_permissions(principal: dict, events: list, *, can_write: bool) -> list:
+def _annotate_helm_event_permissions(
+    principal: dict,
+    events: list,
+    *,
+    can_write: bool,
+    accessible_department_ids: Optional[set[str]] = None,
+) -> list:
     """Attach can_edit for UI; deadline/google rows stay non-editable."""
     out = []
     for ev in events or []:
@@ -6912,7 +6979,9 @@ def _annotate_helm_event_permissions(principal: dict, events: list, *, can_write
         if not can_write:
             row["can_edit"] = False
         elif row.get("source") == "helm" and not str(row.get("id") or "").startswith("deadline_"):
-            row["can_edit"] = can_manage_helm_calendar_event(principal, row)
+            row["can_edit"] = can_manage_helm_calendar_event(
+                principal, row, accessible_department_ids=accessible_department_ids,
+            )
         else:
             row["can_edit"] = False
         out.append(row)
@@ -6925,6 +6994,7 @@ def _build_helm_event(
     google_event_id: Optional[str] = None,
     *,
     created_by: Optional[str] = None,
+    department_ids: Optional[list[str]] = None,
     preserve: Optional[dict] = None,
 ) -> dict:
     try:
@@ -6938,10 +7008,29 @@ def _build_helm_event(
     creator = (created_by or _helm_event_creator_id(preserve) or "").strip()
     if creator:
         extra["created_by"] = creator
-    if preserve:
-        for key in ("department_id", "department_ids"):
-            if preserve.get(key) is not None and key not in extra:
-                extra[key] = preserve[key]
+    depts: list[str] = []
+    if department_ids is not None:
+        seen: set[str] = set()
+        for raw in department_ids:
+            value = str(raw or "").strip()
+            if value and value not in seen:
+                seen.add(value)
+                depts.append(value)
+    elif preserve:
+        if isinstance(preserve.get("department_ids"), list) and preserve.get("department_ids"):
+            seen = set()
+            for raw in preserve["department_ids"]:
+                value = str(raw or "").strip()
+                if value and value not in seen:
+                    seen.add(value)
+                    depts.append(value)
+        else:
+            one = (preserve.get("department_id") or "").strip()
+            if one:
+                depts = [one]
+    if depts:
+        extra["department_ids"] = depts
+        extra["department_id"] = depts[0]
     if payload.all_day:
         start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
         end = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
@@ -7007,7 +7096,14 @@ async def create_calendar_event(
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
     events = list(cal.get("helm_events") or [])
-    ev = _build_helm_event(payload, created_by=principal["user_id"])
+    member_depts = await _principal_calendar_department_ids(principal)
+    # Stamp the creator's department memberships so co-members can manage the event.
+    dept_list = None if member_depts is None else sorted(member_depts)
+    ev = _build_helm_event(
+        payload,
+        created_by=principal["user_id"],
+        department_ids=dept_list,
+    )
     ev = await _maybe_push_google_event(c, ev, payload, principal)
     events.append(ev)
     cal["helm_events"] = events
@@ -7027,13 +7123,17 @@ async def edit_calendar_event(
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
     events = list(cal.get("helm_events") or [])
+    member_depts = await _principal_calendar_department_ids(principal)
+    access_depts = set() if member_depts is None else set(member_depts)
     found = None
     for i, ev in enumerate(events):
         if ev.get("id") == event_id and ev.get("source") == "helm":
-            if not can_manage_helm_calendar_event(principal, ev):
+            if not can_manage_helm_calendar_event(
+                principal, ev, accessible_department_ids=access_depts,
+            ):
                 raise HTTPException(
                     status_code=403,
-                    detail="You can only edit calendar events you created",
+                    detail="You can only edit calendar events you created or that belong to your department",
                 )
             events[i] = _build_helm_event(
                 payload,
@@ -7073,10 +7173,14 @@ async def delete_calendar_event(
     existing = [e for e in (cal.get("helm_events") or []) if e.get("id") == event_id]
     if not existing:
         raise HTTPException(status_code=404, detail="Event not found")
-    if not can_manage_helm_calendar_event(principal, existing[0]):
+    member_depts = await _principal_calendar_department_ids(principal)
+    access_depts = set() if member_depts is None else set(member_depts)
+    if not can_manage_helm_calendar_event(
+        principal, existing[0], accessible_department_ids=access_depts,
+    ):
         raise HTTPException(
             status_code=403,
-            detail="You can only delete calendar events you created",
+            detail="You can only delete calendar events you created or that belong to your department",
         )
     events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
     gid = existing[0].get("google_event_id")

@@ -92,8 +92,28 @@ def test_grant_member_can_only_manage_own_events():
     member = {"user_id": "u_member", "pack": "member"}
     own = {"id": "helm_1", "source": "helm", "created_by": "u_member", "title": "Mine"}
     other = {"id": "helm_2", "source": "helm", "created_by": "u_other", "title": "Theirs"}
-    assert server.can_manage_helm_calendar_event(member, own) is True
-    assert server.can_manage_helm_calendar_event(member, other) is False
+    assert server.can_manage_helm_calendar_event(member, own, accessible_department_ids=set()) is True
+    assert server.can_manage_helm_calendar_event(member, other, accessible_department_ids=set()) is False
+
+
+def test_grant_member_can_manage_department_tied_event():
+    import server
+
+    member = {"user_id": "u_member", "pack": "member"}
+    sales_event = {
+        "id": "helm_sales",
+        "source": "helm",
+        "created_by": "u_other",
+        "department_id": "dept_sales",
+        "department_ids": ["dept_sales"],
+        "title": "Pipeline review",
+    }
+    assert server.can_manage_helm_calendar_event(
+        member, sales_event, accessible_department_ids={"dept_sales"},
+    ) is True
+    assert server.can_manage_helm_calendar_event(
+        member, sales_event, accessible_department_ids={"dept_hr"},
+    ) is False
 
 
 def test_legacy_helm_event_without_creator_editable_by_grant_writer():
@@ -101,7 +121,7 @@ def test_legacy_helm_event_without_creator_editable_by_grant_writer():
 
     member = {"user_id": "u_member", "pack": "member"}
     legacy = {"id": "helm_old", "source": "helm", "title": "Old"}
-    assert server.can_manage_helm_calendar_event(member, legacy) is True
+    assert server.can_manage_helm_calendar_event(member, legacy, accessible_department_ids=set()) is True
 
 
 def test_deadline_events_not_manageable():
@@ -119,24 +139,40 @@ def test_annotate_sets_can_edit_flags():
     events = [
         {"id": "helm_1", "source": "helm", "created_by": "u_member", "title": "Mine"},
         {"id": "helm_2", "source": "helm", "created_by": "u_other", "title": "Theirs"},
+        {
+            "id": "helm_3",
+            "source": "helm",
+            "created_by": "u_other",
+            "department_ids": ["dept_sales"],
+            "title": "Sales",
+        },
         {"id": "deadline_1", "source": "deadline", "title": "Due"},
     ]
-    annotated = server._annotate_helm_event_permissions(principal, events, can_write=True)
+    annotated = server._annotate_helm_event_permissions(
+        principal, events, can_write=True, accessible_department_ids={"dept_sales"},
+    )
     assert annotated[0]["can_edit"] is True
     assert annotated[1]["can_edit"] is False
-    assert annotated[2]["can_edit"] is False
+    assert annotated[2]["can_edit"] is True
+    assert annotated[3]["can_edit"] is False
 
-    locked = server._annotate_helm_event_permissions(principal, events, can_write=False)
+    locked = server._annotate_helm_event_permissions(
+        principal, events, can_write=False, accessible_department_ids={"dept_sales"},
+    )
     assert all(row["can_edit"] is False for row in locked)
 
 
-def test_build_helm_event_stamps_created_by():
+def test_build_helm_event_stamps_created_by_and_departments():
     import server
 
     payload = server.CalendarEventInput(title="Kickoff", date="2026-09-18", time="10:00")
-    ev = server._build_helm_event(payload, created_by="u_member")
+    ev = server._build_helm_event(
+        payload, created_by="u_member", department_ids=["dept_sales", "dept_hr"],
+    )
     assert ev["created_by"] == "u_member"
     assert ev["source"] == "helm"
+    assert ev["department_ids"] == ["dept_sales", "dept_hr"]
+    assert ev["department_id"] == "dept_sales"
 
     edited = server._build_helm_event(
         payload,
@@ -144,3 +180,4 @@ def test_build_helm_event_stamps_created_by():
         preserve=ev,
     )
     assert edited["created_by"] == "u_member"
+    assert edited["department_ids"] == ["dept_sales", "dept_hr"]
