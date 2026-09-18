@@ -55,10 +55,21 @@ def test_workspace_source_timestamps():
 
 
 def test_ask_and_weekly_pack_prompts_require_literal_grounding():
+    import inspect
+
+    import llm as helm_llm
     import server
 
     assert "literally" in server._WEEKLY_PACK_SYSTEM
     assert "possibly_stale" in server._WEEKLY_PACK_SYSTEM
+    assert "literally" in helm_llm._REPORTS_DIGEST_SYSTEM
+    assert "Never invent" in helm_llm._REPORTS_DIGEST_SYSTEM or "never invent" in helm_llm._REPORTS_DIGEST_SYSTEM.lower()
+    assert "literally" in helm_llm._REPORT_SUMMARY_SYSTEM
+    ask_src = inspect.getsource(server.ask_helm)
+    assert "literally" in ask_src
+    assert "possibly_stale" in ask_src
+    briefing_src = inspect.getsource(server.generate_briefing)
+    assert "literally" in briefing_src
     ctx = server.ask_context_for_synthesis(
         {"name": "Acme", "people": {"people": []}, "decisions": [], "telemetry_manual": {}},
         {},
@@ -75,3 +86,54 @@ def test_ask_and_weekly_pack_prompts_require_literal_grounding():
     )
     assert ctx["production"]["possibly_stale_count"] >= 1
     assert "outdated" in (ctx["production"].get("instructions_for_missing_data") or "")
+
+
+def test_stale_distinct_from_not_entered_and_zero():
+    """Staleness must not be conflated with not-entered / confirmed-zero."""
+    import server
+
+    fin = {
+        "cash": 0,
+        "cash_entered": True,
+        "mrr": None,
+        "mrr_entered": False,
+        "burn": 0,
+        "burn_entered": True,
+        "runway_months": None,
+        "runway_status": "not_entered",
+        "expense_breakdown": [],
+        "currency": "USD",
+    }
+    # Confirmed-zero cash is still a figure state — freshness is orthogonal.
+    assert server.FIGURE_NOT_ENTERED == "not_entered"
+    assert fin["cash_entered"] is True and fin["cash"] == 0
+    assert fin["mrr_entered"] is False
+    stale_expense = {"name": "Rent", "amount": 0, "updated_at": "2000-01-01T00:00:00+00:00"}
+    annotated = fresh.annotate_possibly_stale(
+        [stale_expense], dept_type=dept_catalog.TYPE_ACCOUNTING_FINANCE,
+        now=datetime(2026, 9, 18, tzinfo=timezone.utc),
+    )
+    assert annotated[0]["amount"] == 0
+    assert annotated[0]["possibly_stale"] is True
+
+
+def test_pipeline_and_onboarding_surface_stale_instructions():
+    import server
+
+    now = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    deals = [
+        {"stage": "proposal", "value": 1000, "updated_at": (now - timedelta(days=40)).isoformat()},
+    ]
+    pipe = server.pipeline_for_synthesis(deals, sales_tracked=True)
+    assert pipe["possibly_stale_count"] >= 1
+    assert "outdated" in (pipe.get("instructions_for_missing_data") or "")
+
+    instances = [
+        {
+            "overall_status": "in_progress",
+            "updated_at": (now - timedelta(days=40)).isoformat(),
+        },
+    ]
+    onb = server.onboarding_for_synthesis(instances, hr_tracked=True)
+    assert onb["possibly_stale_count"] >= 1
+    assert "outdated" in (onb.get("instructions_for_missing_data") or "")

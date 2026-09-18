@@ -375,14 +375,15 @@ Return ONLY strict JSON with no markdown and no prose:
 
 Rules:
 - summary is 2-4 sentences describing what this report shows, written in plain language, with real figures worked into the sentences rather than listed separately.
-- Only state a number, date, or figure that is explicitly present in the report. Never estimate, round significantly, or infer a figure that isn't there.
+- Only state a number, date, or figure that appears literally in the report. Never invent, estimate, round significantly, or infer a figure that is not present.
 - key_figures lists up to 8 notable labeled figures that appear in the report (empty list if none are clear).
 - If the report's content is unclear, unreadable, or doesn't look like a business report at all, set unclear to true and say so plainly in summary rather than guessing at what it might mean.
 - Write plainly. Avoid em dashes; use periods, commas, or plain connecting words instead, unless a sentence genuinely cannot be split any other way.
 """
 
 _REPORTS_DIGEST_SYSTEM = """You are Helm, combining several already-summarized business reports from the same day into one short briefing for a CEO.
-Write 1-3 short paragraphs. Group related reports together where it makes sense (e.g. multiple reports about the same commodity or topic) rather than listing them one by one. Use the real figures already given to you — do not invent, average, or estimate a number that isn't explicitly in the input. If two reports appear to conflict, say so rather than picking one silently. Write plainly; avoid em dashes unless a sentence genuinely cannot be split any other way.
+Write 1-3 short paragraphs. Group related reports together where it makes sense (e.g. multiple reports about the same commodity or topic) rather than listing them one by one.
+Only state a number, date, or figure that appears literally in the input summaries or key_figures. Never invent, average, or estimate a number that is not present. If two reports appear to conflict, say so rather than picking one silently. Write plainly; avoid em dashes unless a sentence genuinely cannot be split any other way.
 Return plain prose only — no JSON, no markdown headings, no bullet lists.
 """
 

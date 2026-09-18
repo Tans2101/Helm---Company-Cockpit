@@ -8,6 +8,7 @@ import {
 } from "@/components/kit";
 import { fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const stageStyle = {
   lead: "text-helm-fg bg-helm-fg/5",
@@ -280,7 +281,10 @@ export default function Pipeline() {
                   {deals.filter((d) => d.stage === s.stage).map((d) => (
                     <GlassCard key={d.id} className="p-4 fade-up flex items-center gap-4 group" data-testid={`deal-${d.id}`}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-helm-fg truncate">{d.name}</p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="text-sm text-helm-fg truncate">{d.name}</p>
+                          <PossiblyStaleBadge show={d.possibly_stale} />
+                        </div>
                         <p className="text-xs text-helm-muted truncate">
                           {d.company || "—"}
                           {d.owner_name ? ` · Owner ${d.owner_name}` : ""}

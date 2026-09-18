@@ -279,6 +279,8 @@ def test_digest_combines_when_stale(client):
     assert len(body["reports"]) == 2
     assert "4.52" in body["combined_digest"]
     assert body["digest_cached"] is False
+    # Freshness is latest underlying upload/update — not digest compute time.
+    assert body["data_as_of"].startswith("2026-09-15T11:00")
     combine.assert_awaited_once()
     # Cache write after recompute
     assert server.db.report_digests.update_one.await_args.args[1]["$set"]["stale"] is False

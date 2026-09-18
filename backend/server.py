@@ -1808,13 +1808,18 @@ def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
             value = 0.0
         normalized.append({"stage": d.get("stage") or "lead", "value": value})
     metrics = _deal_metrics(normalized)
+    stale_count = helm_freshness.count_possibly_stale(annotated)
     return {
         "tracked": True,
         "deal_count": metrics["open_count"],
         "open_value": metrics["open_value"],
-        "possibly_stale_count": helm_freshness.count_possibly_stale(annotated),
+        "possibly_stale_count": stale_count,
         "unknown_fields": [],
-        "instructions_for_missing_data": "",
+        "instructions_for_missing_data": (
+            "If possibly_stale_count is greater than zero, say some open deals may be "
+            "outdated rather than treating every count as freshly updated."
+            if stale_count else ""
+        ),
     }
 
 
@@ -1838,12 +1843,17 @@ def onboarding_for_synthesis(instances, *, hr_tracked: bool) -> dict:
         }
     # "active" means the hire finished onboarding — not currently in the pipeline.
     in_progress = [i for i in annotated if (i.get("overall_status") or "in_progress") != "active"]
+    stale_count = helm_freshness.count_possibly_stale(in_progress)
     return {
         "tracked": True,
         "instance_count": len(in_progress),
-        "possibly_stale_count": helm_freshness.count_possibly_stale(in_progress),
+        "possibly_stale_count": stale_count,
         "unknown_fields": [],
-        "instructions_for_missing_data": "",
+        "instructions_for_missing_data": (
+            "If possibly_stale_count is greater than zero, say some open onboardings may be "
+            "outdated rather than treating every count as freshly updated."
+            if stale_count else ""
+        ),
     }
 
 
@@ -4183,6 +4193,7 @@ async def list_deals(
     deals = await db.deals.find(filt, {"_id": 0}).sort([("updated_at", -1), ("id", -1)]).limit(page_limit).to_list(page_limit)
     await _migrate_deal_owner_user_ids(ws, deals)
     deals = await _enrich_deals(deals)
+    deals = helm_freshness.annotate_possibly_stale(deals, dept_type=dept_catalog.TYPE_SALES)
     metrics = await _deal_metrics_for_workspace(ws, department_ids=dept_ids)
     cursor = next_cursor(deals, "updated_at", page_limit, id_field="id")
     currency = await _workspace_currency(ws)
@@ -10134,6 +10145,7 @@ async def list_hr_onboarding(
     )
     is_lead = _can_lead_hr(principal, membership)
     items = await _enrich_hr_instances(rows)
+    items = helm_freshness.annotate_possibly_stale(items, dept_type=dept_catalog.TYPE_HR)
     return {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",

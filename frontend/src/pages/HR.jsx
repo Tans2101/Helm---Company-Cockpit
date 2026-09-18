@@ -9,6 +9,7 @@ import {
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const STEP_STATUS_META = {
   not_started: { label: "Not started", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
@@ -555,7 +556,10 @@ export default function HR() {
                         )}
                       >
                         <td className="px-3 py-2.5">
-                          <p className="text-helm-fg truncate max-w-[14rem]">{inst.hire_name}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="text-helm-fg truncate max-w-[14rem]">{inst.hire_name}</p>
+                            <PossiblyStaleBadge show={inst.possibly_stale} />
+                          </div>
                           {inst.hire_email && (
                             <p className="text-[11px] text-helm-muted truncate">{inst.hire_email}</p>
                           )}
