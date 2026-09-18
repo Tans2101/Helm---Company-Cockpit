@@ -3,7 +3,7 @@
  * Source of truth for About / pricing FAQ accuracy vs shipped product.
  * Update this file when claims or product behavior change.
  */
-import { VALUES, CEO_DAY, PRICING_FAQ, FEATURE_MODULES } from "./marketingCopy";
+import { VALUES, CEO_DAY, PRICING_FAQ, FEATURE_MODULES, PLANS, paidPlanRenewalDisclosure } from "./marketingCopy";
 
 describe("marketing claim verification log", () => {
   test("About Honest synthesis claims remain present", () => {
@@ -32,5 +32,18 @@ describe("marketing claim verification log", () => {
     const decisions = FEATURE_MODULES.find((m) => m.title === "Decision Center");
     expect(decisions.body.toLowerCase()).not.toContain("actually landed");
     expect(decisions.body.toLowerCase()).toMatch(/status and owner|do not disappear/);
+  });
+
+  test("paid plan CTAs have ARL renewal disclosure; Free does not", () => {
+    expect(paidPlanRenewalDisclosure(PLANS.find((p) => p.id === "free"))).toBe("");
+    for (const id of ["starter", "growth", "business"]) {
+      const plan = PLANS.find((p) => p.id === id);
+      const text = paidPlanRenewalDisclosure(plan);
+      expect(text).toMatch(/7-day free trial/);
+      expect(text).toContain(`$${plan.price}/mo`);
+      expect(text).toMatch(/unless you cancel before it ends/i);
+      expect(text).toMatch(/Paddle customer portal/i);
+      expect(text).toMatch(/Billing/i);
+    }
   });
 });

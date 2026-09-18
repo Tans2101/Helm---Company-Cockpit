@@ -10,6 +10,7 @@ import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
   TAGLINE, CATEGORY, AUDIENCE, HERO_SUB,
   PLANS, PRODUCT_FACTS, HOW_IT_WORKS, FEATURE_HIGHLIGHTS, CEO_DAY, PRICING_FAQ,
+  paidPlanRenewalDisclosure,
 } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -206,7 +207,9 @@ export default function Landing() {
             <p className="mt-4 text-helm-slate">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
           </motion.div>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-0 border border-helm-cream/[0.08] divide-y sm:divide-y-0 sm:divide-x divide-helm-cream/[0.08]">
-            {PLANS.map((plan) => (
+            {PLANS.map((plan) => {
+              const renewalDisclosure = paidPlanRenewalDisclosure(plan);
+              return (
               <motion.div
                 key={plan.id}
                 variants={fade}
@@ -240,8 +243,17 @@ export default function Landing() {
                   }`}>
                   {authed ? "Open cockpit" : plan.id === "free" ? "Get started free" : "Start free trial"}
                 </button>
+                {renewalDisclosure ? (
+                  <p
+                    data-testid={`pricing-renewal-${plan.id}`}
+                    className="mt-3 text-[11px] leading-relaxed text-helm-slate"
+                  >
+                    {renewalDisclosure}
+                  </p>
+                ) : null}
               </motion.div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-14 max-w-2xl space-y-5 text-left">
             <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate">Common questions</p>

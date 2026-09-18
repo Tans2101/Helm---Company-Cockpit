@@ -184,6 +184,22 @@ export const PLANS = [
 export const PRO_PRICE = 15;
 export const HELM_PRICE = PRO_PRICE;
 
+/**
+ * Point-of-purchase auto-renewal disclosure for paid plan CTAs (ARL / FTC proximity).
+ * Cancellation is via Billing → Paddle customer portal (see Refunds / Billing).
+ * Free plan returns "" — no trial, no charge, no disclosure required.
+ */
+export function paidPlanRenewalDisclosure(plan) {
+  if (!plan || plan.id === "free" || !(Number(plan.price) > 0)) return "";
+  const trial = Number(plan.trialDays ?? plan.trial_days ?? 0);
+  if (!(trial > 0)) return "";
+  const price = Number(plan.price);
+  return (
+    `${trial}-day free trial, then $${price}/mo unless you cancel before it ends. ` +
+    "Cancel anytime in Billing through the Paddle customer portal."
+  );
+}
+
 export const PRO_FEATURES = PLANS.find((p) => p.id === "starter").includes;
 export const HELM_FEATURES = PRO_FEATURES;
 
