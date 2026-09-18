@@ -119,6 +119,7 @@ def test_google_callback_never_500s_on_unexpected_error():
     assert r.status_code in (302, 307)
     assert "error=token" in r.headers.get("location", "")
     assert "provider=google" in r.headers.get("location", "")
+    assert "reason=network" in r.headers.get("location", "")
     assert r.status_code != 500
 
 
@@ -215,6 +216,7 @@ def test_quickbooks_callback_token_exchange_includes_provider():
     loc = r.headers.get("location", "")
     assert "error=token" in loc
     assert "provider=quickbooks" in loc
+    assert "reason=invalid_client" in loc
 
 
 def test_quickbooks_callback_save_failure_includes_provider():
@@ -264,3 +266,4 @@ def test_quickbooks_callback_save_failure_includes_provider():
     loc = r.headers.get("location", "")
     assert "error=save" in loc
     assert "provider=quickbooks" in loc
+    assert "reason=store" in loc

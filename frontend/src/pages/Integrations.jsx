@@ -218,6 +218,7 @@ export default function Integrations() {
     } else if (params.get("error")) {
       const err = params.get("error");
       const provider = params.get("provider");
+      const reason = (params.get("reason") || "").toLowerCase();
       const providerName = provider === "quickbooks"
         ? "QuickBooks"
         : provider === "xero"
@@ -227,15 +228,25 @@ export default function Integrations() {
             : provider === "google"
               ? "Google"
               : "The provider";
-      toast.error(
-        err === "xero_org"
-          ? "No Xero organisations were available on that account."
-          : err === "save"
-            ? `${providerName} accepted the grant, but Helm could not save the connection. Check INTEGRATION_ENCRYPTION_KEY on Render, then try Connect again.`
-            : err === "token"
-              ? `${providerName} accepted the grant, but Helm could not finish the connection. Check OAuth keys and redirect URI on Render, then try Connect again.`
-              : "Could not complete the connection. Try again or use a different account.",
-      );
+      let message = "Could not complete the connection. Try again or use a different account.";
+      if (err === "xero_org") {
+        message = "No Xero organisations were available on that account.";
+      } else if (err === "save") {
+        message = reason === "seal"
+          ? `${providerName} accepted the grant, but Helm could not encrypt tokens. Set INTEGRATION_ENCRYPTION_KEY on Render (Fernet key), redeploy, then Connect again.`
+          : `${providerName} accepted the grant, but Helm could not save the connection. Check Render logs, then try Connect again.`;
+      } else if (err === "token") {
+        if (reason === "invalid_client") {
+          message = `${providerName} rejected Helm's app keys. On Render, set the matching ${provider === "quickbooks" ? "sandbox Development" : "OAuth"} Client ID/Secret, redeploy, then Connect again.`;
+        } else if (reason === "invalid_grant") {
+          message = `${providerName} rejected the auth code (expired or redirect URI mismatch). Confirm the Redirect URI is exact, then Connect again (codes are single-use).`;
+        } else if (reason === "network") {
+          message = `${providerName} accepted the grant, but Helm could not reach the token server. Try Connect again in a minute.`;
+        } else {
+          message = `${providerName} accepted the grant, but Helm could not finish the connection${reason ? ` (${reason})` : ""}. Check OAuth keys and redirect URI on Render, then try Connect again.`;
+        }
+      }
+      toast.error(message);
       setParams({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -420,6 +431,15 @@ export default function Integrations() {
       )}
 
       <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-3">Connect your accounts</h2>
+      {data.can_manage && typeof data.encryption_ready === "boolean" && (
+        <p className="text-xs text-helm-muted mb-3" data-testid="oauth-diag">
+          Encryption: {data.encryption_ready ? "ready" : "missing INTEGRATION_ENCRYPTION_KEY on Render"}
+          {data.quickbooks_env ? ` · QuickBooks env: ${data.quickbooks_env}` : ""}
+          {data.oauth_redirect_uris?.quickbooks
+            ? ` · QB redirect: ${data.oauth_redirect_uris.quickbooks}`
+            : ""}
+        </p>
+      )}
       <div className="grid md:grid-cols-2 gap-4 mb-10">
         {data.can_manage && (
           <GlassCard className="p-5 fade-up flex flex-col" data-testid="slack-webhook-card">
