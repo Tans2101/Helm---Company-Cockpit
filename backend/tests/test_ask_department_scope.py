@@ -455,3 +455,92 @@ async def test_ask_helm_department_slice_uses_accessible_department_ids():
     assert enabled and visible
     filt = mock_db.production_work_orders.find.call_args[0][0]
     assert "department_id" not in filt
+
+
+# Catalog coverage: every department type Ask Helm can surface must be membership-gated
+# (Accounting/Finance uses the Financials section grant, not department membership alone).
+_ASK_DEPT_SLICES = (
+    (dept_catalog.TYPE_SALES, "deals", "pipeline"),
+    (dept_catalog.TYPE_HR, "hr_onboarding_instances", "onboarding"),
+    (dept_catalog.TYPE_PRODUCTION, "production_work_orders", "production"),
+    (dept_catalog.TYPE_PROCUREMENT, "procurement_requests", "procurement"),
+    (dept_catalog.TYPE_LEGAL, "legal_matters", "legal"),
+    (dept_catalog.TYPE_ENGINEERING_MAINTENANCE, "maintenance_tickets", "maintenance"),
+)
+
+
+def test_ask_scopes_every_non_finance_catalog_department():
+    """No department queue is left as an unconditional Ask Helm exception."""
+    catalog_types = {d["type"] for d in dept_catalog.DEPARTMENT_CATALOG}
+    sliced = {t for t, _c, _k in _ASK_DEPT_SLICES}
+    assert dept_catalog.TYPE_ACCOUNTING_FINANCE in catalog_types
+    assert sliced | {dept_catalog.TYPE_ACCOUNTING_FINANCE} == catalog_types
+    for _type, _coll, ctx_key in _ASK_DEPT_SLICES:
+        assert ctx_key in (
+            "pipeline", "onboarding", "production", "procurement", "legal", "maintenance",
+        )
+
+
+@pytest.mark.asyncio
+async def test_ask_helm_calls_membership_slice_for_every_non_finance_dept():
+    """Inspect context construction: each non-finance dept goes through accessible_department_ids."""
+    principal = {
+        "user_id": "u_member",
+        "workspace_id": "ws_ask",
+        "pack": "member",
+        "role": "member",
+        "email": "m@example.com",
+        "name": "Member",
+    }
+    ws = _company()
+    mock_db = MagicMock()
+    mock_db.chat_messages.insert_one = AsyncMock(return_value=None)
+    called = []
+
+    async def _slice(principal, dept_type, collection_attr):
+        called.append((dept_type, collection_attr))
+        return [], True, False
+
+    captured = {}
+
+    async def _capture_stream(system, message):
+        captured["system"] = system
+        yield "ok"
+
+    with patch.object(server, "get_ws", new=AsyncMock(return_value=ws)), \
+            patch.object(server, "can_access_financials", new=AsyncMock(return_value=False)), \
+            patch.object(server, "db", mock_db), \
+            patch.object(server, "_product_event", new=AsyncMock()), \
+            patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
+            patch.object(server.helm_llm, "stream_text", side_effect=_capture_stream), \
+            patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
+            patch.object(server.plan_usage, "current_usage_period", return_value={
+                "key": "2026-09-01",
+                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
+                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
+            }), \
+            patch.object(server, "BILLING_ENFORCED", False), \
+            patch.object(server, "_ask_helm_department_slice", new=AsyncMock(side_effect=_slice)), \
+            patch.object(server.helm_freshness, "resolve_workspace_data_as_of", new=AsyncMock(return_value={
+                "data_as_of": None, "sources": {},
+            })):
+        resp = await server.ask_helm(
+            server.AskInput(message="What is happening in production?"),
+            principal,
+        )
+        async for _ in resp.body_iterator:
+            pass
+
+    expected = {(t, c) for t, c, _k in _ASK_DEPT_SLICES}
+    assert set(called) == expected
+    system = captured["system"]
+    for note_frag in (
+        "Sales pipeline is not shared",
+        "HR onboarding data is not shared",
+        "Production data is not shared",
+        "Procurement data is not shared",
+        "Legal data is not shared",
+        "Engineering & Maintenance data is not shared",
+        "Financial figures are not shared",
+    ):
+        assert note_frag in system
