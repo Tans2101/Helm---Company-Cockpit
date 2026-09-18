@@ -3382,6 +3382,138 @@ async def _department_signal_inputs(workspace_id: str) -> list:
     return out
 
 
+def _signal_suggestion_key(signal: dict) -> str:
+    """Stable id for matching a live signal to a prior suggestion card."""
+    import alert_notify as an
+    return an.signal_notify_key(signal or {})
+
+
+def _index_suggestions_by_signal(suggestions: list) -> dict:
+    """Map signal fingerprint → most recent suggested card (status=suggested)."""
+    out = {}
+    for s in suggestions or []:
+        if s.get("status") and s.get("status") != "suggested":
+            continue
+        sig = s.get("signal")
+        if not isinstance(sig, dict) or not sig:
+            sig = {
+                "type": s.get("signal_type"),
+                "related_id": s.get("related_id"),
+                "summary": s.get("title") or s.get("summary") or "",
+            }
+        out[_signal_suggestion_key(sig)] = s
+    return out
+
+
+def _severity_to_impact_label(severity) -> str:
+    return {"high": "High", "medium": "Medium", "low": "Low"}.get(
+        str(severity or "medium").lower(), "Medium",
+    )
+
+
+def _raw_decision_card_from_signal(sig: dict, *, now: str) -> dict:
+    """Minimal undrafted decision card so a failed LLM draft cannot drop the signal."""
+    return {
+        "id": f"sug_{uuid.uuid4().hex[:10]}",
+        "status": "suggested",
+        "source": "signal_fallback",
+        "draft_failed": True,
+        "signal_type": sig.get("type"),
+        "signal": sig,
+        "severity": sig.get("severity"),
+        "created_at": now,
+        "title": (sig.get("summary") or "Review detected signal")[:200],
+        "description": str(sig.get("detail") or "").strip()[:800],
+        "recommendation": "Review the signal and choose a course of action.",
+        "confidence": None,
+        "confidence_unavailable": True,
+        "category": str(sig.get("category") or "General")[:80] or "General",
+        "impact": _severity_to_impact_label(sig.get("severity")),
+        "due": "",
+        "owner": None,
+    }
+
+
+def _raw_delegate_card_from_signal(sig: dict, *, now: str) -> dict:
+    """Minimal undrafted delegate card for a failed LLM draft."""
+    owner_id = sig.get("assignee_user_id")
+    if owner_id is not None:
+        owner_id = str(owner_id).strip() or None
+    owner_name = str(sig.get("assignee_name") or "Unassigned").strip()[:100] or "Unassigned"
+    title = (sig.get("summary") or "Follow up on blocker")[:200]
+    return {
+        "id": f"del_{uuid.uuid4().hex[:10]}",
+        "status": "suggested",
+        "source": "signal_fallback",
+        "draft_failed": True,
+        "signal_type": sig.get("type"),
+        "signal": sig,
+        "severity": sig.get("severity"),
+        "created_at": now,
+        "title": title,
+        "detail": str(sig.get("detail") or title).strip()[:800],
+        "suggested_owner_user_id": owner_id,
+        "suggested_owner_name": owner_name,
+    }
+
+
+def _merge_partial_draft_fallbacks(
+    *,
+    failed_signals: list,
+    decision_suggestions: list,
+    delegate_suggestions: list,
+    prior_decisions: list,
+    prior_delegates: list,
+    now: str,
+) -> tuple[list, list]:
+    """Keep active signals that failed to draft via prior card or raw-signal fallback."""
+    prior_d = _index_suggestions_by_signal(prior_decisions)
+    prior_g = _index_suggestions_by_signal(prior_delegates)
+    decisions = list(decision_suggestions)
+    delegates = list(delegate_suggestions)
+    seen_d = {_signal_suggestion_key(s.get("signal") or {}) for s in decisions}
+    seen_g = {_signal_suggestion_key(s.get("signal") or {}) for s in delegates}
+
+    for sig in failed_signals or []:
+        key = _signal_suggestion_key(sig)
+        stype = sig.get("type")
+        if stype in decision_engine.DECISION_SIGNAL_TYPES:
+            if key in seen_d:
+                continue
+            prior = prior_d.get(key)
+            if prior:
+                merged = dict(prior)
+                merged.update({
+                    "status": "suggested",
+                    "signal": sig,
+                    "signal_type": stype,
+                    "severity": sig.get("severity"),
+                    "draft_reused": True,
+                })
+                decisions.append(merged)
+            else:
+                decisions.append(_raw_decision_card_from_signal(sig, now=now))
+            seen_d.add(key)
+        elif stype in decision_engine.DELEGATE_SIGNAL_TYPES:
+            if key in seen_g:
+                continue
+            prior = prior_g.get(key)
+            if prior:
+                merged = dict(prior)
+                merged.update({
+                    "status": "suggested",
+                    "signal": sig,
+                    "signal_type": stype,
+                    "severity": sig.get("severity"),
+                    "draft_reused": True,
+                })
+                delegates.append(merged)
+            else:
+                delegates.append(_raw_delegate_card_from_signal(sig, now=now))
+            seen_g.add(key)
+    return decisions, delegates
+
+
 async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = True) -> dict:
     """Detect signals, draft AI suggestions, replace workspace suggestion lists."""
     if await doc_rate_limit.insights_over_limit(db, workspace_id):
@@ -3421,6 +3553,7 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
     company_context = company_context_for_synthesis(c, fin)
     decision_suggestions = []
     delegate_suggestions = []
+    failed_signals = []
     now = datetime.now(timezone.utc).isoformat()
     for sig in signals:
         try:
@@ -3451,7 +3584,13 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
                     **draft,
                 })
         except Exception:
-            logger.exception("draft failed for signal %s", sig.get("type"))
+            failed_signals.append(sig)
+            logger.exception(
+                "draft failed for signal %s related_id=%s workspace=%s",
+                sig.get("type"),
+                sig.get("related_id"),
+                workspace_id,
+            )
 
     # If every draft failed, keep prior suggestions and do not burn the daily stamp.
     if signals and not decision_suggestions and not delegate_suggestions:
@@ -3461,6 +3600,25 @@ async def _generate_insights(workspace_id: str, *, raise_on_rate_limit: bool = T
             len(signals),
         )
         return {"skipped": "draft_failed", "signals": len(signals)}
+
+    if failed_signals:
+        fail_types = sorted({(s.get("type") or "?") for s in failed_signals})
+        logger.warning(
+            "insights partial draft failures for %s: failed=%s ok_decision=%s ok_delegate=%s types=%s",
+            workspace_id,
+            len(failed_signals),
+            len(decision_suggestions),
+            len(delegate_suggestions),
+            ",".join(fail_types),
+        )
+        decision_suggestions, delegate_suggestions = _merge_partial_draft_fallbacks(
+            failed_signals=failed_signals,
+            decision_suggestions=decision_suggestions,
+            delegate_suggestions=delegate_suggestions,
+            prior_decisions=c.get("decision_suggestions") or [],
+            prior_delegates=c.get("delegate_suggestions") or [],
+            now=now,
+        )
 
     if not await doc_rate_limit.acquire_insights_slot(db, workspace_id):
         if raise_on_rate_limit:
