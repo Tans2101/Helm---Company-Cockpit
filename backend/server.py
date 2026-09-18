@@ -11598,13 +11598,15 @@ async def _run_sap_b1_sync_for_workspace(c: dict, principal: dict, *, source: st
         raise HTTPException(status_code=401, detail="SAP Business One session expired. Reconnect in Integrations.") from exc
     await _store_integration_tokens(ws_id, "sap_b1_credentials", live)
     since = c.get("sap_b1_last_synced_at")
-    txns = await sap_b1_sync.fetch_sap_transactions(live, since)
+    txns, complete = await sap_b1_sync.fetch_sap_transactions(live, since)
     synced_count = await _upsert_accounting_sync_entries(
         ws_id=ws_id, principal=principal, txns=txns, source=source,
     )
-    last_synced_at = datetime.now(timezone.utc).isoformat()
-    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"sap_b1_last_synced_at": last_synced_at}})
-    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
+    last_synced_at = None
+    if complete:
+        last_synced_at = datetime.now(timezone.utc).isoformat()
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"sap_b1_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at, "complete": complete}
 
 
 @api_router.post("/integrations/sap_b1/sync")
@@ -11753,13 +11755,15 @@ async def _run_quickbooks_sync_for_workspace(c: dict, principal: dict, *, source
     tokens = await qb_sync.refresh_qb_token(tokens)
     await _store_integration_tokens(ws_id, "quickbooks_tokens", tokens)
     since = c.get("qb_last_synced_at")
-    txns = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
+    txns, complete = await qb_sync.fetch_qb_transactions(tokens, realm_id, since)
     synced_count = await _upsert_accounting_sync_entries(
         ws_id=ws_id, principal=principal, txns=txns, source=source,
     )
-    last_synced_at = datetime.now(timezone.utc).isoformat()
-    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
-    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
+    last_synced_at = None
+    if complete:
+        last_synced_at = datetime.now(timezone.utc).isoformat()
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"qb_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at, "complete": complete}
 
 
 async def _run_xero_sync_for_workspace(c: dict, principal: dict, *, source: str = "xero_sync") -> dict:
@@ -11775,13 +11779,15 @@ async def _run_xero_sync_for_workspace(c: dict, principal: dict, *, source: str 
     tokens = await xero_sync.refresh_xero_token(tokens)
     await _store_integration_tokens(ws_id, "xero_tokens", tokens)
     since = c.get("xero_last_synced_at")
-    txns = await xero_sync.fetch_xero_transactions(tokens, tenant_id, since)
+    txns, complete = await xero_sync.fetch_xero_transactions(tokens, tenant_id, since)
     synced_count = await _upsert_accounting_sync_entries(
         ws_id=ws_id, principal=principal, txns=txns, source=source,
     )
-    last_synced_at = datetime.now(timezone.utc).isoformat()
-    await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"xero_last_synced_at": last_synced_at}})
-    return {"synced_count": synced_count, "last_synced_at": last_synced_at}
+    last_synced_at = None
+    if complete:
+        last_synced_at = datetime.now(timezone.utc).isoformat()
+        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"xero_last_synced_at": last_synced_at}})
+    return {"synced_count": synced_count, "last_synced_at": last_synced_at, "complete": complete}
 
 
 @api_router.post("/integrations/quickbooks/sync")
@@ -11956,16 +11962,18 @@ async def hubspot_sync_endpoint(principal=Depends(require_pro_perm("integrations
         await _store_integration_tokens(ws_id, "hubspot_tokens", tokens)
 
         since = c.get("hubspot_last_synced_at")
-        deals = await hubspot_sync.fetch_deals(tokens, since)
+        deals, complete = await hubspot_sync.fetch_deals(tokens, since)
         synced_count = await _upsert_hubspot_deals(ws_id=ws_id, principal=principal, deals=deals)
-        last_synced_at = datetime.now(timezone.utc).isoformat()
-        await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"hubspot_last_synced_at": last_synced_at}})
+        last_synced_at = None
+        if complete:
+            last_synced_at = datetime.now(timezone.utc).isoformat()
+            await db.workspaces.update_one({"workspace_id": ws_id}, {"$set": {"hubspot_last_synced_at": last_synced_at}})
         await log_activity(
             principal, "integrations", "hubspot.sync",
             f"Synced {synced_count} deal{'s' if synced_count != 1 else ''} from HubSpot",
-            {"synced_count": synced_count},
+            {"synced_count": synced_count, "complete": complete},
         )
-        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at}
+        return {"ok": True, "synced_count": synced_count, "last_synced_at": last_synced_at, "complete": complete}
 
     except hubspot_sync.HubSpotAuthError as exc:
         logger.warning("HubSpot auth failed for %s: %s", ws_id, exc)
