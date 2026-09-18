@@ -69,10 +69,10 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Helm quotas, more seats, and QuickBooks." },
+  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Helm quotas, more seats, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
   { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
-  { q: "What integrations are included?", a: "Paid plans can connect Google Calendar and QuickBooks. Free stays manual-only." },
+  { q: "What integrations are included?", a: "Paid plans can connect Google (Calendar, Gmail briefing threads with AI draft replies you review and send in Gmail, Sheets export, and Drive bill import), QuickBooks or Xero, HubSpot, and other options under Integrations. Free stays manual-only." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment. Use the trial to evaluate." },
 ];
 
@@ -217,7 +217,7 @@ export const HOW_IT_WORKS = [
 
 export const FEATURE_HIGHLIGHTS = [
   { title: "Briefing", body: "What changed, what to decide, what to delegate, synthesized from your live company data." },
-  { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus outcome checks." },
+  { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus a recently resolved list so calls do not disappear." },
   { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking. Always know where the money stands." },
   { title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },
 ];
@@ -277,7 +277,7 @@ export const FEATURE_MODULES = [
   {
     title: "Decision Center",
     ceoValue: "Every open decision, ranked by impact.",
-    body: "Approve, follow up, or delegate with AI confidence scores. Helm tracks whether outcomes actually landed.",
+    body: "Approve, follow up, or delegate with AI confidence scores. Resolved calls stay visible with status and owner so they do not disappear after you act.",
     example: "Six pending approvals. Helm recommends the $40K reservation first: 4.2-month payback.",
   },
   {
@@ -343,8 +343,8 @@ export const FEATURE_MODULES = [
   {
     title: "Integrations",
     ceoValue: "Your team keeps their tools. You get the picture.",
-    body: "Connect Google Calendar and QuickBooks where they fit. Manual entry stays available when a system is not connected.",
-    example: "Finance logs in QuickBooks. Sales lives in the pipeline. You see it all in the briefing.",
+    body: "Connect Google (Calendar and Gmail), QuickBooks or Xero, and HubSpot where they fit. Manual entry stays available when a system is not connected.",
+    example: "Finance logs in QuickBooks. Important Gmail threads surface in Briefing. You see it all in the cockpit.",
   },
   {
     title: "Team & Access",
