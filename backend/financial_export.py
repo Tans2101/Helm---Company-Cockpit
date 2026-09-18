@@ -51,16 +51,17 @@ def financial_xlsx_filename(workspace_name: str, period: str) -> str:
 
 
 def _expand_ledger(entries: list[dict[str, Any]], now: Optional[datetime] = None):
-    """Same expansion path as `compute_financials`."""
+    """Same expansion path as `compute_financials` (future months excluded from horizon)."""
     from collections import defaultdict
 
     valid = [e for e in (entries or []) if fin_recur.is_valid_month(str(e.get("month") or ""))]
-    horizon = fin_recur.resolve_expense_horizon(valid, now)
-    rev_by = defaultdict(float, fin_recur.expand_entries_by_month(valid, entry_type="revenue", horizon_end=horizon))
-    exp_by = defaultdict(float, fin_recur.expand_entries_by_month(valid, entry_type="expense", horizon_end=horizon))
-    cat_totals = fin_recur.expand_expense_category_totals(valid, horizon)
+    current, _scheduled = fin_recur.partition_ledger_entries(valid, now)
+    horizon = fin_recur.resolve_expense_horizon(current, now)
+    rev_by = defaultdict(float, fin_recur.expand_entries_by_month(current, entry_type="revenue", horizon_end=horizon))
+    exp_by = defaultdict(float, fin_recur.expand_entries_by_month(current, entry_type="expense", horizon_end=horizon))
+    cat_totals = fin_recur.expand_expense_category_totals(current, horizon)
     months = sorted(set(list(rev_by) + list(exp_by)))
-    return valid, horizon, months, rev_by, exp_by, cat_totals
+    return current, horizon, months, rev_by, exp_by, cat_totals
 
 
 def period_line_items(

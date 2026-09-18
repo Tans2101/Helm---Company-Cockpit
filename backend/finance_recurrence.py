@@ -41,6 +41,41 @@ def is_valid_month(month: str) -> bool:
         return False
 
 
+def current_month(now: Optional[datetime] = None) -> str:
+    from datetime import timezone
+    dt = now or datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m")
+
+
+def is_future_month(month: str, now: Optional[datetime] = None) -> bool:
+    """True when month is a valid YYYY-MM strictly after the real calendar month."""
+    s = (month or "").strip()
+    return is_valid_month(s) and s > current_month(now)
+
+
+def is_current_or_past_month(month: str, now: Optional[datetime] = None) -> bool:
+    s = (month or "").strip()
+    return is_valid_month(s) and s <= current_month(now)
+
+
+def partition_ledger_entries(
+    entries: list[dict[str, Any]],
+    now: Optional[datetime] = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split valid entries into (current_or_past, scheduled/upcoming future)."""
+    current: list[dict[str, Any]] = []
+    scheduled: list[dict[str, Any]] = []
+    for e in entries or []:
+        month = str(e.get("month") or "").strip()
+        if not is_valid_month(month):
+            continue
+        if is_future_month(month, now):
+            scheduled.append(e)
+        else:
+            current.append(e)
+    return current, scheduled
+
+
 def month_add(month: str, delta: int) -> str:
     """Shift YYYY-MM by delta months."""
     year, mon = map(int, month.split("-"))
@@ -63,12 +98,29 @@ def months_inclusive(start: str, end: str) -> list[str]:
     return out
 
 
-def current_month(now: Optional[datetime] = None) -> str:
-    from datetime import timezone
-    dt = now or datetime.now(timezone.utc)
-    return dt.strftime("%Y-%m")
+def resolve_expense_horizon(
+    entries: list[dict[str, Any]],
+    now: Optional[datetime] = None,
+    *,
+    allow_future: bool = False,
+) -> str:
+    """Latest month to expand recurring entries through for burn/MRR/runway.
 
-
+    Always capped at the real calendar month by default so a typo or synced
+    scheduled invoice (e.g. 2027-01) cannot silently become the "current" month.
+    Pass allow_future=True only for an explicit forward-looking view.
+    """
+    end = current_month(now)
+    if not allow_future:
+        return end
+    months = [
+        str(e.get("month"))
+        for e in entries or []
+        if e.get("month") and is_valid_month(str(e.get("month")))
+    ]
+    if months:
+        end = max(end, max(months))
+    return end
 def expense_monthly_amount(entry: dict[str, Any]) -> float:
     """Monthlyized expense amount used in burn series."""
     amount = float(entry.get("amount") or 0)
@@ -243,11 +295,3 @@ def expand_expense_category_totals(
 
     return {m: dict(cats) for m, cats in out.items()}
 
-
-def resolve_expense_horizon(entries: list[dict[str, Any]], now: Optional[datetime] = None) -> str:
-    """Latest month to expand recurring entries through."""
-    months = [e.get("month") for e in entries if e.get("month") and is_valid_month(str(e.get("month")))]
-    end = current_month(now)
-    if months:
-        end = max(end, max(months))
-    return end

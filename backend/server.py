@@ -1246,9 +1246,28 @@ def workspace_allows(ws_or_plan, feature: str) -> bool:
     return True
 
 
-def _valid_fin_month(month: str) -> bool:
+def _valid_fin_month(month: str, *, allow_future: bool = False) -> bool:
+    """Syntactically valid YYYY-MM. Future months rejected unless allow_future."""
     import finance_recurrence as fin_recur
-    return fin_recur.is_valid_month((month or "").strip())
+    s = (month or "").strip()
+    if not fin_recur.is_valid_month(s):
+        return False
+    if not allow_future and fin_recur.is_future_month(s):
+        return False
+    return True
+
+
+def _reject_future_fin_month(month: str) -> None:
+    """Raise 400 when month is in the future (manual / AI commit / CSV)."""
+    import finance_recurrence as fin_recur
+    s = (month or "").strip()
+    if fin_recur.is_valid_month(s) and fin_recur.is_future_month(s):
+        raise HTTPException(
+            status_code=400,
+            detail="month cannot be in the future — use the current or a past month",
+        )
+    if not fin_recur.is_valid_month(s):
+        raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
 
 
 async def require_pro(principal=Depends(get_principal)):
@@ -1530,8 +1549,10 @@ async def compute_financials(
             {"workspace_id": workspace_id}, department_ids,
         )
         entries = await db.financial_entries.find(entry_filt, {"_id": 0}).to_list(5000)
-        # Drop clearly invalid months so one bad CSV row cannot 500 the page
-        entries = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
+        # Drop invalid months; future-dated sync rows stay in DB but are excluded
+        # from current burn/MRR/runway (they cannot redefine the horizon).
+        valid = [e for e in entries if fin_recur.is_valid_month(str(e.get("month") or ""))]
+        entries, scheduled = fin_recur.partition_ledger_entries(valid)
         horizon = fin_recur.resolve_expense_horizon(entries)
         rev_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="revenue", horizon_end=horizon))
         exp_by = defaultdict(float, fin_recur.expand_entries_by_month(entries, entry_type="expense", horizon_end=horizon))
@@ -1615,7 +1636,22 @@ async def compute_financials(
             "runway_state": _runway_state(runway_months=runway, runway_no_burn=runway_no_burn),
             "months": months,
             "latest_month": latest,
+            "horizon_month": horizon,
+            "scheduled_count": len(scheduled),
+            "scheduled_entries": [
+                {
+                    "id": e.get("id"),
+                    "month": e.get("month"),
+                    "type": e.get("type"),
+                    "name": normalize_entry_name(e.get("name"), e.get("category")),
+                    "category": e.get("category"),
+                    "amount": e.get("amount"),
+                    "source": e.get("source"),
+                }
+                for e in scheduled[:50]
+            ],
         }
+        # Metrics use current/past only; return_entries keeps that set for signal reuse.
         return {"fin": result, "entries": list(entries)}
 
     if bypass_cache:
@@ -4798,8 +4834,10 @@ async def financials(principal=Depends(require_section("financials", "finance:wr
         {"workspace_id": principal["workspace_id"]}, dept_ids,
     )
     entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
+    import finance_recurrence as fin_recur
     for e in entries:
         e["name"] = normalize_entry_name(e.get("name"), e.get("category"))
+        e["scheduled"] = fin_recur.is_future_month(str(e.get("month") or ""))
     await _product_event(
         principal["workspace_id"], principal["user_id"],
         helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
@@ -5333,8 +5371,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
 
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
-    if not _valid_fin_month(payload.month):
-        raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
+    _reject_future_fin_month(payload.month)
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
     if not math.isfinite(payload.amount):
@@ -5430,8 +5467,7 @@ async def add_fin_entry(payload: FinEntryInput, principal=Depends(require_sectio
 async def edit_fin_entry(entry_id: str, payload: FinEntryInput, principal=Depends(require_section("financials", "finance:write"))):
     if payload.type not in ("revenue", "expense"):
         raise HTTPException(status_code=400, detail="type must be revenue or expense")
-    if not _valid_fin_month(payload.month):
-        raise HTTPException(status_code=400, detail="month must be a valid YYYY-MM")
+    _reject_future_fin_month(payload.month)
     if payload.amount < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
     if not math.isfinite(payload.amount):

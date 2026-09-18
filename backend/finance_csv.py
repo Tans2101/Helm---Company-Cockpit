@@ -126,6 +126,8 @@ def _parse_type(raw: str) -> Optional[str]:
 
 def parse_financial_csv(text: str) -> dict[str, Any]:
     """Return {valid: [...], skipped: [{row, reason}], parsed_row_count} without writing."""
+    import finance_recurrence as fin_recur
+
     if text.startswith("\ufeff"):
         text = text[1:]
     sample = text[:4096]
@@ -163,6 +165,9 @@ def parse_financial_csv(text: str) -> dict[str, Any]:
         month = _parse_month(raw_date)
         if not month:
             skipped.append({"row": i, "reason": f"Invalid date/month: {raw_date!r}"})
+            continue
+        if fin_recur.is_future_month(month):
+            skipped.append({"row": i, "reason": f"Month cannot be in the future: {month}"})
             continue
         entry_type = _parse_type(raw_type)
         if not entry_type:

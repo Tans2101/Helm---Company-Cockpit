@@ -734,7 +734,12 @@ export default function Financials() {
                 <tbody>
                   {data.entries.map((e) => (
                     <tr key={e.id} className="border-b border-helm-fg/[0.03]" data-testid={`entry-${e.id}`}>
-                      <td className="py-2.5 pr-4 font-mono text-helm-muted">{e.month}</td>
+                      <td className="py-2.5 pr-4 font-mono text-helm-muted">
+                        {e.month}
+                        {(e.scheduled || false) && (
+                          <span className="ml-1.5 text-[9px] font-mono uppercase tracking-wide text-helm-gold/80">Upcoming</span>
+                        )}
+                      </td>
                       <td className="py-2.5 pr-4"><span className={cn("text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5", e.type === "revenue" ? "text-helm-fg bg-helm-status-positive/12" : "text-helm-status-negative bg-helm-status-negative/12")}>{e.type}</span></td>
                       <td className="py-2.5 pr-4 text-helm-fg">
                         {e.name || e.category}
