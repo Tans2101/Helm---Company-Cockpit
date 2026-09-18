@@ -2075,10 +2075,11 @@ def ask_context_for_synthesis(
         )
 
     # Back-compat: older callers passed sales_tracked/hr_tracked without enabled flags.
+    # Visibility alone must not invent a tracked queue when the department is off.
     if sales_enabled is None:
-        sales_enabled = bool(sales_tracked or sales_visible)
+        sales_enabled = bool(sales_tracked)
     if hr_enabled is None:
-        hr_enabled = bool(hr_tracked or hr_visible)
+        hr_enabled = bool(hr_tracked)
 
     pipeline_ctx = _ask_slice_context(
         deals,
@@ -4722,13 +4723,15 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
         activity_heatmap = await _activity_heatmap_for_workspace(c["workspace_id"], weeks=12)
     except Exception:
         logger.exception("telemetry activity heatmap failed for %s", c.get("workspace_id"))
+    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
     return {
         "kpis": kpis, "revenue_trend": revenue_trend, "funnel": funnel, "risks": risks,
         "funnel_is_sample": funnel_is_sample,
         "risks_is_sample": risks_is_sample,
         "suggested_risks": suggested_risks,
         "expense_breakdown": fin["expense_breakdown"],
-        "data_as_of": now.isoformat(),
+        "data_as_of": freshness.get("data_as_of") or now.isoformat(),
+        "data_freshness_sources": freshness.get("sources") or {},
         "sources": sources,
         "can_write": can_write,
         "notes": manual.get("notes") or "",
@@ -5468,23 +5471,24 @@ async def delete_fin_entry(entry_id: str, principal=Depends(require_section("fin
 
 
 class FinSettingsInput(BaseModel):
-    cash: float
+    cash: Optional[float] = None
     gross_margin: Optional[float] = None
     currency: Optional[str] = None
 
 
 @api_router.put("/financials/settings")
 async def update_fin_settings(payload: FinSettingsInput, principal=Depends(require_section("financials", "finance:write"))):
-    if not math.isfinite(payload.cash):
+    if payload.cash is not None and not math.isfinite(payload.cash):
         raise HTTPException(status_code=400, detail="cash must be a finite number")
     if payload.gross_margin is not None and not math.isfinite(payload.gross_margin):
         raise HTTPException(status_code=400, detail="gross_margin must be a finite number")
     currency = normalize_currency(payload.currency) if payload.currency is not None else None
-    sets = {
-        "financial_settings.cash": round(payload.cash, 2),
-        "financial_settings.cash_entered": True,
+    sets: dict = {
         "financial_settings.gross_margin": payload.gross_margin,
     }
+    if payload.cash is not None:
+        sets["financial_settings.cash"] = round(payload.cash, 2)
+        sets["financial_settings.cash_entered"] = True
     if currency is not None:
         sets["financial_settings.currency"] = currency
     await db.workspaces.update_one({"workspace_id": principal["workspace_id"]}, {"$set": sets})
@@ -5492,9 +5496,16 @@ async def update_fin_settings(payload: FinSettingsInput, principal=Depends(requi
     fin = await compute_financials(principal["workspace_id"])
     runway = fin["runway_months"]
     cur = fin.get("currency") or "usd"
-    await log_activity(principal, "financials", "settings.update",
-                       f"Updated cash to {fmt_money(payload.cash, cur)}" + (f", runway now {runway}mo" if runway is not None else ""),
-                       {"cash": payload.cash, "runway_months": runway, "currency": cur})
+    cash_note = (
+        f"Updated cash to {fmt_money(payload.cash, cur)}"
+        if payload.cash is not None
+        else "Updated financial settings"
+    )
+    await log_activity(
+        principal, "financials", "settings.update",
+        cash_note + (f", runway now {runway}mo" if runway is not None and payload.cash is not None else ""),
+        {"cash": payload.cash, "runway_months": runway, "currency": cur},
+    )
     return {"ok": True, "settings": fin.get("settings"), "currency": cur}
 
 
@@ -6141,6 +6152,10 @@ async def reports(principal=Depends(get_principal)):
         "financial_months": financial_months,
         "financial_latest_month": financial_latest_month,
         "is_pro": workspace_is_pro(c),
+        "can_generate_pack": (
+            "reports:pack" in perms_for(principal["pack"])
+            and workspace_allows(c, helm_plans.FEATURE_ADVANCED_REPORTS)
+        ),
     }
 
 
@@ -8193,19 +8208,33 @@ async def list_production_work_orders(
     )
     is_lead = _can_lead_production(principal, membership)
     cycle = decision_engine.compute_average_cycle_time(rows)
-    # Open procurement / maintenance for linking in the UI
-    open_proc = await db.procurement_requests.find(
+    # Open procurement / maintenance for linking — scoped to departments the user can see.
+    proc_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_PROCUREMENT,
+    )
+    maint_ids_access = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+    )
+    proc_filt = dept_access.apply_department_filter(
         {
             "workspace_id": principal["workspace_id"],
             "status": {"$in": list(PROCUREMENT_OPEN_FOR_LINK)},
         },
-        {"_id": 0, "id": 1, "item": 1, "status": 1, "quantity": 1},
-    ).sort("created_at", -1).to_list(500)
-    open_maint = await db.maintenance_tickets.find(
+        proc_ids,
+    )
+    maint_filt = dept_access.apply_department_filter(
         {
             "workspace_id": principal["workspace_id"],
             "status": {"$in": list(MAINTENANCE_OPEN_FOR_LINK)},
         },
+        maint_ids_access,
+    )
+    open_proc = await db.procurement_requests.find(
+        proc_filt,
+        {"_id": 0, "id": 1, "item": 1, "status": 1, "quantity": 1},
+    ).sort("created_at", -1).to_list(500)
+    open_maint = await db.maintenance_tickets.find(
+        maint_filt,
         {"_id": 0, "id": 1, "equipment_name": 1, "status": 1, "priority": 1},
     ).sort("created_at", -1).to_list(500)
     return {
@@ -11252,6 +11281,8 @@ async def integrations(principal=Depends(get_principal)):
     return {
         "integrations": ints,
         "is_pro": workspace_is_pro(c),
+        "billing_enforced": BILLING_ENFORCED,
+        "integrations_enabled": workspace_allows(c, helm_plans.FEATURE_INTEGRATIONS),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
         "connection_owners": connection_owners,
         "can_use_connection": can_use,
