@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonChart, SkeletonCardList } from "@/components/kit";
 import DocumentStamp, { stampLabelForLine } from "@/components/DocumentStamp";
 import ReportsDailyDigest from "@/components/ReportsDailyDigest";
+import AiSummaryMeta from "@/components/AiSummaryMeta";
 import { cn } from "@/lib/utils";
 
 const emptyReport = () => ({ title: "", type: "General", period: "", summary: "", metrics: [{ label: "", value: "" }, { label: "", value: "" }, { label: "", value: "" }] });
@@ -15,6 +16,7 @@ export default function Reports() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch("/reports");
   const [pack, setPack] = useState("");
+  const [packAsOf, setPackAsOf] = useState(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -158,6 +160,7 @@ export default function Reports() {
     try {
       const { data: res } = await api.post("/reports/weekly-pack");
       setPack(res.content);
+      setPackAsOf(res.data_as_of || null);
       toast.success("Weekly update draft ready");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not generate CEO Pack");
@@ -451,6 +454,12 @@ export default function Reports() {
         </div>
         {pack && (
           <div className="mt-4 rounded-lg border border-helm-line bg-helm-ink/30 p-5" data-testid="pack-content">
+            <AiSummaryMeta
+              asOf={packAsOf}
+              detailHref="/app/financials"
+              detailLabel="Financials"
+              className="mb-3"
+            />
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <button
                 data-testid="copy-pack-btn"

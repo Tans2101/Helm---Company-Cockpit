@@ -129,10 +129,15 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">AI processing</h2>
             <p>
-              Features such as document extraction, Ask Helm chat, and AI briefings/summaries may send relevant workspace
-              content you provide to <span className="text-helm-cream">Anthropic (Claude)</span>. That context is used only to
-              generate responses and suggested entries for your workspace. Do not submit data you are not authorized to
-              process with third-party AI providers.
+              Helm uses a third-party AI provider, <span className="text-helm-cream">Anthropic (Claude)</span>, for
+              features including Ask Helm chat, document and bill/receipt extraction, Decision Engine suggestions,
+              Weekly Pack and Briefing summaries, and report digests. When you use those features, Helm transmits
+              relevant workspace data to Anthropic for processing. That can include financial figures and entries,
+              uploaded documents and reports, and operational or department records assembled for context (for
+              example pipeline, people, or department queue data used by Ask Helm). Anthropic uses that context only
+              to generate the requested response or suggested entries for your workspace. Do not submit data you are
+              not authorized to process with third-party AI providers. Helm does not claim SOC 2, HIPAA, GDPR, or
+              similar certifications based solely on this disclosure.
             </p>
           </section>
 
@@ -162,7 +167,7 @@ export default function Privacy() {
               <li><span className="text-helm-cream">MongoDB Atlas</span>: primary database for account and business data</li>
               <li><span className="text-helm-cream">Cloudflare R2</span>: uploaded document files (private bucket)</li>
               <li><span className="text-helm-cream">Clerk</span>: authentication and login/session data</li>
-              <li><span className="text-helm-cream">Anthropic</span>: processes uploaded documents and Ask Helm messages</li>
+              <li><span className="text-helm-cream">Anthropic</span>: processes AI feature inputs (documents, Ask Helm context, summaries)</li>
               <li><span className="text-helm-cream">Paddle</span>: payment processing</li>
               <li><span className="text-helm-cream">Resend</span>: transactional email</li>
               <li><span className="text-helm-cream">Vercel</span>: hosting and cookieless web analytics (page views)</li>

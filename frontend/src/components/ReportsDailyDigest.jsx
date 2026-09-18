@@ -4,6 +4,7 @@ import { Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { fetchErrorMessage } from "@/hooks/useFetch";
 import { GlassCard, SectionLabel, SkeletonCardList } from "@/components/kit";
+import AiSummaryMeta from "@/components/AiSummaryMeta";
 
 const REPORT_UPLOAD_TYPES = [
   "application/pdf",
@@ -205,6 +206,12 @@ export default function ReportsDailyDigest({ canWrite }) {
         <>
           {combined ? (
             <div className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-4 mb-5" data-testid="digest-combined">
+              <AiSummaryMeta
+                asOf={digest?.data_as_of}
+                detailHref="/app/reports"
+                detailLabel="uploaded reports"
+                className="mb-2"
+              />
               <p className="text-[10px] font-mono uppercase tracking-wider text-helm-muted mb-2">Combined digest</p>
               <div className="text-sm text-helm-fg leading-relaxed whitespace-pre-wrap">{combined}</div>
             </div>

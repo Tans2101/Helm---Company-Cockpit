@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import Onboarding from "@/pages/Onboarding";
 import { dayPartGreeting } from "@/lib/greeting";
 import BentoGrid from "@/components/kokonutui/bento-grid";
+import AiSummaryMeta from "@/components/AiSummaryMeta";
 
 const toneDot = { positive: "bg-helm-status-positive", negative: "bg-helm-status-negative", neutral: "bg-helm-muted" };
 
@@ -62,7 +63,12 @@ export default function Briefing() {
     setGenLoading(true);
     try {
       const { data: res } = await api.post("/briefing/generate");
-      setData((prev) => ({ ...(prev || {}), ai_summary: res.ai_summary }));
+      setData((prev) => ({
+        ...(prev || {}),
+        ai_summary: res.ai_summary,
+        data_as_of: res.data_as_of || prev?.data_as_of,
+        ai_summary_data_as_of: res.data_as_of || prev?.ai_summary_data_as_of,
+      }));
       toast.success("Briefing updated");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not generate briefing");
@@ -172,7 +178,15 @@ export default function Briefing() {
           )}
         </div>
         {data.ai_summary ? (
-          <p className="text-helm-fg leading-relaxed text-[15px] max-w-3xl">{data.ai_summary}</p>
+          <>
+            <AiSummaryMeta
+              asOf={data.data_as_of || data.ai_summary_data_as_of}
+              detailHref="/app/decisions"
+              detailLabel="Decisions"
+              className="mb-3"
+            />
+            <p className="text-helm-fg leading-relaxed text-[15px] max-w-3xl">{data.ai_summary}</p>
+          </>
         ) : (
           <div>
             <p className="text-helm-muted text-sm mb-4 max-w-xl">
@@ -340,15 +354,30 @@ export default function Briefing() {
         </GlassCard>
 
         <GlassCard className="p-5 fade-up">
-          <BriefLabel className="mb-4">What to hand off</BriefLabel>
+          <div className="flex items-center justify-between mb-4">
+            <BriefLabel>What to hand off</BriefLabel>
+            <button
+              type="button"
+              onClick={() => navigate("/app/tasks")}
+              className="text-[11px] font-mono uppercase tracking-wider text-helm-muted hover:text-helm-gold"
+            >
+              Open Tasks
+            </button>
+          </div>
           <div className="space-y-3">
             {whatToDelegate.length === 0 && (
               <p className="text-sm text-helm-muted leading-relaxed">No handoffs suggested. Overdue work will show up here.</p>
             )}
             {whatToDelegate.map((d, i) => (
               <div key={d.id || i} className="rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3" data-testid={`delegate-${d.id || i}`}>
-                <p className="text-sm text-helm-fg leading-snug">{d.title}</p>
-                <p className="text-xs text-helm-muted mt-1 leading-relaxed">{d.detail}</p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/app/tasks")}
+                  className="w-full text-left group"
+                >
+                  <p className="text-sm text-helm-fg leading-snug group-hover:text-helm-gold">{d.title}</p>
+                  <p className="text-xs text-helm-muted mt-1 leading-relaxed">{d.detail}</p>
+                </button>
                 <div className="flex items-center gap-1.5 mt-2 text-helm-muted">
                   <UserCheck className="w-3.5 h-3.5" />
                   <span className="text-xs">{d.owner || d.suggested_owner_name}</span>

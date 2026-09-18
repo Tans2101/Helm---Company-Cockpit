@@ -58,6 +58,7 @@ import department_access as dept_access
 import credential_crypto as cred_crypto
 import department_migrate as dept_migrate
 import work_items as helm_work_items
+import data_freshness as helm_freshness
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -2965,6 +2966,9 @@ async def briefing(principal=Depends(get_principal)):
     b["gmail_connected"] = gmail_meta["connected"]
     b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]
     b["gmail_compose"] = gmail_meta.get("compose", False)
+    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
+    b["data_as_of"] = freshness.get("data_as_of")
+    b["data_freshness_sources"] = freshness.get("sources") or {}
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
 
 
@@ -3331,14 +3335,23 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         "if cash was not entered, say to add a cash balance for an accurate runway picture. "
         "Do not claim they are out of runway. "
         "Follow calendar.instructions_for_missing_data: if calendar is not connected, say so. "
-        "Do not treat a missing calendar as a free day."
+        "Do not treat a missing calendar as a free day. "
+        "Only state figures that appear literally in the company data. Never invent, estimate, or "
+        "round into a number that is not present. If a fact is missing, say so plainly."
     )
     text = await helm_llm.complete(
         system,
         f"Company data for today:\n{json.dumps(context, indent=2)}\n\nWrite today's short briefing note.",
     )
-    await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"briefing.ai_summary": text}})
-    return {"ai_summary": text}
+    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
+    await db.workspaces.update_one(
+        {"workspace_id": c["workspace_id"]},
+        {"$set": {
+            "briefing.ai_summary": text,
+            "briefing.ai_summary_data_as_of": freshness.get("data_as_of"),
+        }},
+    )
+    return {"ai_summary": text, "data_as_of": freshness.get("data_as_of")}
 
 
 class DecisionAction(BaseModel):
@@ -6282,6 +6295,9 @@ async def reports_daily_digest(
         ],
         "combined_digest": combined,
         "digest_cached": bool(summarized) and not needs_recompute,
+        "data_as_of": helm_freshness.pick_data_as_of(
+            *[r.get("uploaded_at") or r.get("summarized_at") for r in rows],
+        ),
     }
 
 
@@ -6351,6 +6367,10 @@ Style (hard rules):
 - Week-over-week cards are supporting data, not text to copy verbatim.
 - Financial figures are monthly. Never describe monthly burn or revenue as money earned or spent "this week".
 - Follow instructions_for_missing_data exactly. Missing cash is a data-entry gap, not evidence of financial distress.
+- Only state a number, date, or figure that appears literally in the company data. Never invent, estimate,
+  average, or round into a figure that is not present. If data is missing or marked restricted, say so.
+- When an item is marked possibly_stale, mention that the underlying record may be outdated rather than
+  treating it as a fresh fact.
 """
 
 
@@ -6369,17 +6389,24 @@ async def _generate_weekly_pack_content(workspace_id: str) -> dict:
     context = _build_weekly_pack_context(c, fin, items, ups, headcount, prior=baseline)
     recent = await db.financial_entries.find(
         {"workspace_id": workspace_id, "type": "expense"},
-        {"_id": 0, "name": 1, "category": 1, "amount": 1, "month": 1},
+        {"_id": 0, "name": 1, "category": 1, "amount": 1, "month": 1, "updated_at": 1, "created_at": 1},
     ).sort("month", -1).to_list(12)
-    context["recent_expenses"] = [
-        {
-            "name": normalize_entry_name(e.get("name"), e.get("category")),
-            "category": (e.get("category") or "Other"),
-            "amount": e.get("amount"),
-            "month": e.get("month"),
-        }
-        for e in recent
-    ]
+    context["recent_expenses"] = helm_freshness.annotate_possibly_stale(
+        [
+            {
+                "name": normalize_entry_name(e.get("name"), e.get("category")),
+                "category": (e.get("category") or "Other"),
+                "amount": e.get("amount"),
+                "month": e.get("month"),
+                "updated_at": e.get("updated_at") or e.get("created_at"),
+            }
+            for e in recent
+        ],
+        dept_type=dept_catalog.TYPE_ACCOUNTING_FINANCE,
+    )
+    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
+    context["data_as_of"] = freshness.get("data_as_of")
+    context["data_freshness_sources"] = freshness.get("sources") or {}
     text = await helm_llm.complete(
         _WEEKLY_PACK_SYSTEM,
         f"Company data:\n{json.dumps(context, indent=2)}\n\n"
@@ -6389,13 +6416,19 @@ async def _generate_weekly_pack_content(workspace_id: str) -> dict:
         "content": text,
         "workspace_name": c.get("name") or "Company",
         "workspace_id": workspace_id,
+        "data_as_of": freshness.get("data_as_of"),
+        "data_freshness_sources": freshness.get("sources") or {},
     }
 
 
 @api_router.post("/reports/weekly-pack")
 async def weekly_pack(principal=Depends(require_pro_perm("reports:pack"))):
     result = await _generate_weekly_pack_content(principal["workspace_id"])
-    return {"content": result["content"]}
+    return {
+        "content": result["content"],
+        "data_as_of": result.get("data_as_of"),
+        "data_freshness_sources": result.get("data_freshness_sources") or {},
+    }
 
 
 class WeeklyPackExportInput(BaseModel):
@@ -10604,6 +10637,8 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         "block in the snapshot (company_profile, financials, pipeline, onboarding, risks). "
         "If a field is null or listed in unknown_fields, say the data is not in Helm yet. "
         "Do not infer it and do not describe it as zero. "
+        "Only state a number, date, or figure that appears literally in the snapshot. "
+        "Never invent, estimate, or round into a figure that is not present. "
         "If financials.access is \"restricted\", the user does not have access to financial "
         "data in Helm. Tell them clearly they cannot see revenue, burn, runway, or related "
         "figures and should ask someone with Financials access. Do not invent numbers, "
