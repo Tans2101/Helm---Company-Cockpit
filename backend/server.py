@@ -1526,11 +1526,12 @@ async def compute_financials(
         revenue_series = [{"month": lbl(m), "revenue": round(rev_by[m]), "expenses": round(exp_by[m])} for m in last]
         burn_series = [{"month": lbl(m), "burn": round(exp_by[m] - rev_by[m])} for m in last]
         latest = months[-1] if months else None
-        # MRR needs revenue specifically — expense-only ledgers must not look like confirmed $0 MRR
+        # MRR is recurring revenue only — one-time sales must not look like confirmed $0 MRR
         has_ledger = bool(entries)
-        has_revenue = any(e.get("type") == "revenue" for e in entries)
-        mrr_known = has_revenue
-        # MRR is recurring revenue only — never fall back to one-time sales
+        has_recurring_revenue = any(
+            e.get("type") == "revenue" and e.get("recurring") for e in entries
+        )
+        mrr_known = has_recurring_revenue
         mrr_val = float(rec_by[latest]) if latest and mrr_known else 0.0
         cash_val = entered_cash_amount(settings)
         cash_entered = cash_val is not None
@@ -1558,6 +1559,8 @@ async def compute_financials(
             prev_r, curr_r = rec_by[prev_m], rec_by[curr_m]
             if prev_r > 0:
                 mrr_delta = round((curr_r - prev_r) / prev_r * 100, 1)
+        mrr_value = round(float(mrr_val or 0)) if mrr_known else None
+        burn_value = round(float(burn_val or 0)) if burn_known else None
         result = {
             "mrr": fmt_money(mrr_val, currency) if mrr_known else "—",
             "arr": fmt_money(mrr_val * 12, currency) if mrr_known else "—",
@@ -1577,8 +1580,13 @@ async def compute_financials(
             "burn_known": burn_known,
             "cash_entered": cash_entered,
             "cash_value": cash_val,
-            "mrr_value": round(float(mrr_val or 0)) if mrr_known else None,
-            "burn_value": round(float(burn_val or 0)) if burn_known else None,
+            "mrr_value": mrr_value,
+            "burn_value": burn_value,
+            # Explicit three-state for display/synthesis (not_entered | zero_confirmed | computed)
+            "mrr_state": _figure_state(mrr_known, mrr_value),
+            "burn_state": _figure_state(burn_known, burn_value),
+            "cash_state": _figure_state(cash_entered, cash_val),
+            "runway_state": _runway_state(runway_months=runway, runway_no_burn=runway_no_burn),
             "months": months,
             "latest_month": latest,
         }
@@ -1598,6 +1606,36 @@ async def compute_financials(
 
 RUNWAY_NO_BURN_LABEL = "No burn — cash growing"
 
+FIGURE_NOT_ENTERED = "not_entered"
+FIGURE_ZERO_CONFIRMED = "zero_confirmed"
+FIGURE_COMPUTED = "computed"
+
+
+def _figure_state(known: bool, value) -> str:
+    """Three-state for figures that can be unset vs confirmed zero vs computed."""
+    if not known or value is None:
+        return FIGURE_NOT_ENTERED
+    try:
+        if float(value) == 0:
+            return FIGURE_ZERO_CONFIRMED
+    except (TypeError, ValueError):
+        return FIGURE_COMPUTED
+    return FIGURE_COMPUTED
+
+
+def _runway_state(*, runway_months, runway_no_burn: bool) -> str:
+    if runway_months is not None:
+        try:
+            if float(runway_months) == 0:
+                return FIGURE_ZERO_CONFIRMED
+        except (TypeError, ValueError):
+            pass
+        return FIGURE_COMPUTED
+    if runway_no_burn:
+        # Profitable / breakeven with cash entered — confirmed non-positive burn.
+        return FIGURE_ZERO_CONFIRMED
+    return FIGURE_NOT_ENTERED
+
 
 def format_runway_display(fin: dict, *, missing: str = "Add data") -> str:
     """Human runway label: months, profitable/breakeven, or missing-data copy."""
@@ -1606,6 +1644,19 @@ def format_runway_display(fin: dict, *, missing: str = "Add data") -> str:
     if fin.get("runway_no_burn"):
         return RUNWAY_NO_BURN_LABEL
     return missing
+
+
+def format_mrr_display(fin: dict, *, missing: str = "Add data") -> str:
+    """MRR label: formatted amount, confirmed $0, or missing-data copy — never fake $0."""
+    if not fin.get("mrr_known"):
+        return missing
+    return fin.get("mrr") if fin.get("mrr") not in (None, "") else missing
+
+
+def format_burn_display(fin: dict, *, missing: str = "Add data") -> str:
+    if not fin.get("burn_known"):
+        return missing
+    return fin.get("burn") if fin.get("burn") not in (None, "") else missing
 
 
 def financials_for_synthesis(fin: dict) -> dict:
@@ -1643,8 +1694,8 @@ def financials_for_synthesis(fin: dict) -> dict:
             "Urgent out-of-runway language is allowed only when cash_entered is true and "
             "runway_months is a real number (including 0). If runway_no_burn is true, "
             "net burn is zero or negative with cash entered — say cash is growing / no "
-            "burn, not that runway is missing. If mrr_known is false, revenue was never "
-            "logged (expense-only data is not confirmed $0 MRR). If burn_known is false, "
+            "burn, not that runway is missing. If mrr_known is false, recurring revenue was never "
+            "logged (expense-only or one-time sales are not confirmed $0 MRR). If burn_known is false, "
             "say burn is not in Helm yet."
         ),
     }
@@ -2823,10 +2874,11 @@ async def briefing(principal=Depends(get_principal)):
         metrics = [
             {
                 "label": "MRR",
-                "value": fin["mrr"] if fin.get("mrr_known") else "Add data",
+                "value": format_mrr_display(fin),
                 "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
                 "tone": "positive" if fin.get("mrr_known") else "neutral",
                 "missing": not fin.get("mrr_known"),
+                "state": fin.get("mrr_state") or _figure_state(fin.get("mrr_known"), fin.get("mrr_value")),
             },
             {
                 "label": "Runway",
@@ -2834,13 +2886,18 @@ async def briefing(principal=Depends(get_principal)):
                 "delta": 0,
                 "tone": "positive" if fin.get("runway_no_burn") else "neutral",
                 "missing": fin["runway_months"] is None and not fin.get("runway_no_burn"),
+                "state": fin.get("runway_state") or _runway_state(
+                    runway_months=fin.get("runway_months"),
+                    runway_no_burn=bool(fin.get("runway_no_burn")),
+                ),
             },
             {
                 "label": "Burn",
-                "value": fin["burn"] if fin.get("burn_known") else "Add data",
+                "value": format_burn_display(fin),
                 "delta": 0,
                 "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
                 "missing": not fin.get("burn_known"),
+                "state": fin.get("burn_state") or _figure_state(fin.get("burn_known"), fin.get("burn_value")),
             },
         ]
         nrr = b.get("nrr")
@@ -4292,17 +4349,52 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
     now = datetime.now(timezone.utc)
     kpis = []
     sources = []
-    if fin["has_data"]:
-        kpis += [
-            {"label": "MRR", "value": fin["mrr"], "delta": fin["mrr_delta"],
-             "tone": "positive" if fin["mrr_delta"] >= 0 else "negative", "spark": fin["spark"]},
-            {"label": "ARR", "value": fin["arr"], "delta": 0, "tone": "neutral", "spark": fin["spark"]},
-            {"label": "Runway", "value": format_runway_display(fin, missing="—"),
-             "delta": 0, "tone": "neutral", "spark": []},
-            {"label": "Net Burn", "value": fin["burn"], "delta": 0, "tone": fin["burn_tone"],
-             "spark": [b["burn"] for b in fin["burn_series"]]},
-        ]
+    # Always surface finance KPIs with not-entered vs confirmed-zero labels —
+    # never hide them or show a confident $0 when data was never entered.
+    kpis += [
+        {
+            "label": "MRR",
+            "value": format_mrr_display(fin),
+            "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
+            "tone": "positive" if fin.get("mrr_known") and fin.get("mrr_delta", 0) >= 0 else (
+                "negative" if fin.get("mrr_known") else "neutral"
+            ),
+            "spark": fin["spark"] if fin.get("mrr_known") else [],
+            "missing": not fin.get("mrr_known"),
+            "state": fin.get("mrr_state"),
+        },
+        {
+            "label": "ARR",
+            "value": (fin.get("arr") if fin.get("mrr_known") else "Add data"),
+            "delta": 0,
+            "tone": "neutral",
+            "spark": fin["spark"] if fin.get("mrr_known") else [],
+            "missing": not fin.get("mrr_known"),
+            "state": fin.get("mrr_state"),
+        },
+        {
+            "label": "Runway",
+            "value": format_runway_display(fin),
+            "delta": 0,
+            "tone": "positive" if fin.get("runway_no_burn") else "neutral",
+            "spark": [],
+            "missing": fin.get("runway_months") is None and not fin.get("runway_no_burn"),
+            "state": fin.get("runway_state"),
+        },
+        {
+            "label": "Net Burn",
+            "value": format_burn_display(fin),
+            "delta": 0,
+            "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
+            "spark": [b["burn"] for b in fin["burn_series"]] if fin.get("burn_known") else [],
+            "missing": not fin.get("burn_known"),
+            "state": fin.get("burn_state"),
+        },
+    ]
+    if fin["has_data"] or fin.get("cash_entered"):
         sources.append({"label": "Financials", "detail": "Live from your financial entries", "freshness": "live"})
+    else:
+        sources.append({"label": "Financials", "detail": "Add revenue, expenses, and cash on Financials", "freshness": "missing"})
     kpis += [
         {"label": "Headcount", "value": str(headcount), "delta": 0, "tone": "neutral", "spark": []},
         {"label": "Open Tasks", "value": str(open_tasks), "delta": 0, "tone": "neutral", "spark": []},
@@ -5707,12 +5799,12 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None, *, include
             {"id": "auto_fin", "title": "Money check-in", "type": "Updated weekly", "period": period,
              "summary": fin_summary,
              "metrics": [
-                 {"label": "Monthly recurring revenue", "value": fin["mrr"], "change": mrr_change},
+                 {"label": "Monthly recurring revenue", "value": format_mrr_display(fin), "change": mrr_change},
                  {"label": "Cash runway", "value": (
                      f"{fin['runway_months']} months" if fin["runway_months"] is not None
-                     else (RUNWAY_NO_BURN_LABEL if fin.get("runway_no_burn") else "Not available")
+                     else (RUNWAY_NO_BURN_LABEL if fin.get("runway_no_burn") else "Add data")
                  ), "change": runway_change},
-                 {"label": "Net burn this month", "value": fin["burn"], "change": burn_change},
+                 {"label": "Net burn this month", "value": format_burn_display(fin), "change": burn_change},
              ],
              "baseline_at": baseline_at, "source": "auto"},
         )

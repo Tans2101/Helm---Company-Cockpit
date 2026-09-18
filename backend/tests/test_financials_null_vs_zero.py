@@ -38,31 +38,83 @@ def test_format_runway_display_states():
     assert server.format_runway_display({"runway_months": None}, missing="—") == "—"
 
 
-def test_expense_only_ledger_does_not_confirm_zero_mrr():
+def test_one_time_revenue_does_not_confirm_zero_mrr():
+    """One-time sales are not MRR — must not render as confirmed $0."""
     fin = _run_compute(
         [
             {
-                "type": "expense",
-                "category": "Cloud",
-                "amount": 5000,
-                "month": "2026-08",
-                "recurring": True,
+                "type": "revenue",
+                "category": "Project",
+                "amount": 15000,
+                "month": "2026-09",
+                "recurring": False,
             },
             {
                 "type": "expense",
-                "category": "Cloud",
-                "amount": 5000,
+                "category": "Ops",
+                "amount": 3000,
                 "month": "2026-09",
                 "recurring": True,
             },
         ],
-        {"cash": 100000, "currency": "usd"},
+        {"cash": 50000, "currency": "usd", "cash_entered": True},
     )
     assert fin["mrr_known"] is False
+    assert fin["mrr_state"] == server.FIGURE_NOT_ENTERED
     assert fin["mrr"] == "—"
     assert fin["mrr_value"] is None
-    assert fin["burn_known"] is True
-    assert fin["has_data"] is True
+    assert server.format_mrr_display(fin) == "Add data"
+
+
+def test_confirmed_zero_recurring_mrr_shows_zero():
+    fin = _run_compute(
+        [
+            {
+                "type": "revenue",
+                "category": "Subscriptions",
+                "amount": 0,
+                "month": "2026-09",
+                "recurring": True,
+            },
+        ],
+        {"cash": 10000, "currency": "usd", "cash_entered": True},
+    )
+    assert fin["mrr_known"] is True
+    assert fin["mrr_state"] == server.FIGURE_ZERO_CONFIRMED
+    assert fin["mrr_value"] == 0
+    assert server.format_mrr_display(fin) == fin["mrr"]
+    assert "$0" in fin["mrr"] or fin["mrr"].endswith("0")
+
+
+def test_empty_workspace_finance_displays_are_add_data():
+    fin = _run_compute([], {})
+    assert fin["mrr_known"] is False
+    assert fin["burn_known"] is False
+    assert fin["cash_entered"] is False
+    assert fin["runway_state"] == server.FIGURE_NOT_ENTERED
+    assert server.format_mrr_display(fin) == "Add data"
+    assert server.format_runway_display(fin) == "Add data"
+    assert server.format_burn_display(fin) == "Add data"
+
+
+def test_report_money_card_uses_add_data_not_dash():
+    fin = {
+        "mrr": "—",
+        "mrr_known": False,
+        "mrr_value": None,
+        "burn": "—",
+        "burn_known": False,
+        "burn_value": None,
+        "runway_months": None,
+        "runway_no_burn": False,
+        "currency": "usd",
+    }
+    cards = server._computed_report_cards({}, fin, [], [], 1, prior=None, include_financials=True)
+    money = next(c for c in cards if c["id"] == "auto_fin")
+    values = {m["label"]: m["value"] for m in money["metrics"]}
+    assert values["Monthly recurring revenue"] == "Add data"
+    assert values["Cash runway"] == "Add data"
+    assert values["Net burn this month"] == "Add data"
 
 
 def test_profitable_company_runway_is_not_add_data():
@@ -115,8 +167,10 @@ def test_profitable_company_runway_is_not_add_data():
     )
     assert fin["runway_months"] is None
     assert fin["runway_no_burn"] is True
+    assert fin["runway_state"] == server.FIGURE_ZERO_CONFIRMED
     assert server.format_runway_display(fin) == server.RUNWAY_NO_BURN_LABEL
     assert fin["mrr_known"] is True
+    assert fin["mrr_state"] == server.FIGURE_COMPUTED
 
 
 def test_empty_ledger_runway_still_missing():
