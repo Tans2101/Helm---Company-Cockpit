@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Send, Sparkles, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFetch } from "@/hooks/useFetch";
+import { useAuth } from "@/context/AuthContext";
 import { API, getApiAuthHeaders, apiErrorMessage, apiForbiddenReason } from "@/lib/api";
 import { PageHeader } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -14,13 +15,20 @@ const SUGGESTIONS = [
   "Where is my team over capacity?",
 ];
 
+const FINANCE_SUGGESTION_RE = /\b(runway|mrr|burn|cash|revenue|financial)\b/i;
+
 export default function AskHelm() {
+  const { user } = useAuth();
   const { data: history } = useFetch("/ask/history");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef(null);
   const navigate = useNavigate();
+  const canSeeFinancials = (user?.granted_sections || []).includes("financials");
+  const suggestions = SUGGESTIONS.filter(
+    (s) => canSeeFinancials || !FINANCE_SUGGESTION_RE.test(s),
+  );
 
   useEffect(() => {
     if (history?.messages) setMessages(history.messages.map((m) => ({ role: m.role, content: m.content })));
@@ -130,7 +138,7 @@ export default function AskHelm() {
               <span className="font-mono text-xs uppercase tracking-[0.2em]">Try asking</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-2">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button key={s} onClick={() => send(s)} data-testid="ask-suggestion"
                   className="text-left rounded-lg border border-helm-line bg-helm-fg/[0.02] p-3 text-sm text-helm-fg transition-colors hover:border-helm-gold/35 hover:bg-helm-fg/[0.04]">
                   {s}
