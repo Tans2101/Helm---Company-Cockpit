@@ -54,7 +54,11 @@ export default function InviteCeoCard() {
       toast.success("Invite recorded");
     } catch (e) {
       const detail = e?.response?.data?.detail;
-      const message = typeof detail === "string" && detail.trim() ? detail : "Could not record invite";
+      const raw = typeof detail === "string" && detail.trim() ? detail : "Could not record invite";
+      // Referrer-profile failures are not about the typed email — keep copy generic.
+      const message = /user not found|referral profile unavailable/i.test(raw)
+        ? "Could not record invite"
+        : raw;
       setTrackError(message);
       toast.error(message);
     } finally {

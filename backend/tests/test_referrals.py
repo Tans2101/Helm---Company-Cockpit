@@ -159,6 +159,20 @@ async def test_ensure_referral_code_allocates():
 
 
 @pytest.mark.asyncio
+async def test_ensure_referral_code_missing_user_not_invite_wording():
+    """Must not raise 'User not found' — that string looked like invite-field validation."""
+    from fastapi import HTTPException
+
+    users = _users_store([])
+    db = _db(users=users, referrals=_referrals_store([]), workspaces=_workspaces_store([]))
+    with pytest.raises(HTTPException) as ei:
+        await helm_referrals.ensure_referral_code(db, "missing")
+    assert ei.value.status_code == 404
+    assert "user not found" not in ei.value.detail.lower()
+    assert "referral" in ei.value.detail.lower()
+
+
+@pytest.mark.asyncio
 async def test_attribute_signup_tags_workspace_and_signed_up():
     users = _users_store([
         {"user_id": "ceo1", "referral_code": "aabbccddeeff0011", "active_workspace_id": "ws_ceo"},

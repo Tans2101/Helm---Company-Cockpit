@@ -59,7 +59,8 @@ async def ensure_referral_code(db, user_id: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid user")
     user = await db.users.find_one({"user_id": uid}, {"_id": 0, "referral_code": 1})
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Do not use "User not found" — that reads like invite-email validation in the UI.
+        raise HTTPException(status_code=404, detail="Referral profile unavailable")
     existing = str(user.get("referral_code") or "").strip().lower()
     if existing:
         return existing
