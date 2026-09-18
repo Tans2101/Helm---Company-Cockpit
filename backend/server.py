@@ -12,14 +12,14 @@ import logging
 from pathlib import Path
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, quote
 from collections import defaultdict
 
 import httpx
 import jwt
 import resend
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, BackgroundTasks
-from fastapi.responses import StreamingResponse, RedirectResponse, Response
+from fastapi.responses import StreamingResponse, RedirectResponse, Response, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -814,10 +814,12 @@ async def send_resend_email(
     subject: str,
     html: str,
     attachments: Optional[list] = None,
+    headers: Optional[dict] = None,
 ) -> dict:
     """Shared Resend send helper (best-effort). `to` may include multiple recipients in one send.
 
     attachments: optional list of {"filename": str, "content": bytes, "content_type": optional str}.
+    headers: optional extra SMTP/API headers (e.g. List-Unsubscribe for commercial mail).
     """
     recipients = [e for e in (to or []) if e and "@" in str(e)]
     if not recipients:
@@ -827,6 +829,10 @@ async def send_resend_email(
         return {"sent": False, "reason": "no_key"}
     resend.api_key = RESEND_API_KEY
     params = {"from": SENDER_EMAIL, "to": recipients, "subject": subject, "html": html}
+    if headers:
+        clean = {str(k): str(v) for k, v in headers.items() if k and v is not None}
+        if clean:
+            params["headers"] = clean
     if attachments:
         packed = []
         for att in attachments:
@@ -852,10 +858,15 @@ async def send_resend_email(
         return {"sent": False, "reason": "error"}
 
 
-async def send_notification_email(to: str | list, subject: str, body: str) -> dict:
+async def send_notification_email(
+    to: str | list,
+    subject: str,
+    body: str,
+    headers: Optional[dict] = None,
+) -> dict:
     """Reusable single/multi-recipient notification email via Resend. Never raises."""
     recipients = to if isinstance(to, list) else [to]
-    return await send_resend_email(to=recipients, subject=subject, html=body)
+    return await send_resend_email(to=recipients, subject=subject, html=body, headers=headers)
 
 
 def _app_base_url() -> str:
@@ -12933,9 +12944,19 @@ def _iso_week_key(now: datetime | None = None) -> str:
     return now.strftime("%G-W%V")
 
 
-def _weekly_digest_email_html(*, workspace_name: str, app_url: str) -> str:
+def _weekly_digest_email_html(*, workspace_name: str, app_url: str, unsubscribe_url: str = "") -> str:
+    import email_compliance as ec
+
     name = html.escape(workspace_name or "your company")
     link = html.escape((app_url or "").rstrip("/") + "/app/reports", quote=True)
+    footer = (
+        ec.marketing_footer_html(unsubscribe_url=unsubscribe_url)
+        if unsubscribe_url
+        else """\
+<tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
+<p style="color:#52525b;font-size:12px;margin:0;line-height:1.6;">Know what matters before your first meeting.</p>
+</td></tr>"""
+    )
     return f"""\
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
@@ -12950,9 +12971,7 @@ def _weekly_digest_email_html(*, workspace_name: str, app_url: str) -> str:
 <a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Reports in Helm &rarr;</a>
 </td></tr></table>
 </td></tr>
-<tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
-<p style="color:#52525b;font-size:12px;margin:0;line-height:1.6;">Know what matters before your first meeting.</p>
-</td></tr>
+{footer}
 </table>
 </td></tr></table></body></html>"""
 
@@ -12964,12 +12983,15 @@ async def run_weekly_digest_cron() -> dict:
     independent — daily at a fixed UTC morning hour, weekly on Mondays.
     Debounces with weekly_digest_emailed_week (ISO week) so a re-run the same week
     does not re-send. Respects the same plan gate as /api/reports/weekly-pack.
+    Commercial: CAN-SPAM footer + immediate email_suppressions check per recipient.
     """
     import weekly_pack_export as pack_pdf
+    import email_compliance as ec
 
     workspaces = await db.workspaces.find({}, {"_id": 0}).to_list(MAX_PROACTIVE_CRON_WORKSPACES)
     week = _iso_week_key()
     app_url = _app_base_url()
+    api_base = public_api_origin()
     stats = {
         "workspaces_scanned": len(workspaces),
         "week": week,
@@ -12977,6 +12999,7 @@ async def run_weekly_digest_cron() -> dict:
         "skipped_already": 0,
         "skipped_plan": 0,
         "skipped_no_recipients": 0,
+        "skipped_suppressed": 0,
         "skipped_empty": 0,
         "send_failed": 0,
         "errors": 0,
@@ -12996,6 +13019,10 @@ async def run_weekly_digest_cron() -> dict:
             if not recipients:
                 stats["skipped_no_recipients"] += 1
                 continue
+            sendable = await ec.filter_unsuppressed(db, recipients)
+            if not sendable:
+                stats["skipped_suppressed"] += 1
+                continue
             pack = await _generate_weekly_pack_content(wid)
             content = (pack.get("content") or "").strip()
             if not content:
@@ -13004,17 +13031,28 @@ async def run_weekly_digest_cron() -> dict:
             ws_name = pack.get("workspace_name") or c.get("name") or "Company"
             pdf = pack_pdf.render_weekly_pack_pdf(content, workspace_name=ws_name)
             filename = pack_pdf.pdf_filename(ws_name)
-            email_result = await send_resend_email(
-                to=recipients,
-                subject=f"Your Helm weekly pack: {ws_name}",
-                html=_weekly_digest_email_html(workspace_name=ws_name, app_url=app_url),
-                attachments=[{
-                    "filename": filename,
-                    "content": pdf,
-                    "content_type": "application/pdf",
-                }],
-            )
-            if email_result.get("sent"):
+            any_sent = False
+            for addr in sendable:
+                unsub = ec.unsubscribe_url(app_url, addr, secret=SESSION_SECRET)
+                one_click = ec.api_unsubscribe_url(api_base, addr, secret=SESSION_SECRET)
+                email_result = await send_resend_email(
+                    to=[addr],
+                    subject=f"Your Helm weekly pack: {ws_name}",
+                    html=_weekly_digest_email_html(
+                        workspace_name=ws_name,
+                        app_url=app_url,
+                        unsubscribe_url=unsub,
+                    ),
+                    attachments=[{
+                        "filename": filename,
+                        "content": pdf,
+                        "content_type": "application/pdf",
+                    }],
+                    headers=ec.list_unsubscribe_headers(one_click),
+                )
+                if email_result.get("sent"):
+                    any_sent = True
+            if any_sent:
                 await db.workspaces.update_one(
                     {"workspace_id": wid},
                     {"$set": {
@@ -13041,6 +13079,8 @@ async def internal_run_retention_checks(request: Request):
         app_base_url=_app_base_url(),
         send_email=send_notification_email,
         recipient_emails=_alert_recipient_emails,
+        signing_secret=SESSION_SECRET,
+        api_base_url=public_api_origin(),
     )
     try:
         drafts = await helm_dept_drafts.run_department_drafts(db)
@@ -13073,6 +13113,70 @@ async def internal_run_weekly_digest(request: Request):
     """Weekly Render cron: email weekly pack PDF to CEO/owner. Shared-secret header required."""
     _require_internal_cron(request)
     return await run_weekly_digest_cron()
+
+
+async def _apply_unsubscribe_token(token: str, *, source: str) -> dict:
+    import email_compliance as ec
+
+    parsed = ec.parse_unsubscribe_token(token, secret=SESSION_SECRET)
+    result = await ec.suppress_email(
+        db,
+        parsed["email"],
+        parsed["category"],
+        source=source,
+    )
+    return {
+        **result,
+        "label": ec.category_label(parsed["category"]),
+        "ok": True,
+    }
+
+
+@api_router.get("/email/unsubscribe")
+async def email_unsubscribe_get(token: str = ""):
+    """One-click unsubscribe (email link). Suppresses immediately, then redirects to confirmation."""
+    import email_compliance as ec
+
+    frontend = _app_base_url() or HELM_CANONICAL_ORIGIN
+    try:
+        result = await _apply_unsubscribe_token(token, source="link_get")
+        dest = (
+            f"{frontend}/unsubscribe?status=ok"
+            f"&category={quote(result.get('category') or ec.CATEGORY_COMMERCIAL, safe='')}"
+        )
+        return RedirectResponse(url=dest, status_code=303)
+    except ValueError:
+        return RedirectResponse(url=f"{frontend}/unsubscribe?status=invalid", status_code=303)
+    except Exception:
+        logger.exception("unsubscribe GET failed")
+        return RedirectResponse(url=f"{frontend}/unsubscribe?status=error", status_code=303)
+
+
+@api_router.post("/email/unsubscribe")
+async def email_unsubscribe_post(request: Request, token: str = ""):
+    """RFC 8058 one-click List-Unsubscribe-Post and SPA confirmation POST.
+
+    Accepts token via query string (mail-client one-click) or JSON body {"token": "..."}.
+    Honored immediately — writes email_suppressions before responding.
+    """
+    body_token = ""
+    try:
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "application/json" in content_type:
+            payload = await request.json()
+            if isinstance(payload, dict):
+                body_token = str(payload.get("token") or "")
+        elif "application/x-www-form-urlencoded" in content_type:
+            form = await request.form()
+            body_token = str(form.get("token") or "")
+    except Exception:
+        body_token = ""
+    raw = (token or body_token or "").strip()
+    try:
+        result = await _apply_unsubscribe_token(raw, source="one_click_post")
+        return JSONResponse(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @api_router.get("/internal/analytics-summary")

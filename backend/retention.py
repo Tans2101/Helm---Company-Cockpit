@@ -152,10 +152,24 @@ def _esc(s: Any) -> str:
     return html.escape(str(s or ""), quote=True)
 
 
-def _email_shell(*, kicker: str, heading: str, intro: str, bullets: list[str], cta_url: str, cta_label: str) -> str:
+def _email_shell(
+    *,
+    kicker: str,
+    heading: str,
+    intro: str,
+    bullets: list[str],
+    cta_url: str,
+    cta_label: str,
+    unsubscribe_url: str = "",
+) -> str:
+    import email_compliance as ec
+
     items = "".join(
         f"<li style='margin:0 0 8px 0;color:#e4e4e7;'>{_esc(b)}</li>" for b in bullets
     )
+    footer = ""
+    if unsubscribe_url:
+        footer = ec.marketing_footer_html(unsubscribe_url=unsubscribe_url)
     return f"""\
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#09090b;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
@@ -171,11 +185,18 @@ def _email_shell(*, kicker: str, heading: str, intro: str, bullets: list[str], c
 <a href="{_esc(cta_url)}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">{_esc(cta_label)}</a>
 </td></tr></table>
 </td></tr>
+{footer}
 </table>
 </td></tr></table></body></html>"""
 
 
-def trial_email_html(*, workspace_name: str, bullets: list[str], briefing_url: str) -> str:
+def trial_email_html(
+    *,
+    workspace_name: str,
+    bullets: list[str],
+    briefing_url: str,
+    unsubscribe_url: str = "",
+) -> str:
     name = workspace_name or "your company"
     intro = (
         f"Your Helm trial for <b style='color:#ffffff;'>{_esc(name)}</b> ends in 2 days. "
@@ -189,10 +210,18 @@ def trial_email_html(*, workspace_name: str, bullets: list[str], briefing_url: s
         bullets=bullets,
         cta_url=briefing_url,
         cta_label="Open your briefing →",
+        unsubscribe_url=unsubscribe_url,
     )
 
 
-def inactivity_email_html(*, workspace_name: str, days: int, bullets: list[str], briefing_url: str) -> str:
+def inactivity_email_html(
+    *,
+    workspace_name: str,
+    days: int,
+    bullets: list[str],
+    briefing_url: str,
+    unsubscribe_url: str = "",
+) -> str:
     name = workspace_name or "your company"
     intro = (
         f"Your last briefing for <b style='color:#ffffff;'>{_esc(name)}</b> was {days} days ago. "
@@ -205,6 +234,7 @@ def inactivity_email_html(*, workspace_name: str, days: int, bullets: list[str],
         bullets=bullets,
         cta_url=briefing_url,
         cta_label="Open your briefing →",
+        unsubscribe_url=unsubscribe_url,
     )
 
 
@@ -238,15 +268,25 @@ async def run_retention_checks(
     app_base_url: str = "",
     send_email,
     recipient_emails,
+    signing_secret: str = "",
+    api_base_url: str = "",
 ) -> dict:
-    """Scan workspaces and send at most one trial reminder / one inactivity nudge per window."""
+    """Scan workspaces and send at most one trial reminder / one inactivity nudge per window.
+
+    Commercial emails: skip suppressed addresses, attach CAN-SPAM footer + List-Unsubscribe.
+    """
+    import email_compliance as ec
+
     now = now or datetime.now(timezone.utc)
     link = briefing_url(app_base_url)
+    secret = (signing_secret or "").strip()
+    api_base = (api_base_url or app_base_url or "").rstrip("/")
     stats = {
         "trial_sent": 0,
         "trial_skipped": 0,
         "inactivity_sent": 0,
         "inactivity_skipped": 0,
+        "suppressed_skipped": 0,
     }
 
     trialing = await db.workspaces.find(
@@ -289,43 +329,88 @@ async def run_retention_checks(
                 if not bullets or not emails:
                     stats["trial_skipped"] += 1
                 else:
-                    result = await send_email(
-                        emails,
-                        "Your Helm trial ends in 2 days",
-                        trial_email_html(workspace_name=name, bullets=bullets, briefing_url=link),
-                    )
-                    if result.get("sent"):
-                        await db.workspaces.update_one(
-                            {"workspace_id": wid},
-                            {"$set": {
-                                "trial_reminder_sent": True,
-                                "trial_reminder_sent_at": now.isoformat(),
-                            }},
-                        )
-                        stats["trial_sent"] += 1
-                    else:
+                    sendable = await ec.filter_unsuppressed(db, emails) if secret else list(emails)
+                    if not sendable:
+                        stats["suppressed_skipped"] += 1
                         stats["trial_skipped"] += 1
+                    else:
+                        any_sent = False
+                        for addr in sendable:
+                            unsub = (
+                                ec.unsubscribe_url(app_base_url, addr, secret=secret)
+                                if secret else ""
+                            )
+                            headers = {}
+                            if secret and api_base:
+                                one_click = ec.api_unsubscribe_url(api_base, addr, secret=secret)
+                                headers = ec.list_unsubscribe_headers(one_click)
+                            result = await send_email(
+                                addr,
+                                "Your Helm trial ends in 2 days",
+                                trial_email_html(
+                                    workspace_name=name,
+                                    bullets=bullets,
+                                    briefing_url=link,
+                                    unsubscribe_url=unsub,
+                                ),
+                                headers=headers,
+                            )
+                            if result.get("sent"):
+                                any_sent = True
+                        if any_sent:
+                            await db.workspaces.update_one(
+                                {"workspace_id": wid},
+                                {"$set": {
+                                    "trial_reminder_sent": True,
+                                    "trial_reminder_sent_at": now.isoformat(),
+                                }},
+                            )
+                            stats["trial_sent"] += 1
+                        else:
+                            stats["trial_skipped"] += 1
 
             if inactivity_nudge_due(ws, now=now):
                 if not bullets or not emails:
                     stats["inactivity_skipped"] += 1
                 else:
-                    days = days_inactive(ws, now=now)
-                    result = await send_email(
-                        emails,
-                        f"Your last briefing was {days} days ago. Here's what's changed since",
-                        inactivity_email_html(
-                            workspace_name=name, days=days, bullets=bullets, briefing_url=link,
-                        ),
-                    )
-                    if result.get("sent"):
-                        await db.workspaces.update_one(
-                            {"workspace_id": wid},
-                            {"$set": {"inactivity_nudge_sent_at": now.isoformat()}},
-                        )
-                        stats["inactivity_sent"] += 1
-                    else:
+                    sendable = await ec.filter_unsuppressed(db, emails) if secret else list(emails)
+                    if not sendable:
+                        stats["suppressed_skipped"] += 1
                         stats["inactivity_skipped"] += 1
+                    else:
+                        days = days_inactive(ws, now=now)
+                        any_sent = False
+                        for addr in sendable:
+                            unsub = (
+                                ec.unsubscribe_url(app_base_url, addr, secret=secret)
+                                if secret else ""
+                            )
+                            headers = {}
+                            if secret and api_base:
+                                one_click = ec.api_unsubscribe_url(api_base, addr, secret=secret)
+                                headers = ec.list_unsubscribe_headers(one_click)
+                            result = await send_email(
+                                addr,
+                                f"Your last briefing was {days} days ago. Here's what's changed since",
+                                inactivity_email_html(
+                                    workspace_name=name,
+                                    days=days,
+                                    bullets=bullets,
+                                    briefing_url=link,
+                                    unsubscribe_url=unsub,
+                                ),
+                                headers=headers,
+                            )
+                            if result.get("sent"):
+                                any_sent = True
+                        if any_sent:
+                            await db.workspaces.update_one(
+                                {"workspace_id": wid},
+                                {"$set": {"inactivity_nudge_sent_at": now.isoformat()}},
+                            )
+                            stats["inactivity_sent"] += 1
+                        else:
+                            stats["inactivity_skipped"] += 1
         except Exception:
             logger.exception("retention check failed for workspace %s", wid)
             continue

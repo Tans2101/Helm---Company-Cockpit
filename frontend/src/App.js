@@ -30,6 +30,7 @@ const Security = lazy(() => import("@/pages/Security"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
 const Terms = lazy(() => import("@/pages/Terms"));
 const Refunds = lazy(() => import("@/pages/Refunds"));
+const Unsubscribe = lazy(() => import("@/pages/Unsubscribe"));
 const Briefing = lazy(() => import("@/pages/Briefing"));
 const MyDay = lazy(() => import("@/pages/MyDay"));
 const Pipeline = lazy(() => import("@/pages/Pipeline"));
@@ -179,6 +180,7 @@ function AppRouter() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/refunds" element={<Refunds />} />
+        <Route path="/unsubscribe" element={<Unsubscribe />} />
         <Route path="/app" element={<Protected />}>
           <Route index element={<Briefing />} />
           <Route path="me" element={<MyDay />} />

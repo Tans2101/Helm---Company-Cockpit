@@ -135,15 +135,17 @@ def test_run_weekly_digest_emails_pdf_and_debounces():
     fake_db = MagicMock()
     fake_db.workspaces.find = MagicMock(return_value=_Cursor(rows))
     fake_db.workspaces.update_one = AsyncMock()
+    fake_db.email_suppressions.find_one = AsyncMock(return_value=None)
 
     sent = []
 
-    async def fake_send(*, to, subject, html, attachments=None):
+    async def fake_send(*, to, subject, html, attachments=None, headers=None):
         sent.append({
             "to": to,
             "subject": subject,
             "html": html,
             "attachments": attachments,
+            "headers": headers,
         })
         return {"sent": True, "id": "email_1"}
 
@@ -153,6 +155,7 @@ def test_run_weekly_digest_emails_pdf_and_debounces():
     with (
         patch.object(server, "db", fake_db),
         patch.object(server, "BILLING_ENFORCED", True),
+        patch.object(server, "SESSION_SECRET", "weekly-digest-test-secret"),
         patch.object(server, "_alert_recipient_emails", side_effect=fake_recipients),
         patch.object(
             server,
@@ -183,6 +186,9 @@ def test_run_weekly_digest_emails_pdf_and_debounces():
     assert len(sent) == 1
     assert sent[0]["to"] == ["ceo@send.test"]
     assert "Send Co" in sent[0]["subject"]
+    assert "Unsubscribe" in sent[0]["html"]
+    assert "BGC, Taguig, Philippines" in sent[0]["html"]
+    assert sent[0]["headers"] and "List-Unsubscribe" in sent[0]["headers"]
     assert sent[0]["attachments"][0]["filename"].endswith(".pdf")
     assert sent[0]["attachments"][0]["content"] == b"%PDF-1.4 fake"
     fake_db.workspaces.update_one.assert_awaited_once()
@@ -198,6 +204,7 @@ def test_run_weekly_digest_continues_after_one_failure():
     fake_db = MagicMock()
     fake_db.workspaces.find = MagicMock(return_value=_Cursor(rows))
     fake_db.workspaces.update_one = AsyncMock()
+    fake_db.email_suppressions.find_one = AsyncMock(return_value=None)
 
     async def fake_pack(wid):
         if wid == "ws_bad":
@@ -211,6 +218,7 @@ def test_run_weekly_digest_continues_after_one_failure():
     with (
         patch.object(server, "db", fake_db),
         patch.object(server, "BILLING_ENFORCED", True),
+        patch.object(server, "SESSION_SECRET", "weekly-digest-test-secret"),
         patch.object(server, "_alert_recipient_emails", new=AsyncMock(return_value=["a@b.test"])),
         patch.object(server, "_generate_weekly_pack_content", side_effect=fake_pack),
         patch.object(server, "send_resend_email", new=AsyncMock(return_value={"sent": True})),

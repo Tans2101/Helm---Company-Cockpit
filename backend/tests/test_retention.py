@@ -120,8 +120,8 @@ async def test_run_sends_each_email_once_then_skips():
     stored = [ws]
     sent = []
 
-    async def fake_send(to, subject, body):
-        sent.append({"to": to, "subject": subject, "body": body})
+    async def fake_send(to, subject, body, headers=None):
+        sent.append({"to": to, "subject": subject, "body": body, "headers": headers})
         return {"sent": True}
 
     async def fake_recipients(_wid):
@@ -142,6 +142,7 @@ async def test_run_sends_each_email_once_then_skips():
     mock_db.activities.find = MagicMock(return_value=MagicMock(
         sort=MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[]))),
     ))
+    mock_db.email_suppressions.find_one = AsyncMock(return_value=None)
 
     stats = await retention.run_retention_checks(
         mock_db,
@@ -150,11 +151,16 @@ async def test_run_sends_each_email_once_then_skips():
         app_base_url="https://www.helmcontrol.online",
         send_email=fake_send,
         recipient_emails=fake_recipients,
+        signing_secret="retention-test-secret",
+        api_base_url="https://www.helmcontrol.online",
     )
     assert stats["trial_sent"] == 1
     assert stats["inactivity_sent"] == 1
     assert len(sent) == 2
     assert "/app" in sent[0]["body"]
+    assert "Unsubscribe" in sent[0]["body"]
+    assert "BGC, Taguig, Philippines" in sent[0]["body"]
+    assert sent[0]["headers"] and "List-Unsubscribe" in sent[0]["headers"]
     assert mock_db.workspaces.update_one.await_count == 2
 
     # Same window: flags set on the in-memory workspace as the runner would persist
@@ -168,6 +174,8 @@ async def test_run_sends_each_email_once_then_skips():
         app_base_url="https://www.helmcontrol.online",
         send_email=fake_send,
         recipient_emails=fake_recipients,
+        signing_secret="retention-test-secret",
+        api_base_url="https://www.helmcontrol.online",
     )
     assert stats2["trial_sent"] == 0
     assert stats2["inactivity_sent"] == 0
@@ -208,7 +216,45 @@ async def test_run_skips_empty_workspace():
     mock_db.workspaces.update_one.assert_not_awaited()
 
 
-def test_endpoint_rejects_missing_secret():
+@pytest.mark.asyncio
+async def test_suppressed_recipient_skips_send():
+    ws = _ws()
+    sent = []
+
+    async def fake_send(to, subject, body, headers=None):
+        sent.append(to)
+        return {"sent": True}
+
+    mock_db = MagicMock()
+    mock_find = MagicMock()
+    mock_find.to_list = AsyncMock(return_value=[ws])
+    mock_db.workspaces.find = MagicMock(return_value=mock_find)
+    mock_db.workspaces.update_one = AsyncMock()
+    mock_db.deals.find = MagicMock(return_value=MagicMock(
+        sort=MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[]))),
+    ))
+    mock_db.activities.find = MagicMock(return_value=MagicMock(
+        sort=MagicMock(return_value=MagicMock(to_list=AsyncMock(return_value=[]))),
+    ))
+    mock_db.email_suppressions.find_one = AsyncMock(
+        return_value={"email": "ceo@northwind.test", "category": "commercial"},
+    )
+
+    stats = await retention.run_retention_checks(
+        mock_db,
+        now=NOW,
+        trial_days=7,
+        app_base_url="https://www.helmcontrol.online",
+        send_email=fake_send,
+        recipient_emails=AsyncMock(return_value=["ceo@northwind.test"]),
+        signing_secret="retention-test-secret",
+        api_base_url="https://www.helmcontrol.online",
+    )
+    assert sent == []
+    assert stats["suppressed_skipped"] >= 1
+    assert stats["trial_sent"] == 0
+    assert stats["inactivity_sent"] == 0
+
     async def mock_principal():
         return {"user_id": "u", "workspace_id": "ws", "pack": "owner", "role": "owner"}
 
