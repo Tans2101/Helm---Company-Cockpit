@@ -5,15 +5,13 @@ import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, SectionLabel, ErrorScreen, SkeletonCardList } from "@/components/kit";
-import { PACKS, packMeta, hasPerm } from "@/lib/access";
+import { ASSIGNABLE_PACKS, packMeta, hasPerm } from "@/lib/access";
 import { formatDepartmentNames } from "@/lib/departments";
 import { cn } from "@/lib/utils";
-import InviteCeoCard from "@/components/InviteCeoCard";
 
 export default function Members() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch("/members");
-  const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canInvite = hasPerm(user, "members:invite");
   const canManageOwners = hasPerm(user, "members:manage");
   const { data: codeData } = useFetch(canInvite ? "/workspaces/join-code" : null);
@@ -49,7 +47,7 @@ export default function Members() {
     );
   }
 
-  const packOptions = PACKS.filter((p) => p.id !== "owner" || canManageOwners);
+  const packOptions = ASSIGNABLE_PACKS;
   const sections = accessData?.sections || [];
   const accessMembers = accessData?.members || [];
 
@@ -273,8 +271,6 @@ export default function Members() {
             </GlassCard>
           )}
 
-          {isOwner && <InviteCeoCard />}
-
           {canInvite && codeData?.join_code && (
             <GlassCard className="p-4 mb-6 fade-up flex items-center gap-3" data-testid="join-code-card">
               <Link2 className="w-4 h-4 text-helm-gold shrink-0" />
@@ -316,10 +312,11 @@ export default function Members() {
                     </span>
                     {canEditThis && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        <select value={m.pack || m.role} onChange={(e) => changePack(m, e.target.value)}
+                        <select value={targetIsOwner ? "owner" : (m.pack || m.role)} onChange={(e) => changePack(m, e.target.value)}
                           data-testid={`pack-select-${m.email}`}
                           className="text-[11px] text-helm-fg bg-helm-card border border-helm-line rounded px-2 py-1 focus:outline-none focus:border-helm-gold/40">
-                          {PACKS.filter((p) => p.id !== "owner" || canManageOwners).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                          {targetIsOwner && <option value="owner" disabled>Owner</option>}
+                          {ASSIGNABLE_PACKS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                         </select>
                         {canManageOwners && (
                           <button onClick={() => remove(m)} data-testid={`remove-${m.email}`}

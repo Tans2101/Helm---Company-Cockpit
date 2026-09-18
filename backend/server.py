@@ -371,6 +371,20 @@ PACK_HOME = {"owner": "/app", "exec": "/app", "member": "/app/me",
 PACK_LABEL = {"owner": "Owner", "exec": "Executive", "finance": "Finance",
               "hr": "People/HR", "sales": "Sales", "ops": "Operations", "member": "Member"}
 VALID_PACKS = set(PACK_PERMS.keys())
+# Owner/CEO is only for the workspace creator — never assignable via invite or role edit.
+ASSIGNABLE_PACKS = frozenset(p for p in VALID_PACKS if p != "owner")
+
+
+def _require_assignable_pack(pack: str) -> str:
+    """Validate a pack that may be granted via invite or role change (never owner/CEO)."""
+    if pack not in VALID_PACKS:
+        raise HTTPException(status_code=400, detail="Unknown access pack")
+    if pack == "owner":
+        raise HTTPException(
+            status_code=400,
+            detail="Owner (CEO) access cannot be assigned via invite. The workspace creator remains the owner.",
+        )
+    return pack
 
 
 def pack_of(membership: dict) -> str:
@@ -2532,13 +2546,9 @@ class InviteInput(BaseModel):
 
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, request: Request, principal=Depends(require_pro_perm("members:invite"))):
-    if payload.pack not in VALID_PACKS:
-        raise HTTPException(status_code=400, detail="Unknown access pack")
-    pack = payload.pack
-    if pack == "owner" and "members:manage" not in perms_for(principal["pack"]):
-        raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
+    pack = _require_assignable_pack(payload.pack)
     await _enforce_seat_available(principal["workspace_id"])
-    role = "owner" if pack == "owner" else "member"
+    role = "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
     if existing:
@@ -2577,13 +2587,11 @@ async def update_member_role(membership_id: str, payload: RoleInput, principal=D
         raise HTTPException(status_code=404, detail="Member not found")
     if m.get("user_id") == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot change your own access")
-    if payload.pack not in VALID_PACKS:
-        raise HTTPException(status_code=400, detail="Unknown access pack")
+    pack = _require_assignable_pack(payload.pack)
     is_owner_admin = "members:manage" in perms_for(principal["pack"])
-    if (pack_of(m) == "owner" or payload.pack == "owner") and not is_owner_admin:
+    if pack_of(m) == "owner" and not is_owner_admin:
         raise HTTPException(status_code=403, detail="Only an owner can change owner access")
-    pack = payload.pack
-    role = "owner" if pack == "owner" else "member"
+    role = "member"
     upd = {"role": role, "pack": pack}
     await db.memberships.update_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
     m2 = {**m, **upd}
@@ -7129,10 +7137,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
             raise HTTPException(status_code=403, detail="You do not have permission to invite to Team & Access")
         if not email:
             raise HTTPException(status_code=400, detail="Email is required to include in Team & Access")
-        if payload.pack not in VALID_PACKS:
-            raise HTTPException(status_code=400, detail="Unknown access pack")
-        if payload.pack == "owner" and "members:manage" not in perms_for(principal["pack"]):
-            raise HTTPException(status_code=403, detail="Only an owner can grant owner access")
+        pack = _require_assignable_pack(payload.pack)
         existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
         if existing:
             raise HTTPException(status_code=400, detail="Already a member or invited; they should already be on the roster")
@@ -7146,8 +7151,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
 
     invite_meta = None
     if invite:
-        pack = payload.pack
-        role = "owner" if pack == "owner" else "member"
+        role = "member"
         existing_user = await db.users.find_one({"email": email}, {"_id": 0})
         membership = {
             "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],

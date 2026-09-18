@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Handshake } from "lucide-react";
 import { api } from "@/lib/api";
-import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
+import { useFetch } from "@/hooks/useFetch";
 import { GlassCard } from "@/components/kit";
 
 const STATUS_LABEL = {
@@ -16,6 +16,7 @@ export default function InviteCeoCard() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [trackError, setTrackError] = useState("");
   const copyTimer = useRef(null);
 
   useEffect(() => () => {
@@ -39,33 +40,45 @@ export default function InviteCeoCard() {
   };
 
   const trackEmail = async () => {
-    if (!email.trim()) return;
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setTrackError("");
+      return;
+    }
     setBusy(true);
+    setTrackError("");
     try {
-      const { data: res } = await api.post("/referrals", { email: email.trim() });
+      const { data: res } = await api.post("/referrals", { email: trimmed });
       setEmail("");
       if (res) setData(res);
       toast.success("Invite recorded");
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not record invite");
+      const detail = e?.response?.data?.detail;
+      const message = typeof detail === "string" && detail.trim() ? detail : "Could not record invite";
+      setTrackError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
   };
 
-  const linkValue = error
-    ? fetchErrorMessage(error, "Could not load referral link")
-    : (shareUrl || (loading ? "Generating link…" : "Could not load referral link"));
+  const linkValue = shareUrl
+    || (loading ? "Generating link…" : "Could not load referral link");
 
   return (
     <GlassCard className="p-5 mb-4 fade-up" data-testid="invite-ceo-card">
       <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
         <Handshake className="w-4 h-4" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Invite a CEO</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Refer a founder</span>
       </div>
       <p className="text-sm text-helm-muted mb-4 leading-relaxed">
         Share Helm with another business owner you know. This is a tracking link only, so no discount or credit is applied.
       </p>
+      {error && (
+        <p className="text-xs text-helm-muted mb-3" data-testid="referral-load-hint">
+          Referral link unavailable right now. Try again later from Account settings.
+        </p>
+      )}
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           data-testid="referral-link-input"
@@ -88,7 +101,10 @@ export default function InviteCeoCard() {
         <input
           data-testid="referral-email-input"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setTrackError("");
+          }}
           onKeyDown={(e) => e.key === "Enter" && trackEmail()}
           placeholder="Optional: their email to track this invite"
           className="flex-1 rounded-md border border-helm-line bg-helm-card px-3 py-2.5 text-sm text-helm-fg placeholder:text-helm-muted"
@@ -103,6 +119,9 @@ export default function InviteCeoCard() {
           {busy ? "Saving…" : "Track invite"}
         </button>
       </div>
+      {trackError ? (
+        <p className="text-xs text-helm-status-negative mt-2" data-testid="referral-track-error">{trackError}</p>
+      ) : null}
       {rows.length > 0 && (
         <div className="mt-4 border-t border-helm-line pt-3" data-testid="referral-list">
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-2">Your referrals</p>

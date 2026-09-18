@@ -342,10 +342,11 @@ def test_join_by_code_flow(mongo):
 
 
 # ------------- Who-can-invite: owner vs exec -------------
-def test_owner_can_invite_owner_pack(owner, mongo):
+def test_owner_cannot_invite_owner_pack(owner, mongo):
     email = f"test_owner_invite_{uuid.uuid4().hex[:6]}@example.com"
     r = owner.post(f"{BASE_URL}/api/members/invite", json={"email": email, "pack": "owner"})
-    assert r.status_code == 200
+    assert r.status_code == 400
+    assert "owner" in r.text.lower() or "ceo" in r.text.lower()
     mongo.memberships.delete_many({"email": email, "workspace_id": WS_ID})
 
 
@@ -353,8 +354,8 @@ def test_exec_cannot_invite_owner_pack(exec_ctx):
     email = f"test_exec_deny_owner_{uuid.uuid4().hex[:6]}@example.com"
     r = exec_ctx["session"].post(f"{BASE_URL}/api/members/invite",
                                  json={"email": email, "pack": "owner"})
-    assert r.status_code == 403
-    assert "owner" in r.text.lower()
+    assert r.status_code == 400
+    assert "owner" in r.text.lower() or "ceo" in r.text.lower()
 
 
 def test_exec_can_invite_finance_and_member(exec_ctx, mongo):
@@ -377,7 +378,7 @@ def test_invalid_pack_400(owner):
 
 
 def test_exec_patch_nonowner_to_nonowner(exec_ctx, owner, mongo):
-    # owner invites a finance member; exec patches to hr; then exec attempts to promote to owner -> 403
+    # owner invites a finance member; exec patches to hr; then exec attempts to promote to owner -> 400
     email = f"test_patch_target_{uuid.uuid4().hex[:6]}@example.com"
     r = owner.post(f"{BASE_URL}/api/members/invite", json={"email": email, "pack": "finance"})
     assert r.status_code == 200
@@ -391,9 +392,12 @@ def test_exec_patch_nonowner_to_nonowner(exec_ctx, owner, mongo):
         ml2 = owner.get(f"{BASE_URL}/api/members").json()
         assert next(m for m in ml2["members"] if m["email"] == email)["pack"] == "hr"
 
-        # exec cannot promote to owner
+        # nobody can promote to owner via role edit
         r = exec_ctx["session"].patch(f"{BASE_URL}/api/members/{mid}", json={"pack": "owner"})
-        assert r.status_code == 403
+        assert r.status_code == 400
+
+        r = owner.patch(f"{BASE_URL}/api/members/{mid}", json={"pack": "owner"})
+        assert r.status_code == 400
 
         # exec cannot change an existing owner
         owner_mem = next(m for m in ml2["members"] if m["pack"] == "owner")

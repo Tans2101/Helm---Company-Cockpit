@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, SkeletonKPIRow, SkeletonCardList } from "@/components/kit";
 import { formatDepartmentNames } from "@/lib/departments";
-import { PACKS, hasPerm } from "@/lib/access";
+import { ASSIGNABLE_PACKS, hasPerm } from "@/lib/access";
 import { cn } from "@/lib/utils";
 
 const emptyForm = () => ({
@@ -81,7 +81,7 @@ export default function People() {
   }
   const canWrite = data.can_write;
   const canInvite = data.can_invite_to_access || hasPerm(user, "members:invite");
-  const packOptions = PACKS.filter((p) => p.id !== "owner" || hasPerm(user, "members:manage"));
+  const packOptions = ASSIGNABLE_PACKS;
   const editingPerson = editing ? (data.people || []).find((p) => p.id === editing) : null;
   const assignedDeptCount = new Set((data.people || []).flatMap((p) => p.departments || [])).size;
   const unassignedCount = Number(data.unassigned_count) || 0;

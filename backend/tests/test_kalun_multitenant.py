@@ -253,10 +253,13 @@ def test_owner_change_member_role_and_delete(owner, mongo):
         owner.post(f"{BASE_URL}/api/members/invite", json={"email": email})
         members = owner.get(f"{BASE_URL}/api/members").json()["members"]
         target = next(m for m in members if m["email"] == email)
+        # Owner/CEO cannot be assigned via role edit
         r = owner.patch(f"{BASE_URL}/api/members/{target['membership_id']}", json={"pack": "owner"})
+        assert r.status_code == 400
+        r = owner.patch(f"{BASE_URL}/api/members/{target['membership_id']}", json={"pack": "exec"})
         assert r.status_code == 200
         members2 = owner.get(f"{BASE_URL}/api/members").json()["members"]
-        assert next(m for m in members2 if m["email"] == email)["pack"] == "owner"
+        assert next(m for m in members2 if m["email"] == email)["pack"] == "exec"
         # delete
         d = owner.delete(f"{BASE_URL}/api/members/{target['membership_id']}")
         assert d.status_code == 200

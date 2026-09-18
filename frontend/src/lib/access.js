@@ -11,6 +11,9 @@ export const PACKS = [
   { id: "member", label: "Member", icon: Shield, style: "text-helm-fg bg-helm-fg/5 border-helm-line", desc: "Read access + works their own tasks and posts a status update." },
 ];
 
+/** Packs that can be granted via invite or role edit. Owner/CEO is never assignable. */
+export const ASSIGNABLE_PACKS = PACKS.filter((p) => p.id !== "owner");
+
 export const packMeta = (id) => PACKS.find((p) => p.id === id) || PACKS[PACKS.length - 1];
 export const hasPerm = (user, perm) => Array.isArray(user?.perms) && user.perms.includes(perm);
 
