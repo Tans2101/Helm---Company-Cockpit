@@ -12354,6 +12354,29 @@ async def _maybe_mark_referral_converted(workspace_id: str | None, subscription_
         logger.exception("referral conversion update failed for %s", workspace_id)
 
 
+def _paddle_price_id_from_event(data: dict | None) -> Optional[str]:
+    """Best-effort price id from a Paddle Billing subscription/transaction payload."""
+    data = data or {}
+    items = data.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            price = item.get("price") if isinstance(item.get("price"), dict) else {}
+            pid = str(price.get("id") or item.get("price_id") or "").strip()
+            if pid:
+                return pid
+    details = data.get("details") if isinstance(data.get("details"), dict) else {}
+    for item in details.get("line_items") or []:
+        if not isinstance(item, dict):
+            continue
+        price = item.get("price") if isinstance(item.get("price"), dict) else {}
+        pid = str(price.get("id") or item.get("price_id") or "").strip()
+        if pid:
+            return pid
+    return None
+
+
 async def _paddle_provision(event, status: str = "active"):
     data = event.get("data") or {}
     custom = data.get("custom_data") or {}
@@ -12362,9 +12385,10 @@ async def _paddle_provision(event, status: str = "active"):
     user_id = custom.get("user_id")
     sub_id = data.get("subscription_id") or data.get("id")
     now_iso = event.get("occurred_at") or datetime.now(timezone.utc).isoformat()
+    event_price_id = _paddle_price_id_from_event(data)
 
     # Recovery path: subscription reactivated / updated without checkout nonce
-    # (e.g. past_due → active). Bind by paddle_subscription_id.
+    # (e.g. past_due → active, or portal plan change). Bind by paddle_subscription_id.
     if not (nonce and workspace_id and user_id):
         if not sub_id or status not in ("active", "trialing"):
             return
@@ -12379,15 +12403,22 @@ async def _paddle_provision(event, status: str = "active"):
         }
         if data.get("customer_id"):
             recovery["paddle_customer_id"] = data["customer_id"]
+        # Portal upgrades/downgrades send subscription.updated without checkout nonce —
+        # map the live Paddle price onto Helm plan entitlements.
+        mapped_plan = helm_plans.plan_for_paddle_price(event_price_id)
+        if mapped_plan:
+            recovery["plan"] = mapped_plan
         recovery.update(_paddle_trial_fields(data, status))
         await db.workspaces.update_one(
             {"paddle_subscription_id": sub_id},
             {"$set": recovery, "$unset": {"canceled_at": ""}},
         )
         if prev:
+            if mapped_plan:
+                invalidate_plan_cache(prev.get("workspace_id"))
             await helm_analytics.emit_billing_funnel(
                 db, prev.get("workspace_id"), user_id,
-                prev.get("subscription_status"), status, prev.get("plan"),
+                prev.get("subscription_status"), status, mapped_plan or prev.get("plan"),
             )
             await _maybe_mark_referral_converted(prev.get("workspace_id"), status)
         return
@@ -12395,7 +12426,17 @@ async def _paddle_provision(event, status: str = "active"):
     intent = await db.paddle_intents.find_one({"_id": nonce})
     if not intent or intent.get("workspace_id") != workspace_id or intent.get("user_id") != user_id:
         return
-    plan = intent.get("plan") or helm_plans.plan_for_paddle_price(intent.get("price_id")) or helm_plans.PLAN_STARTER
+    if intent.get("used"):
+        # Replay / reused checkout nonce — do not re-provision entitlements.
+        return
+    # Prefer the live event price when present (covers mid-checkout price changes),
+    # then the intent, then Starter.
+    plan = (
+        helm_plans.plan_for_paddle_price(event_price_id)
+        or intent.get("plan")
+        or helm_plans.plan_for_paddle_price(intent.get("price_id"))
+        or helm_plans.PLAN_STARTER
+    )
     plan = helm_plans.normalize_plan(plan)
     if plan == helm_plans.PLAN_FREE:
         plan = helm_plans.PLAN_STARTER
