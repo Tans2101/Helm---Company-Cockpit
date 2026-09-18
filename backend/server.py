@@ -13202,9 +13202,13 @@ async def _ensure_indexes():
         (db.report_digests, [("workspace_id", 1), ("date", 1)], {"unique": True}),
         (db.document_rate_events, [("created_at", 1)], {"expireAfterSeconds": 3600}),
         (db.document_rate_events, [("workspace_id", 1), ("action", 1)], {}),
+        # Window-keyed acquire counters — expire so stale windows cannot lock a workspace out.
+        (db.document_rate_buckets, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.insights_rate_events, [("created_at", 1)], {"expireAfterSeconds": 86400}),
         (db.insights_rate_events, [("workspace_id", 1)], {}),
+        (db.insights_rate_buckets, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.ask_helm_rate_events, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.ASK_HELM_WINDOW_SECONDS}),
+        (db.ask_helm_rate_buckets, [("expires_at", 1)], {"expireAfterSeconds": 0}),
         (db.document_ai_usage, [("created_at", 1)], {"expireAfterSeconds": doc_rate_limit.DOCUMENT_AI_WINDOW_SECONDS}),
         (db.document_ai_usage, [("workspace_id", 1)], {}),
         (db.oauth_states, [("state_hash", 1)], {"unique": True}),
