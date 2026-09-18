@@ -122,8 +122,8 @@ def resolve_expense_horizon(
         end = max(end, max(months))
     return end
 def expense_monthly_amount(entry: dict[str, Any]) -> float:
-    """Monthlyized expense amount used in burn series."""
-    amount = float(entry.get("amount") or 0)
+    """Monthlyized expense amount used in burn series (absolute; polarity via is_credit)."""
+    amount = abs(float(entry.get("amount") or 0))
     if not entry.get("recurring"):
         return amount
     cadence = normalize_recurrence(True, entry.get("recurrence"), "expense")
@@ -133,8 +133,13 @@ def expense_monthly_amount(entry: dict[str, Any]) -> float:
 
 
 def revenue_monthly_amount(entry: dict[str, Any]) -> float:
-    """Monthlyized recurring revenue (MRR contribution)."""
-    return float(entry.get("amount") or 0)
+    """Monthlyized recurring revenue (absolute; polarity via is_credit)."""
+    return abs(float(entry.get("amount") or 0))
+
+
+def _signed(entry: dict[str, Any], amount: float) -> float:
+    import accounting_map as amap
+    return amap.entry_signed_amount(entry, amount)
 
 
 def _monthlyized(entry: dict[str, Any], entry_type: str) -> float:
@@ -154,6 +159,7 @@ def iter_expense_month_amounts(
     For recurring rows, `series_end` (inclusive) caps the projection — used when
     a later commitment of the same category/cadence supersedes this rate.
     Without series_end, expands through horizon_end (single-commitment case).
+    Credits/refunds yield negative amounts.
     """
     if (entry.get("type") or "").strip().lower() != "expense":
         return
@@ -166,7 +172,7 @@ def iter_expense_month_amounts(
 
     if not entry.get("recurring"):
         if start <= horizon_end:
-            yield start, amount
+            yield start, _signed(entry, abs(amount))
         return
 
     end = horizon_end
@@ -174,7 +180,7 @@ def iter_expense_month_amounts(
         end = min(end, series_end)
     if start > end:
         return
-    monthly = expense_monthly_amount(entry)
+    monthly = _signed(entry, expense_monthly_amount(entry))
     for month in months_inclusive(start, end):
         yield month, monthly
 
@@ -190,6 +196,7 @@ def expand_entries_by_month(
     - One-time rows: count only in their own month.
     - Recurring rows grouped by (category, cadence): sorted by start month; each
       covers until the month before the next start (or through horizon).
+    - Credits/refunds (`is_credit`) subtract from the month total.
     """
     from collections import defaultdict
 
@@ -211,7 +218,7 @@ def expand_entries_by_month(
 
     for e in one_time:
         if e["month"] <= horizon_end:
-            by_month[e["month"]] += float(e.get("amount") or 0)
+            by_month[e["month"]] += _signed(e, abs(float(e.get("amount") or 0)))
 
     # Group recurring commitments
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -237,7 +244,7 @@ def expand_entries_by_month(
             end = min(series_end, horizon_end)
             if start > end:
                 continue
-            monthly = _monthlyized(e, want)
+            monthly = _signed(e, _monthlyized(e, want))
             for month in months_inclusive(start, end):
                 by_month[month] += monthly
 
@@ -269,7 +276,7 @@ def expand_expense_category_totals(
     for e in one_time:
         if e["month"] <= horizon_end:
             cat = (e.get("category") or "Other").strip() or "Other"
-            out[e["month"]][cat] += float(e.get("amount") or 0)
+            out[e["month"]][cat] += _signed(e, abs(float(e.get("amount") or 0)))
 
     groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for e in recurring:
@@ -289,7 +296,7 @@ def expand_expense_category_totals(
             end = min(series_end, horizon_end)
             if start > end:
                 continue
-            monthly = expense_monthly_amount(e)
+            monthly = _signed(e, expense_monthly_amount(e))
             for month in months_inclusive(start, end):
                 out[month][cat] += monthly
 

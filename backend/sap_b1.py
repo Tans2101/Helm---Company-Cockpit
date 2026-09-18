@@ -83,6 +83,8 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
 
     kind: \"ar\" (customer invoice → revenue) or \"ap\" (purchase invoice → expense).
     """
+    import accounting_map as amap
+
     if kind not in ("ar", "ap"):
         return None
     if str(doc.get("Cancelled") or "tNO").upper() in ("TYES", "Y", "TRUE", "1"):
@@ -90,10 +92,7 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
 
     date_full = _parse_doc_date(doc)
     month = date_full[:7]
-    try:
-        amount = round(abs(float(doc.get("DocTotal") or 0)), 2)
-    except (TypeError, ValueError):
-        return None
+    amount, is_credit = amap.normalize_mapped_amount(doc.get("DocTotal"))
     if amount <= 0:
         return None
 
@@ -105,7 +104,7 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
     card = (doc.get("CardName") or "").strip()
     doc_num = doc.get("DocNum")
     comments = (doc.get("Comments") or "").strip()
-    category = _line_category(doc) or ("Sales" if kind == "ar" else "Purchases")
+    category = amap.fallback_category(_line_category(doc))
     name = (card or comments or category).strip()[:120]
     extras = [p for p in [f"Doc #{doc_num}" if doc_num is not None else "", comments] if p and p != name]
     note = " · ".join(extras)
@@ -116,6 +115,7 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
             "category": category,
             "name": name,
             "amount": amount,
+            "is_credit": is_credit,
             "month": month,
             "note": note[:500],
             "qb_txn_id": qb_txn_id,
@@ -128,6 +128,7 @@ def map_sap_document(doc: dict, *, kind: str) -> Optional[dict]:
         "category": category,
         "name": name,
         "amount": amount,
+        "is_credit": is_credit,
         "month": month,
         "note": note[:500],
         "qb_txn_id": qb_txn_id,

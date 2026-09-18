@@ -51,7 +51,7 @@ def test_map_sap_ar_and_ap_documents():
     )
     assert ap["type"] == "expense"
     assert ap["qb_txn_id"] == "sap_b1_ap_22_2026-09-02"
-    assert ap["category"] == "Purchases"
+    assert ap["category"] == "Other"
 
 
 def test_map_skips_cancelled():

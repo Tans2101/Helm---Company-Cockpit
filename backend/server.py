@@ -11737,6 +11737,7 @@ async def _upsert_accounting_sync_entries(
             "category": txn["category"],
             "name": normalize_entry_name(txn.get("name"), txn.get("category")),
             "amount": txn["amount"],
+            "is_credit": bool(txn.get("is_credit") or txn.get("is_refund")),
             "month": txn["month"],
             "note": txn.get("note", ""),
             "recurring": txn.get("recurring", False),

@@ -146,6 +146,8 @@ def _line_description(inv: dict) -> str:
 
 def map_xero_invoice(inv: dict) -> Optional[dict]:
     """Map a Xero Invoice (ACCREC/ACCPAY) to financial_entries fields (QB-compatible)."""
+    import accounting_map as amap
+
     status = (inv.get("Status") or "").upper()
     if status in ("DRAFT", "DELETED", "VOIDED"):
         return None
@@ -155,7 +157,7 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
 
     date_full = _parse_xero_date(inv)
     month = date_full[:7]
-    amount = round(abs(float(inv.get("Total") or 0)), 2)
+    amount, is_credit = amap.normalize_mapped_amount(inv.get("Total"))
     invoice_id = str(inv.get("InvoiceID") or inv.get("InvoiceNumber") or "")
     if not invoice_id:
         return None
@@ -166,7 +168,7 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
     number = inv.get("InvoiceNumber") or ""
     ref = inv.get("Reference") or ""
 
-    category = _line_category(inv) or "Other"
+    category = amap.fallback_category(_line_category(inv))
     line_desc = _line_description(inv)
     name = (contact or line_desc or number or category).strip()[:120]
     extras = [p for p in [number, ref, line_desc] if p and p != name]
@@ -178,6 +180,7 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
             "category": category,
             "name": name,
             "amount": amount,
+            "is_credit": is_credit,
             "month": month,
             "note": note[:500],
             "qb_txn_id": qb_txn_id,
@@ -190,6 +193,7 @@ def map_xero_invoice(inv: dict) -> Optional[dict]:
         "category": category,
         "name": name,
         "amount": amount,
+        "is_credit": is_credit,
         "month": month,
         "note": note[:500],
         "qb_txn_id": qb_txn_id,

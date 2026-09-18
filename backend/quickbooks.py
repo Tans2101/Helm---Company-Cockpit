@@ -81,16 +81,18 @@ def _line_category(txn: dict) -> str:
 
 def map_qb_transaction(txn: dict, txn_type: str) -> dict:
     """Map a QuickBooks Purchase or Invoice to financial_entries fields."""
+    import accounting_map as amap
+
     txn_date_full = str(txn.get("TxnDate") or "")
     month = txn_date_full[:7] if len(txn_date_full) >= 7 else datetime.now(timezone.utc).strftime("%Y-%m")
-    amount = round(float(txn.get("TotalAmt") or 0), 2)
+    amount, is_credit = amap.normalize_mapped_amount(txn.get("TotalAmt"))
     qb_id = str(txn.get("Id") or "")
     qb_txn_id = f"{qb_id}_{txn_date_full}"
 
     if txn_type == "purchase":
         vendor = (txn.get("EntityRef") or {}).get("name") or ""
         memo = txn.get("PrivateNote") or ""
-        category = _line_category(txn) or "Other"
+        category = amap.fallback_category(_line_category(txn))
         name = (vendor or memo or category).strip()[:120]
         extras = [p for p in [memo] if p and p != name]
         note = " · ".join(extras) if extras else ""
@@ -99,6 +101,7 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
             "category": category,
             "name": name,
             "amount": amount,
+            "is_credit": is_credit,
             "month": month,
             "note": note[:500],
             "qb_txn_id": qb_txn_id,
@@ -108,7 +111,7 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
     customer = (txn.get("CustomerRef") or {}).get("name") or ""
     doc = txn.get("DocNumber") or ""
     memo = txn.get("PrivateNote") or ""
-    category = _line_category(txn) or "Other"
+    category = amap.fallback_category(_line_category(txn))
     name = (customer or doc or category).strip()[:120]
     extras = [p for p in [doc, memo] if p and p != name]
     note = " · ".join(extras) if extras else ""
@@ -117,6 +120,7 @@ def map_qb_transaction(txn: dict, txn_type: str) -> dict:
         "category": category,
         "name": name,
         "amount": amount,
+        "is_credit": is_credit,
         "month": month,
         "note": note[:500],
         "qb_txn_id": qb_txn_id,
