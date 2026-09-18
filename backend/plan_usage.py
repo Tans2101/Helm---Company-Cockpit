@@ -117,6 +117,61 @@ async def increment_period_extract(db, workspace_id: str, period_key: str) -> in
     return await get_period_extract_count(db, workspace_id, period_key)
 
 
+async def acquire_period_extract_slot(db, workspace_id: str, period_key: str, limit: int) -> bool:
+    """Atomically consume one AI-extract slot for the billing period. False when at cap."""
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit <= 0:
+        return False
+    now = datetime.now(timezone.utc).isoformat()
+    filt = {
+        "workspace_id": workspace_id,
+        "period": period_key,
+        "action": "extract",
+        "count": {"$lt": limit},
+    }
+    update = {
+        "$inc": {"count": 1},
+        "$set": {"updated_at": now},
+        "$setOnInsert": {
+            "workspace_id": workspace_id,
+            "period": period_key,
+            "action": "extract",
+            "created_at": now,
+        },
+    }
+    coll = db.document_usage_periods
+    try:
+        doc = await coll.find_one_and_update(
+            filt,
+            update,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        doc = await coll.find_one_and_update(
+            filt,
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+    return doc is not None
+
+
+async def release_period_extract_slot(db, workspace_id: str, period_key: str) -> None:
+    """Return one period extract slot after a failed/aborted extract."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.document_usage_periods.update_one(
+        {
+            "workspace_id": workspace_id,
+            "period": period_key,
+            "action": "extract",
+            "count": {"$gt": 0},
+        },
+        {"$inc": {"count": -1}, "$set": {"updated_at": now}},
+    )
+
+
 ASK_HELM_ACTION = "ask_helm"
 
 
@@ -202,3 +257,103 @@ async def increment_lifetime_extract(db, workspace_id: str) -> int:
         {"_id": 0, "ai_extracts_lifetime_used": 1},
     )
     return get_lifetime_extract_count(ws)
+
+
+async def acquire_lifetime_extract_slot(db, workspace_id: str, limit: int) -> bool:
+    """Atomically consume one lifetime AI-extract slot. False when at cap."""
+    from pymongo import ReturnDocument
+
+    if limit <= 0:
+        return False
+    now = datetime.now(timezone.utc).isoformat()
+    doc = await db.workspaces.find_one_and_update(
+        {
+            "workspace_id": workspace_id,
+            "$expr": {"$lt": [{"$ifNull": ["$ai_extracts_lifetime_used", 0]}, limit]},
+        },
+        {
+            "$inc": {"ai_extracts_lifetime_used": 1},
+            "$set": {"ai_extracts_lifetime_updated_at": now},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    return doc is not None
+
+
+async def release_lifetime_extract_slot(db, workspace_id: str) -> None:
+    """Return one lifetime extract slot after a failed/aborted extract."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.workspaces.update_one(
+        {
+            "workspace_id": workspace_id,
+            "$expr": {"$gt": [{"$ifNull": ["$ai_extracts_lifetime_used", 0]}, 0]},
+        },
+        {
+            "$inc": {"ai_extracts_lifetime_used": -1},
+            "$set": {"ai_extracts_lifetime_updated_at": now},
+        },
+    )
+
+
+SEAT_USAGE_ACTION = "seats"
+
+
+async def acquire_seat_slot(db, workspace_id: str, limit: int, *, membership_count: int) -> bool:
+    """Atomically reserve one seat under `limit`, seeding from membership_count.
+
+    Memberships remain the durable roster; this counter prevents check-then-act
+    races between concurrent invites/joins. Call release_seat_slot if the
+    membership insert does not complete.
+    """
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit is None:
+        return True
+    if limit <= 0:
+        return False
+    try:
+        used = max(0, int(membership_count))
+    except (TypeError, ValueError):
+        used = 0
+    if used >= limit:
+        return False
+
+    now = datetime.now(timezone.utc).isoformat()
+    coll = db.seat_usage
+    # Ensure a counter row exists, floored at the live membership count.
+    try:
+        await coll.update_one(
+            {"workspace_id": workspace_id},
+            {
+                "$max": {"count": used},
+                "$set": {"updated_at": now},
+                "$setOnInsert": {
+                    "workspace_id": workspace_id,
+                    "action": SEAT_USAGE_ACTION,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+    except DuplicateKeyError:
+        await coll.update_one(
+            {"workspace_id": workspace_id},
+            {"$max": {"count": used}, "$set": {"updated_at": now}},
+        )
+
+    doc = await coll.find_one_and_update(
+        {"workspace_id": workspace_id, "count": {"$lt": limit}},
+        {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return doc is not None
+
+
+async def release_seat_slot(db, workspace_id: str) -> None:
+    """Return one reserved seat after a failed invite/join (or member removal)."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.seat_usage.update_one(
+        {"workspace_id": workspace_id, "count": {"$gt": 0}},
+        {"$inc": {"count": -1}, "$set": {"updated_at": now}},
+    )

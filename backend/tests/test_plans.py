@@ -150,11 +150,16 @@ async def test_starter_seat_enforcement_allows_10th_blocks_11th():
     from fastapi import HTTPException
 
     with patch.object(server, "BILLING_ENFORCED", True), \
-         patch.object(server, "_seat_count", new=AsyncMock(return_value=9)):
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=9)), \
+         patch.object(server.plan_usage, "acquire_seat_slot", new=AsyncMock(return_value=True)) as acquire:
         await server._enforce_seat_available("ws_test", "starter")
+        acquire.assert_awaited_once()
+        assert acquire.await_args.kwargs["membership_count"] == 9
+        assert acquire.await_args.args[2] == 10
 
     with patch.object(server, "BILLING_ENFORCED", True), \
-         patch.object(server, "_seat_count", new=AsyncMock(return_value=10)):
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=10)), \
+         patch.object(server.plan_usage, "acquire_seat_slot", new=AsyncMock(return_value=False)):
         with pytest.raises(HTTPException) as ei:
             await server._enforce_seat_available("ws_test", "starter")
         assert ei.value.status_code == 403
@@ -170,11 +175,13 @@ async def test_growth_seat_enforcement_allows_25th_blocks_26th():
     from fastapi import HTTPException
 
     with patch.object(server, "BILLING_ENFORCED", True), \
-         patch.object(server, "_seat_count", new=AsyncMock(return_value=24)):
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=24)), \
+         patch.object(server.plan_usage, "acquire_seat_slot", new=AsyncMock(return_value=True)):
         await server._enforce_seat_available("ws_test", "growth")
 
     with patch.object(server, "BILLING_ENFORCED", True), \
-         patch.object(server, "_seat_count", new=AsyncMock(return_value=25)):
+         patch.object(server, "_seat_count", new=AsyncMock(return_value=25)), \
+         patch.object(server.plan_usage, "acquire_seat_slot", new=AsyncMock(return_value=False)):
         with pytest.raises(HTTPException) as ei:
             await server._enforce_seat_available("ws_test", "growth")
         assert ei.value.status_code == 403

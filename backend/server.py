@@ -1329,6 +1329,11 @@ async def _seat_count(workspace_id: str) -> int:
 
 
 async def _enforce_seat_available(workspace_id: str, plan: str | None = None) -> None:
+    """Atomically reserve one seat under the plan cap (check-then-act safe).
+
+    Callers that fail to insert a membership after this succeeds must call
+    `_release_seat_reservation` so a phantom seat is not held.
+    """
     if not BILLING_ENFORCED:
         return
     if plan is None:
@@ -1338,14 +1343,27 @@ async def _enforce_seat_available(workspace_id: str, plan: str | None = None) ->
     if limit is None:
         return
     used = await _seat_count(workspace_id)
-    if used >= limit:
+    ok = await plan_usage.acquire_seat_slot(
+        db, workspace_id, limit, membership_count=used,
+    )
+    if not ok:
         raise HTTPException(
             status_code=403,
             detail=f"Upgrade to add more members. Your plan allows {limit} seat{'s' if limit != 1 else ''} ({used}/{limit} used).",
         )
 
 
+async def _release_seat_reservation(workspace_id: str) -> None:
+    if not BILLING_ENFORCED:
+        return
+    try:
+        await plan_usage.release_seat_slot(db, workspace_id)
+    except Exception:
+        logger.exception("seat reservation release failed for %s", workspace_id)
+
+
 async def _enforce_ai_extract_quota(principal) -> None:
+    """Read-only quota gate (e.g. upload). Extract/summarize must use acquire."""
     c = await get_ws(principal["workspace_id"])
     if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
         raise HTTPException(
@@ -1379,6 +1397,62 @@ async def _enforce_ai_extract_quota(principal) -> None:
             status_code=429,
             detail="You've hit this month's document limit. Upgrade for more.",
         )
+
+
+async def _acquire_ai_extract_quota(principal) -> dict:
+    """Atomically consume one AI-extract slot before processing starts.
+
+    Returns a ticket; pass to `_release_ai_extract_quota` if processing fails
+    or does not produce a billable extract so the slot is not left phantom.
+    """
+    c = await get_ws(principal["workspace_id"])
+    if not workspace_allows(c, helm_plans.FEATURE_AI_EXTRACT):
+        raise HTTPException(
+            status_code=403,
+            detail="AI document upload is not available on this plan. Upgrade to Starter or higher.",
+        )
+    if not BILLING_ENFORCED:
+        return {"mode": "unenforced"}
+    ws_id = principal["workspace_id"]
+    lifetime_limit = helm_plans.ai_extracts_lifetime_limit(c.get("plan"))
+    if lifetime_limit > 0:
+        ok = await plan_usage.acquire_lifetime_extract_slot(db, ws_id, lifetime_limit)
+        if not ok:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"You've used your {lifetime_limit} free AI extracts. "
+                    "upgrade to continue."
+                ),
+            )
+        return {"mode": "lifetime"}
+    limit = helm_plans.ai_extracts_limit(c.get("plan"))
+    if limit <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="AI document upload is not available on your plan. Upgrade to continue.",
+        )
+    period = plan_usage.current_usage_period(c)
+    ok = await plan_usage.acquire_period_extract_slot(db, ws_id, period["key"], limit)
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="You've hit this month's document limit. Upgrade for more.",
+        )
+    return {"mode": "period", "period_key": period["key"]}
+
+
+async def _release_ai_extract_quota(principal, ticket: dict | None) -> None:
+    if not ticket or ticket.get("mode") in (None, "unenforced"):
+        return
+    ws_id = principal["workspace_id"]
+    try:
+        if ticket.get("mode") == "lifetime":
+            await plan_usage.release_lifetime_extract_slot(db, ws_id)
+        elif ticket.get("mode") == "period" and ticket.get("period_key"):
+            await plan_usage.release_period_extract_slot(db, ws_id, ticket["period_key"])
+    except Exception:
+        logger.exception("AI extract quota release failed for %s", ws_id)
 
 
 async def get_ws(workspace_id: str):
@@ -2772,7 +2846,11 @@ async def join_workspace(payload: JoinInput, request: Request, user=Depends(get_
             "pack": "member", "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.memberships.insert_one(membership)
+        try:
+            await db.memberships.insert_one(membership)
+        except Exception:
+            await _release_seat_reservation(ws_id)
+            raise
         existing = membership
     await ensure_person_for_membership(ws_id, existing, name=user.get("name"))
     await dept_migrate.enroll_user_in_sales_finance(db, ws_id, user["user_id"])
@@ -2835,12 +2913,12 @@ class InviteInput(BaseModel):
 @api_router.post("/members/invite")
 async def invite_member(payload: InviteInput, request: Request, principal=Depends(require_pro_perm("members:invite"))):
     pack = _require_assignable_pack(payload.pack)
-    await _enforce_seat_available(principal["workspace_id"])
     role = "member"
     email = payload.email.strip().lower()
     existing = await db.memberships.find_one({"workspace_id": principal["workspace_id"], "email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Already a member or invited")
+    await _enforce_seat_available(principal["workspace_id"])
     existing_user = await db.users.find_one({"email": email}, {"_id": 0})
     membership = {
         "membership_id": f"mem_{uuid.uuid4().hex[:12]}", "workspace_id": principal["workspace_id"],
@@ -2849,7 +2927,11 @@ async def invite_member(payload: InviteInput, request: Request, principal=Depend
         "status": "active" if existing_user else "invited",
         "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.memberships.insert_one(membership)
+    try:
+        await db.memberships.insert_one(membership)
+    except Exception:
+        await _release_seat_reservation(principal["workspace_id"])
+        raise
     display_name = (existing_user or {}).get("name") or payload.name
     await ensure_person_for_membership(principal["workspace_id"], membership, name=display_name)
     if membership.get("user_id"):
@@ -3000,6 +3082,7 @@ async def remove_member(membership_id: str, principal=Depends(require_pro_perm("
     if m.get("user_id") == principal["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot remove yourself")
     await db.memberships.delete_one({"membership_id": membership_id, "workspace_id": principal["workspace_id"]})
+    await _release_seat_reservation(principal["workspace_id"])
     await unlink_person_membership(principal["workspace_id"], membership_id)
     return {"ok": True}
 
@@ -5321,7 +5404,7 @@ async def extract_financial_document_route(
         return doc["extracted_data"]
     if not helm_llm.extraction_configured():
         raise HTTPException(status_code=503, detail="AI extraction is not configured")
-    await _enforce_ai_extract_quota(principal)
+    quota_ticket = await _acquire_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
         "Extraction limit reached. Try again in a bit",
@@ -5342,12 +5425,6 @@ async def extract_financial_document_route(
             {"$set": {"status": status, "extracted_data": extracted}},
         )
         if status == "extracted":
-            ws = await get_ws(principal["workspace_id"])
-            if helm_plans.ai_extracts_lifetime_limit(ws.get("plan")) > 0:
-                await plan_usage.increment_lifetime_extract(db, principal["workspace_id"])
-            else:
-                period = plan_usage.current_usage_period(ws)
-                await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
             await log_activity(
                 principal, "financials", "document.extract",
                 f"Extracted bill data · {doc['filename']}",
@@ -5357,14 +5434,21 @@ async def extract_financial_document_route(
                 helm_analytics.EVENT_AI_EXTRACT,
                 {"document_id": document_id},
             )
+        else:
+            await _release_ai_extract_quota(principal, quota_ticket)
+            quota_ticket = None
         return extracted
     except ValueError as exc:
+        await _release_ai_extract_quota(principal, quota_ticket)
+        quota_ticket = None
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
             {"$set": {"status": "failed", "extracted_data": {"error": "parse_failed"}}},
         )
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        await _release_ai_extract_quota(principal, quota_ticket)
+        quota_ticket = None
         logger.exception("document extract failed for %s", document_id)
         await db.documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
@@ -6516,7 +6600,7 @@ async def summarize_report_document_route(
         }
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI summarization is not configured")
-    await _enforce_ai_extract_quota(principal)
+    quota_ticket = await _acquire_ai_extract_quota(principal)
     await _enforce_document_rate_limit(
         principal, "extract", doc_rate_limit.DOC_EXTRACT_HOURLY_LIMIT,
         "Extraction limit reached. Try again in a bit",
@@ -6561,12 +6645,6 @@ async def summarize_report_document_route(
             }},
             upsert=True,
         )
-        ws = await get_ws(principal["workspace_id"])
-        if helm_plans.ai_extracts_lifetime_limit(ws.get("plan")) > 0:
-            await plan_usage.increment_lifetime_extract(db, principal["workspace_id"])
-        else:
-            period = plan_usage.current_usage_period(ws)
-            await plan_usage.increment_period_extract(db, principal["workspace_id"], period["key"])
         await log_activity(
             principal, "reports", "report_document.summarize",
             f"Summarized report · {doc.get('filename') or document_id}",
@@ -6585,12 +6663,16 @@ async def summarize_report_document_route(
             "report_date": doc.get("report_date"),
         }
     except ValueError as exc:
+        await _release_ai_extract_quota(principal, quota_ticket)
+        quota_ticket = None
         await db.report_documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
             {"$set": {"status": "failed", "summary": str(exc), "unclear": True}},
         )
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        await _release_ai_extract_quota(principal, quota_ticket)
+        quota_ticket = None
         logger.exception("report summarize failed for %s", document_id)
         await db.report_documents.update_one(
             {"id": document_id, "workspace_id": principal["workspace_id"]},
@@ -7801,7 +7883,11 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
             "status": "active" if existing_user else "invited",
             "invite_token": uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.memberships.insert_one(membership)
+        try:
+            await db.memberships.insert_one(membership)
+        except Exception:
+            await _release_seat_reservation(principal["workspace_id"])
+            raise
         person["membership_id"] = membership["membership_id"]
         person["user_id"] = membership.get("user_id")
         person["has_access"] = True
