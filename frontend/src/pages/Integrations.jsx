@@ -217,12 +217,24 @@ export default function Integrations() {
       reload();
     } else if (params.get("error")) {
       const err = params.get("error");
+      const provider = params.get("provider");
+      const providerName = provider === "quickbooks"
+        ? "QuickBooks"
+        : provider === "xero"
+          ? "Xero"
+          : provider === "hubspot"
+            ? "HubSpot"
+            : provider === "google"
+              ? "Google"
+              : "The provider";
       toast.error(
         err === "xero_org"
           ? "No Xero organisations were available on that account."
-          : err === "token"
-            ? "Google accepted the grant, but Helm could not save the connection. Try Connect again."
-            : "Could not complete the connection. Try again or use a different account.",
+          : err === "save"
+            ? `${providerName} accepted the grant, but Helm could not save the connection. Check INTEGRATION_ENCRYPTION_KEY on Render, then try Connect again.`
+            : err === "token"
+              ? `${providerName} accepted the grant, but Helm could not finish the connection. Check OAuth keys and redirect URI on Render, then try Connect again.`
+              : "Could not complete the connection. Try again or use a different account.",
       );
       setParams({});
     }

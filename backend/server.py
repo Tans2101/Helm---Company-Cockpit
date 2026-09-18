@@ -10631,7 +10631,7 @@ async def oauth_callback(provider: str, request: Request, code: Optional[str] = 
         return await _complete_oauth_callback(provider, code, state, realmId, integrations_path)
     except Exception:
         logger.exception("oauth callback failed for %s", provider)
-        return RedirectResponse(f"{integrations_path}?error=token")
+        return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
 
 
 async def _complete_oauth_callback(
@@ -10643,10 +10643,10 @@ async def _complete_oauth_callback(
 ):
     cfg = _provider_config(provider)
     if not cfg or not code or not state:
-        return RedirectResponse(f"{integrations_path}?error=oauth")
+        return RedirectResponse(f"{integrations_path}?error=oauth&provider={provider}")
     verified = _verify_state(state)
     if not verified or verified[0] != provider:
-        return RedirectResponse(f"{integrations_path}?error=state")
+        return RedirectResponse(f"{integrations_path}?error=state&provider={provider}")
     workspace_id, user_id, _nonce = verified[1:]
     state_row = await db.oauth_states.find_one_and_delete({
         "state_hash": hashlib.sha256(state.encode()).hexdigest(),
@@ -10655,14 +10655,25 @@ async def _complete_oauth_callback(
         "user_id": user_id,
     })
     if not state_row or _oauth_datetime_expired(state_row.get("expires_at")):
-        return RedirectResponse(f"{integrations_path}?error=state")
+        return RedirectResponse(f"{integrations_path}?error=state&provider={provider}")
     membership = await db.memberships.find_one({
         "workspace_id": workspace_id,
         "user_id": user_id,
         "status": "active",
     }, {"_id": 0, "role": 1, "pack": 1, "permissions": 1})
     if not membership or "integrations:manage" not in perms_for(pack_of(membership)):
-        return RedirectResponse(f"{integrations_path}?error=state")
+        return RedirectResponse(f"{integrations_path}?error=state&provider={provider}")
+
+    async def _persist_tokens(payload: dict):
+        try:
+            await _store_integration_tokens(
+                workspace_id, cfg["token_field"], payload, connected_by_user_id=user_id,
+            )
+        except Exception:
+            logger.exception("oauth token store failed for %s", provider)
+            return RedirectResponse(f"{integrations_path}?error=save&provider={provider}")
+        return None
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as hc:
             if provider in ("quickbooks", "xero"):
@@ -10703,19 +10714,19 @@ async def _complete_oauth_callback(
                 )
         if tr.status_code >= 400:
             logger.error("oauth token exchange %s failed with status %s: %s", provider, tr.status_code, (tr.text or "")[:300])
-            return RedirectResponse(f"{integrations_path}?error=token")
+            return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
         try:
             tokens = tr.json()
         except Exception:
             logger.error("oauth token response was not JSON for %s", provider)
-            return RedirectResponse(f"{integrations_path}?error=token")
+            return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
         if not isinstance(tokens, dict) or tokens.get("error"):
             logger.error("oauth token response contained an error for %s", provider)
-            return RedirectResponse(f"{integrations_path}?error=token")
+            return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
         tokens = sanitize_oauth_token_payload(tokens)
         if not tokens.get("access_token"):
             logger.error("oauth token response missing access_token for %s", provider)
-            return RedirectResponse(f"{integrations_path}?error=token")
+            return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
         if realmId:
             tokens["realmId"] = realmId
         tokens["obtained_at"] = datetime.now(timezone.utc).isoformat()
@@ -10724,25 +10735,31 @@ async def _complete_oauth_callback(
                 tenants = await xero_sync.fetch_xero_connections(tokens.get("access_token") or "")
             except Exception:
                 logger.exception("xero connections lookup failed")
-                return RedirectResponse(f"{integrations_path}?error=token")
+                return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
             if not tenants:
-                return RedirectResponse(f"{integrations_path}?error=xero_org")
+                return RedirectResponse(f"{integrations_path}?error=xero_org&provider={provider}")
             if len(tenants) == 1:
                 tokens["tenant_id"] = tenants[0]["tenant_id"]
                 tokens["tenant_name"] = tenants[0]["tenant_name"]
                 tokens.pop("pending_tenants", None)
-                await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
+                store_err = await _persist_tokens(tokens)
+                if store_err:
+                    return store_err
                 return RedirectResponse(f"{integrations_path}?connected=xero")
             tokens["pending_tenants"] = tenants
             tokens.pop("tenant_id", None)
             tokens.pop("tenant_name", None)
             tokens = sanitize_oauth_token_payload(tokens)
-            await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
+            store_err = await _persist_tokens(tokens)
+            if store_err:
+                return store_err
             return RedirectResponse(f"{integrations_path}?xero_select=1")
-        await _store_integration_tokens(workspace_id, cfg["token_field"], tokens, connected_by_user_id=user_id)
+        store_err = await _persist_tokens(tokens)
+        if store_err:
+            return store_err
     except Exception:
-        logger.exception("oauth token exchange failed")
-        return RedirectResponse(f"{integrations_path}?error=token")
+        logger.exception("oauth token exchange failed for %s", provider)
+        return RedirectResponse(f"{integrations_path}?error=token&provider={provider}")
     return RedirectResponse(f"{integrations_path}?connected={provider}")
 
 
