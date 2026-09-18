@@ -26,6 +26,9 @@ CHRONIC_EQUIPMENT_MIN_COUNT = 3
 RUNWAY_MONTHS_THRESHOLD = 6
 BURN_INCREASE_PCT = 0.20
 EXPENSE_SPIKE_PCT = 0.25
+# Brand-new categories (prev month $0) need an absolute/relative floor — % change is undefined.
+NEW_EXPENSE_CATEGORY_MIN = 2000.0
+NEW_EXPENSE_CATEGORY_SHARE = 0.05
 SIGNAL_CAP = 12
 
 # Normalize heterogeneous impact proxies onto one comparable scale.
@@ -43,6 +46,8 @@ DECISION_SIGNAL_TYPES = frozenset({
     "runway_risk",
     "burn_increase",
     "expense_spike",
+    # First month of material spend in a category with no prior-month baseline.
+    "new_expense_category",
     "stalled_deal",
     # Planned follow-up date passed without progress — distinct from general stall.
     "missed_followup",
@@ -222,6 +227,70 @@ def detect_expense_spike(expense_by_month: dict, *, currency: str = "usd") -> li
             prev_amount=round(prev_amt, 2),
             curr_amount=round(float(curr_amt), 2),
             delta_pct=delta_pct,
+        ))
+    return out
+
+
+def _new_expense_category_threshold(prev_month_total: float) -> float:
+    """Material-spend floor: flat minimum, raised for large prior-month totals."""
+    threshold = NEW_EXPENSE_CATEGORY_MIN
+    try:
+        total = float(prev_month_total or 0)
+    except (TypeError, ValueError):
+        total = 0.0
+    if total > 0:
+        threshold = max(threshold, total * NEW_EXPENSE_CATEGORY_SHARE)
+    return threshold
+
+
+def detect_new_expense_category(expense_by_month: dict, *, currency: str = "usd") -> list:
+    """Fire for categories with $0 prior-month spend and material current-month spend.
+
+    Distinct from expense_spike: percentage increase from zero is not meaningful.
+    """
+    months = sorted(expense_by_month.keys())
+    if len(months) < 2:
+        return []
+    prev_m, curr_m = months[-2], months[-1]
+    prev_cats = expense_by_month.get(prev_m) or {}
+    curr_cats = expense_by_month.get(curr_m) or {}
+    prev_total = sum(float(v or 0) for v in prev_cats.values())
+    threshold = _new_expense_category_threshold(prev_total)
+    out = []
+    for cat, curr_amt in curr_cats.items():
+        prev_amt = float(prev_cats.get(cat) or 0)
+        if prev_amt > 0:
+            continue
+        try:
+            amount = float(curr_amt or 0)
+        except (TypeError, ValueError):
+            continue
+        if amount < threshold:
+            continue
+        # Larger absolute debuts escalate; share of prior total is secondary context.
+        share = (amount / prev_total) if prev_total > 0 else None
+        severity = "high" if amount >= threshold * 2 else "medium"
+        share_bit = (
+            f" ({round(share * 100, 1)}% of {prev_m} total spend)"
+            if share is not None else ""
+        )
+        out.append(_signal(
+            "new_expense_category",
+            severity,
+            summary=f"New expense category: {cat}",
+            detail=(
+                f"{cat} had no spend in {prev_m} and "
+                f"{fmt_money_plain(amount, currency)} in {curr_m}{share_bit}. "
+                f"This is a first appearance above the material threshold "
+                f"({fmt_money_plain(threshold, currency)}), not a MoM percentage spike."
+            ),
+            related_id=cat,
+            category=cat,
+            prev_month=prev_m,
+            curr_month=curr_m,
+            prev_amount=0.0,
+            curr_amount=round(amount, 2),
+            threshold=round(threshold, 2),
         ))
     return out
 
@@ -1289,6 +1358,7 @@ def collect_signals(
     if runway:
         signals.append(runway)
     signals.extend(detect_expense_spike(expense_by_month, currency=currency))
+    signals.extend(detect_new_expense_category(expense_by_month, currency=currency))
     signals.extend(detect_stalled_deals(deals, currency=currency, now=now))
     today = (now or datetime.now(timezone.utc)).date()
     signals.extend(detect_upcoming_followups(deals, today=today))

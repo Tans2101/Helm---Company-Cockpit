@@ -94,6 +94,38 @@ def test_expense_spike_fires_and_stays_silent():
     assert quiet == []
 
 
+def test_new_expense_category_fires_for_material_first_month():
+    """Brand-new categories with material spend must surface (not only MoM spikes)."""
+    by_month = {
+        "2026-07": {"Payroll": 100000, "Cloud/Infra": 10000},
+        "2026-08": {
+            "Payroll": 100000,
+            "Cloud/Infra": 10000,
+            "Legal retainers": 15000,  # first appearance, well above floor
+        },
+    }
+    new_cats = eng.detect_new_expense_category(by_month)
+    assert len(new_cats) == 1
+    sig = new_cats[0]
+    assert sig["type"] == "new_expense_category"
+    assert sig["category"] == "Legal retainers"
+    assert sig["prev_amount"] == 0.0
+    assert sig["curr_amount"] == 15000
+    assert "New expense category" in sig["summary"]
+    assert "expense_spike" not in sig["type"]
+    # Must not also appear as a percentage spike (no prior baseline).
+    assert eng.detect_expense_spike(by_month) == []
+    assert "new_expense_category" in eng.DECISION_SIGNAL_TYPES
+
+
+def test_new_expense_category_ignores_trivial_amounts():
+    by_month = {
+        "2026-07": {"Payroll": 100000},
+        "2026-08": {"Payroll": 100000, "Office snacks": 40},
+    }
+    assert eng.detect_new_expense_category(by_month) == []
+
+
 def test_stalled_deals_fires_for_old_open_deal():
     now = datetime(2026, 9, 4, tzinfo=timezone.utc)
     deals = [
