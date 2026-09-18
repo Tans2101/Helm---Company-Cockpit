@@ -17,7 +17,7 @@
       "metric_label": "text-xs font-mono uppercase tracking-[0.2em] text-zinc-500",
       "small": "text-xs text-zinc-500"
     },
-    "installation": "Add Google Fonts imports for 'DM Sans' and 'DM Mono' to index.css or index.html"
+    "installation": "Self-host DM Sans, DM Mono, and Hedvig Letters Sans via /fonts/fonts.css (no Google Fonts CDN)."
   },
   "colors": {
     "background": {

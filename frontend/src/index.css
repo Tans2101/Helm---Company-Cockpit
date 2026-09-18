@@ -148,7 +148,7 @@
 
 .font-mono { font-family: 'DM Mono', monospace; }
 
-/* Page headers / display — Hedvig Letters Sans (Google Fonts). Never buttons, tables, or form fields */
+/* Page headers / display — Hedvig Letters Sans (self-hosted). Never buttons, tables, or form fields */
 .font-display,
 .font-serif-display {
     font-family: 'Hedvig Letters Sans', 'DM Sans', system-ui, sans-serif;

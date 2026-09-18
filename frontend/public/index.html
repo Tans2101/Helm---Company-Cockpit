@@ -76,22 +76,11 @@
             ]
           }
         </script>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-          rel="preload"
-          as="style"
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&family=Hedvig+Letters+Sans&display=swap"
-        />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&family=Hedvig+Letters+Sans&display=swap"
-          media="print"
-          onload="this.media='all'"
-        />
-        <noscript>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&family=Hedvig+Letters+Sans&display=swap" />
-        </noscript>
+        <!-- Self-hosted typefaces (DM Sans / DM Mono / Hedvig) — no Google Fonts CDN -->
+        <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/dm-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin />
+        <link rel="preload" href="/fonts/hedvig-letters-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+        <link rel="stylesheet" href="/fonts/fonts.css" />
         <title>Helm — Run the business. Don't chase it.</title>
     </head>
     <body>
