@@ -27,6 +27,7 @@ def test_annotate_possibly_stale():
     assert out[0]["possibly_stale"] is False
     assert out[1]["possibly_stale"] is True
     assert "possibly_stale" not in rows[0]
+    assert fresh.count_possibly_stale(out) == 1
 
 
 def test_pick_data_as_of_takes_latest():
@@ -34,6 +35,13 @@ def test_pick_data_as_of_takes_latest():
     newer = "2026-09-10T12:00:00+00:00"
     assert fresh.pick_data_as_of(older, None, newer).startswith("2026-09-10")
     assert fresh.pick_data_as_of(None, "", None) is None
+
+
+def test_stale_thresholds_are_centralized():
+    assert fresh.stale_after_days(dept_catalog.TYPE_PRODUCTION) == 14
+    assert fresh.stale_after_days(dept_catalog.TYPE_LEGAL) == 21
+    assert fresh.stale_after_days(dept_catalog.TYPE_ACCOUNTING_FINANCE) == 30
+    assert fresh.stale_after_days("unknown") == fresh.DEFAULT_STALE_AFTER_DAYS
 
 
 def test_workspace_source_timestamps():
@@ -44,3 +52,26 @@ def test_workspace_source_timestamps():
     sources = fresh.workspace_source_timestamps(ws)
     assert sources["qb_last_synced_at"].startswith("2026-09-15")
     assert sources["xero_last_synced_at"] is None
+
+
+def test_ask_and_weekly_pack_prompts_require_literal_grounding():
+    import server
+
+    assert "literally" in server._WEEKLY_PACK_SYSTEM
+    assert "possibly_stale" in server._WEEKLY_PACK_SYSTEM
+    ctx = server.ask_context_for_synthesis(
+        {"name": "Acme", "people": {"people": []}, "decisions": [], "telemetry_manual": {}},
+        {},
+        financials_visible=False,
+        sales_enabled=False,
+        sales_visible=False,
+        hr_enabled=False,
+        hr_visible=False,
+        production_enabled=True,
+        production_visible=True,
+        production_rows=[
+            {"id": "wo", "status": "in_production", "updated_at": "2000-01-01T00:00:00+00:00"},
+        ],
+    )
+    assert ctx["production"]["possibly_stale_count"] >= 1
+    assert "outdated" in (ctx["production"].get("instructions_for_missing_data") or "")

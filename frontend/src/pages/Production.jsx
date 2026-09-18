@@ -8,6 +8,7 @@ import {
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const STATUS_META = {
   awaiting_materials: {
@@ -468,6 +469,7 @@ export default function Production() {
                               : ""}
                           </span>
                         )}
+                        <PossiblyStaleBadge show={order.possibly_stale} />
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">

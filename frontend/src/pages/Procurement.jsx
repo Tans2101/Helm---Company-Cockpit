@@ -8,6 +8,7 @@ import {
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const STATUS_META = {
   requested: { label: "Requested", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
@@ -414,7 +415,10 @@ export default function Procurement() {
                 >
                   <td className="px-3 py-2.5 text-helm-fg max-w-[14rem]">
                     <div className="flex flex-col gap-1 min-w-0">
-                      <span className="truncate">{req.item}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{req.item}</span>
+                        <PossiblyStaleBadge show={req.possibly_stale} />
+                      </div>
                       <BlockingProductionBadge
                         orders={req.blocking_production_orders}
                         requestId={req.id}

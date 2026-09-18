@@ -8,6 +8,7 @@ import {
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const STATUS_META = {
   reported: { label: "Reported", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
@@ -377,7 +378,10 @@ export default function Maintenance() {
                 >
                   <td className="px-3 py-2.5 text-helm-fg max-w-[16rem]">
                     <div className="flex flex-col gap-1 min-w-0">
-                      <span className="truncate">{t.equipment_name}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{t.equipment_name}</span>
+                        <PossiblyStaleBadge show={t.possibly_stale} />
+                      </div>
                       <div className="flex flex-wrap gap-1">
                         <BlockingProductionBadge
                           orders={t.blocking_production_orders}

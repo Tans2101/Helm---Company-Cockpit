@@ -98,6 +98,10 @@ def annotate_possibly_stale(
     return out
 
 
+def count_possibly_stale(rows: list[dict] | None) -> int:
+    return sum(1 for r in (rows or []) if r.get("possibly_stale"))
+
+
 def _max_ts(*candidates: Optional[datetime]) -> Optional[datetime]:
     present = [c for c in candidates if c is not None]
     return max(present) if present else None
@@ -126,13 +130,30 @@ def pick_data_as_of(*raw_values: Any) -> Optional[str]:
     return latest.isoformat() if latest else None
 
 
+async def _latest_collection_ts(db, workspace_id: str, collection_name: str) -> Optional[datetime]:
+    coll = getattr(db, collection_name, None)
+    if coll is None or not workspace_id:
+        return None
+    try:
+        cursor = coll.find(
+            {"workspace_id": workspace_id},
+            {"_id": 0, "updated_at": 1, "created_at": 1, "modified_at": 1},
+        ).sort([("updated_at", -1), ("created_at", -1)]).limit(1)
+        rows = await cursor.to_list(1)
+    except Exception:
+        return None
+    return item_timestamp(rows[0]) if rows else None
+
+
 async def resolve_workspace_data_as_of(db, workspace: dict) -> dict:
-    """Build an as-of payload from sync stamps + latest financial entry update."""
+    """Build an as-of payload from sync stamps + latest financial/dept updates."""
     sources = workspace_source_timestamps(workspace)
+    ws_id = (workspace or {}).get("workspace_id") or ""
+
     latest_entry = None
     try:
         cursor = db.financial_entries.find(
-            {"workspace_id": workspace.get("workspace_id")},
+            {"workspace_id": ws_id},
             {"_id": 0, "updated_at": 1, "created_at": 1},
         ).sort([("updated_at", -1), ("created_at", -1)]).limit(1)
         rows = await cursor.to_list(1)
@@ -140,10 +161,19 @@ async def resolve_workspace_data_as_of(db, workspace: dict) -> dict:
     except Exception:
         latest_entry = None
     entry_ts = item_timestamp(latest_entry) if latest_entry else None
-    if entry_ts:
-        sources["financial_entries_updated_at"] = entry_ts.isoformat()
-    else:
-        sources["financial_entries_updated_at"] = None
+    sources["financial_entries_updated_at"] = entry_ts.isoformat() if entry_ts else None
+
+    # Latest touch across department-backed collections that feed AI summaries.
+    for key, coll_name in (
+        ("deals_updated_at", "deals"),
+        ("production_updated_at", "production_work_orders"),
+        ("procurement_updated_at", "procurement_requests"),
+        ("legal_updated_at", "legal_matters"),
+        ("maintenance_updated_at", "maintenance_tickets"),
+        ("hr_onboarding_updated_at", "hr_onboarding_instances"),
+    ):
+        ts = await _latest_collection_ts(db, ws_id, coll_name)
+        sources[key] = ts.isoformat() if ts else None
 
     data_as_of = pick_data_as_of(*sources.values())
     return {

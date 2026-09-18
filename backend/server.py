@@ -1784,11 +1784,15 @@ def calendar_for_synthesis(cal_snap: Optional[dict], *, google_connected: bool =
 def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
     """Pipeline for AI: Sales off + no deals is not the same as a $0 pipeline."""
     deals = list(deals or [])
-    if not deals and not sales_tracked:
+    annotated = helm_freshness.annotate_possibly_stale(
+        deals, dept_type=dept_catalog.TYPE_SALES,
+    ) if deals or sales_tracked else []
+    if not annotated and not sales_tracked:
         return {
             "tracked": False,
             "deal_count": None,
             "open_value": None,
+            "possibly_stale_count": None,
             "unknown_fields": ["sales_pipeline"],
             "instructions_for_missing_data": (
                 "Sales pipeline is not tracked in this workspace. Do not say pipeline "
@@ -1797,7 +1801,7 @@ def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
             ),
         }
     normalized = []
-    for d in deals:
+    for d in annotated:
         try:
             value = float(d.get("value") or 0)
         except (TypeError, ValueError):
@@ -1808,6 +1812,7 @@ def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
         "tracked": True,
         "deal_count": metrics["open_count"],
         "open_value": metrics["open_value"],
+        "possibly_stale_count": helm_freshness.count_possibly_stale(annotated),
         "unknown_fields": [],
         "instructions_for_missing_data": "",
     }
@@ -1816,10 +1821,14 @@ def pipeline_for_synthesis(deals, *, sales_tracked: bool) -> dict:
 def onboarding_for_synthesis(instances, *, hr_tracked: bool) -> dict:
     """HR onboarding for AI: HR unused is not the same as zero hires onboarding."""
     instances = list(instances or [])
-    if not instances and not hr_tracked:
+    annotated = helm_freshness.annotate_possibly_stale(
+        instances, dept_type=dept_catalog.TYPE_HR,
+    ) if instances or hr_tracked else []
+    if not annotated and not hr_tracked:
         return {
             "tracked": False,
             "instance_count": None,
+            "possibly_stale_count": None,
             "unknown_fields": ["hr_onboarding"],
             "instructions_for_missing_data": (
                 "HR onboarding is not used in this workspace. Do not say there are no "
@@ -1828,10 +1837,11 @@ def onboarding_for_synthesis(instances, *, hr_tracked: bool) -> dict:
             ),
         }
     # "active" means the hire finished onboarding — not currently in the pipeline.
-    in_progress = [i for i in instances if (i.get("overall_status") or "in_progress") != "active"]
+    in_progress = [i for i in annotated if (i.get("overall_status") or "in_progress") != "active"]
     return {
         "tracked": True,
         "instance_count": len(in_progress),
+        "possibly_stale_count": helm_freshness.count_possibly_stale(in_progress),
         "unknown_fields": [],
         "instructions_for_missing_data": "",
     }
@@ -1857,33 +1867,49 @@ def dept_queue_for_synthesis(
     open_statuses: Optional[frozenset] = None,
     status_key: str = "status",
     empty_label: str = "This department queue",
+    dept_type: Optional[str] = None,
 ) -> dict:
     """Compact status counts for Ask Helm — no row-level PII beyond aggregates."""
     rows = list(rows or [])
-    if not rows and not tracked:
+    annotated = helm_freshness.annotate_possibly_stale(
+        rows, dept_type=dept_type,
+    ) if rows or tracked else []
+    if not annotated and not tracked:
         return {
             "tracked": False,
             "open_count": None,
             "total_count": None,
             "by_status": None,
+            "possibly_stale_count": None,
             "unknown_fields": [field_name],
             "instructions_for_missing_data": (
                 f"{empty_label} is not tracked in this workspace. Do not invent items "
                 "or treat an empty list as measured. Say this data is not available."
             ),
         }
-    by_status = _status_histogram(rows, status_key)
+    by_status = _status_histogram(annotated, status_key)
     if open_statuses is not None:
-        open_count = sum(by_status.get(s, 0) for s in open_statuses)
+        open_rows = [
+            r for r in annotated
+            if str(r.get(status_key) or "").strip().lower() in open_statuses
+        ]
+        open_count = len(open_rows)
+        stale_count = helm_freshness.count_possibly_stale(open_rows)
     else:
-        open_count = len(rows)
+        open_count = len(annotated)
+        stale_count = helm_freshness.count_possibly_stale(annotated)
     return {
         "tracked": True,
         "open_count": open_count,
-        "total_count": len(rows),
+        "total_count": len(annotated),
         "by_status": by_status,
+        "possibly_stale_count": stale_count,
         "unknown_fields": [],
-        "instructions_for_missing_data": "",
+        "instructions_for_missing_data": (
+            "If possibly_stale_count is greater than zero, say some open items may be "
+            "outdated rather than treating every count as freshly updated."
+            if stale_count else ""
+        ),
     }
 
 
@@ -1897,6 +1923,7 @@ def _ask_slice_context(
     open_statuses: Optional[frozenset] = None,
     status_key: str = "status",
     empty_label: str = "This department queue",
+    dept_type: Optional[str] = None,
     legacy_builder=None,
 ):
     """Enabled → membership → data. Disabled → not tracked. No access → restricted."""
@@ -1910,6 +1937,7 @@ def _ask_slice_context(
             open_statuses=open_statuses,
             status_key=status_key,
             empty_label=empty_label,
+            dept_type=dept_type,
         )
     if not visible:
         return _ask_dept_restricted(restricted_note)
@@ -1922,6 +1950,7 @@ def _ask_slice_context(
         open_statuses=open_statuses,
         status_key=status_key,
         empty_label=empty_label,
+        dept_type=dept_type,
     )
 
 
@@ -2067,6 +2096,7 @@ def ask_context_for_synthesis(
         restricted_note="Production data is not shared with this user's role.",
         open_statuses=frozenset({"awaiting_materials", "in_production", "quality_check"}),
         empty_label="Production",
+        dept_type=dept_catalog.TYPE_PRODUCTION,
     )
     procurement_ctx = _ask_slice_context(
         procurement_rows,
@@ -2076,6 +2106,7 @@ def ask_context_for_synthesis(
         restricted_note="Procurement data is not shared with this user's role.",
         open_statuses=frozenset({"requested", "approved", "ordered"}),
         empty_label="Procurement",
+        dept_type=dept_catalog.TYPE_PROCUREMENT,
     )
     legal_ctx = _ask_slice_context(
         legal_rows,
@@ -2085,6 +2116,7 @@ def ask_context_for_synthesis(
         restricted_note="Legal data is not shared with this user's role.",
         open_statuses=frozenset({"draft", "internal_review", "counterparty_review"}),
         empty_label="Legal",
+        dept_type=dept_catalog.TYPE_LEGAL,
     )
     maintenance_ctx = _ask_slice_context(
         maintenance_rows,
@@ -2094,6 +2126,7 @@ def ask_context_for_synthesis(
         restricted_note="Engineering & Maintenance data is not shared with this user's role.",
         open_statuses=frozenset({"reported", "diagnosed", "in_repair"}),
         empty_label="Engineering & Maintenance",
+        dept_type=dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
     )
 
     in_context = ["financials", "sales_pipeline", "hr_onboarding",
@@ -6576,6 +6609,62 @@ async def _generate_weekly_pack_content(workspace_id: str) -> dict:
         ],
         dept_type=dept_catalog.TYPE_ACCOUNTING_FINANCE,
     )
+    # Department queue samples that feed this summary — flag possibly_stale items.
+    dept_slices = []
+    for dept_type, coll_name, label, open_statuses in (
+        (dept_catalog.TYPE_PRODUCTION, "production_work_orders", "Production",
+         frozenset({"awaiting_materials", "in_production", "quality_check"})),
+        (dept_catalog.TYPE_PROCUREMENT, "procurement_requests", "Procurement",
+         frozenset({"requested", "approved", "ordered"})),
+        (dept_catalog.TYPE_LEGAL, "legal_matters", "Legal",
+         frozenset({"draft", "internal_review", "counterparty_review"})),
+        (dept_catalog.TYPE_ENGINEERING_MAINTENANCE, "maintenance_tickets",
+         "Engineering & Maintenance",
+         frozenset({"reported", "diagnosed", "in_repair"})),
+        (dept_catalog.TYPE_SALES, "deals", "Sales", None),
+        (dept_catalog.TYPE_HR, "hr_onboarding_instances", "HR", None),
+    ):
+        coll = getattr(db, coll_name, None)
+        if coll is None:
+            continue
+        try:
+            raw = await coll.find(
+                {"workspace_id": workspace_id},
+                {"_id": 0, "id": 1, "status": 1, "overall_status": 1, "stage": 1,
+                 "title": 1, "reference": 1, "item": 1, "updated_at": 1, "created_at": 1},
+            ).sort("updated_at", -1).to_list(40)
+        except Exception:
+            raw = []
+        annotated = helm_freshness.annotate_possibly_stale(raw, dept_type=dept_type)
+        if open_statuses is not None:
+            open_items = [
+                r for r in annotated
+                if str(r.get("status") or "").strip().lower() in open_statuses
+            ]
+        elif dept_type == dept_catalog.TYPE_HR:
+            open_items = [
+                r for r in annotated
+                if (r.get("overall_status") or "in_progress") != "active"
+            ]
+        else:
+            open_items = annotated
+        stale_items = [r for r in open_items if r.get("possibly_stale")]
+        dept_slices.append({
+            "department": label,
+            "open_count": len(open_items),
+            "possibly_stale_count": len(stale_items),
+            "possibly_stale_items": [
+                {
+                    "id": r.get("id"),
+                    "label": r.get("reference") or r.get("title") or r.get("item") or r.get("id"),
+                    "status": r.get("status") or r.get("overall_status") or r.get("stage"),
+                    "updated_at": r.get("updated_at") or r.get("created_at"),
+                    "possibly_stale": True,
+                }
+                for r in stale_items[:8]
+            ],
+        })
+    context["department_queues"] = dept_slices
     freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
     context["data_as_of"] = freshness.get("data_as_of")
     context["data_freshness_sources"] = freshness.get("sources") or {}
@@ -8049,6 +8138,7 @@ async def list_production_work_orders(
             raise HTTPException(status_code=400, detail="Invalid status filter")
         filt["status"] = st
     rows = await db.production_work_orders.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = helm_freshness.annotate_possibly_stale(rows, dept_type=dept_catalog.TYPE_PRODUCTION)
     assignee_ids = []
     link_ids = []
     maint_ids = []
@@ -8595,6 +8685,7 @@ async def list_procurement_requests(
             raise HTTPException(status_code=400, detail="Invalid status filter")
         filt["status"] = st
     rows = await db.procurement_requests.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = helm_freshness.annotate_possibly_stale(rows, dept_type=dept_catalog.TYPE_PROCUREMENT)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
@@ -9082,6 +9173,7 @@ async def list_legal_matters(
         if cp:
             filt["counterparty"] = cp
     rows = await db.legal_matters.find(filt, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = helm_freshness.annotate_possibly_stale(rows, dept_type=dept_catalog.TYPE_LEGAL)
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
@@ -9559,6 +9651,9 @@ async def list_maintenance_tickets(
             raise HTTPException(status_code=400, detail="Invalid priority filter")
         filt["priority"] = pr
     rows = await db.maintenance_tickets.find(filt, {"_id": 0}).to_list(1000)
+    rows = helm_freshness.annotate_possibly_stale(
+        rows, dept_type=dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+    )
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
@@ -10916,6 +11011,9 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         context["maintenance"] = _ask_dept_restricted(
             "Engineering & Maintenance data is not shared with this user's role.",
         )
+    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
+    context["data_as_of"] = freshness.get("data_as_of")
+    context["data_freshness_sources"] = freshness.get("sources") or {}
     system = (
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
         "Answer like a sharp, trusted operator: direct, quantified, decisive. "
@@ -10937,6 +11035,10 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         "access \"restricted\", the user is not a member of that department. Say you do "
         "not have access to that department's data. Do not invent deals, hires, work "
         "orders, tickets, or legal matters. "
+        "When possibly_stale_count is greater than zero, say those open records may be "
+        "outdated rather than treating every count as freshly updated. "
+        "data_as_of is the latest underlying sync or department update, not the time of "
+        "this answer. Prefer it when describing how current the picture is. "
         f"Current company snapshot:\n{json.dumps(context, indent=2)}"
     )
 

@@ -151,12 +151,14 @@ def test_ask_context_includes_departments_when_visible():
     assert ctx["production"].get("access") != "restricted"
     assert ctx["production"]["open_count"] == 1
     assert ctx["production"]["by_status"]["in_production"] == 1
+    assert "possibly_stale_count" in ctx["production"]
     assert ctx["procurement"]["open_count"] == 1
     assert ctx["legal"]["open_count"] == 1
     assert ctx["maintenance"]["open_count"] == 1
     # Aggregate only — raw titles/items are not copied into the snapshot.
     assert "Secret WO" not in str(ctx["production"])
     assert "Secret Parts" not in str(ctx["procurement"])
+
 
 
 def test_ask_context_disabled_department_is_not_tracked_not_restricted():

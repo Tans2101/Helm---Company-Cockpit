@@ -8,6 +8,7 @@ import {
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
+import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
 const STATUS_META = {
   draft: { label: "Draft", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
@@ -369,7 +370,12 @@ export default function Legal() {
                     selectedId === m.id && "bg-helm-gold/12",
                   )}
                 >
-                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">{m.title}</td>
+                  <td className="px-3 py-2.5 text-helm-fg truncate max-w-[16rem]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">{m.title}</span>
+                      <PossiblyStaleBadge show={m.possibly_stale} />
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5 text-helm-muted capitalize">{m.matter_type || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{m.counterparty || "—"}</td>
                   <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">{personLabel(m.assignee)}</td>
