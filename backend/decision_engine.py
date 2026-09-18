@@ -7,11 +7,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone, timedelta
 from typing import Optional
+import logging
+import math
 
 from money_fmt import fmt_money_plain
 from departments_catalog import TYPE_ENGINEERING_MAINTENANCE, TYPE_HR, TYPE_LEGAL, TYPE_PRODUCTION, TYPE_PROCUREMENT
 from department_report_drafts import SPEC_BY_TYPE
 
+
+logger = logging.getLogger("helm.decision_engine")
 
 SEVERITIES = ("high", "medium", "low")
 STALLED_DEAL_DAYS = 14
@@ -23,6 +27,12 @@ RUNWAY_MONTHS_THRESHOLD = 6
 BURN_INCREASE_PCT = 0.20
 EXPENSE_SPIKE_PCT = 0.25
 SIGNAL_CAP = 12
+
+# Normalize heterogeneous impact proxies onto one comparable scale.
+# $1k ≈ 1 day idle/overdue ≈ 24h downtime for tie-breaks within a severity tier.
+IMPACT_DOLLAR_UNIT = 1000.0
+IMPACT_DAY_UNIT = 1.0
+IMPACT_HOUR_UNIT = 24.0
 
 # Keep in sync with server._MAINT_PRIORITY_RANK — 0 is the top (most urgent) rank.
 MAINT_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -1154,6 +1164,114 @@ def collect_department_signals(
     return signals
 
 
+def compute_impact_score(signal: dict) -> float:
+    """Comparable impact proxy for tie-breaks within a severity tier.
+
+    Dollars (deal value, expense spike), days overdue/idle, and downtime hours
+    are normalized onto one scale so alphabetical type names never decide
+    which signals survive SIGNAL_CAP.
+    """
+    if not signal:
+        return 0.0
+
+    dollars = 0.0
+    for key in ("value", "curr_amount"):
+        raw = signal.get(key)
+        if raw is None:
+            continue
+        try:
+            dollars = max(dollars, abs(float(raw)))
+        except (TypeError, ValueError):
+            pass
+    prev = signal.get("prev_amount")
+    curr = signal.get("curr_amount")
+    if prev is not None and curr is not None:
+        try:
+            dollars = max(dollars, abs(float(curr) - float(prev)))
+        except (TypeError, ValueError):
+            pass
+
+    days = 0.0
+    for key in ("idle_days", "days_late", "pending_days", "streak_days", "span_days"):
+        raw = signal.get(key)
+        if raw is None:
+            continue
+        try:
+            days = max(days, float(raw))
+        except (TypeError, ValueError):
+            pass
+    # Upcoming reminders: sooner = more impact (within the reminder window).
+    if signal.get("days_until") is not None:
+        try:
+            days = max(days, max(0.0, 14.0 - float(signal["days_until"])))
+        except (TypeError, ValueError):
+            pass
+
+    hours = 0.0
+    if signal.get("downtime_hours") is not None:
+        try:
+            hours = max(0.0, float(signal["downtime_hours"]))
+        except (TypeError, ValueError):
+            pass
+    elif signal.get("downtime_seconds") is not None:
+        try:
+            hours = max(0.0, float(signal["downtime_seconds"]) / 3600.0)
+        except (TypeError, ValueError):
+            pass
+
+    # Runway pressure: months under the threshold ≈ days of exposure.
+    if signal.get("runway_months") is not None:
+        try:
+            runway = float(signal["runway_months"])
+            days = max(days, max(0.0, (RUNWAY_MONTHS_THRESHOLD - runway) * 30.0))
+        except (TypeError, ValueError):
+            pass
+    if signal.get("burn_delta_pct") is not None:
+        try:
+            # 20% MoM ≈ 4 impact-days; keeps burn spikes competitive with stalls.
+            days = max(days, float(signal["burn_delta_pct"]) / 5.0)
+        except (TypeError, ValueError):
+            pass
+
+    score = (
+        dollars / IMPACT_DOLLAR_UNIT
+        + days / IMPACT_DAY_UNIT
+        + hours / IMPACT_HOUR_UNIT
+    )
+    if not math.isfinite(score):
+        return 0.0
+    return round(score, 4)
+
+
+def rank_and_cap_signals(signals: list, *, cap: int = SIGNAL_CAP) -> list:
+    """Sort by severity, then impact (desc); truncate and log when over cap."""
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    ranked = list(signals or [])
+    for s in ranked:
+        s["impact_score"] = compute_impact_score(s)
+    ranked.sort(
+        key=lambda s: (
+            severity_rank.get(s.get("severity"), 9),
+            -float(s.get("impact_score") or 0),
+            s.get("type") or "",
+            str(s.get("related_id") or ""),
+        )
+    )
+    if len(ranked) <= cap:
+        return ranked
+    kept = ranked[:cap]
+    cut = ranked[cap:]
+    cut_types = sorted({(c.get("type") or "?") for c in cut})
+    logger.info(
+        "decision signals truncated: total=%s kept=%s cut=%s cut_types=%s",
+        len(ranked),
+        cap,
+        len(cut),
+        ",".join(cut_types),
+    )
+    return kept
+
+
 def collect_signals(
     *,
     fin: dict,
@@ -1178,7 +1296,6 @@ def collect_signals(
     signals.extend(detect_overdue_tasks(tasks))
     signals.extend(detect_recurring_blockers(updates))
     signals.extend(collect_department_signals(department_items, now=now))
-    # Cap volume so one regenerate can't spawn dozens of LLM calls
-    severity_rank = {"high": 0, "medium": 1, "low": 2}
-    signals.sort(key=lambda s: (severity_rank.get(s.get("severity"), 9), s.get("type") or ""))
-    return signals[:SIGNAL_CAP]
+    # Cap volume so one regenerate can't spawn dozens of LLM calls.
+    # Severity first; within a tier, impact — not alphabetical type names.
+    return rank_and_cap_signals(signals, cap=SIGNAL_CAP)

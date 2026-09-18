@@ -222,6 +222,150 @@ def test_collect_signals_caps_and_ranks():
     assert signals[0]["severity"] in ("high", "medium", "low")
 
 
+def test_compute_impact_score_normalizes_dollars_days_hours():
+    dollar = eng.compute_impact_score({"value": 50_000})
+    days = eng.compute_impact_score({"idle_days": 50})
+    hours = eng.compute_impact_score({"downtime_hours": 24 * 50})
+    # $50k ≈ 50 days ≈ 50*24h under the shared units.
+    assert dollar == pytest.approx(50.0)
+    assert days == pytest.approx(50.0)
+    assert hours == pytest.approx(50.0)
+    assert eng.compute_impact_score({"value": 10_000, "idle_days": 5}) == pytest.approx(15.0)
+    assert eng.compute_impact_score({}) == 0.0
+    assert eng.compute_impact_score({"value": "bad"}) == 0.0
+
+
+def test_rank_and_cap_prefers_impact_over_alphabetical_type(caplog):
+    """Same-severity overflow must keep high-impact late-alphabet types.
+
+    Alphabetically overdue_task < stalled_deal < urgent_maintenance, so the
+    old type-string tie-break silently dropped the CEO-escalation signals.
+    """
+    import logging
+
+    # 14 low-impact overdue tasks that would crowd out later type names.
+    low = [
+        eng._signal(
+            "overdue_task",
+            "high",
+            summary=f"Overdue {i}",
+            detail="minor",
+            related_id=f"t{i}",
+            days_late=7,
+        )
+        for i in range(14)
+    ]
+    stalled = eng._signal(
+        "stalled_deal",
+        "high",
+        summary="Big deal stalled",
+        detail="high value",
+        related_id="deal_big",
+        value=250_000,
+        idle_days=40,
+    )
+    urgent = eng._signal(
+        "urgent_maintenance",
+        "high",
+        summary="Press down",
+        detail="downtime",
+        related_id="mt_press",
+        idle_days=21,
+        downtime_hours=96,
+    )
+    # Medium severity must stay below every high regardless of huge impact.
+    medium_noise = eng._signal(
+        "stalled_deal",
+        "medium",
+        summary="Tiny medium deal",
+        detail="should not outrank highs",
+        related_id="deal_med",
+        value=9_999_999,
+        idle_days=999,
+    )
+
+    with caplog.at_level(logging.INFO, logger="helm.decision_engine"):
+        kept = eng.rank_and_cap_signals(low + [stalled, urgent, medium_noise], cap=12)
+
+    assert len(kept) == 12
+    types = {s["type"] for s in kept}
+    ids = {s["related_id"] for s in kept}
+    assert "stalled_deal" in types
+    assert "urgent_maintenance" in types
+    assert "deal_big" in ids
+    assert "mt_press" in ids
+    assert "deal_med" not in ids  # severity still primary
+    assert all(s["severity"] == "high" for s in kept)
+    # Highest-impact highs should lead the list.
+    assert kept[0]["related_id"] == "deal_big"
+    assert kept[1]["related_id"] == "mt_press"
+    assert "decision signals truncated" in caplog.text
+    assert "cut_types=" in caplog.text
+    # Overdue fillers that didn't make the cut should appear in the log.
+    assert "overdue_task" in caplog.text
+
+
+def test_collect_signals_impact_cap_keeps_late_alphabet_high_impact():
+    """End-to-end: >12 same-severity signals; impact beats alphabetical type."""
+    now = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    # 14 high-severity overdue tasks (due ≥7 days ago) — alphabetically first.
+    tasks = [
+        {
+            "id": f"t{i}",
+            "title": f"Task {i}",
+            "column": "backlog",
+            "due": (now.date() - timedelta(days=7)).isoformat(),
+            "assignee": "A",
+        }
+        for i in range(14)
+    ]
+    # High-value stalled deal (idle ≥28 days → high severity). Sorts after overdue_task.
+    deals = [
+        {
+            "id": "deal_big",
+            "name": "Enterprise renewal",
+            "stage": "negotiation",
+            "value": 400_000,
+            "updated_at": (now - timedelta(days=45)).isoformat(),
+            "owner_name": "Sam",
+        }
+    ]
+    # Urgent maintenance — last alphabetically among these types, high idle.
+    maint_spec = eng.SPEC_BY_TYPE["engineering_maintenance"]
+    maint_items = [
+        {
+            "id": "mt_press",
+            maint_spec["status_field"]: "reported",
+            maint_spec["label_field"]: "Hydraulic press",
+            "priority": "high",
+            "updated_at": (now - timedelta(days=12)).isoformat(),
+        }
+    ]
+
+    signals = eng.collect_signals(
+        fin={"has_data": False},
+        expense_by_month={},
+        deals=deals,
+        tasks=tasks,
+        updates=[],
+        department_items=[{"spec": maint_spec, "items": maint_items}],
+        now=now,
+    )
+
+    assert len(signals) == eng.SIGNAL_CAP
+    by_id = {s["related_id"]: s for s in signals}
+    assert "deal_big" in by_id
+    assert "mt_press" in by_id
+    assert by_id["deal_big"]["type"] == "stalled_deal"
+    assert by_id["mt_press"]["type"] == "urgent_maintenance"
+    assert by_id["deal_big"]["impact_score"] > by_id["mt_press"]["impact_score"]
+    # Severity still primary: every kept signal here is high.
+    assert all(s["severity"] == "high" for s in signals)
+    # Old alphabetical cap would have kept only overdue_task; ensure we didn't.
+    assert sum(1 for s in signals if s["type"] == "overdue_task") < 14
+    assert signals[0]["related_id"] == "deal_big"
+
+
 def _stalled_item(spec, *, item_id, label, status, days_ago, now, extra=None):
     updated = (now - timedelta(days=days_ago)).isoformat()
     row = {
