@@ -1894,8 +1894,15 @@ def ask_context_for_synthesis(
     onboarding_instances=None,
     hr_tracked: bool = False,
     financials_visible: bool = True,
+    sales_visible: bool = True,
+    hr_visible: bool = True,
 ) -> dict:
-    """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished."""
+    """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished.
+
+    Department-backed slices (pipeline, HR onboarding) are omitted or marked
+    restricted unless the requester can access that department — same membership
+    rule as the department pages (CEO sees all enabled departments).
+    """
     profile = company_profile_for_synthesis(c)
     roster = ((c.get("people") or {}).get("people") or [])
     if financials_visible:
@@ -1905,20 +1912,38 @@ def ask_context_for_synthesis(
             "access": "restricted",
             "note": "Financial figures are not shared with this user's role.",
         }
+    if sales_visible:
+        pipeline_ctx = pipeline_for_synthesis(deals, sales_tracked=sales_tracked)
+    else:
+        pipeline_ctx = {
+            "access": "restricted",
+            "note": "Sales pipeline is not shared with this user's role.",
+        }
+    if hr_visible:
+        onboarding_ctx = onboarding_for_synthesis(onboarding_instances, hr_tracked=hr_tracked)
+    else:
+        onboarding_ctx = {
+            "access": "restricted",
+            "note": "HR onboarding data is not shared with this user's role.",
+        }
     return {
         "company": profile.get("name"),
         "company_profile": profile,
         # People-roster length is computed — 0 means nobody on the list, not "headcount not entered".
         "people_count": len(roster),
         "financials": financials_ctx,
-        "pipeline": pipeline_for_synthesis(deals, sales_tracked=sales_tracked),
-        "onboarding": onboarding_for_synthesis(onboarding_instances, hr_tracked=hr_tracked),
+        "pipeline": pipeline_ctx,
+        "onboarding": onboarding_ctx,
         "risks": risks_for_synthesis(c),
         # Pending decision titles are a computed list of existing cards — empty means
         # none are pending, not that the Decision Center was never used.
         "open_decisions": [
             d.get("title") for d in (c.get("decisions") or []) if d.get("status") == "pending"
         ],
+        # Other department queues (Production, Procurement, Legal, Maintenance) are
+        # intentionally not loaded into Ask Helm context. Membership gating for those
+        # lives on their own pages; omitting them here prevents cross-department leaks.
+        "department_data_in_context": ["sales_pipeline", "hr_onboarding", "financials"],
     }
 
 
@@ -10508,30 +10533,66 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     )
 
     fin = await compute_financials(c["workspace_id"]) if has_fin_access else {}
-    deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
-    onboarding_rows = await db.hr_onboarding_instances.find(
-        {"workspace_id": c["workspace_id"]}, {"_id": 0},
-    ).to_list(500)
     sales_dept = await dept_migrate.get_enabled_department(
         db, c["workspace_id"], dept_catalog.TYPE_SALES,
     )
     hr_dept = await dept_migrate.get_enabled_department(
         db, c["workspace_id"], dept_catalog.TYPE_HR,
     )
+    sales_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_SALES,
+    )
+    hr_ids = await dept_access.accessible_department_ids(
+        db, principal, dept_catalog.TYPE_HR,
+    )
+    # CEO → ids is None (bypass). Member → list (possibly empty).
+    sales_visible = bool(sales_dept) and (sales_ids is None or len(sales_ids) > 0)
+    hr_visible = bool(hr_dept) and (hr_ids is None or len(hr_ids) > 0)
+
+    if sales_visible:
+        deal_filt = dept_access.apply_department_filter(
+            {"workspace_id": c["workspace_id"]}, sales_ids,
+        )
+        deals = await db.deals.find(deal_filt, {"_id": 0}).to_list(500)
+    else:
+        deals = []
+
+    if hr_visible:
+        onboarding_filt = dept_access.apply_department_filter(
+            {"workspace_id": c["workspace_id"]}, hr_ids,
+        )
+        onboarding_rows = await db.hr_onboarding_instances.find(
+            onboarding_filt, {"_id": 0},
+        ).to_list(500)
+    else:
+        onboarding_rows = []
+
     context = ask_context_for_synthesis(
         c,
         fin,
         deals=deals,
-        sales_tracked=sales_dept is not None,
+        sales_tracked=sales_visible,
         onboarding_instances=onboarding_rows,
-        hr_tracked=hr_dept is not None,
+        hr_tracked=hr_visible,
         financials_visible=has_fin_access,
+        sales_visible=sales_visible,
+        hr_visible=hr_visible,
     )
     # Defense in depth: never put real figures in the prompt without access.
     if not has_fin_access:
         context["financials"] = {
             "access": "restricted",
             "note": "Financial figures are not shared with this user's role.",
+        }
+    if not sales_visible:
+        context["pipeline"] = {
+            "access": "restricted",
+            "note": "Sales pipeline is not shared with this user's role.",
+        }
+    if not hr_visible:
+        context["onboarding"] = {
+            "access": "restricted",
+            "note": "HR onboarding data is not shared with this user's role.",
         }
     system = (
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
@@ -10547,6 +10608,11 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         "data in Helm. Tell them clearly they cannot see revenue, burn, runway, or related "
         "figures and should ask someone with Financials access. Do not invent numbers, "
         "describe them as zero, or estimate them from pipeline deal values or other clues. "
+        "If pipeline.access or onboarding.access is \"restricted\", the user is not a member "
+        "of that department. Say you do not have access to that department's data. "
+        "Do not invent deals, hires, work orders, tickets, or legal matters. "
+        "Production, Procurement, Legal, and Maintenance queues are not in this snapshot; "
+        "do not invent them. "
         f"Current company snapshot:\n{json.dumps(context, indent=2)}"
     )
 
