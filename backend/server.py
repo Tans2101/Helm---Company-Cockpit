@@ -599,6 +599,52 @@ async def can_section_write(
     return dept in allowed
 
 
+async def can_access_financials(
+    principal: dict,
+    *,
+    membership: Optional[dict] = None,
+    workspace: Optional[dict] = None,
+) -> bool:
+    """Single gate for MRR/runway/burn and related figures across Helm surfaces.
+
+    Same rule as Financials page write access: pack `finance:write` or a CEO
+    section grant / legacy department grant for `financials`.
+    """
+    return await can_section_write(
+        principal,
+        "financials",
+        "finance:write",
+        membership=membership,
+        workspace=workspace,
+    )
+
+
+# Phrases that request financial figures Ask Helm must not answer without access.
+_FINANCE_ASK_RE = re.compile(
+    r"\b("
+    r"mrr|arr|runway|burn(?:\s*rate)?|cash(?:\s*balance)?|revenue|revenues|"
+    r"expense(?:s)?|profit(?:ability)?|p\s*&\s*l|pnl|income\s*statement|"
+    r"net\s*burn|gross\s*margin|financial(?:s)?|budget|payroll\s*cost|"
+    r"how\s+much\s+(?:money|cash|revenue)|out\s+of\s+(?:money|runway)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+FINANCIALS_ACCESS_DENIED_MESSAGE = (
+    "You don't have access to financial data in this workspace. "
+    "Ask a workspace owner to grant you Financials access if you need MRR, "
+    "runway, burn, or related figures."
+)
+
+
+def message_requests_financials(message: str) -> bool:
+    """True when an Ask Helm message is asking for gated financial figures."""
+    text = (message or "").strip()
+    if not text:
+        return False
+    return bool(_FINANCE_ASK_RE.search(text))
+
+
 def require_section(section_id: str, pack_perm: str):
     """Section write access — Free may edit manually; AI upload uses a separate feature gate."""
     async def dep(principal=Depends(get_principal)):
@@ -2770,7 +2816,7 @@ async def briefing(principal=Depends(get_principal)):
     if (b.get("headline") or "").startswith("Your cockpit is ready"):
         b["headline"] = "Start by logging your financials and adding your team."
     is_pro = workspace_is_pro(c)
-    has_fin_access = await can_section_write(principal, "financials", "finance:write")
+    has_fin_access = await can_access_financials(principal)
     metrics = []
     if has_fin_access:
         fin = await compute_financials(c["workspace_id"])
@@ -4396,7 +4442,7 @@ async def financials(principal=Depends(require_section("financials", "finance:wr
     )
     ws = await get_ws(principal["workspace_id"])
     return {**fin, "entries": entries,
-            "can_write": await can_section_write(principal, "financials", "finance:write"),
+            "can_write": await can_access_financials(principal),
             "can_manage": "integrations:manage" in perms_for(principal["pack"]),
             "google": gcal.google_capabilities(_integration_tokens(ws, "google_tokens")),
             }
@@ -5703,14 +5749,16 @@ async def reports(principal=Depends(get_principal)):
     current = _report_metric_snapshot(fin, items, ups, headcount)
     prior = await _apply_report_snapshot(c["workspace_id"], current)
     can_write = await can_section_write(principal, "reports", "reports:write")
-    can_export_financials = await can_section_write(principal, "financials", "finance:write")
+    can_export_financials = await can_access_financials(principal)
     auto = _computed_report_cards(
         c, fin, items, ups, headcount, prior=prior, include_financials=can_export_financials,
     )
     drafts = await helm_dept_drafts.list_open_drafts(db, c["workspace_id"])
-    financial_months = list(fin.get("months") or [])
-    financial_latest_month = fin.get("latest_month")
+    financial_months: list = []
+    financial_latest_month = None
     if can_export_financials:
+        financial_months = list(fin.get("months") or [])
+        financial_latest_month = fin.get("latest_month")
         dept_ids = await dept_access.accessible_department_ids(
             db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
         )
@@ -10254,7 +10302,32 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     )
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
-    has_fin_access = await can_section_write(principal, "financials", "finance:write")
+    has_fin_access = await can_access_financials(principal)
+
+    # Hard deny finance questions without the grant — do not call the model with
+    # (or without) numbers; the model cannot enforce a permission boundary.
+    if not has_fin_access and message_requests_financials(payload.message):
+        denied = FINANCIALS_ACCESS_DENIED_MESSAGE
+
+        async def deny_gen():
+            try:
+                yield denied
+            finally:
+                await db.chat_messages.insert_one({
+                    "workspace_id": c["workspace_id"],
+                    "user_id": principal["user_id"],
+                    "role": "assistant",
+                    "content": denied,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "day": datetime.now(timezone.utc).date().isoformat(),
+                })
+
+        return StreamingResponse(
+            deny_gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     fin = await compute_financials(c["workspace_id"]) if has_fin_access else {}
     deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
     onboarding_rows = await db.hr_onboarding_instances.find(
@@ -10275,6 +10348,12 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         hr_tracked=hr_dept is not None,
         financials_visible=has_fin_access,
     )
+    # Defense in depth: never put real figures in the prompt without access.
+    if not has_fin_access:
+        context["financials"] = {
+            "access": "restricted",
+            "note": "Financial figures are not shared with this user's role.",
+        }
     system = (
         f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
         "Answer like a sharp, trusted operator: direct, quantified, decisive. "

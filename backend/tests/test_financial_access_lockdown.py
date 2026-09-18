@@ -1,16 +1,28 @@
 """Financial access: report cards, Ask Helm context, restricted markers."""
+from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_financial_access_lockdown")
+os.environ.setdefault("ANTHROPIC_API_KEY", "test-anthropic-key")
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from server import ask_context_for_synthesis, _computed_report_cards  # noqa: E402
+import server  # noqa: E402
+from server import (  # noqa: E402
+    FINANCIALS_ACCESS_DENIED_MESSAGE,
+    ask_context_for_synthesis,
+    message_requests_financials,
+    _computed_report_cards,
+)
 
 
 def _sample_fin():
@@ -26,6 +38,8 @@ def _sample_fin():
         "mrr_known": True,
         "burn_known": True,
         "currency": "usd",
+        "months": ["2026-01", "2026-02"],
+        "latest_month": "2026-02",
     }
 
 
@@ -54,7 +68,7 @@ def test_ask_context_restricts_financials_when_not_visible():
         financials_visible=True,
     )
     assert open_ctx["financials"].get("access") != "restricted"
-    assert "mrr" in open_ctx["financials"] or "mrr_value" in open_ctx["financials"] or open_ctx["financials"].get("mrr_known") is not None
+    assert open_ctx["financials"].get("mrr") == 10000
 
     locked = ask_context_for_synthesis(
         c, fin, deals=[], sales_tracked=True, onboarding_instances=[], hr_tracked=True,
@@ -64,7 +78,90 @@ def test_ask_context_restricts_financials_when_not_visible():
         "access": "restricted",
         "note": "Financial figures are not shared with this user's role.",
     }
-    # Non-financial context unchanged
+    blob = str(locked["financials"])
+    assert "10000" not in blob
+    assert "$10K" not in blob
+    assert "50000" not in blob
     assert locked["open_decisions"] == ["Hire"]
     assert locked["people_count"] == 1
     assert locked["pipeline"]["deal_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("How many months of runway do we really have?", True),
+        ("What is our MRR?", True),
+        ("What's our burn rate?", True),
+        ("Show cash balance", True),
+        ("Which decision should I make first?", False),
+        ("Where is my team over capacity?", False),
+        ("", False),
+    ],
+)
+def test_message_requests_financials(message, expected):
+    assert message_requests_financials(message) is expected
+
+
+@pytest.mark.asyncio
+async def test_can_access_financials_matches_section_write():
+    owner = {"pack": "owner", "workspace_id": "ws1", "user_id": "u1"}
+    member = {"pack": "member", "workspace_id": "ws1", "user_id": "u2"}
+    assert await server.can_access_financials(owner) is True
+    with patch.object(server, "_membership_for", new=AsyncMock(return_value={
+        "section_grants": [], "department": "Engineering",
+    })), patch.object(server, "get_ws", new=AsyncMock(return_value={"section_access": {}})):
+        assert await server.can_access_financials(member) is False
+    with patch.object(server, "_membership_for", new=AsyncMock(return_value={
+        "section_grants": ["financials"], "department": "Engineering",
+    })), patch.object(server, "get_ws", new=AsyncMock(return_value={"section_access": {}})):
+        assert await server.can_access_financials(member) is True
+
+
+@pytest.mark.asyncio
+async def test_ask_helm_finance_deny_streams_without_model():
+    principal = {
+        "user_id": "u_member",
+        "workspace_id": "ws_lock",
+        "pack": "member",
+        "role": "member",
+        "email": "member@example.com",
+        "name": "Member",
+    }
+    ws = {
+        "workspace_id": "ws_lock",
+        "name": "Lock Co",
+        "plan": "starter",
+        "people": {"people": []},
+        "decisions": [],
+        "telemetry_manual": {"risks": []},
+    }
+    mock_db = MagicMock()
+    mock_db.chat_messages.insert_one = AsyncMock(return_value=None)
+
+    async def _never_stream(*_a, **_k):
+        raise AssertionError("model must not be called")
+        yield ""  # pragma: no cover
+
+    with patch.object(server, "get_ws", new=AsyncMock(return_value=ws)), \
+            patch.object(server, "can_access_financials", new=AsyncMock(return_value=False)), \
+            patch.object(server, "compute_financials", new=AsyncMock(side_effect=AssertionError("no compute"))), \
+            patch.object(server, "db", mock_db), \
+            patch.object(server, "_product_event", new=AsyncMock()), \
+            patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
+            patch.object(server.helm_llm, "stream_text", side_effect=_never_stream), \
+            patch.object(server.doc_rate_limit, "acquire_ask_helm_slot", new=AsyncMock(return_value=True)), \
+            patch.object(server, "BILLING_ENFORCED", False):
+        resp = await server.ask_helm(
+            server.AskInput(message="How much runway do we have?"),
+            principal,
+        )
+        assert resp.media_type == "text/event-stream"
+        chunks = []
+        async for chunk in resp.body_iterator:
+            chunks.append(chunk if isinstance(chunk, str) else chunk.decode())
+
+    text = "".join(chunks)
+    assert text == FINANCIALS_ACCESS_DENIED_MESSAGE
+    assert "10000" not in text
+    assert mock_db.chat_messages.insert_one.await_count >= 2
