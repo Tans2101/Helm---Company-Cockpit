@@ -338,9 +338,10 @@ export default function Financials() {
   };
 
   const saveSettings = async () => {
-    const cashValue = parseFloat(cash || 0);
+    const cashRaw = String(cash ?? "").trim();
+    const cashValue = cashRaw === "" ? null : parseFloat(cashRaw);
     const gmValue = gm ? parseFloat(gm) : null;
-    if (!Number.isFinite(cashValue)) {
+    if (cashValue != null && !Number.isFinite(cashValue)) {
       toast.error("Enter a valid cash amount");
       return;
     }
@@ -350,11 +351,15 @@ export default function Financials() {
     }
     setBusy(true);
     try {
-      await api.put("/financials/settings", {
-        cash: cashValue,
+      const payload = {
         gross_margin: gmValue,
         currency,
-      });
+      };
+      // Only send cash when the user entered a value — empty must not become confirmed $0.
+      if (cashValue != null) {
+        payload.cash = cashValue;
+      }
+      await api.put("/financials/settings", payload);
       toast.success("Updated");
       setShowSettings(false);
       reload();

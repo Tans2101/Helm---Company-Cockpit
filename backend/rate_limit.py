@@ -1,8 +1,15 @@
-"""Mongo-backed per-workspace rate limits for document upload/extract and insights."""
+"""Mongo-backed per-workspace rate limits for document upload/extract and insights.
+
+Atomic acquires use per-window bucket counters so two concurrent requests cannot
+both slip under the same pre-increment count. Bucket keys include a window id
+derived from wall-clock time so counters reset when the rolling window advances
+(event TTLs alone are not enough — stale buckets previously locked workspaces out forever).
+"""
 from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 DOC_UPLOAD_HOURLY_LIMIT = int(os.environ.get("DOC_UPLOAD_HOURLY_LIMIT", "30"))
 DOC_EXTRACT_HOURLY_LIMIT = int(
@@ -23,6 +30,22 @@ DOCUMENT_AI_COLLECTION = "document_ai_usage"
 DOCUMENT_AI_WINDOW_SECONDS = 86400
 DOCUMENT_AI_GLOBAL_DAILY_LIMIT = int(os.environ.get("DOCUMENT_AI_GLOBAL_DAILY_LIMIT", "80"))
 DOCUMENT_AI_WORKSPACE_DAILY_LIMIT = int(os.environ.get("DOCUMENT_AI_WORKSPACE_DAILY_LIMIT", "8"))
+
+
+def window_id(now: datetime, window_seconds: int) -> int:
+    """Stable id for the rolling window containing `now`."""
+    ts = now.timestamp() if now.tzinfo else now.replace(tzinfo=timezone.utc).timestamp()
+    return int(ts) // int(window_seconds)
+
+
+def window_bucket_key(base_key: str, now: datetime, window_seconds: int) -> str:
+    return f"{base_key}:w{window_id(now, window_seconds)}"
+
+
+def window_bucket_expires_at(now: datetime, window_seconds: int) -> datetime:
+    """Keep the bucket a couple of windows so late TTL cleanup cannot race mid-window."""
+    wid = window_id(now, window_seconds)
+    return datetime.fromtimestamp((wid + 2) * int(window_seconds), tz=timezone.utc)
 
 
 async def count_events(db, workspace_id: str, action: str) -> int:
@@ -47,28 +70,42 @@ async def is_over_limit(db, workspace_id: str, action: str, limit: int) -> bool:
     return await count_events(db, workspace_id, action) >= limit
 
 
-async def acquire_event_slot(db, workspace_id: str, action: str, limit: int) -> bool:
-    """Check+record in one step. Returns True when the caller may proceed.
-
-    Uses a per-(workspace, action) counter with find_one_and_update so two
-    concurrent requests cannot both slip under the same pre-increment count.
-    """
+async def _acquire_window_bucket(
+    coll,
+    *,
+    base_key: str,
+    limit: int,
+    window_seconds: int,
+    extra_fields: Optional[dict[str, Any]] = None,
+    now: Optional[datetime] = None,
+) -> bool:
+    """Atomically reserve one slot in the current window. False when the window is full."""
     from pymongo import ReturnDocument
     from pymongo.errors import DuplicateKeyError
 
-    if limit <= 0:
-        await record_event(db, workspace_id, action)
-        return True
-    now = datetime.now(timezone.utc)
-    key = f"{workspace_id}:{action}"
-    coll = db.document_rate_buckets
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    key = window_bucket_key(base_key, now, window_seconds)
+    expires_at = window_bucket_expires_at(now, window_seconds)
+    fields = dict(extra_fields or {})
+    set_fields = {
+        "updated_at": now,
+        "window_seconds": int(window_seconds),
+        "expires_at": expires_at,
+        **fields,
+    }
+    insert_fields = {
+        "created_at": now,
+        "window_id": window_id(now, window_seconds),
+    }
     try:
         doc = await coll.find_one_and_update(
             {"_id": key, "count": {"$lt": limit}},
             {
                 "$inc": {"count": 1},
-                "$set": {"updated_at": now, "workspace_id": workspace_id, "action": action},
-                "$setOnInsert": {"created_at": now},
+                "$set": set_fields,
+                "$setOnInsert": insert_fields,
             },
             upsert=True,
             return_document=ReturnDocument.AFTER,
@@ -76,10 +113,29 @@ async def acquire_event_slot(db, workspace_id: str, action: str, limit: int) -> 
     except DuplicateKeyError:
         doc = await coll.find_one_and_update(
             {"_id": key, "count": {"$lt": limit}},
-            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            {"$inc": {"count": 1}, "$set": set_fields},
             return_document=ReturnDocument.AFTER,
         )
-    if not doc:
+    return bool(doc)
+
+
+async def acquire_event_slot(db, workspace_id: str, action: str, limit: int) -> bool:
+    """Check+record in one step. Returns True when the caller may proceed.
+
+    Uses a per-(workspace, action, window) counter with find_one_and_update so two
+    concurrent requests cannot both slip under the same pre-increment count.
+    """
+    if limit <= 0:
+        await record_event(db, workspace_id, action)
+        return True
+    ok = await _acquire_window_bucket(
+        db.document_rate_buckets,
+        base_key=f"{workspace_id}:{action}",
+        limit=limit,
+        window_seconds=ROLLING_WINDOW_SECONDS,
+        extra_fields={"workspace_id": workspace_id, "action": action},
+    )
+    if not ok:
         return False
     await record_event(db, workspace_id, action)
     return True
@@ -104,33 +160,17 @@ async def insights_over_limit(db, workspace_id: str, limit: int = INSIGHTS_DAILY
 
 
 async def acquire_insights_slot(db, workspace_id: str, limit: int = INSIGHTS_DAILY_LIMIT) -> bool:
-    from pymongo import ReturnDocument
-    from pymongo.errors import DuplicateKeyError
-
     if limit <= 0:
         await record_insights_event(db, workspace_id)
         return True
-    now = datetime.now(timezone.utc)
-    key = f"insights:{workspace_id}"
-    coll = db.insights_rate_buckets
-    try:
-        doc = await coll.find_one_and_update(
-            {"_id": key, "count": {"$lt": limit}},
-            {
-                "$inc": {"count": 1},
-                "$set": {"updated_at": now, "workspace_id": workspace_id},
-                "$setOnInsert": {"created_at": now},
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
-    except DuplicateKeyError:
-        doc = await coll.find_one_and_update(
-            {"_id": key, "count": {"$lt": limit}},
-            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
-            return_document=ReturnDocument.AFTER,
-        )
-    if not doc:
+    ok = await _acquire_window_bucket(
+        db.insights_rate_buckets,
+        base_key=f"insights:{workspace_id}",
+        limit=limit,
+        window_seconds=INSIGHTS_WINDOW_SECONDS,
+        extra_fields={"workspace_id": workspace_id},
+    )
+    if not ok:
         return False
     await record_insights_event(db, workspace_id)
     return True
@@ -159,33 +199,17 @@ async def ask_helm_over_limit(
 async def acquire_ask_helm_slot(
     db, workspace_id: str, limit: int = ASK_HELM_FREE_MONTHLY_LIMIT,
 ) -> bool:
-    from pymongo import ReturnDocument
-    from pymongo.errors import DuplicateKeyError
-
     if limit <= 0:
         await record_ask_helm_event(db, workspace_id)
         return True
-    now = datetime.now(timezone.utc)
-    key = f"ask:{workspace_id}"
-    coll = db.ask_helm_rate_buckets
-    try:
-        doc = await coll.find_one_and_update(
-            {"_id": key, "count": {"$lt": limit}},
-            {
-                "$inc": {"count": 1},
-                "$set": {"updated_at": now, "workspace_id": workspace_id},
-                "$setOnInsert": {"created_at": now},
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
-    except DuplicateKeyError:
-        doc = await coll.find_one_and_update(
-            {"_id": key, "count": {"$lt": limit}},
-            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
-            return_document=ReturnDocument.AFTER,
-        )
-    if not doc:
+    ok = await _acquire_window_bucket(
+        db.ask_helm_rate_buckets,
+        base_key=f"ask:{workspace_id}",
+        limit=limit,
+        window_seconds=ASK_HELM_WINDOW_SECONDS,
+        extra_fields={"workspace_id": workspace_id},
+    )
+    if not ok:
         return False
     await record_ask_helm_event(db, workspace_id)
     return True
