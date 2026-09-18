@@ -11,6 +11,8 @@ import {
   PLANS,
   paidPlanRenewalDisclosure,
   FOUNDER_NOTE,
+  INTEGRATIONS_SHOWCASE,
+  INTEGRATIONS_PUBLIC_BLURB,
 } from "./marketingCopy";
 
 describe("marketing claim verification log", () => {
@@ -21,11 +23,24 @@ describe("marketing claim verification log", () => {
     expect(honest.body).toContain("Decision Center");
   });
 
-  test("pricing FAQ lists Google Gmail with Calendar and QuickBooks", () => {
+  test("pricing FAQ and Features list the same shipped integrations including SAP B1", () => {
     const integrations = PRICING_FAQ.find((q) => q.q.includes("integrations"));
     expect(integrations.a).toMatch(/Gmail/i);
     expect(integrations.a).toMatch(/Calendar/i);
     expect(integrations.a).toMatch(/QuickBooks/i);
+    expect(integrations.a).toMatch(/Xero/i);
+    expect(integrations.a).toMatch(/SAP Business One/i);
+    expect(integrations.a).toMatch(/HubSpot/i);
+    const mod = FEATURE_MODULES.find((m) => m.title === "Integrations");
+    expect(mod.body).toBe(INTEGRATIONS_PUBLIC_BLURB);
+    expect(mod.body).toMatch(/SAP Business One/i);
+    expect(INTEGRATIONS_SHOWCASE.map((i) => i.name)).toEqual([
+      "Google",
+      "QuickBooks",
+      "Xero",
+      "SAP Business One",
+      "HubSpot",
+    ]);
   });
 
   test("homepage Briefing and FAQ both acknowledge Gmail draft replies", () => {

@@ -6,6 +6,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import ProductScreens from "@/components/marketing/ProductScreens";
 import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
+import IntegrationsShowcase from "@/components/marketing/IntegrationsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
   TAGLINE, CATEGORY, AUDIENCE, HERO_SUB,
@@ -166,6 +167,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <IntegrationsShowcase />
 
       <section className="px-6 py-28 border-t border-helm-cream/[0.05]">
         <div className="mx-auto max-w-6xl">

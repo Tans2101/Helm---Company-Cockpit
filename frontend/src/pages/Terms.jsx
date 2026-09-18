@@ -83,7 +83,7 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Integrations</h2>
             <p>
-              Optional integrations (such as Google Calendar or QuickBooks) only access data after you explicitly connect
+              Optional integrations (such as Google Calendar, QuickBooks, Xero, SAP Business One, or HubSpot) only access data after you explicitly connect
               them. Your use of those services remains subject to their own terms and privacy policies.
             </p>
           </section>

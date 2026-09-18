@@ -9,6 +9,7 @@ import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import { goToHomeHash } from "@/lib/marketingHash";
 import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
+import IntegrationsShowcase from "@/components/marketing/IntegrationsShowcase";
 
 const ease = [0.16, 1, 0.3, 1];
 const fade = {
@@ -100,6 +101,8 @@ export default function Features() {
       ))}
 
       <DepartmentsShowcase compact />
+
+      <IntegrationsShowcase compact />
 
       <section className="px-6 py-24 border-t border-helm-cream/[0.05]">
         <div className="mx-auto max-w-2xl text-center">

@@ -72,9 +72,22 @@ export const PRICING_FAQ = [
   { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Helm quotas, more seats, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
   { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
-  { q: "What integrations are included?", a: "Paid plans can connect Google (Calendar, Gmail briefing threads with AI draft replies you review and send in Gmail, Sheets export, and Drive bill import), QuickBooks or Xero, HubSpot, and other options under Integrations. Free stays manual-only." },
+  { q: "What integrations are included?", a: "Paid plans can connect Google (Calendar, Gmail briefing threads with AI draft replies you review and send in Gmail, Sheets export, and Drive bill import), QuickBooks or Xero, SAP Business One, and HubSpot. Free stays manual-only." },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment. Use the trial to evaluate." },
 ];
+
+/** Real, shipped integrations only — wordmarks for marketing showcase (no aspirational names). */
+export const INTEGRATIONS_SHOWCASE = [
+  { name: "Google", note: "Calendar & Gmail" },
+  { name: "QuickBooks", note: "Accounting" },
+  { name: "Xero", note: "Accounting" },
+  { name: "SAP Business One", note: "ERP" },
+  { name: "HubSpot", note: "CRM" },
+];
+
+/** Shared public integrations blurb — keep Pricing FAQ and Features module aligned. */
+export const INTEGRATIONS_PUBLIC_BLURB =
+  "Connect Google (Calendar and Gmail), QuickBooks or Xero, SAP Business One for ERP-based companies, and HubSpot where they fit. Manual entry stays available when a system is not connected.";
 
 export const FEATURE_CATEGORIES = [
   {
@@ -226,7 +239,7 @@ export const PROBLEMS = [
 ];
 
 export const HOW_IT_WORKS = [
-  { n: "01", title: "Your team updates the work", body: "Finance, sales, operations, and other departments use their own simple queues. Connect QuickBooks and Google where useful." },
+  { n: "01", title: "Your team updates the work", body: "Finance, sales, operations, and other departments use their own simple queues. Connect QuickBooks, Xero, SAP Business One, or Google where useful." },
   { n: "02", title: "Helm prepares your briefing", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
   { n: "03", title: "You decide and hand off", body: "Approve, follow up, or assign the next step. Helm keeps the owner and outcome visible so decisions do not disappear." },
 ];
@@ -359,8 +372,8 @@ export const FEATURE_MODULES = [
   {
     title: "Integrations",
     ceoValue: "Your team keeps their tools. You get the picture.",
-    body: "Connect Google (Calendar and Gmail), QuickBooks or Xero, and HubSpot where they fit. Manual entry stays available when a system is not connected.",
-    example: "Finance logs in QuickBooks. Important Gmail threads surface in Briefing. You see it all in the cockpit.",
+    body: INTEGRATIONS_PUBLIC_BLURB,
+    example: "Finance syncs QuickBooks or SAP Business One. Important Gmail threads surface in Briefing. You see it all in the cockpit.",
   },
   {
     title: "Team & Access",
@@ -458,9 +471,9 @@ export const HOW_TO_USE_CONCEPTS = [
   {
     term: "Integrations",
     explanation:
-      "Integrations connect outside tools such as Google Calendar or QuickBooks so Helm can pull events and accounting data automatically. Nothing requires an integration: you can enter the same information manually if you prefer.",
+      "Integrations connect outside tools such as Google Calendar, QuickBooks, Xero, SAP Business One, or HubSpot so Helm can pull events, accounting, and CRM data automatically. Nothing requires an integration: you can enter the same information manually if you prefer.",
     example:
-      "You connect Google Calendar so meetings show in Helm, while expenses keep being entered by hand until QuickBooks is ready.",
+      "You connect Google Calendar so meetings show in Helm, while expenses keep being entered by hand until QuickBooks or SAP Business One is ready.",
   },
 ];
 
@@ -510,7 +523,7 @@ export const HOW_TO_USE_FAQ = [
       "Those screens are restricted on purpose. Owners always have them. Finance packs can open Financials, and some packs (such as Executive or Operations) can open Telemetry. Everyone else only sees them if an owner grants that section in Team & Access. If a screen is missing, ask your owner for access rather than assuming Helm is broken.",
   },
   {
-    q: "What if my company doesn't use QuickBooks or Google Calendar?",
+    q: "What if my company doesn't use QuickBooks, SAP Business One, or Google Calendar?",
     a:
       "That is fine. Helm works with manual entry everywhere an integration is not connected. Connect tools when they help; nothing in the product requires them to get value from Briefing, Decisions, or department queues.",
   },
@@ -548,5 +561,5 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Reports", path: "/app/reports", tip: "Written context and shareable CEO Pack." },
   { nav: "Departments", path: "/app/settings", tip: "Turn on Procurement, Production, Legal, HR, and more." },
   { nav: "Team & Access", path: "/app/members", tip: "Invite people and choose what each person can open." },
-  { nav: "Integrations", path: "/app/integrations", tip: "Now under Settings → Integrations. Optional connections such as Google Calendar or QuickBooks." },
+  { nav: "Integrations", path: "/app/integrations", tip: "Now under Settings → Integrations. Optional connections such as Google Calendar, QuickBooks, Xero, SAP Business One, or HubSpot." },
 ];
