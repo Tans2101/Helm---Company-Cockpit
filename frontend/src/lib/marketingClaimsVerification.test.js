@@ -3,9 +3,9 @@
  * Source of truth for About / pricing FAQ accuracy vs shipped product.
  * Update this file when claims or product behavior change.
  */
-describe("marketing claim verification log", () => {
-  const { VALUES, CEO_DAY, PRICING_FAQ, FEATURE_MODULES } = require("./marketingCopy");
+import { VALUES, CEO_DAY, PRICING_FAQ, FEATURE_MODULES } from "./marketingCopy";
 
+describe("marketing claim verification log", () => {
   test("About Honest synthesis claims remain present", () => {
     const honest = VALUES.find((v) => v.title === "Honest synthesis");
     expect(honest.body).toContain("Add data");
