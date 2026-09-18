@@ -43,7 +43,9 @@ const typeDot = {
 };
 
 function isEditableHelmEvent(ev) {
-  return ev?.source === "helm" && !String(ev?.id || "").startsWith("deadline_");
+  if (!ev || ev.source !== "helm" || String(ev.id || "").startsWith("deadline_")) return false;
+  if (ev.can_edit === false) return false;
+  return true;
 }
 
 function pad(n) {
@@ -443,7 +445,7 @@ export default function CalendarPage() {
   };
 
   const openEdit = (ev) => {
-    if (!isEditableHelmEvent(ev)) return;
+    if (data?.can_write !== true || !isEditableHelmEvent(ev)) return;
     setEditing(ev.id);
     setForm({
       title: ev.title,

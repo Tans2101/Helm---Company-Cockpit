@@ -6789,6 +6789,9 @@ async def calendar(
                     existing_ids.add(ev.get("id"))
         data["events"] = events
     data["can_write"] = await can_section_write(principal, "calendar", "calendar:write")
+    data["events"] = _annotate_helm_event_permissions(
+        principal, data.get("events") or [], can_write=data["can_write"],
+    )
     data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     tokens = _integration_tokens(c, "google_tokens") if data["google_connected"] else None
@@ -6806,7 +6809,58 @@ class CalendarEventInput(BaseModel):
     push_to_google: bool = False
 
 
-def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = None, google_event_id: Optional[str] = None) -> dict:
+def _helm_event_creator_id(event: dict | None) -> Optional[str]:
+    if not event:
+        return None
+    return (event.get("created_by") or event.get("created_by_user_id") or "").strip() or None
+
+
+def _has_pack_calendar_write(principal: dict) -> bool:
+    """Owner/exec (and any pack with calendar:write) — full calendar manage, all events."""
+    return "calendar:write" in perms_for(principal.get("pack") or "")
+
+
+def can_manage_helm_calendar_event(principal: dict, event: dict | None) -> bool:
+    """Whether principal may edit/delete this Helm calendar event.
+
+    Pack calendar:write (CEO/owner/exec) → any helm event.
+    Section-grant writers → only events they personally created.
+    Legacy events with no creator stay editable by anyone who already has
+    calendar write (pack or grant), so older workspaces are not locked out.
+    """
+    if not event or event.get("source") not in (None, "helm"):
+        return False
+    if _has_pack_calendar_write(principal):
+        return True
+    creator = _helm_event_creator_id(event)
+    if not creator:
+        return True
+    return creator == principal.get("user_id")
+
+
+def _annotate_helm_event_permissions(principal: dict, events: list, *, can_write: bool) -> list:
+    """Attach can_edit for UI; deadline/google rows stay non-editable."""
+    out = []
+    for ev in events or []:
+        row = dict(ev)
+        if not can_write:
+            row["can_edit"] = False
+        elif row.get("source") == "helm" and not str(row.get("id") or "").startswith("deadline_"):
+            row["can_edit"] = can_manage_helm_calendar_event(principal, row)
+        else:
+            row["can_edit"] = False
+        out.append(row)
+    return out
+
+
+def _build_helm_event(
+    payload: CalendarEventInput,
+    event_id: Optional[str] = None,
+    google_event_id: Optional[str] = None,
+    *,
+    created_by: Optional[str] = None,
+    preserve: Optional[dict] = None,
+) -> dict:
     try:
         day = datetime.strptime(payload.date.strip(), "%Y-%m-%d").date()
     except ValueError:
@@ -6815,6 +6869,13 @@ def _build_helm_event(payload: CalendarEventInput, event_id: Optional[str] = Non
     extra = {}
     if google_event_id:
         extra["google_event_id"] = google_event_id
+    creator = (created_by or _helm_event_creator_id(preserve) or "").strip()
+    if creator:
+        extra["created_by"] = creator
+    if preserve:
+        for key in ("department_id", "department_ids"):
+            if preserve.get(key) is not None and key not in extra:
+                extra[key] = preserve[key]
     if payload.all_day:
         start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
         end = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
@@ -6880,7 +6941,7 @@ async def create_calendar_event(
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
     events = list(cal.get("helm_events") or [])
-    ev = _build_helm_event(payload)
+    ev = _build_helm_event(payload, created_by=principal["user_id"])
     ev = await _maybe_push_google_event(c, ev, payload, principal)
     events.append(ev)
     cal["helm_events"] = events
@@ -6903,7 +6964,17 @@ async def edit_calendar_event(
     found = None
     for i, ev in enumerate(events):
         if ev.get("id") == event_id and ev.get("source") == "helm":
-            events[i] = _build_helm_event(payload, event_id=event_id, google_event_id=ev.get("google_event_id"))
+            if not can_manage_helm_calendar_event(principal, ev):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only edit calendar events you created",
+                )
+            events[i] = _build_helm_event(
+                payload,
+                event_id=event_id,
+                google_event_id=ev.get("google_event_id"),
+                preserve=ev,
+            )
             found = events[i]
             gid = ev.get("google_event_id")
             if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
@@ -6934,10 +7005,15 @@ async def delete_calendar_event(
     c = await get_ws(principal["workspace_id"])
     cal = dict(c.get("calendar") or {})
     existing = [e for e in (cal.get("helm_events") or []) if e.get("id") == event_id]
-    events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
-    if len(events) == len(cal.get("helm_events") or []):
+    if not existing:
         raise HTTPException(status_code=404, detail="Event not found")
-    gid = (existing[0].get("google_event_id") if existing else None)
+    if not can_manage_helm_calendar_event(principal, existing[0]):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only delete calendar events you created",
+        )
+    events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
+    gid = existing[0].get("google_event_id")
     if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
         tokens = _integration_tokens(c, "google_tokens")
         if tokens and gcal.has_scope(tokens, "calendar.events"):
