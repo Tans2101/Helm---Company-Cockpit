@@ -131,10 +131,17 @@ export default function Billing() {
   const trialing = data.subscription_status === "trialing";
   const extractsUsed = data.ai_extracts_used ?? 0;
   const extractsLimit = data.ai_extracts_limit ?? 0;
+  const askUsed = data.ask_helm_used ?? 0;
+  const askLimit = data.ask_helm_limit ?? data.ask_helm_mo ?? 0;
   const seatsUsed = data.seats_used ?? 0;
   const seatsLimit = data.seats_limit;
   const seatsOver = seatsLimit > 0 && seatsUsed > seatsLimit;
   const extractsOver = extractsLimit > 0 && extractsUsed > extractsLimit;
+  const askOver = askLimit > 0 && askUsed > askLimit;
+  const askAtLimit = askLimit > 0 && askUsed >= askLimit;
+  const periodEndLabel = data.usage_period_end
+    ? new Date(data.usage_period_end).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
 
   const activatePaddle = async (planId) => {
     if (planId === "free") return;
@@ -331,7 +338,7 @@ export default function Billing() {
             <SectionLabel>
               {data.ai_extracts_kind === "lifetime" ? "Free AI extracts (one-time)" : "Usage this billing period"}
             </SectionLabel>
-            <p className={cn("text-sm mt-1", extractsOver ? "text-helm-status-negative" : "text-helm-muted")}>
+            <p className={cn("text-sm mt-1", extractsOver || askOver ? "text-helm-status-negative" : "text-helm-muted")}>
               {data.ai_extracts_kind === "lifetime"
                 ? extractsOver
                   ? `${extractsUsed} / ${extractsLimit} free AI extracts (over limit)`
@@ -343,6 +350,13 @@ export default function Billing() {
                   : currentPlan === "free"
                     ? "5 free AI extracts to try it, then upgrade"
                     : "No document upload quota on this plan"}
+              {askLimit > 0 && (
+                <span className="block mt-1" data-testid="ask-helm-usage-copy">
+                  {askOver || askAtLimit
+                    ? `Ask Helm ${askUsed} / ${askLimit} messages${periodEndLabel ? ` — resets ${periodEndLabel}` : ""}`
+                    : `Ask Helm ${askUsed} of ${askLimit} messages used${periodEndLabel ? ` (resets ${periodEndLabel})` : ""}`}
+                </span>
+              )}
             </p>
           </div>
           <p
@@ -356,7 +370,7 @@ export default function Billing() {
               : `Seats ${seatsUsed}/${seatsLimit ?? "—"}`}
           </p>
         </div>
-        {(seatsLimit > 0 || extractsLimit > 0) && (
+        {(seatsLimit > 0 || extractsLimit > 0 || askLimit > 0) && (
           <div className="flex flex-wrap items-center gap-6 pt-1" data-testid="usage-rings">
             {seatsLimit > 0 && (
               <UsageRing
@@ -374,6 +388,15 @@ export default function Billing() {
                 used={extractsUsed}
                 limit={extractsLimit}
                 testId="usage-bar"
+              />
+            )}
+            {askLimit > 0 && (
+              <UsageRing
+                label="Ask Helm"
+                unit="messages"
+                used={askUsed}
+                limit={askLimit}
+                testId="ask-helm-usage-ring"
               />
             )}
           </div>

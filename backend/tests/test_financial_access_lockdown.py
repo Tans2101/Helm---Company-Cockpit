@@ -150,7 +150,12 @@ async def test_ask_helm_finance_deny_streams_without_model():
             patch.object(server, "_product_event", new=AsyncMock()), \
             patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
             patch.object(server.helm_llm, "stream_text", side_effect=_never_stream), \
-            patch.object(server.doc_rate_limit, "acquire_ask_helm_slot", new=AsyncMock(return_value=True)), \
+            patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
+            patch.object(server.plan_usage, "current_usage_period", return_value={
+                "key": "2026-09-01",
+                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
+                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
+            }), \
             patch.object(server, "BILLING_ENFORCED", False):
         resp = await server.ask_helm(
             server.AskInput(message="How much runway do we have?"),

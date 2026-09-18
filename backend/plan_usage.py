@@ -117,6 +117,59 @@ async def increment_period_extract(db, workspace_id: str, period_key: str) -> in
     return await get_period_extract_count(db, workspace_id, period_key)
 
 
+ASK_HELM_ACTION = "ask_helm"
+
+
+async def get_period_ask_count(db, workspace_id: str, period_key: str) -> int:
+    """Ask Helm messages used in this billing period (separate from AI extracts)."""
+    doc = await db.document_usage_periods.find_one(
+        {"workspace_id": workspace_id, "period": period_key, "action": ASK_HELM_ACTION},
+        {"_id": 0, "count": 1},
+    )
+    return int((doc or {}).get("count") or 0)
+
+
+async def acquire_period_ask_slot(db, workspace_id: str, period_key: str, limit: int) -> bool:
+    """Atomically consume one Ask Helm slot for the billing period. False when at cap."""
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+
+    if limit <= 0:
+        return True
+    now = datetime.now(timezone.utc).isoformat()
+    filt = {
+        "workspace_id": workspace_id,
+        "period": period_key,
+        "action": ASK_HELM_ACTION,
+        "count": {"$lt": limit},
+    }
+    update = {
+        "$inc": {"count": 1},
+        "$set": {"updated_at": now},
+        "$setOnInsert": {
+            "workspace_id": workspace_id,
+            "period": period_key,
+            "action": ASK_HELM_ACTION,
+            "created_at": now,
+        },
+    }
+    coll = db.document_usage_periods
+    try:
+        doc = await coll.find_one_and_update(
+            filt,
+            update,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        doc = await coll.find_one_and_update(
+            filt,
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+    return doc is not None
+
+
 # Back-compat aliases used by older call sites
 async def get_monthly_extract_count(db, workspace_id: str, month: str | None = None, ws: dict | None = None) -> int:
     period = current_usage_period(ws)

@@ -31,7 +31,9 @@ def test_document_caps_per_plan():
     assert plans.ai_extracts_lifetime_limit("free") == 5
     assert plans.ai_extracts_lifetime_limit("starter") == 0
     assert plans.ask_helm_monthly_limit("free") == 10
-    assert plans.ask_helm_monthly_limit("starter") == 0
+    assert plans.ask_helm_monthly_limit("starter") == 50
+    assert plans.ask_helm_monthly_limit("growth") == 200
+    assert plans.ask_helm_monthly_limit("business") == 500
     assert plans.ai_extracts_limit("starter") == 30
     assert plans.ai_extracts_limit("growth") == 150
     assert plans.ai_extracts_limit("business") == 500

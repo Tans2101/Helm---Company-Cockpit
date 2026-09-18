@@ -69,6 +69,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "for": "Small businesses",
         "seats": 10,
         "ai_extracts_mo": 30,
+        "ask_helm_mo": 50,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_STARTER",
         "features": {
@@ -83,8 +84,8 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 10 team members",
             "AI document upload (30/billing period)",
+            "Ask Helm (50 messages/billing period)",
             "QuickBooks sync",
-            "Ask Helm AI",
             "Calendar",
             "7-day free trial",
         ],
@@ -96,6 +97,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "for": "Growing businesses",
         "seats": 25,
         "ai_extracts_mo": 150,
+        "ask_helm_mo": 200,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_GROWTH",
         "features": {
@@ -110,6 +112,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 25 team members",
             "AI document upload (150/billing period)",
+            "Ask Helm (200 messages/billing period)",
             "Priority QuickBooks sync",
             "Advanced reports & CEO Pack",
             "7-day free trial",
@@ -122,6 +125,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "for": "Larger companies",
         "seats": 50,
         "ai_extracts_mo": 500,
+        "ask_helm_mo": 500,
         "trial_days": TRIAL_DAYS,
         "paddle_price_env": "PADDLE_PRICE_ID_BUSINESS",
         "features": {
@@ -136,6 +140,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 50 team members",
             "AI document upload (500/billing period)",
+            "Ask Helm (500 messages/billing period)",
             "Priority support",
             "Everything in Growth",
             "7-day free trial",
@@ -218,7 +223,7 @@ def ai_extracts_lifetime_limit(plan: str | None) -> int:
 
 
 def ask_helm_monthly_limit(plan: str | None) -> int:
-    """0 = no extra monthly cap beyond the feature flag (paid plans)."""
+    """Monthly Ask Helm message cap for the plan (billing-period keyed). 0 = disabled."""
     return int(plan_def(plan).get("ask_helm_mo") or 0)
 
 

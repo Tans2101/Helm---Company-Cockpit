@@ -10380,18 +10380,8 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     if not helm_llm.anthropic_configured():
         raise HTTPException(status_code=503, detail="AI is not configured (ANTHROPIC_API_KEY)")
     ask_limit = helm_plans.ask_helm_monthly_limit(c.get("plan"))
-    if BILLING_ENFORCED and ask_limit > 0:
-        if not await doc_rate_limit.acquire_ask_helm_slot(db, c["workspace_id"], ask_limit):
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    f"You've used your {ask_limit} Ask Helm messages this month. "
-                    "upgrade to continue."
-                ),
-            )
-    await _product_event(
-        c["workspace_id"], principal["user_id"], helm_analytics.EVENT_ASK_HELM, {},
-    )
+    period = plan_usage.current_usage_period(c)
+    # Enforce after we know the message will consume a real model turn (see below).
     now = datetime.now(timezone.utc)
     await db.chat_messages.insert_one({"workspace_id": c["workspace_id"], "user_id": principal["user_id"], "role": "user", "content": payload.message, "created_at": now.isoformat(), "day": now.date().isoformat()})
     has_fin_access = await can_access_financials(principal)
@@ -10419,6 +10409,23 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    if BILLING_ENFORCED and ask_limit > 0:
+        ok = await plan_usage.acquire_period_ask_slot(
+            db, c["workspace_id"], period["key"], ask_limit,
+        )
+        if not ok:
+            reset_label = period["end"].strftime("%b %d, %Y")
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"You've used your {ask_limit} Ask Helm messages this billing period. "
+                    f"Your allowance resets on {reset_label}. Upgrade for a higher limit."
+                ),
+            )
+    await _product_event(
+        c["workspace_id"], principal["user_id"], helm_analytics.EVENT_ASK_HELM, {},
+    )
 
     fin = await compute_financials(c["workspace_id"]) if has_fin_access else {}
     deals = await db.deals.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).to_list(500)
@@ -11533,6 +11540,8 @@ async def get_billing_status(workspace_id: str, pack: str):
         extracts_kind = "period"
     seats_used = await _seat_count(workspace_id)
     seats_limit = limits["seats_limit"]
+    ask_limit = limits["ask_helm_mo"]
+    ask_used = await plan_usage.get_period_ask_count(db, workspace_id, period["key"]) if ask_limit > 0 else 0
     plans = helm_plans.public_plan_list()
     client_ready = bool(PADDLE_CLIENT_TOKEN)
     for row in plans:
@@ -11557,7 +11566,9 @@ async def get_billing_status(workspace_id: str, pack: str):
         "ai_extracts_used": extracts_used,
         "ai_extracts_limit": extracts_limit,
         "ai_extracts_kind": extracts_kind,
-        "ask_helm_mo": limits["ask_helm_mo"],
+        "ask_helm_used": ask_used,
+        "ask_helm_limit": ask_limit,
+        "ask_helm_mo": ask_limit,
         "usage_period_key": period["key"],
         "usage_period_start": period["start"].isoformat(),
         "usage_period_end": period["end"].isoformat(),
