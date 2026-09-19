@@ -40,6 +40,20 @@ export const SITE_SEARCH_ACTIONS = [
     keywords: ["trust", "encryption", "privacy"],
   },
   {
+    id: "changelog",
+    label: "Changelog",
+    to: "/changelog",
+    description: "Site",
+    keywords: ["whats new", "updates", "release notes", "shipped"],
+  },
+  {
+    id: "status",
+    label: "Status",
+    to: "/status",
+    description: "Site",
+    keywords: ["uptime", "outage", "health", "operational"],
+  },
+  {
     id: "terms",
     label: "Terms of Service",
     to: "/terms",

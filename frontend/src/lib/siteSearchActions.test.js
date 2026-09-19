@@ -9,7 +9,18 @@ describe("quick nav site search pages", () => {
   test("includes About, Features, and other public marketing routes", () => {
     const tos = SITE_SEARCH_ACTIONS.map((a) => a.to).sort();
     expect(tos).toEqual(
-      ["/about", "/features", "/help", "/pricing", "/privacy", "/refunds", "/security", "/terms"].sort(),
+      [
+        "/about",
+        "/changelog",
+        "/features",
+        "/help",
+        "/pricing",
+        "/privacy",
+        "/refunds",
+        "/security",
+        "/status",
+        "/terms",
+      ].sort(),
     );
     expect(SITE_SEARCH_ACTIONS.find((a) => a.id === "about")?.label).toBe("About");
   });

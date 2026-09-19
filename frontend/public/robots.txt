@@ -6,6 +6,8 @@ Allow: /pricing
 Allow: /integrations
 Allow: /help
 Allow: /security
+Allow: /changelog
+Allow: /status
 Allow: /terms
 Allow: /privacy
 Allow: /refunds

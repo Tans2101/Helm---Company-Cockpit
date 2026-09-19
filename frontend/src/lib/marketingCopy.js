@@ -161,6 +161,17 @@ export const PUBLIC_INTEGRATIONS = [
 export const PUBLIC_INTEGRATIONS_ATTRIBUTION =
   "Google, QuickBooks, Xero, SAP, HubSpot, and Slack are trademarks of their respective owners. Helm is not affiliated with or endorsed by these companies.";
 
+/** Not shipped — keep clearly labeled as coming soon on public pages. */
+export const PUBLIC_INTEGRATIONS_COMING_SOON = [
+  {
+    id: "github",
+    name: "GitHub",
+    category: "Engineering",
+    description:
+      "Planned: track PR velocity and engineering delivery alongside business KPIs. Not available to connect today — do not treat this as a live Helm integration.",
+  },
+];
+
 export const FEATURE_CATEGORIES = [
   {
     id: "intelligence",

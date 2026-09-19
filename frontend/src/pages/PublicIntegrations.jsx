@@ -1,14 +1,14 @@
 import { useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
-import { goToHomeHash } from "@/lib/marketingHash";
 import {
   PUBLIC_INTEGRATIONS,
   PUBLIC_INTEGRATIONS_ATTRIBUTION,
+  PUBLIC_INTEGRATIONS_COMING_SOON,
   PUBLIC_INTEGRATIONS_INTRO,
   TAGLINE,
 } from "@/lib/marketingCopy";
@@ -25,8 +25,6 @@ const fade = {
 
 export default function PublicIntegrations() {
   const { authed, enter } = useMarketingAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -107,6 +105,39 @@ export default function PublicIntegrations() {
           </p>
         </section>
 
+        <section className="border-t border-helm-cream/[0.05] px-6 py-16 md:py-20">
+          <div className="mx-auto max-w-3xl">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-helm-slate">
+              Coming soon — not shipped
+            </p>
+            <h2 className="font-display mt-4 text-3xl font-medium tracking-tight text-helm-cream">
+              Planned connections
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-helm-slate">
+              These appear in Helm&apos;s internal catalog as future work. They are not available to connect and are not
+              part of today&apos;s product.
+            </p>
+            <ul className="mt-8 space-y-4">
+              {PUBLIC_INTEGRATIONS_COMING_SOON.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-xl border border-dashed border-helm-cream/15 bg-helm-fg/[0.02] p-6"
+                  data-testid={`public-integration-soon-${item.id}`}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-base font-medium text-helm-cream">{item.name}</h3>
+                    <span className="rounded-full border border-helm-cream/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-helm-slate">
+                      Coming soon
+                    </span>
+                  </div>
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-helm-slate">{item.category}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-helm-slate">{item.description}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         <section className="border-t border-helm-cream/[0.05] px-6 py-24">
           <div className="mx-auto max-w-2xl text-center">
             <div className="mx-auto mb-8 h-px w-10 bg-helm-gold" aria-hidden />
@@ -125,21 +156,17 @@ export default function PublicIntegrations() {
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
             <p className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-helm-slate">
-              <a
-                href="/#pricing"
-                className="hover:text-helm-cream transition-colors"
-                onClick={(e) => {
-                  e.preventDefault();
-                  goToHomeHash(navigate, location, "pricing");
-                }}
-              >
+              <Link to="/pricing" className="hover:text-helm-cream transition-colors">
                 View pricing
-              </a>
+              </Link>
               <Link to="/features" className="hover:text-helm-cream transition-colors">
                 Features
               </Link>
               <Link to="/security" className="hover:text-helm-cream transition-colors">
                 Security
+              </Link>
+              <Link to="/changelog" className="hover:text-helm-cream transition-colors">
+                Changelog
               </Link>
             </p>
           </div>

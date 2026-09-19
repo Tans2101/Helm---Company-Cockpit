@@ -19,6 +19,8 @@ const FOOTER_LINKS = [
   { to: "/about", label: "About" },
   { to: "/help", label: "Help" },
   { to: "/security", label: "Security" },
+  { to: "/changelog", label: "Changelog" },
+  { to: "/status", label: "Status" },
   { to: "/login", label: "Sign in" },
   { to: "/sign-up", label: "Create account" },
   { to: "/privacy", label: "Privacy" },

@@ -14,9 +14,22 @@ describe("seoPages", () => {
     expect(canonicalForPath("/app/financials")).toBe("https://www.helmcontrol.online/");
   });
 
-  test("all ten marketing routes are defined", () => {
+  test("all twelve marketing routes are defined", () => {
     expect(Object.keys(SEO_PAGES).sort()).toEqual(
-      ["/", "/about", "/features", "/help", "/integrations", "/pricing", "/privacy", "/refunds", "/security", "/terms"].sort(),
+      [
+        "/",
+        "/about",
+        "/changelog",
+        "/features",
+        "/help",
+        "/integrations",
+        "/pricing",
+        "/privacy",
+        "/refunds",
+        "/security",
+        "/status",
+        "/terms",
+      ].sort(),
     );
   });
 });

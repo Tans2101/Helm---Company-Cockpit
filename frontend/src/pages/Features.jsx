@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
@@ -7,7 +7,6 @@ import MarketingFooter from "@/components/marketing/MarketingFooter";
 import ProductScreens from "@/components/marketing/ProductScreens";
 import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
-import { goToHomeHash } from "@/lib/marketingHash";
 import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
 import IntegrationsShowcase from "@/components/marketing/IntegrationsShowcase";
 
@@ -19,8 +18,6 @@ const fade = {
 
 export default function Features() {
   const { authed, enter } = useMarketingAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const modulesByTitle = Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m]));
@@ -118,26 +115,23 @@ export default function Features() {
         <div className="mx-auto max-w-2xl text-center">
           <div className="mx-auto h-px w-10 bg-helm-gold mb-8" aria-hidden />
           <p className="font-display text-3xl md:text-4xl font-medium tracking-tight text-helm-cream leading-tight">{TAGLINE}</p>
-          <p className="mt-4 text-sm text-helm-slate">One plan. Full cockpit. Live in minutes.</p>
+          <p className="mt-4 text-sm text-helm-slate">
+            Everything below is shipping in the product today. Nothing on this page is a roadmap item.
+          </p>
+          <p className="mt-4 text-sm text-helm-slate">Free to start. Full cockpit on every plan.</p>
           <button type="button" onClick={enter}
             className="mt-10 group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-6 py-3 hover:bg-helm-gold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">
             {authed ? "Open your cockpit" : "Get started with Helm"}
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
           <p className="mt-6 text-sm text-helm-slate flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-            <a
-              href="/#pricing"
-              className="hover:text-helm-cream transition-colors"
-              onClick={(e) => {
-                e.preventDefault();
-                goToHomeHash(navigate, location, "pricing");
-              }}
-            >
+            <Link to="/pricing" className="hover:text-helm-cream transition-colors">
               View pricing
-            </a>
+            </Link>
             <Link to="/about" className="hover:text-helm-cream transition-colors">About Helm</Link>
             <Link to="/integrations" className="hover:text-helm-cream transition-colors">Integrations</Link>
             <Link to="/security" className="hover:text-helm-cream transition-colors">Security</Link>
+            <Link to="/changelog" className="hover:text-helm-cream transition-colors">Changelog</Link>
           </p>
         </div>
       </section>

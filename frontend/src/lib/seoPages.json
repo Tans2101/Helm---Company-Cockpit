@@ -40,9 +40,21 @@
     },
     "/security": {
       "title": "Security at Helm",
-      "description": "How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.",
+      "description": "Where Helm hosts data (Vercel, Render, MongoDB Atlas, R2), what is encrypted, which third parties receive data, retention, and staff access — without unearned certifications.",
       "ogTitle": "Security at Helm",
-      "ogDescription": "Workspace isolation, private document storage, and encryption — how Helm protects company data."
+      "ogDescription": "Hosting, encryption, integrations, retention, and access — the controls that are actually in the product today."
+    },
+    "/changelog": {
+      "title": "Changelog · Helm",
+      "description": "What actually shipped in Helm — integrations, performance, security, and cockpit improvements in plain language.",
+      "ogTitle": "Helm Changelog",
+      "ogDescription": "Real shipped changes only — not a roadmap."
+    },
+    "/status": {
+      "title": "Status · Helm",
+      "description": "Live health of Helm’s web app, API, and database. Public status tracking started September 19, 2026 — no fabricated historical uptime.",
+      "ogTitle": "Helm Status",
+      "ogDescription": "Operational checks for Vercel, Render API, and MongoDB Atlas — honest about what we measure."
     },
     "/privacy": {
       "title": "Privacy Policy · Helm",

@@ -26,6 +26,8 @@ import { seoForPath, canonicalForPath, DEFAULT_OG_IMAGE } from "@/lib/seoPages";
 const About = lazy(() => import("@/pages/About"));
 const Features = lazy(() => import("@/pages/Features"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
+const Changelog = lazy(() => import("@/pages/Changelog"));
+const StatusPage = lazy(() => import("@/pages/Status"));
 const PublicIntegrations = lazy(() => import("@/pages/PublicIntegrations"));
 const Help = lazy(() => import("@/pages/Help"));
 const Security = lazy(() => import("@/pages/Security"));
@@ -174,6 +176,8 @@ function AppRouter() {
         <Route path="/about" element={<About />} />
         <Route path="/features" element={<Features />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/changelog" element={<Changelog />} />
+        <Route path="/status" element={<StatusPage />} />
         <Route path="/integrations" element={<PublicIntegrations />} />
         <Route path="/help" element={<Help />} />
         <Route path="/security" element={<Security />} />

@@ -30,9 +30,14 @@ const fade = {
 
 const WHERE_DATA_LIVES = [
   {
+    icon: Cloud,
+    title: "Application hosting",
+    body: "The signed-in cockpit and marketing site run on Vercel. The API is a Python FastAPI service on Render (see render.yaml), with Render cron jobs for retention checks, accounting sync, daily alerts, and weekly digest email.",
+  },
+  {
     icon: Database,
     title: "MongoDB Atlas",
-    body: "Primary company data (workspaces, financials, pipeline, decisions, and team records) lives in a dedicated MongoDB database, not in the browser.",
+    body: "Primary company data (workspaces, financials, pipeline, decisions, and team records) lives in a dedicated MongoDB Atlas database (DB_NAME=helm), not in the browser and not in a Render-managed Mongo sidecar.",
   },
   {
     icon: Cloud,
@@ -42,7 +47,7 @@ const WHERE_DATA_LIVES = [
   {
     icon: UserRoundCheck,
     title: "Clerk",
-    body: "Sign-in identity and authentication sessions are handled by Clerk. Helm stores the account details needed to run your workspace, not payment cards.",
+    body: "Sign-in identity and authentication sessions are handled by Clerk (clerk.helmcontrol.online). Helm stores the account details needed to run your workspace, not payment cards.",
   },
   {
     icon: CreditCard,
@@ -51,11 +56,66 @@ const WHERE_DATA_LIVES = [
   },
 ];
 
+const ENCRYPTION = [
+  {
+    title: "In transit",
+    body: "Production traffic uses HTTPS end to end: browsers talk to Vercel over TLS; the API on Render serves HTTPS; outbound calls to Clerk, Paddle, Anthropic, Google, QuickBooks, Xero, HubSpot, SAP Business One, Resend, and R2 use TLS.",
+  },
+  {
+    title: "At rest — integration secrets",
+    body: "OAuth tokens and ERP credentials (Google, QuickBooks, Xero, HubSpot, SAP Business One) are sealed with Fernet symmetric encryption before they are written to MongoDB. The key is INTEGRATION_ENCRYPTION_KEY in Render environment config — never committed to the repository. Production refuses to boot without a valid key.",
+  },
+  {
+    title: "At rest — platform storage",
+    body: "MongoDB Atlas and Cloudflare R2 provide their own encrypted storage for the clusters and buckets Helm uses. Helm does not claim an additional application-level encryption layer over every document field beyond credential sealing described above.",
+  },
+];
+
+const THIRD_PARTIES = [
+  {
+    name: "Google",
+    why: "Optional, per-user Calendar and Gmail (plus Sheets export and Drive file pick when you grant those scopes). Tokens are personal to the teammate who connected.",
+  },
+  {
+    name: "QuickBooks / Xero / SAP Business One",
+    why: "Optional accounting sync into Financials when a workspace owner or the teammate who connected the system triggers it. SAP uses Service Layer credentials you supply; QB/Xero use OAuth.",
+  },
+  {
+    name: "HubSpot",
+    why: "Optional CRM deal sync into Pipeline and Telemetry when connected.",
+  },
+  {
+    name: "Slack",
+    why: "Optional Incoming Webhook URL only — high-severity alerts to a channel you choose. Not a full Slack OAuth app.",
+  },
+  {
+    name: "Anthropic",
+    why: "AI features (Ask Helm, bill/receipt extract, briefing and digest summaries, decision suggestions) send the minimum workspace context needed for that request.",
+  },
+  {
+    name: "Clerk, Paddle, Resend, Vercel Analytics",
+    why: "Auth sessions, billing as merchant of record, transactional email, and cookieless page-view analytics respectively.",
+  },
+];
+
+const RETENTION = [
+  "Account deletion wipes personal account data immediately — there is no post-deletion hold period for that wipe path.",
+  "Workspace owners can delete the company workspace; Helm removes workspace-scoped MongoDB records and associated private R2 objects. If object storage is unreachable, deletion fails visibly so it can be retried instead of silently leaving files behind.",
+  "Workspace owners can export a data package (integration tokens stripped). Non-owners get their own account data plus a membership summary.",
+  "Trial and inactivity retention emails are driven by a daily Render cron (helm-retention-checks) — reminders, not silent data deletion without the controls above.",
+];
+
+const STAFF_ACCESS = [
+  "Helm is founder-operated. The people who administer production (Render, Vercel, MongoDB Atlas, Cloudflare R2, Clerk, Paddle) can, in principle, reach infrastructure that holds customer data — the same as any small SaaS with shared ops credentials.",
+  "There is no separate large support organization with standing read access to every workspace. We do not browse customer financials or documents for marketing or product curiosity.",
+  "When access is needed to debug a customer-reported issue, we do it for that purpose and with the customer’s knowledge whenever practical. Prefer contacting contact@helmcontrol.online for security or access questions.",
+];
+
 const CONTROLS = [
   {
     icon: KeyRound,
     title: "Credentials encrypted at rest",
-    body: "OAuth tokens for Google, QuickBooks, Xero, and HubSpot are encrypted before they are stored. Encryption keys come from protected environment configuration, never from the codebase.",
+    body: "OAuth tokens for Google, QuickBooks, Xero, and HubSpot, plus SAP Business One credentials, are Fernet-encrypted before they are stored. Encryption keys come from protected environment configuration, never from the codebase.",
   },
   {
     icon: UserRoundCheck,
@@ -75,7 +135,7 @@ const CONTROLS = [
   {
     icon: ShieldCheck,
     title: "Safer web defaults",
-    body: "HTTPS, restrictive browser security headers, protected administrative diagnostics, and no-store API responses reduce exposure in browsers and intermediaries.",
+    body: "HTTPS, restrictive browser security headers on Vercel and the API, protected administrative diagnostics, and no-store API responses reduce exposure in browsers and intermediaries.",
   },
   {
     icon: Trash2,
@@ -93,6 +153,7 @@ const PRACTICES = [
   "Authentication is handled by Clerk using secure session controls.",
   "Sensitive credentials and provider token responses are excluded from application logs.",
   "Uploaded documents are sent to Anthropic only when an AI extract feature needs to process them.",
+  "GitHub is listed as coming soon in the product catalog — it is not a live data connection today.",
 ];
 
 const QUESTIONS = [
@@ -113,8 +174,12 @@ const QUESTIONS = [
     a: "Authorized people in your workspace. Files sit in a private bucket and are served through short-lived signed links, not public URLs.",
   },
   {
-    q: "Is Helm SOC 2 certified?",
-    a: "Not yet. We do not claim certifications we have not earned. This page describes the controls that are in the product today.",
+    q: "Is Helm SOC 2 or ISO 27001 certified?",
+    a: "Not yet. We do not claim SOC 2, ISO 27001, HIPAA, or similar certifications we have not earned. This page describes the controls that are in the product and infrastructure today.",
+  },
+  {
+    q: "Where is the API hosted?",
+    a: "Render (web service helm-company-cockpit), with MongoDB Atlas as the database. The frontend is on Vercel. Health is exposed at /api/health and summarized on the public Status page.",
   },
 ];
 
@@ -172,7 +237,21 @@ export default function Security() {
               custom={3}
               className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-helm-slate"
             >
-              Last updated September 13, 2026
+              Last updated September 19, 2026
+            </motion.p>
+            <motion.p
+              variants={fade}
+              initial="hidden"
+              animate="show"
+              custom={4}
+              className="mt-4 text-sm text-helm-slate"
+            >
+              Also see{" "}
+              <Link to="/status" className="text-helm-gold hover:underline">Status</Link>
+              {" · "}
+              <Link to="/changelog" className="text-helm-gold hover:underline">Changelog</Link>
+              {" · "}
+              <Link to="/privacy" className="text-helm-gold hover:underline">Privacy</Link>
             </motion.p>
           </div>
         </section>
@@ -219,6 +298,76 @@ export default function Security() {
                   <p className="mt-2 text-sm leading-relaxed text-helm-slate">{body}</p>
                 </motion.article>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-helm-cream/[0.05] px-6 py-20 md:py-24">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Encryption</p>
+            <h2 className="font-display mt-4 max-w-3xl text-3xl font-medium tracking-tight md:text-4xl">
+              What is encrypted, and how
+            </h2>
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              {ENCRYPTION.map((item) => (
+                <article key={item.title} className="rounded-2xl border border-helm-cream/[0.07] bg-helm-ink-card p-6">
+                  <h3 className="text-sm font-medium text-helm-cream">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-helm-slate">{item.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-6 py-20 md:py-24">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Third parties</p>
+            <h2 className="font-display mt-4 max-w-3xl text-3xl font-medium tracking-tight md:text-4xl">
+              Who receives data, and why
+            </h2>
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-helm-slate">
+              Cross-checked against the product integration catalog. Optional connections only run after someone in your
+              workspace connects them. Platform providers below are required to operate Helm itself.
+            </p>
+            <ul className="mt-10 space-y-3">
+              {THIRD_PARTIES.map((item) => (
+                <li key={item.name} className="rounded-xl border border-helm-cream/[0.06] bg-helm-fg/[0.02] p-5 md:grid md:grid-cols-[14rem_1fr] md:gap-6">
+                  <p className="text-sm font-medium text-helm-cream">{item.name}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-helm-slate md:mt-0">{item.why}</p>
+                </li>
+              ))}
+            </ul>
+            <Link to="/integrations" className="mt-6 inline-flex items-center gap-2 text-sm text-helm-gold hover:text-helm-gold-hover">
+              Public integrations page <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </section>
+
+        <section className="border-y border-helm-cream/[0.05] bg-helm-ink px-6 py-20 md:py-24">
+          <div className="mx-auto grid max-w-5xl gap-12 md:grid-cols-2">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Retention &amp; deletion</p>
+              <h2 className="font-display mt-4 text-3xl font-medium tracking-tight">How long data stays</h2>
+              <ul className="mt-6 space-y-3">
+                {RETENTION.map((line) => (
+                  <li key={line} className="flex gap-3 text-sm leading-relaxed text-helm-slate">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-helm-gold" aria-hidden />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Who at Helm can access data</p>
+              <h2 className="font-display mt-4 text-3xl font-medium tracking-tight">Staff access</h2>
+              <ul className="mt-6 space-y-3">
+                {STAFF_ACCESS.map((line) => (
+                  <li key={line} className="flex gap-3 text-sm leading-relaxed text-helm-slate">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-helm-gold" aria-hidden />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
