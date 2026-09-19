@@ -1,4 +1,5 @@
 import axios from "axios";
+import { invalidateFetchAfterMutation } from "@/lib/fetchInvalidation";
 
 /** Empty string = same-origin `/api` (Vercel rewrite → Render). Local: http://localhost:8001 */
 export const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
@@ -93,8 +94,16 @@ api.interceptors.request.use(async (config) => {
 });
 
 // Structured 403 bodies ({reason, message}) stay toast-friendly as a string detail.
+// Successful writes invalidate matching useFetch react-query caches immediately.
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    try {
+      invalidateFetchAfterMutation(response?.config?.method, response?.config?.url);
+    } catch {
+      /* never block the response on cache invalidation */
+    }
+    return response;
+  },
   (error) => {
     const data = error?.response?.data;
     const detail = data?.detail;

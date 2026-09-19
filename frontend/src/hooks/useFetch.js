@@ -1,58 +1,78 @@
-import { useState, useEffect, useRef } from "react";
+/**
+ * Shared page data fetcher — thin react-query wrapper.
+ *
+ * Choice (a): keep the useFetch(path) API so every department tab gets
+ * stale-while-revalidate caching without rewriting each page. Query keys are
+ * ["fetch", path, ...deps] so mutations can invalidate with invalidateFetchQueries().
+ *
+ * Freshness is driven by write-path invalidation (frontend + backend), not by
+ * a long staleTime. The short staleTime only dedupes rapid remounts / tab
+ * switches so revisits show last data instantly while a background refetch
+ * runs when the entry is stale.
+ */
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { invalidateFetchQueries } from "@/lib/fetchInvalidation";
+
+/** Short client stale window — safety net / dedupe only; writes invalidate. */
+export const FETCH_STALE_MS = 5_000;
+
+export function fetchQueryKey(path) {
+  return ["fetch", path];
+}
 
 export function useFetch(path, deps = []) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const prevPathRef = useRef(path);
+  const queryClient = useQueryClient();
+  const enabled = Boolean(path);
+  // deps are folded into the key so callers that pass e.g. [weekStart] refetch
+  // when those change, matching the previous useEffect dependency behavior.
+  const queryKey = enabled ? ["fetch", path, ...deps] : ["fetch", "__disabled__"];
 
-  useEffect(() => {
-    if (!path) {
-      setData(null);
-      setError(null);
-      setLoading(false);
-      prevPathRef.current = path;
-      return;
-    }
-    let mounted = true;
-    const pathChanged = prevPathRef.current !== path;
-    prevPathRef.current = path;
+  const query = useQuery({
+    queryKey,
+    enabled,
+    staleTime: FETCH_STALE_MS,
+    // Remount after staleTime → show cache, refetch in background (no skeleton).
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data } = await api.get(path);
+      return data;
+    },
+  });
 
-    if (pathChanged) {
-      // Different resource — never show the previous path's data.
-      setData(null);
-      setLoading(true);
-    } else {
-      // Soft reload of the same path: keep showing existing rows.
-      setLoading((prev) => (data == null ? true : prev));
-    }
-    setError(null);
+  const setData = useCallback(
+    (updater) => {
+      queryClient.setQueryData(queryKey, (prev) => {
+        if (typeof updater === "function") return updater(prev ?? null);
+        return updater;
+      });
+    },
+    [queryClient, queryKey],
+  );
 
-    api.get(path)
-      .then((r) => {
-        if (!mounted) return;
-        setData(r.data);
-        setError(null);
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        // Soft reload: keep prior data and don't flip the whole page to ErrorScreen.
-        if (pathChanged) {
-          setError(e);
-        } else {
-          setError((prev) => (data == null ? e : prev));
-        }
-      })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, reloadKey, ...deps]);
+  // isLoading = pending && fetching — false when cached data exists (tab revisit).
+  const loading = enabled ? query.isLoading : false;
 
-  const reload = () => setReloadKey((k) => k + 1);
-  return { data, loading, error, reload, setData };
+  return {
+    data: enabled ? (query.data ?? null) : null,
+    loading,
+    error: enabled ? (query.error ?? null) : null,
+    reload: () => query.refetch(),
+    setData,
+  };
 }
+
+export function useInvalidateFetch() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    (pathPrefix) => invalidateFetchQueries(queryClient, pathPrefix),
+    [queryClient],
+  );
+}
+
+export { invalidateFetchQueries };
 
 export function fetchErrorMessage(error, fallback = "Could not load data. Check your connection and try again.") {
   if (!error) return fallback;

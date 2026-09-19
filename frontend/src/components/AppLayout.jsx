@@ -23,6 +23,7 @@ import { LoadingScreen } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
 import { departmentPath } from "@/lib/departmentRoutes";
 import { canManageBilling } from "@/lib/access";
+import { prefetchRouteHandlers } from "@/lib/prefetchRoute";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
@@ -202,6 +203,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
                 to={item.to}
                 end={item.end}
                 onClick={onNavigate}
+                {...prefetchRouteHandlers(item.to)}
                 data-testid={`sidebar-nav-${item.id}`}
                 className={navBtn}
               >
@@ -222,6 +224,7 @@ function SidebarContent({ onNavigate, billingEnforced, onOpenSearch }) {
                 <NavLink
                   to={to}
                   onClick={onNavigate}
+                  {...prefetchRouteHandlers(to)}
                   data-testid={`sidebar-dept-${dept.type}`}
                   className={navBtn}
                 >

@@ -1532,7 +1532,7 @@ async def _enforce_document_rate_limit(principal, action: str, limit: int, messa
 
 
 # ------------------------- Financials (computed from entries) -------------------------
-_FINANCIALS_CACHE_TTL_SECONDS = 90.0
+_FINANCIALS_CACHE_TTL_SECONDS = 30.0
 
 
 def _financials_cache_key(workspace_id: str, department_ids: Optional[list] = None) -> str:
@@ -1547,6 +1547,7 @@ def invalidate_financials_cache(workspace_id: str) -> None:
         return
     simple_cache.invalidate(f"financials:{workspace_id}")
     simple_cache.invalidate_prefix(f"financials:{workspace_id}:")
+    invalidate_workspace_list_cache(workspace_id, "financials_page")
 
 
 def invalidate_departments_cache(workspace_id: str) -> None:
@@ -1559,6 +1560,34 @@ def invalidate_plan_cache(workspace_id: str) -> None:
     if not workspace_id:
         return
     simple_cache.invalidate(f"planmeta:{workspace_id}")
+
+
+# Short TTL for department list endpoints — write handlers must call
+# invalidate_workspace_list_cache so CEOs see updates on the next fetch.
+_DEPT_LIST_CACHE_TTL_SECONDS = 20.0
+
+
+def _list_cache_key(kind: str, workspace_id: str, *parts: str) -> str:
+    tail = ":".join(str(p) for p in parts if p is not None)
+    return f"list:{kind}:{workspace_id}:{tail}" if tail else f"list:{kind}:{workspace_id}"
+
+
+def invalidate_workspace_list_cache(workspace_id: str, *kinds: str) -> None:
+    """Drop cached department list payloads after a successful write.
+
+    This is the primary freshness guarantee; the 20s TTL is only a fallback for
+    writes that bypass Helm (e.g. external accounting sync).
+    """
+    if not workspace_id:
+        return
+    targets = kinds or (
+        "production", "procurement", "legal", "maintenance", "hr",
+        "deals", "people", "calendar", "reports", "tasks", "notes",
+        "financials_page", "me_work",
+    )
+    for kind in targets:
+        simple_cache.invalidate_prefix(f"list:{kind}:{workspace_id}:")
+        simple_cache.invalidate(f"list:{kind}:{workspace_id}")
 
 
 async def get_workspace_plan_limits(workspace_id: str, *, bypass_cache: bool = False) -> dict:
@@ -4073,6 +4102,7 @@ async def decision_action(decision_id: str, payload: DecisionAction, principal=D
     if not found:
         raise HTTPException(status_code=404, detail="Not found")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
     return {"ok": True, "decisions": decisions}
 
 
@@ -4112,6 +4142,7 @@ async def create_decision(payload: DecisionInput, principal=Depends(require_sect
         d["confidence"] = None
     decisions = c["decisions"] + [d]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
     await log_activity(principal, "decisions", "decision.create", f"New decision: {d['title']}")
     return {"ok": True, "decision": d}
 
@@ -4156,6 +4187,7 @@ async def approve_decision_suggestion(suggestion_id: str, principal=Depends(requ
         {"workspace_id": c["workspace_id"]},
         {"$set": {"decisions": decisions, "decision_suggestions": suggestions}},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
     await log_activity(principal, "decisions", "suggestion.approve", f"Accepted Helm suggestion: {decision['title']}")
     return {"ok": True, "decision": decision}
 
@@ -4260,6 +4292,7 @@ async def edit_decision(decision_id: str, payload: DecisionInput, principal=Depe
     if not found:
         raise HTTPException(status_code=404, detail="Decision not found")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
     return {"ok": True}
 
 
@@ -4268,6 +4301,7 @@ async def delete_decision(decision_id: str, principal=Depends(require_section("d
     c = await get_ws(principal["workspace_id"])
     decisions = [d for d in c["decisions"] if d["id"] != decision_id]
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"decisions": decisions}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
     return {"ok": True}
 
 
@@ -4613,6 +4647,17 @@ async def list_deals(
 ):
     page_limit = clamp_limit(limit)
     ws = principal["workspace_id"]
+    owner_key = (owner_user_id or "").strip() or "all"
+    cache_key = _list_cache_key(
+        "deals", ws, principal["user_id"], owner_key, before or "", str(page_limit),
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        asyncio.create_task(_product_event(
+            ws, principal["user_id"], helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
+            {"department": dept_catalog.TYPE_SALES},
+        ))
+        return cached
     dept_ids = await dept_access.accessible_department_ids(db, principal, dept_catalog.TYPE_SALES)
     base = dept_access.apply_department_filter({"workspace_id": ws}, dept_ids)
     if owner_user_id is not None:
@@ -4637,11 +4682,11 @@ async def list_deals(
         )
     is_lead = _can_lead_sales(principal, membership)
     sales_owners = await _sales_member_rows(ws)
-    await _product_event(
+    asyncio.create_task(_product_event(
         ws, principal["user_id"], helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
         {"department": dept_catalog.TYPE_SALES},
-    )
-    return {
+    ))
+    payload_out = {
         "items": deals,
         "deals": deals,
         "next_cursor": cursor,
@@ -4655,6 +4700,8 @@ async def list_deals(
         "currency_symbol": currency_symbol(currency),
         "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in DEAL_STAGES],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/deals")
@@ -4695,6 +4742,7 @@ async def create_deal(payload: DealInput, principal=Depends(require_section("sal
         "updated_at": now,
     }
     await db.deals.insert_one(dict(deal))
+    invalidate_workspace_list_cache(principal["workspace_id"], "deals", "me_work")
     enriched = (await _enrich_deals([deal]))[0]
     await log_activity(principal, "sales", "deal.create",
                        f"New deal: {deal['name']} · {fmt_money(deal['value'], currency)} ({STAGE_LABEL[stage]})",
@@ -4733,6 +4781,7 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.deals.update_one({"id": deal_id, "workspace_id": principal["workspace_id"]}, {"$set": upd})
+    invalidate_workspace_list_cache(principal["workspace_id"], "deals", "me_work")
     updated = {**d, **upd}
     enriched = (await _enrich_deals([updated]))[0]
     financial_entry = None
@@ -4783,6 +4832,7 @@ async def update_deal(deal_id: str, payload: DealInput, principal=Depends(requir
 @api_router.delete("/deals/{deal_id}")
 async def delete_deal(deal_id: str, principal=Depends(require_section("sales", "sales:write"))):
     await db.deals.delete_one({"id": deal_id, "workspace_id": principal["workspace_id"]})
+    invalidate_workspace_list_cache(principal["workspace_id"], "deals", "me_work")
     return {"ok": True}
 
 
@@ -5216,26 +5266,35 @@ async def financials(principal=Depends(require_section("financials", "finance:wr
     dept_ids = await dept_access.accessible_department_ids(
         db, principal, dept_catalog.TYPE_ACCOUNTING_FINANCE,
     )
-    fin = await compute_financials(principal["workspace_id"], department_ids=dept_ids)
-    entry_filt = dept_access.apply_department_filter(
-        {"workspace_id": principal["workspace_id"]}, dept_ids,
-    )
-    entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
-    import finance_recurrence as fin_recur
-    for e in entries:
-        e["name"] = normalize_entry_name(e.get("name"), e.get("category"))
-        e["scheduled"] = fin_recur.is_future_month(str(e.get("month") or ""))
-    await _product_event(
-        principal["workspace_id"], principal["user_id"],
+    ws_id = principal["workspace_id"]
+    scope = ",".join(sorted(str(d) for d in (dept_ids or []))) if dept_ids is not None else "all"
+    cache_key = _list_cache_key("financials_page", ws_id, scope)
+
+    async def loader():
+        # compute_financials already caches metrics; return_entries avoids a
+        # second uncached financial_entries scan on every page load.
+        fin = await compute_financials(ws_id, department_ids=dept_ids, return_entries=True)
+        entries = list(fin.pop("entries", None) or [])
+        import finance_recurrence as fin_recur
+        for e in entries:
+            e["name"] = normalize_entry_name(e.get("name"), e.get("category"))
+            e["scheduled"] = fin_recur.is_future_month(str(e.get("month") or ""))
+        return {**fin, "entries": entries}
+
+    payload = await simple_cache.get_or_set(cache_key, _DEPT_LIST_CACHE_TTL_SECONDS, loader)
+    # Analytics + Google capabilities are per-request / per-user — keep out of cache.
+    asyncio.create_task(_product_event(
+        ws_id, principal["user_id"],
         helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
         {"department": dept_catalog.TYPE_ACCOUNTING_FINANCE},
-    )
-    my_google = await _user_google_tokens(principal["workspace_id"], principal["user_id"])
-    return {**fin, "entries": entries,
-            "can_write": await can_access_financials(principal),
-            "can_manage": "integrations:manage" in perms_for(principal["pack"]),
-            "google": gcal.google_capabilities(my_google),
-            }
+    ))
+    my_google = await _user_google_tokens(ws_id, principal["user_id"])
+    return {
+        **payload,
+        "can_write": await can_access_financials(principal),
+        "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+        "google": gcal.google_capabilities(my_google),
+    }
 
 
 class FinEntryInput(BaseModel):
@@ -6072,6 +6131,7 @@ async def create_task(payload: TaskInput, principal=Depends(require_pro_perm("ta
         item["done_at"] = datetime.now(timezone.utc).isoformat()
     t["items"].append(item)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "tasks", "me_work", "calendar", "reports")
     await notify_task_delegated(
         assignee_user_id=assignee_uid,
         previous_assignee_user_id=None,
@@ -6133,6 +6193,7 @@ async def patch_task(task_id: str, payload: TaskPatch, principal=Depends(require
             target["assignee"] = principal.get("name") or principal.get("email") or "Me"
 
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "tasks", "me_work", "calendar", "reports")
     if "assignee_user_id" in fields:
         await notify_task_delegated(
             assignee_user_id=target.get("assignee_user_id"),
@@ -6165,6 +6226,7 @@ async def clear_done_tasks(principal=Depends(require_pro_perm("tasks:move"))):
     if cleared:
         t["items"] = kept
         await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"tasks": t}})
+        invalidate_workspace_list_cache(principal["workspace_id"], "tasks", "me_work", "calendar", "reports")
         await log_activity(principal, "tasks", "tasks.clear_done", f"Cleared {cleared} finished task{'s' if cleared != 1 else ''}")
     return {"ok": True, "cleared": cleared}
 
@@ -6206,6 +6268,7 @@ async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("
                                     {"$set": {"text": text, "blocker": payload.blocker, "updated_at": now}})
         if existing.get("activity_id"):
             await db.activities.update_one({"activity_id": existing["activity_id"]}, {"$set": {"summary": summary, "created_at": now}})
+        invalidate_workspace_list_cache(principal["workspace_id"], "reports")
         return {"ok": True, "edited": True}
     act = await log_activity(principal, "updates", "daily.update", summary, {"blocker": payload.blocker})
     doc = {"update_id": f"upd_{uuid.uuid4().hex[:10]}", "workspace_id": principal["workspace_id"],
@@ -6213,6 +6276,7 @@ async def post_update(payload: UpdateInput, principal=Depends(require_pro_perm("
            "blocker": payload.blocker, "activity_id": act["activity_id"],
            "created_at": now, "updated_at": now}
     await db.updates.insert_one(doc)
+    invalidate_workspace_list_cache(principal["workspace_id"], "reports")
     doc.pop("_id", None)
     return {"ok": True, "edited": False, "update": doc}
 
@@ -6251,6 +6315,7 @@ async def create_note(payload: NoteInput, principal=Depends(get_principal)):
         "updated_at": now,
     }
     await db.private_notes.insert_one(doc)
+    invalidate_workspace_list_cache(principal["workspace_id"], "notes")
     doc.pop("_id", None)
     return {"ok": True, "note": doc}
 
@@ -6270,6 +6335,7 @@ async def edit_note(note_id: str, payload: NoteInput, principal=Depends(get_prin
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Note not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "notes")
     return {"ok": True}
 
 
@@ -6280,6 +6346,7 @@ async def delete_note(note_id: str, principal=Depends(get_principal)):
     )
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Note not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "notes")
     return {"ok": True}
 
 
@@ -6560,6 +6627,10 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None, *, include
 
 @api_router.get("/reports")
 async def reports(principal=Depends(get_principal)):
+    cache_key = _list_cache_key("reports", principal["workspace_id"], principal["user_id"])
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     c = await get_ws(principal["workspace_id"])
     fin = await compute_financials(c["workspace_id"])
     items = c["tasks"]["items"]
@@ -6587,7 +6658,7 @@ async def reports(principal=Depends(get_principal)):
             scoped = await compute_financials(c["workspace_id"], department_ids=dept_ids)
             financial_months = list(scoped.get("months") or [])
             financial_latest_month = scoped.get("latest_month")
-    return {
+    payload_out = {
         "reports": manual + auto,
         "manual_reports": manual,
         "auto_reports": auto,
@@ -6598,6 +6669,8 @@ async def reports(principal=Depends(get_principal)):
         "financial_latest_month": financial_latest_month,
         "is_pro": workspace_is_pro(c),
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 class ReportInput(BaseModel):
@@ -6640,6 +6713,7 @@ async def create_report(payload: ReportInput, principal=Depends(require_section(
     }
     manual.append(report)
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "reports")
     if draft_id:
         await helm_dept_drafts.mark_published(db, c["workspace_id"], draft_id)
     await log_activity(principal, "reports", "report.create", f"Added report: {report['title']}")
@@ -6666,6 +6740,7 @@ async def edit_report(report_id: str, payload: ReportInput, principal=Depends(re
     if not found:
         raise HTTPException(status_code=404, detail="Report not found")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "reports")
     return {"ok": True, "report": found}
 
 
@@ -6676,6 +6751,7 @@ async def delete_report(report_id: str, principal=Depends(require_section("repor
     if len(manual) == len(c.get("manual_reports") or []):
         raise HTTPException(status_code=404, detail="Report not found")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"manual_reports": manual}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "reports")
     return {"ok": True}
 
 
@@ -6684,6 +6760,7 @@ async def dismiss_report_draft(draft_id: str, principal=Depends(require_section(
     ok = await helm_dept_drafts.dismiss_draft(db, principal["workspace_id"], draft_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Draft not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "reports")
     return {"ok": True}
 
 
@@ -7511,6 +7588,11 @@ async def calendar(
     principal=Depends(get_principal),
     week_start: Optional[str] = Query(None, description="Sunday of the week to load (YYYY-MM-DD)"),
 ):
+    week_key = (week_start or "").strip() or "default"
+    cache_key = _list_cache_key("calendar", principal["workspace_id"], principal["user_id"], week_key)
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     c = await get_ws(principal["workspace_id"])
     if week_start:
         try:
@@ -7605,6 +7687,7 @@ async def calendar(
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     tokens = await _user_google_tokens(principal["workspace_id"], principal["user_id"]) if data["google_connected"] else None
     data["google"] = gcal.google_capabilities(tokens)
+    simple_cache.put(cache_key, data, _DEPT_LIST_CACHE_TTL_SECONDS)
     return data
 
 
@@ -7843,6 +7926,7 @@ async def create_calendar_event(
     events.append(ev)
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "calendar")
     await log_activity(principal, "calendar", "event.create", f"Added calendar event: {ev['title']}")
     return {"ok": True, "event": ev}
 
@@ -7895,6 +7979,7 @@ async def edit_calendar_event(
         raise HTTPException(status_code=404, detail="Event not found")
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "calendar")
     return {"ok": True, "event": found}
 
 
@@ -7929,11 +8014,16 @@ async def delete_calendar_event(
                 logger.exception("Google Calendar delete failed")
     cal["helm_events"] = events
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"calendar": cal}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "calendar")
     return {"ok": True}
 
 
 @api_router.get("/people")
 async def people(principal=Depends(get_principal)):
+    cache_key = _list_cache_key("people", principal["workspace_id"], principal["user_id"])
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     c = await sync_members_into_people(principal["workspace_id"])
     data = dict(c["people"])
     roster = list(data.get("people") or [])
@@ -8001,6 +8091,7 @@ async def people(principal=Depends(get_principal)):
 
     data["can_write"] = await can_section_write(principal, "people", "people:write")
     data["can_invite_to_access"] = "members:invite" in perms_for(principal["pack"])
+    simple_cache.put(cache_key, data, _DEPT_LIST_CACHE_TTL_SECONDS)
     return data
 
 
@@ -8077,6 +8168,7 @@ async def add_person(payload: PersonInput, request: Request, principal=Depends(r
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "people", "reports")
     summary = f"Added {person['name']}" + (f" · {person['role']}" if person['role'] else "") + f", headcount now {headcount}"
     if invite:
         summary += " · invited to Team & Access"
@@ -8105,6 +8197,7 @@ async def edit_person(person_id: str, payload: PersonInput, principal=Depends(re
     if not found:
         raise HTTPException(status_code=404, detail="Person not found")
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]}, {"$set": {"people": people}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "people", "reports")
     await log_activity(principal, "people", "person.edit", f"Updated {found['name']}'s profile")
     return {"ok": True}
 
@@ -8128,6 +8221,7 @@ async def remove_person(person_id: str, principal=Depends(require_section("peopl
     headcount = len(people["people"])
     await db.workspaces.update_one({"workspace_id": c["workspace_id"]},
                                    {"$set": {"people": people, "employees": headcount}})
+    invalidate_workspace_list_cache(principal["workspace_id"], "people", "reports")
     if person:
         await log_activity(principal, "people", "person.delete",
                            f"Removed {person['name']}, headcount now {headcount}", {"headcount": headcount})
@@ -8609,6 +8703,14 @@ async def list_production_work_orders(
     status: Optional[str] = Query(None),
 ):
     dept = await _production_department(principal)
+    status_key = (status or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "production", principal["workspace_id"], principal["user_id"],
+        dept["department_id"], status_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
         st = status.strip().lower()
@@ -8664,7 +8766,7 @@ async def list_production_work_orders(
         },
         {"_id": 0, "id": 1, "equipment_name": 1, "status": 1, "priority": 1},
     ).sort("created_at", -1).to_list(500)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Production",
         "work_orders": orders,
@@ -8678,6 +8780,8 @@ async def list_production_work_orders(
         "is_lead": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/production/work-orders")
@@ -8745,6 +8849,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "completed_at": None,
     }
     await db.production_work_orders.insert_one(dict(order))
+    invalidate_workspace_list_cache(principal["workspace_id"], "production", "me_work", "calendar")
     return {"ok": True, "work_order": await _enrich_work_order(order)}
 
 
@@ -8875,6 +8980,7 @@ async def patch_production_work_order(
         {"id": work_order_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "production", "me_work", "calendar")
     return {"ok": True, "work_order": await _enrich_work_order({**order, **upd})}
 
 
@@ -8887,6 +8993,7 @@ async def delete_production_work_order(work_order_id: str, principal=Depends(get
     )
     if not _can_update_production_order(principal, membership, order):
         raise HTTPException(status_code=403, detail="You are not assigned to this work order")
+    invalidate_workspace_list_cache(principal["workspace_id"], "production", "me_work", "calendar")
     await db.production_work_orders.delete_one(
         {"id": work_order_id, "department_id": dept["department_id"]},
     )
@@ -9156,6 +9263,14 @@ async def list_procurement_requests(
     status: Optional[str] = Query(None),
 ):
     dept = await _procurement_department(principal)
+    status_key = (status or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "procurement", principal["workspace_id"], principal["user_id"],
+        dept["department_id"], status_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
         st = status.strip().lower()
@@ -9173,7 +9288,7 @@ async def list_procurement_requests(
     )
     items.sort(key=_procurement_queue_sort_key)
 
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Procurement",
         "requests": items,
@@ -9184,6 +9299,8 @@ async def list_procurement_requests(
         "can_approve": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/procurement/requests")
@@ -9231,6 +9348,7 @@ async def create_procurement_request(
         "updated_at": now,
     }
     await db.procurement_requests.insert_one(dict(req))
+    invalidate_workspace_list_cache(principal["workspace_id"], "procurement", "production", "me_work", "calendar")
     return {"ok": True, "request": await _enrich_procurement_request(req)}
 
 
@@ -9339,6 +9457,7 @@ async def patch_procurement_request(
         {"id": request_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "procurement", "production", "me_work", "calendar")
     return {"ok": True, "request": await _enrich_procurement_request({**req, **upd})}
 
 
@@ -9365,6 +9484,7 @@ async def delete_procurement_request(request_id: str, principal=Depends(get_prin
             status_code=403,
             detail="Only the requester (while still requested) or a lead/CEO can delete this request",
         )
+    invalidate_workspace_list_cache(principal["workspace_id"], "procurement", "production", "me_work", "calendar")
     await db.procurement_requests.delete_one(
         {"id": request_id, "department_id": dept["department_id"]},
     )
@@ -9640,6 +9760,15 @@ async def list_legal_matters(
     counterparty: Optional[str] = Query(None),
 ):
     dept = await _legal_department(principal)
+    status_key = (status or "").strip().lower() or "all"
+    cp_key = (counterparty or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "legal", principal["workspace_id"], principal["user_id"],
+        dept["department_id"], status_key, cp_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
         st = status.strip().lower()
@@ -9657,7 +9786,7 @@ async def list_legal_matters(
     )
     is_lead = _can_lead_legal(principal, membership)
     items = await _enrich_legal_matters(rows)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Legal",
         "matters": items,
@@ -9671,6 +9800,8 @@ async def list_legal_matters(
         "can_delete": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/legal/matters")
@@ -9718,6 +9849,7 @@ async def create_legal_matter(payload: LegalMatterCreate, principal=Depends(get_
     if matter["status"] == "filed":
         matter["completed_at"] = now
     await db.legal_matters.insert_one(dict(matter))
+    invalidate_workspace_list_cache(principal["workspace_id"], "legal", "me_work", "calendar")
     return {"ok": True, "matter": await _enrich_legal_matter(matter)}
 
 
@@ -9799,6 +9931,7 @@ async def patch_legal_matter(
         {"id": matter_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "legal", "me_work", "calendar")
     updated = {**matter, **upd}
     renewal = None
     if becoming_filed:
@@ -9951,6 +10084,7 @@ async def delete_legal_matter(matter_id: str, principal=Depends(get_principal)):
     await db.legal_matters.delete_one(
         {"id": matter_id, "department_id": dept["department_id"]},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "legal", "me_work", "calendar")
     if storage_key and doc_storage.r2_configured():
         try:
             await asyncio.to_thread(doc_storage.delete_document, storage_key)
@@ -10117,6 +10251,15 @@ async def list_maintenance_tickets(
     priority: Optional[str] = Query(None),
 ):
     dept = await _maintenance_department(principal)
+    status_key = (status or "").strip().lower() or "all"
+    pri_key = (priority or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "maintenance", principal["workspace_id"], principal["user_id"],
+        dept["department_id"], status_key, pri_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
         st = status.strip().lower()
@@ -10144,7 +10287,7 @@ async def list_maintenance_tickets(
     downtime = decision_engine.compute_downtime(
         rows, period_start=month_start, period_end=month_end,
     )
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Engineering & Maintenance",
         "tickets": items,
@@ -10161,6 +10304,8 @@ async def list_maintenance_tickets(
         "can_delete": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.get("/maintenance/equipment-history")
@@ -10232,6 +10377,7 @@ async def create_maintenance_ticket(
         "updated_at": now,
     }
     await db.maintenance_tickets.insert_one(dict(ticket))
+    invalidate_workspace_list_cache(principal["workspace_id"], "maintenance", "production", "me_work", "calendar")
     return {"ok": True, "ticket": await _enrich_maintenance_ticket(ticket)}
 
 
@@ -10301,6 +10447,7 @@ async def patch_maintenance_ticket(
         {"id": ticket_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "maintenance", "production", "me_work", "calendar")
     return {"ok": True, "ticket": await _enrich_maintenance_ticket({**ticket, **upd})}
 
 
@@ -10320,6 +10467,7 @@ async def delete_maintenance_ticket(ticket_id: str, principal=Depends(get_princi
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "maintenance", "production", "me_work", "calendar")
     return {"ok": True}
 
 
@@ -10475,6 +10623,7 @@ async def _ensure_employee_from_onboarding(
             )
             return existing, False
         raise
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     emp.pop("_id", None)
     return emp, True
 
@@ -10546,13 +10695,17 @@ class HrOnboardingPatch(BaseModel):
 
 @api_router.get("/hr/template")
 async def get_hr_template(principal=Depends(get_principal)):
+    cache_key = _list_cache_key("hr", principal["workspace_id"], principal["user_id"], "template")
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     tmpl = await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_hr(principal, membership)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "template": {k: v for k, v in tmpl.items() if k != "_id"},
@@ -10560,6 +10713,8 @@ async def get_hr_template(principal=Depends(get_principal)):
         "can_edit_template": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.patch("/hr/template")
@@ -10589,6 +10744,7 @@ async def patch_hr_template(payload: HrTemplatePatch, principal=Depends(get_prin
         {"$set": {"steps": cleaned, "updated_at": now}},
     )
     updated = {**tmpl, "steps": cleaned, "updated_at": now}
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr")
     return {"ok": True, "template": {k: v for k, v in updated.items() if k != "_id"}}
 
 
@@ -10597,6 +10753,13 @@ async def list_hr_onboarding(
     principal=Depends(get_principal),
     overall_status: Optional[str] = Query(None),
 ):
+    status_key = (overall_status or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "hr", principal["workspace_id"], principal["user_id"], "onboarding", status_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     await _ensure_hr_onboarding_template(principal["workspace_id"], dept["department_id"])
     filt: dict = {"department_id": dept["department_id"]}
@@ -10613,7 +10776,7 @@ async def list_hr_onboarding(
     is_lead = _can_lead_hr(principal, membership)
     items = await _enrich_hr_instances(rows)
     items = helm_freshness.annotate_possibly_stale(items, dept_type=dept_catalog.TYPE_HR)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "instances": items,
@@ -10623,6 +10786,8 @@ async def list_hr_onboarding(
         "my_user_id": principal["user_id"],
         "step_statuses": sorted(HR_STEP_STATUSES),
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/hr/onboarding")
@@ -10662,6 +10827,7 @@ async def create_hr_onboarding(payload: HrOnboardingCreate, principal=Depends(ge
         "updated_at": now,
     }
     await db.hr_onboarding_instances.insert_one(dict(inst))
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work")
     return {"ok": True, "instance": await _enrich_hr_instance(inst)}
 
 
@@ -10734,6 +10900,7 @@ async def patch_hr_onboarding(
     updated = {**inst, **set_fields}
     if overall == "active":
         await _ensure_employee_from_onboarding(updated, principal)
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     return {"ok": True, "instance": await _enrich_hr_instance(updated)}
 
 
@@ -10750,6 +10917,7 @@ async def delete_hr_onboarding(instance_id: str, principal=Depends(get_principal
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Onboarding instance not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     return {"ok": True}
 
 
@@ -10779,6 +10947,13 @@ async def list_hr_employees(
     status: Optional[str] = Query(None),
 ):
     """Employment records — no medical, government ID, compensation, or protected characteristics."""
+    status_key = (status or "").strip().lower() or "all"
+    cache_key = _list_cache_key(
+        "hr", principal["workspace_id"], principal["user_id"], "employees", status_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
@@ -10795,7 +10970,7 @@ async def list_hr_employees(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_hr(principal, membership)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "employees": [_public_hr_employee(r) for r in rows],
@@ -10805,11 +10980,17 @@ async def list_hr_employees(
         "my_user_id": principal["user_id"],
         "statuses": sorted(HR_EMPLOYEE_STATUSES),
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.get("/hr/summary")
 async def hr_summary(principal=Depends(get_principal)):
     """Headcount and leave backlog for the HR page — no confidential hr_records."""
+    cache_key = _list_cache_key("hr", principal["workspace_id"], principal["user_id"], "summary")
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     dept_id = dept["department_id"]
     employees = await db.hr_employees.find(
@@ -10830,13 +11011,15 @@ async def hr_summary(principal=Depends(get_principal)):
     leave_rows = await db.hr_leave_requests.find(
         {"department_id": dept_id, "status": "pending"}, {"_id": 0},
     ).to_list(5000)
-    return {
+    payload_out = {
         "department_id": dept_id,
         "name": dept.get("name") or "HR",
         "headcount": headcount,
         "pending_leave_requests": len(leave_rows),
         "departed_last_90_days": departed_last_90_days,
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/hr/employees")
@@ -10873,6 +11056,7 @@ async def create_hr_employee(payload: HrEmployeeCreate, principal=Depends(get_pr
         "departed_at": now if st == "departed" else None,
     }
     await db.hr_employees.insert_one(dict(emp))
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     emp.pop("_id", None)
     return {"ok": True, "employee": _public_hr_employee(emp)}
 
@@ -10925,6 +11109,7 @@ async def patch_hr_employee(
         {"id": employee_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     return {"ok": True, "employee": _public_hr_employee({**emp, **upd})}
 
 
@@ -10940,13 +11125,17 @@ class HrOffboardingPatch(BaseModel):
 
 @api_router.get("/hr/offboarding/template")
 async def get_hr_offboarding_template(principal=Depends(get_principal)):
+    cache_key = _list_cache_key("hr", principal["workspace_id"], principal["user_id"], "offboarding_template")
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     tmpl = await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_hr(principal, membership)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "template": {k: v for k, v in tmpl.items() if k != "_id"},
@@ -10954,6 +11143,8 @@ async def get_hr_offboarding_template(principal=Depends(get_principal)):
         "can_edit_template": is_lead,
         "my_user_id": principal["user_id"],
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.patch("/hr/offboarding/template")
@@ -10983,6 +11174,7 @@ async def patch_hr_offboarding_template(payload: HrTemplatePatch, principal=Depe
         {"$set": {"steps": cleaned, "updated_at": now}},
     )
     updated = {**tmpl, "steps": cleaned, "updated_at": now}
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr")
     return {"ok": True, "template": {k: v for k, v in updated.items() if k != "_id"}}
 
 
@@ -10992,6 +11184,14 @@ async def list_hr_offboarding(
     overall_status: Optional[str] = Query(None),
     employee_id: Optional[str] = Query(None),
 ):
+    status_key = (overall_status or "").strip().lower() or "all"
+    emp_key = (employee_id or "").strip() or "all"
+    cache_key = _list_cache_key(
+        "hr", principal["workspace_id"], principal["user_id"], "offboarding", status_key, emp_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     await _ensure_hr_offboarding_template(principal["workspace_id"], dept["department_id"])
     filt: dict = {"department_id": dept["department_id"]}
@@ -11011,7 +11211,7 @@ async def list_hr_offboarding(
     )
     is_lead = _can_lead_hr(principal, membership)
     items = await _enrich_hr_instances(rows)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "instances": items,
@@ -11021,6 +11221,8 @@ async def list_hr_offboarding(
         "my_user_id": principal["user_id"],
         "step_statuses": sorted(HR_STEP_STATUSES),
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/hr/offboarding")
@@ -11076,6 +11278,7 @@ async def create_hr_offboarding(payload: HrOffboardingCreate, principal=Depends(
         "updated_at": now,
     }
     await db.hr_offboarding_instances.insert_one(dict(inst))
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work")
     # Employee status stays as-is until all offboarding steps are done.
     return {"ok": True, "instance": await _enrich_hr_instance(inst)}
 
@@ -11137,6 +11340,7 @@ async def patch_hr_offboarding(
     if overall == "active" and inst.get("employee_id"):
         await _mark_employee_departed(inst["employee_id"], dept["department_id"], now)
     updated = {**inst, **set_fields}
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     return {"ok": True, "instance": await _enrich_hr_instance(updated)}
 
 
@@ -11153,6 +11357,7 @@ async def delete_hr_offboarding(instance_id: str, principal=Depends(get_principa
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Offboarding instance not found")
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work", "people")
     return {"ok": True}
 
 
@@ -11209,6 +11414,14 @@ async def list_hr_leave_requests(
     status: Optional[str] = Query(None),
     employee_id: Optional[str] = Query(None),
 ):
+    status_key = (status or "").strip().lower() or "all"
+    emp_key = (employee_id or "").strip() or "all"
+    cache_key = _list_cache_key(
+        "hr", principal["workspace_id"], principal["user_id"], "leave", status_key, emp_key,
+    )
+    cached = simple_cache.peek(cache_key)
+    if cached is not None:
+        return cached
     dept = await _hr_department(principal)
     filt: dict = {"department_id": dept["department_id"]}
     if status is not None:
@@ -11231,7 +11444,7 @@ async def list_hr_leave_requests(
         db, dept["department_id"], principal["user_id"],
     )
     is_lead = _can_lead_hr(principal, membership)
-    return {
+    payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "HR",
         "requests": [{k: v for k, v in r.items() if k != "_id"} for r in rows],
@@ -11241,6 +11454,8 @@ async def list_hr_leave_requests(
         "types": sorted(HR_LEAVE_TYPES),
         "statuses": sorted(HR_LEAVE_STATUSES),
     }
+    simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
+    return payload_out
 
 
 @api_router.post("/hr/leave-requests")
@@ -11289,6 +11504,7 @@ async def create_hr_leave_request(payload: HrLeaveCreate, principal=Depends(get_
         "updated_at": now,
     }
     await db.hr_leave_requests.insert_one(dict(doc))
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work")
     doc.pop("_id", None)
     return {"ok": True, "request": doc}
 
@@ -11331,6 +11547,7 @@ async def patch_hr_leave_request(
             {"id": request_id, "department_id": dept["department_id"]},
             {"$set": upd},
         )
+        invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work")
         return {"ok": True, "request": {**row, **upd}}
 
     if st not in ("approved", "denied"):
@@ -11348,6 +11565,7 @@ async def patch_hr_leave_request(
         {"id": request_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+    invalidate_workspace_list_cache(principal["workspace_id"], "hr", "me_work")
     return {"ok": True, "request": {**row, **upd}}
 
 

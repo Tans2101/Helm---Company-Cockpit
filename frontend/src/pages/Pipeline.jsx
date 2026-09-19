@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, PenLine, Trash2, X, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
@@ -6,7 +7,7 @@ import {
   PageHeader, GlassCard, SectionLabel, ErrorScreen, EmptyState, ConfirmDialog,
   SkeletonKPIRow, SkeletonCardList,
 } from "@/components/kit";
-import { fetchErrorMessage } from "@/hooks/useFetch";
+import { FETCH_STALE_MS, fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
 import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
 
@@ -39,11 +40,9 @@ function ownerLabel(owner) {
 }
 
 export default function Pipeline() {
-  const [deals, setDeals] = useState([]);
-  const [meta, setMeta] = useState(null);
+  const queryClient = useQueryClient();
+  const [extraDeals, setExtraDeals] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -54,50 +53,61 @@ export default function Pipeline() {
   const [productionPrompt, setProductionPrompt] = useState(null);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
 
-  const fetchPage = useCallback(async (before = null, append = false, mine = mineOnly) => {
-    const params = { limit: PAGE_LIMIT };
-    if (before) params.before = before;
-    if (mine) params.owner_user_id = "me";
-    const { data } = await api.get("/deals", { params });
-    const page = data.items || data.deals || [];
-    setDeals((prev) => (append ? [...prev, ...page] : page));
-    setMeta({
-      can_write: data.can_write,
-      can_reassign_owner: Boolean(data.can_reassign_owner || data.is_lead),
-      is_lead: Boolean(data.is_lead || data.can_reassign_owner),
-      my_user_id: data.my_user_id || null,
-      sales_owners: data.sales_owners || [],
-      metrics: data.metrics,
-      stages: data.stages,
-      currency: data.currency || "usd",
-      currency_symbol: data.currency_symbol || "$",
-    });
-    setNextCursor(data.next_cursor ?? null);
-    return data;
-  }, [mineOnly]);
+  const dealsQueryKey = ["deals", "pipeline", mineOnly ? "me" : "all"];
+
+  const dealsQuery = useQuery({
+    queryKey: dealsQueryKey,
+    staleTime: FETCH_STALE_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const params = { limit: PAGE_LIMIT };
+      if (mineOnly) params.owner_user_id = "me";
+      const { data } = await api.get("/deals", { params });
+      return data;
+    },
+  });
+
+  // Reset pagination extras when the primary page (or mine filter) changes.
+  useEffect(() => {
+    setExtraDeals([]);
+    setNextCursor(dealsQuery.data?.next_cursor ?? null);
+  }, [dealsQuery.data, mineOnly]);
+
+  const pageDeals = dealsQuery.data?.items || dealsQuery.data?.deals || [];
+  const deals = extraDeals.length ? [...pageDeals, ...extraDeals] : pageDeals;
+  const meta = dealsQuery.data
+    ? {
+        can_write: dealsQuery.data.can_write,
+        can_reassign_owner: Boolean(dealsQuery.data.can_reassign_owner || dealsQuery.data.is_lead),
+        is_lead: Boolean(dealsQuery.data.is_lead || dealsQuery.data.can_reassign_owner),
+        my_user_id: dealsQuery.data.my_user_id || null,
+        sales_owners: dealsQuery.data.sales_owners || [],
+        metrics: dealsQuery.data.metrics,
+        stages: dealsQuery.data.stages,
+        currency: dealsQuery.data.currency || "usd",
+        currency_symbol: dealsQuery.data.currency_symbol || "$",
+      }
+    : null;
+
+  const loading = dealsQuery.isLoading;
+  const loadError = dealsQuery.error ?? null;
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      await fetchPage(null, false, mineOnly);
-    } catch (e) {
-      setLoadError(e);
-      toast.error(fetchErrorMessage(e, "Could not load pipeline"));
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchPage, mineOnly]);
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
+    setExtraDeals([]);
+    await queryClient.invalidateQueries({ queryKey: ["deals", "pipeline"] });
+  }, [queryClient]);
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      await fetchPage(nextCursor, true, mineOnly);
+      const params = { limit: PAGE_LIMIT, before: nextCursor };
+      if (mineOnly) params.owner_user_id = "me";
+      const { data } = await api.get("/deals", { params });
+      const page = data.items || data.deals || [];
+      setExtraDeals((prev) => [...prev, ...page]);
+      setNextCursor(data.next_cursor ?? null);
     } catch {
       toast.error("Could not load more deals");
     } finally {
