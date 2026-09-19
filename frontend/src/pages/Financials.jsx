@@ -455,72 +455,14 @@ export default function Financials() {
   ];
 
   const actions = canWrite ? (
-    <div className="flex flex-wrap items-center gap-2">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-        className="hidden"
-        data-testid="bill-file-input"
-        onChange={onFilePick}
-      />
-      <input
-        ref={csvInputRef}
-        type="file"
-        accept=".csv,text/csv"
-        className="hidden"
-        data-testid="csv-file-input"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          previewCsv(f);
-        }}
-      />
-      <button
-        type="button"
-        data-testid="upload-bill-btn"
-        disabled={uploadBusy || csvBusy}
-        onClick={() => fileInputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/10 disabled:opacity-60"
-      >
-        <Upload className="w-4 h-4" />
-        {uploadBusy ? "Reading bill…" : "Upload a bill"}
-      </button>
-      <button
-        type="button"
-        data-testid="import-drive-btn"
-        disabled={uploadBusy || csvBusy}
-        onClick={importFromDrive}
-        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
-      >
-        <FileText className="w-4 h-4" />
-        From Drive
-      </button>
-      <button
-        type="button"
-        data-testid="export-sheets-btn"
-        disabled={sheetsBusy || !data.has_data}
-        onClick={exportToSheets}
-        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
-      >
-        <Sheet className="w-4 h-4" />
-        {sheetsBusy ? "Creating Sheet…" : "Export to Sheets"}
-      </button>
-      <button
-        type="button"
-        data-testid="import-csv-btn"
-        disabled={uploadBusy || csvBusy}
-        onClick={() => csvInputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
-      >
-        <FileSpreadsheet className="w-4 h-4" />
-        {csvBusy ? "Reading CSV…" : "Import from CSV"}
-      </button>
-      <button data-testid="add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
-        className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover">
-        <Plus className="w-4 h-4" /> Log entry
-      </button>
-    </div>
+    <button
+      type="button"
+      data-testid="add-entry-btn"
+      onClick={() => { setForm(emptyForm()); setShowForm(true); }}
+      className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover"
+    >
+      <Plus className="w-4 h-4" /> Log entry
+    </button>
   ) : null;
 
   return (
@@ -595,23 +537,98 @@ export default function Financials() {
         </GlassCard>
       )}
       {canWrite && (
-        <div
-          data-testid="bill-dropzone"
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          className={cn(
-            "mb-6 rounded-xl border border-dashed px-5 py-6 text-center transition-colors fade-up",
-            dragOver ? "border-helm-gold/35 bg-helm-gold/12" : "border-helm-line bg-helm-fg/[0.02]",
-            uploadBusy && "opacity-70 pointer-events-none",
-          )}
-        >
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-helm-gold" />
+        <div className="mb-6 fade-up">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+            className="hidden"
+            data-testid="bill-file-input"
+            onChange={onFilePick}
+          />
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            data-testid="csv-file-input"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              previewCsv(f);
+            }}
+          />
+          <div
+            data-testid="bill-dropzone"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={cn(
+              "rounded-xl border border-dashed px-4 py-4 sm:px-5 sm:py-5 transition-colors",
+              dragOver ? "border-helm-gold/35 bg-helm-gold/12" : "border-helm-line bg-helm-fg/[0.02]",
+              uploadBusy && "opacity-70 pointer-events-none",
+            )}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-helm-gold/12 border border-helm-gold/35 flex items-center justify-center shrink-0">
+                  <Upload className="w-4 h-4 text-helm-gold" />
+                </div>
+                <div className="min-w-0 text-left">
+                  <p className="text-sm text-helm-fg">Add bills &amp; ledger data</p>
+                  <p className="text-xs text-helm-muted mt-0.5 leading-relaxed">
+                    Drop a PDF, PNG, or JPEG here · up to 15MB · Claude reads it and pre-fills an entry to confirm
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="upload-bill-btn"
+                    disabled={uploadBusy || csvBusy}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/10 disabled:opacity-60"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {uploadBusy ? "Reading bill…" : "Upload a bill"}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="import-drive-btn"
+                    disabled={uploadBusy || csvBusy}
+                    onClick={importFromDrive}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 disabled:opacity-60"
+                  >
+                    <FileText className="w-4 h-4" />
+                    From Drive
+                  </button>
+                </div>
+                <span className="hidden sm:block w-px h-5 bg-helm-line self-center" aria-hidden />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="import-csv-btn"
+                    disabled={uploadBusy || csvBusy}
+                    onClick={() => csvInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-muted font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 hover:text-helm-fg disabled:opacity-60"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    {csvBusy ? "Reading CSV…" : "Import CSV"}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="export-sheets-btn"
+                    disabled={sheetsBusy || !data.has_data}
+                    onClick={exportToSheets}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-muted font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 hover:text-helm-fg disabled:opacity-60"
+                  >
+                    <Sheet className="w-4 h-4" />
+                    {sheetsBusy ? "Creating Sheet…" : "Export Sheets"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-helm-fg">Drop a bill, receipt, or invoice here</p>
-            <p className="text-xs text-helm-muted">PDF, PNG, or JPEG · up to 15MB · Claude reads it and pre-fills an entry for you to confirm</p>
           </div>
         </div>
       )}
