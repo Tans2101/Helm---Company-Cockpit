@@ -2,9 +2,9 @@
 
 export const TAGLINE = "Run the business. Don't chase it.";
 export const CATEGORY = "CEO Operating System";
-export const AUDIENCE = "Built for CEOs running companies of up to 50 people.";
+export const AUDIENCE = "Built for founders and owners running companies with up to 50 employees.";
 export const FOUNDER_NAME = "Tansher Dhawan";
-export const FOUNDER_ROLE = "CEO & Founder";
+export const FOUNDER_ROLE = "Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
 /** Public LinkedIn profile — also used as Person JSON-LD sameAs on /about. */
 export const FOUNDER_LINKEDIN_URL = "https://www.linkedin.com/in/tansher-dhawan-0a0848332/";
@@ -19,15 +19,15 @@ export const WHAT_TRENSTON_IS =
 /** @deprecated use WHAT_TRENSTON_IS */
 export const WHAT_HELM_IS = WHAT_TRENSTON_IS;
 export const ABOUT_PROBLEM =
-  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Trenston exists to close that gap.";
+  "Owners running a business of this size often spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Trenston exists to close that gap.";
 export const FOUNDER_NOTE =
-  "Tansher Dhawan built Trenston himself: he writes the code and still does the day-to-day department redesigns and fixes. There is no separate product team behind the curtain. What you see in the cockpit is what he is actively shipping.";
+  "Tansher Dhawan builds and ships Trenston himself — writing the code and handling day-to-day product work. There is no separate product team. What you see in the cockpit is what he is actively shipping.";
 
 export const HERO_SUB =
   "Trenston gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Trenston exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes, spreadsheets, and status chases every morning.";
+  "Trenston exists so an owner can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes, spreadsheets, and status chases every morning.";
 
 export const VISION =
   "The near direction is to deepen that same cockpit across every lane operators already run in Trenston (Briefing, Decisions, Financials, Production, Procurement, Legal, HR, Maintenance, Sales) so the morning open is the company, not another reconstruction project.";
@@ -54,16 +54,16 @@ export const VALUES = [
 
 export const WHO_HELM_IS_FOR = [
   {
-    title: "CEOs of companies up to 50",
-    body: "You're still in the weeds but shouldn't be drowning in them. Trenston gives you a clear view to share with your leadership team without hiring a chief of staff.",
+    title: "Founders and owners of companies with up to 50 employees",
+    body: "You are still close to the work, but you should not drown in status chasing. Trenston gives you a clear view to share with leadership without hiring a chief of staff.",
   },
   {
-    title: "Owner-operators & traditional businesses",
+    title: "Owner-operators and traditional businesses",
     body: "Manufacturing, services, agencies, family companies. Trenston is a cockpit for running the operation, not a tool only venture-backed startups use.",
   },
   {
     title: "Leadership teams",
-    body: "From a handful of people to fifty. Finance, sales, ops, and production keep their lanes. You get one synthesized view.",
+    body: "From a handful of people to fifty employees. Finance, sales, ops, and production keep their lanes. You get one synthesized view.",
   },
 ];
 
@@ -75,9 +75,12 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Trenston (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Trenston quotas, more seats, and integrations." },
-  { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Trenston?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
+  { q: "Is there a free plan?", a: "Yes. Free includes 3 Trenston seats, 5 free AI extracts to try it (then upgrade), Ask Trenston (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Trenston quotas, more seats, and integrations." },
+  { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you will not be charged." },
+  {
+    q: "Can my leadership team use Trenston?",
+    a: "Yes. Free supports up to 3 Trenston seats, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs. Trenston seats are logins to the product — separate from your company's total employee headcount. A 50-employee company might only need a handful of seats.",
+  },
   {
     q: "What integrations are included?",
     a: "Paid plans can connect Google, QuickBooks or Xero, SAP Business One, HubSpot, and Slack webhook alerts. Free stays manual-only.",
@@ -101,10 +104,10 @@ export const INTEGRATIONS_SHOWCASE = [
  * (sourced from backend/integrations_catalog.py + Slack webhook settings).
  */
 export const INTEGRATIONS_PUBLIC_BLURB =
-  "Connect the tools you already use so Financials, Briefing, Pipeline, and alerts stay current. Manual entry stays available when a system is not connected.";
+  "Connect the tools you already use so Financials, Briefing, Pipeline, and alerts stay current. Manual entry stays available for one-offs when an accounting system is connected.";
 
 export const PUBLIC_INTEGRATIONS_INTRO =
-  "Trenston connects to the tools your team already uses — nothing to migrate, nothing to duplicate.";
+  "Trenston connects to the tools your team already uses — nothing to migrate, nothing you must duplicate by hand.";
 
 /** Public /integrations cards — text wordmarks only (vendor logos need written permission). */
 export const PUBLIC_INTEGRATIONS = [
@@ -221,7 +224,7 @@ export const PLANS = [
     trialDays: 0,
     highlighted: false,
     includes: [
-      "Up to 3 team members",
+      "Up to 3 Trenston seats",
       "5 free AI extracts to try it, then upgrade",
       "Ask Trenston (10 messages/month)",
       "AI briefing",
@@ -238,7 +241,7 @@ export const PLANS = [
     trialDays: 7,
     highlighted: true,
     includes: [
-      "Up to 10 team members",
+      "Up to 10 Trenston seats",
       "AI document upload (30/billing period)",
       "Ask Trenston (50 messages/billing period)",
       "QuickBooks sync",
@@ -255,7 +258,7 @@ export const PLANS = [
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Up to 25 team members",
+      "Up to 25 Trenston seats",
       "AI document upload (150/billing period)",
       "Ask Trenston (200 messages/billing period)",
       "Priority QuickBooks sync",
@@ -272,7 +275,7 @@ export const PLANS = [
     trialDays: 7,
     highlighted: false,
     includes: [
-      "Up to 50 team members",
+      "Up to 50 Trenston seats",
       "AI document upload (500/billing period)",
       "Ask Trenston (500 messages/billing period)",
       "Priority support",
@@ -319,11 +322,11 @@ export const PROBLEMS = [
   },
   {
     title: "You react instead of lead",
-    body: "By the time a problem reaches you, it's already a fire. Cash, delivery, and overload creep up silently between check-ins.",
+    body: "By the time a problem reaches you, it is already a fire. Cash, delivery, and overload creep up silently between check-ins.",
   },
   {
     title: "Dashboards ≠ decisions",
-    body: "More charts don't help. You need synthesis: the one number that moved, the one call to make, the one thing to hand off.",
+    body: "More charts do not help. You need synthesis: the one number that moved, the one call to make, the one thing to hand off.",
   },
 ];
 
@@ -345,7 +348,7 @@ export const DEPARTMENTS_SECTION = {
   label: "Departments",
   title: "Turn on only the departments your company actually needs.",
   intro:
-    "Give each team its own lane (Procurement, Production, Accounting & Finance, Sales, Legal, HR, Engineering & Maintenance) while you see everything from the top. Disable what you don't use.",
+    "Give each team its own lane (Procurement, Production, Accounting & Finance, Sales, Legal, HR, Engineering & Maintenance) while you see everything from the top. Disable what you do not use.",
   items: [
     {
       name: "Procurement",
@@ -540,7 +543,7 @@ export const HOW_TO_USE_CONCEPTS = [
   {
     term: "Financials",
     explanation:
-      "Financials is where revenue, expenses, and cash are logged so Trenston can show MRR, burn, and runway elsewhere in the cockpit. Your finance team (or anyone granted access) can enter numbers manually, import a CSV, or connect accounting tools when available.",
+      "Financials is where revenue, expenses, and cash are logged so Trenston can show MRR, burn, and runway elsewhere in the cockpit. Your finance team (or anyone granted access) can enter numbers manually, import a CSV, or connect accounting tools. When QuickBooks, Xero, or SAP Business One is connected, synced books are the source of truth and manual entry is for one-offs that sync will not catch.",
     example:
       "Finance logs this month's expenses and updates cash. Briefing and Telemetry then reflect the new runway without a separate spreadsheet chase.",
   },
@@ -608,12 +611,12 @@ export const HOW_TO_USE_STEPS = [
 
 export const HOW_TO_USE_FAQ = [
   {
-    q: "Why can't I see Financials or Telemetry?",
+    q: "Why can I not see Financials or Telemetry?",
     a:
       "Those screens are restricted on purpose. Owners always have them. Finance packs can open Financials, and some packs (such as Executive or Operations) can open Telemetry. Everyone else only sees them if an owner grants that section in Team & Access. If a screen is missing, ask your owner for access rather than assuming Trenston is broken.",
   },
   {
-    q: "What if my company doesn't use QuickBooks, SAP Business One, or Google Calendar?",
+    q: "What if my company does not use QuickBooks, SAP Business One, or Google Calendar?",
     a:
       "That is fine. Trenston works with manual entry everywhere an integration is not connected. Connect tools when they help; nothing in the product requires them to get value from Briefing, Decisions, or department queues.",
   },
@@ -623,7 +626,7 @@ export const HOW_TO_USE_FAQ = [
       "The decision moves out of the open queue. Approved, rejected, and delegated items stay visible under recently resolved so you can confirm the outcome and who owns the follow-through. Delegating to yourself keeps the item open so you can still approve or reject it.",
   },
   {
-    q: "What's the difference between asking Ask Trenston and checking Decisions?",
+    q: "What is the difference between asking Ask Trenston and checking Decisions?",
     a:
       "Ask Trenston answers a question you type right now, using your live company data. Decisions is the queue of calls that already need approval or judgment, including suggestions Trenston drafts for you to confirm. Use Ask Trenston when you have a specific question; use Decisions when something is waiting on a yes, no, or owner.",
   },
@@ -633,7 +636,7 @@ export const HOW_TO_USE_FAQ = [
       "Private sticky notes on My Day are only visible to you. They are stored per user and are not shown to teammates or the owner. The optional team update on My Day is different: if you post one, it is shared with the team. Tasks you create or are assigned to follow normal task visibility for people who can see that work.",
   },
   {
-    q: "I'm in one department. Why don't I see the rest of the company?",
+    q: "I am in one department. Why do I not see the rest of the company?",
     a:
       "Access follows department membership and the permissions your owner set. You see My Day plus the department lanes you belong to. Company-wide screens such as Financials, Telemetry, or Team & Access appear only when your pack or an explicit grant includes them. That keeps each team in its own lane while leadership keeps the full picture.",
   },

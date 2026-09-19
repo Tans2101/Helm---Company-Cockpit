@@ -21,7 +21,7 @@ export default function Terms() {
             <p>
               By accessing or using <span className="text-helm-cream">Trenston</span>, you agree to these Terms of Service with{" "}
               <span className="text-helm-cream">Trenston</span> (“we”, “us”), operated by{" "}
-              <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>. If you use Trenston on behalf of a company,
+              <span className="text-helm-cream">Tansher Dhawan, Founder</span>. If you use Trenston on behalf of a company,
               you represent that you have authority to bind that company.
               Contact:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>

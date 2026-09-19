@@ -175,7 +175,7 @@ export default function Landing() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">
-              Everything a CEO needs, nothing they don&apos;t.
+              Everything a CEO needs, nothing they do not.
             </h2>
             <p className="mt-5 text-helm-slate leading-relaxed">
               Real surfaces from the cockpit, not illustrations.
@@ -286,7 +286,7 @@ export default function Landing() {
           className="relative mx-auto max-w-2xl text-center">
           <div className="mx-auto h-px w-10 bg-helm-gold mb-8" aria-hidden />
           <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">{TAGLINE}</h2>
-          <p className="mt-6 text-helm-slate">Quiet control for the CEO everyone&apos;s counting on.</p>
+          <p className="mt-6 text-helm-slate">Quiet control for the owner everyone is counting on.</p>
           <div className="mt-10">
             <button data-testid="footer-cta-btn" onClick={enter} type="button"
               className="group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-7 py-3 transition-colors hover:bg-helm-gold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">

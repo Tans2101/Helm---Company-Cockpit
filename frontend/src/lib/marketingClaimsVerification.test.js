@@ -96,14 +96,15 @@ describe("marketing claim verification log", () => {
   });
 
   test("founder note stays factual and short (no new personal details)", () => {
-    expect(FOUNDER_NOTE).toMatch(/built Trenston himself/i);
+    expect(FOUNDER_NOTE).toMatch(/builds and ships Trenston himself|built Trenston himself/i);
     expect(FOUNDER_NOTE).toMatch(/no separate product team/i);
     expect(FOUNDER_NOTE.toLowerCase()).not.toMatch(/\b(age|student|family|linkedin|photo)\b/);
   });
 
   test("founder LinkedIn URL is a single named constant for credit + Person sameAs", () => {
     expect(FOUNDER_NAME).toBe("Tansher Dhawan");
-    expect(FOUNDER_ROLE).toMatch(/Founder/i);
+    expect(FOUNDER_ROLE).toBe("Founder");
+    expect(FOUNDER_ROLE).not.toMatch(/CEO/i);
     expect(FOUNDER_LINKEDIN_URL).toBe("https://www.linkedin.com/in/tansher-dhawan-0a0848332/");
   });
 });

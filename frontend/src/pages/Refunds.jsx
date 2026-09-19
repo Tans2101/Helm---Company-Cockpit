@@ -20,7 +20,7 @@ export default function Refunds() {
             <p>
               This policy applies to paid Trenston subscriptions sold by{" "}
               <span className="text-helm-cream">Trenston</span> (operated by{" "}
-              <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>) through{" "}
+              <span className="text-helm-cream">Tansher Dhawan, Founder</span>) through{" "}
               <span className="text-helm-cream">Paddle</span> (merchant of record).
               Contact:{" "}
               <a href="mailto:contact@trenston.com" className="text-helm-gold hover:underline">contact@trenston.com</a>.

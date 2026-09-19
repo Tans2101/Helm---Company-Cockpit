@@ -20,7 +20,7 @@ export default function Privacy() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who we are</h2>
             <p>
               This Privacy Policy explains how <span className="text-helm-cream">Trenston</span> (“we”, “us”),
-              operated by <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>,
+              operated by <span className="text-helm-cream">Tansher Dhawan, Founder</span>,
               collects and uses information when you use <span className="text-helm-cream">Trenston</span>, our company cockpit product.
               Contact:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>.

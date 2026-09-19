@@ -5289,11 +5289,13 @@ async def financials(principal=Depends(require_section("financials", "finance:wr
         {"department": dept_catalog.TYPE_ACCOUNTING_FINANCE},
     ))
     my_google = await _user_google_tokens(ws_id, principal["user_id"])
+    c = await get_ws(ws_id)
     return {
         **payload,
         "can_write": await can_access_financials(principal),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
         "google": gcal.google_capabilities(my_google),
+        "accounting": _workspace_accounting_sync(c),
     }
 
 
@@ -11790,6 +11792,27 @@ def _integration_tokens(workspace: dict, field: str) -> Optional[dict]:
     except cred_crypto.CredentialCryptoError:
         logger.exception("Failed to decrypt %s for workspace %s", field, workspace.get("workspace_id"))
         return None
+
+
+def _workspace_accounting_sync(workspace: dict) -> dict:
+    """Which accounting systems are connected for Financials sync (not Google)."""
+    providers = []
+    if cred_crypto.credentials_present(workspace.get("quickbooks_tokens")):
+        providers.append({"id": "quickbooks", "label": "QuickBooks"})
+    if cred_crypto.credentials_present(workspace.get("xero_tokens")):
+        providers.append({"id": "xero", "label": "Xero"})
+    if cred_crypto.credentials_present(workspace.get("sap_b1_credentials")):
+        providers.append({"id": "sap_b1", "label": "SAP Business One"})
+    labels = [p["label"] for p in providers]
+    if len(labels) == 0:
+        label = ""
+    elif len(labels) == 1:
+        label = labels[0]
+    elif len(labels) == 2:
+        label = f"{labels[0]} and {labels[1]}"
+    else:
+        label = f"{', '.join(labels[:-1])}, and {labels[-1]}"
+    return {"connected": bool(providers), "providers": providers, "label": label}
 
 
 async def _store_integration_tokens(

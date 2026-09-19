@@ -36,7 +36,6 @@ const ABOUT_FACTS = [
   { label: "Who it's for", body: AUDIENCE },
   { label: "Problem we solve", body: ABOUT_PROBLEM },
   { label: "Founded", body: FOUNDED_DATE },
-  { label: "Founder", founder: true },
   { label: "Operates from", body: COMPANY_LOCATION },
   { label: "Contact", body: PUBLIC_CONTACT_EMAIL, href: PUBLIC_CONTACT_MAILTO },
 ];
@@ -71,9 +70,7 @@ export default function About() {
                 className="grid sm:grid-cols-[11rem_1fr] gap-2 sm:gap-8 py-6 border-b border-helm-cream/[0.06]"
               >
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-slate">{row.label}</h3>
-                {row.founder ? (
-                  <FounderCredit creditClassName="text-sm text-helm-cream/90 leading-relaxed" />
-                ) : row.href ? (
+                {row.href ? (
                   <a
                     id={row.label === "Contact" ? "contact" : undefined}
                     href={row.href}
@@ -102,10 +99,11 @@ export default function About() {
         <div className="mx-auto max-w-3xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
           <h2 className="font-display text-3xl font-medium tracking-tight">Who&apos;s behind Trenston</h2>
-          <p className="mt-5 text-helm-cream/80 leading-relaxed" data-testid="founder-credit">{FOUNDER_NOTE}</p>
+          <p className="mt-5 text-helm-cream/80 leading-relaxed">{FOUNDER_NOTE}</p>
           <FounderCredit
             className="mt-4"
             creditClassName="font-mono text-xs uppercase tracking-[0.2em] text-helm-slate"
+            data-testid="founder-credit"
           />
           <p className="mt-2 text-sm text-helm-slate">Based in {COMPANY_LOCATION}.</p>
         </div>

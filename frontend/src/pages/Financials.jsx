@@ -318,8 +318,25 @@ export default function Financials() {
   }
 
   const canWrite = data.can_write;
+  const accounting = data.accounting || {};
+  const hasAccountingSync = Boolean(accounting.connected);
+  const accountingLabel = accounting.label || "your accounting system";
   const finActs = (activityData?.items || activityData?.activities || []).filter((a) => a.module === "financials").slice(0, 5);
   const sym = data.currency_symbol || "$";
+
+  const findLikelySyncedDuplicate = (payload) => {
+    const amount = Number(payload.amount);
+    const month = payload.month;
+    if (!Number.isFinite(amount) || !month) return null;
+    return (data.entries || []).find((e) => {
+      const src = String(e.source || "");
+      if (!src.includes("sync") && !src.startsWith("qbo") && !src.startsWith("xero") && !src.startsWith("sap")) {
+        return false;
+      }
+      if (e.month !== month) return false;
+      return Math.abs(Number(e.amount) - amount) < 0.02;
+    }) || null;
+  };
 
   const submitEntry = async () => {
     if (!form.name?.trim() || !form.amount || !form.month) {
@@ -344,6 +361,16 @@ export default function Financials() {
         note: form.note,
       };
       if (form.source_document_id) payload.source_document_id = form.source_document_id;
+      if (hasAccountingSync) {
+        const dup = findLikelySyncedDuplicate(payload);
+        if (dup) {
+          const ok = window.confirm(
+            `A synced entry for about the same amount already exists in ${dup.month}`
+            + `${dup.name ? ` (${dup.name})` : ""}. Save anyway? Manual duplicates can inflate MRR, burn, and cash.`,
+          );
+          if (!ok) return;
+        }
+      }
       await api.post("/financials/entries", payload);
       toast.success("Entry logged");
       setForm(emptyForm());
@@ -420,6 +447,15 @@ export default function Financials() {
       toast.error("No valid rows to import");
       return;
     }
+    if (hasAccountingSync) {
+      const overlaps = csvPreview.valid.filter((row) => findLikelySyncedDuplicate(row));
+      if (overlaps.length > 0) {
+        const ok = window.confirm(
+          `${overlaps.length} CSV row${overlaps.length === 1 ? "" : "s"} look similar to entries already synced from ${accountingLabel}. Import anyway? Manual duplicates can inflate MRR, burn, and cash.`,
+        );
+        if (!ok) return;
+      }
+    }
     setCsvBusy(true);
     try {
       const { data: res } = await api.post("/financials/import-csv/confirm", { entries: csvPreview.valid });
@@ -461,16 +497,29 @@ export default function Financials() {
       onClick={() => { setForm(emptyForm()); setShowForm(true); }}
       className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold-hover"
     >
-      <Plus className="w-4 h-4" /> Log entry
+      <Plus className="w-4 h-4" /> {hasAccountingSync ? "Add one-off entry" : "Log entry"}
     </button>
   ) : null;
 
   return (
     <div>
-      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Trenston turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
+      <PageHeader
+        title="Financials"
+        subtitle={
+          hasAccountingSync
+            ? `Numbers sync from ${accountingLabel}. Use manual entry only for items that will not appear in your books.`
+            : "Log revenue and expenses here — or connect QuickBooks, Xero, or SAP Business One under Integrations. Trenston turns it into live MRR, runway, and burn."
+        }
+        action={actions}
+      />
 
       {csvPreview && (
         <GlassCard className="p-5 mb-6 fade-up" data-testid="csv-import-preview">
+          {hasAccountingSync && (
+            <p className="mb-3 text-xs text-helm-muted leading-relaxed" data-testid="csv-accounting-sync-note">
+              Your financials sync from {accountingLabel}. Import only rows that are not already in synced books.
+            </p>
+          )}
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-gold">CSV import preview</p>
@@ -575,9 +624,13 @@ export default function Financials() {
                   <Upload className="w-4 h-4 text-helm-gold" />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-sm text-helm-fg">Add bills &amp; ledger data</p>
+                  <p className="text-sm text-helm-fg">
+                    {hasAccountingSync ? "Add a one-off not in your synced books" : "Add bills & ledger data"}
+                  </p>
                   <p className="text-xs text-helm-muted mt-0.5 leading-relaxed">
-                    Drop a PDF, PNG, or JPEG here · up to 15MB · Claude reads it and pre-fills an entry to confirm
+                    {hasAccountingSync
+                      ? `Financials sync from ${accountingLabel}. Use upload, CSV, or a manual entry only for reimbursements, cash payments, or other items sync will not catch.`
+                      : "Drop a PDF, PNG, or JPEG here · up to 15MB · Claude reads it and pre-fills an entry to confirm"}
                   </p>
                 </div>
               </div>
@@ -591,7 +644,7 @@ export default function Financials() {
                     className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-gold/10 disabled:opacity-60"
                   >
                     <Upload className="w-4 h-4" />
-                    {uploadBusy ? "Reading bill…" : "Upload a bill"}
+                    {uploadBusy ? "Reading bill…" : (hasAccountingSync ? "Upload one-off bill" : "Upload a bill")}
                   </button>
                   <button
                     type="button"
@@ -614,7 +667,7 @@ export default function Financials() {
                     className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-muted font-medium text-sm px-3 py-2 transition-colors hover:bg-helm-fg/5 hover:text-helm-fg disabled:opacity-60"
                   >
                     <FileSpreadsheet className="w-4 h-4" />
-                    {csvBusy ? "Reading CSV…" : "Import CSV"}
+                    {csvBusy ? "Reading CSV…" : (hasAccountingSync ? "Import one-off CSV" : "Import CSV")}
                   </button>
                   <button
                     type="button"
@@ -635,16 +688,20 @@ export default function Financials() {
 
       {!data.has_data ? (
         <EmptyState icon={Wallet} title="No financials logged yet"
-          body="Log your revenue and expenses and Trenston computes MRR, ARR, runway and burn automatically."
+          body={
+            hasAccountingSync
+              ? `Connect and sync ${accountingLabel} under Integrations, or add a one-off entry for anything sync will not include.`
+              : "Log your revenue and expenses and Trenston computes MRR, ARR, runway, and burn automatically."
+          }
           action={canWrite ? (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button data-testid="empty-upload-bill-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}
                 className="inline-flex items-center gap-1.5 rounded-md border border-helm-gold/35 bg-helm-gold/12 text-helm-gold font-medium text-sm px-4 py-2 hover:bg-helm-gold/10 disabled:opacity-60">
-                <Upload className="w-4 h-4" /> Upload a bill
+                <Upload className="w-4 h-4" /> {hasAccountingSync ? "Upload one-off bill" : "Upload a bill"}
               </button>
               <button data-testid="empty-add-entry-btn" onClick={() => { setForm(emptyForm()); setShowForm(true); }}
                 className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover">
-                <Plus className="w-4 h-4" /> Log first entry
+                <Plus className="w-4 h-4" /> {hasAccountingSync ? "Add one-off entry" : "Log first entry"}
               </button>
               <button data-testid="empty-settings-btn" onClick={openSettings}
                 className="inline-flex items-center gap-1.5 rounded-md border border-helm-line text-helm-fg font-medium text-sm px-4 py-2 hover:bg-helm-fg/5">
@@ -829,10 +886,20 @@ export default function Financials() {
           <GlassCard className="relative w-full sm:max-w-md m-0 sm:m-4 rounded-t-2xl sm:rounded-2xl p-6" data-testid="entry-form">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg text-helm-fg font-light">
-                {form.source_document_id ? "Confirm extracted entry" : "Log a financial entry"}
+                {form.source_document_id
+                  ? "Confirm extracted entry"
+                  : hasAccountingSync
+                    ? "Add a one-off entry"
+                    : "Log a financial entry"}
               </h3>
               <button onClick={() => setShowForm(false)} className="text-helm-muted hover:text-helm-fg"><X className="w-5 h-5" /></button>
             </div>
+            {hasAccountingSync && !form.source_document_id && (
+              <p className="mb-4 text-xs text-helm-muted leading-relaxed" data-testid="accounting-sync-note">
+                Your financials sync from {accountingLabel}. Use this only for items that will not appear in synced books
+                (for example a cash reimbursement).
+              </p>
+            )}
             {form.extract_confidence === "low" && (
               <div className="mb-4 flex items-start gap-2 rounded-lg border border-helm-status-warning/35 bg-helm-status-warning/12 px-3 py-2.5 text-sm text-helm-fg" data-testid="low-confidence-banner">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />

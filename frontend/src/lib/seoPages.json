@@ -4,15 +4,15 @@
   "pages": {
     "/": {
       "title": "Trenston — Run the business. Don't chase it.",
-      "description": "Trenston — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people.",
+      "description": "Trenston — Run the business. Don't chase it. Built for founders and owners running companies with up to 50 employees.",
       "ogTitle": "Trenston — Run the business. Don't chase it.",
-      "ogDescription": "Trenston — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people."
+      "ogDescription": "Trenston — Run the business. Don't chase it. Built for founders and owners running companies with up to 50 employees."
     },
     "/about": {
       "title": "About Trenston — CEO Operating System",
-      "description": "Why Trenston exists: money, decisions, people, and department work in one cockpit for CEOs running companies of up to 50 people.",
+      "description": "Why Trenston exists: money, decisions, people, and department work in one cockpit for founders and owners running companies with up to 50 employees.",
       "ogTitle": "About Trenston",
-      "ogDescription": "Trenston pulls financials, decisions, and day-to-day work into one place so CEOs see what needs them — not another dashboard to chase."
+      "ogDescription": "Trenston pulls financials, decisions, and day-to-day work into one place so founders and owners see what needs them — not another dashboard to chase."
     },
     "/features": {
       "title": "Features · Trenston",
