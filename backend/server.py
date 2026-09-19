@@ -62,6 +62,10 @@ import work_items as helm_work_items
 import data_freshness as helm_freshness
 import procurement_metrics as proc_metrics
 import production_daily_logs as prod_daily
+import sales_order_book as sales_ob
+import maintenance_ops as maint_ops
+import procurement_spend as proc_spend
+import dept_ops_wiring
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -3420,14 +3424,20 @@ def _fmt_days_metric(value: Optional[float]) -> str:
 
 
 async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
-    """Procurement lead-time + Production daily output rollups for Briefing.
+    """Procurement / Production / Sales / Maintenance rollups for Briefing.
 
-    Missing timestamps / logs surface as not tracked / no data — never fabricated zeros.
+    Missing timestamps / logs / budgets / targets surface as not tracked / no data
+    — never fabricated zeros.
     """
     depts = await dept_migrate.get_enabled_departments_by_type(
         db,
         workspace_id,
-        (dept_catalog.TYPE_PROCUREMENT, dept_catalog.TYPE_PRODUCTION),
+        (
+            dept_catalog.TYPE_PROCUREMENT,
+            dept_catalog.TYPE_PRODUCTION,
+            dept_catalog.TYPE_SALES,
+            dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+        ),
     )
     out: list[dict] = []
 
@@ -3437,8 +3447,8 @@ async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
             {"department_id": proc_dept["department_id"]},
             {
                 "_id": 0, "id": 1, "item": 1, "vendor_name": 1, "status": 1, "priority": 1,
-                "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1,
-                "expected_delivery_date": 1, "actual_delivery_date": 1,
+                "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1, "updated_at": 1,
+                "expected_delivery_date": 1, "actual_delivery_date": 1, "cost": 1,
             },
         ).to_list(2000)
         summary = proc_metrics.department_lead_time_summary(rows)
@@ -3469,12 +3479,39 @@ async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
             "missing": False,
             "href": "/app/procurement" if late_n else None,
         })
+        month_start, month_end = decision_engine.month_period_bounds()
+        spend = proc_spend.spend_rollup(
+            rows,
+            period_start=month_start,
+            period_end=month_end,
+            budget=proc_dept.get("monthly_budget"),
+            budget_entered=bool(proc_dept.get("monthly_budget_entered")),
+        )
+        if spend["budget_entered"]:
+            gap = spend.get("gap") or 0
+            out.append({
+                "label": "Procurement spend",
+                "value": f"${spend['actual']:,.0f} / ${spend['budget']:,.0f}",
+                "delta": 0,
+                "tone": "negative" if gap > 0 else "positive",
+                "missing": False,
+                "href": "/app/procurement",
+            })
+        else:
+            out.append({
+                "label": "Procurement spend",
+                "value": f"${spend['actual']:,.0f}",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": spend["priced_count"] == 0,
+                "href": "/app/procurement",
+            })
 
     prod_dept = depts.get(dept_catalog.TYPE_PRODUCTION)
     if prod_dept:
         orders = await db.production_work_orders.find(
             {"department_id": prod_dept["department_id"]},
-            {"_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1},
+            {"_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1, "unit": 1},
         ).to_list(1000)
         wo_ids = [o["id"] for o in orders if o.get("id")]
         logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
@@ -3560,6 +3597,149 @@ async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
                 "tone": "neutral",
                 "missing": True,
                 "href": "/app/production",
+            })
+
+    sales_dept = depts.get(dept_catalog.TYPE_SALES)
+    if sales_dept:
+        entries = await db.sales_order_book.find(
+            {"department_id": sales_dept["department_id"]},
+            {"_id": 0},
+        ).to_list(5000)
+        summary = sales_ob.order_book_summary(entries)
+        month = sales_ob.current_month()
+        target_row = await db.sales_targets.find_one(
+            {"workspace_id": workspace_id, "month": month}, {"_id": 0},
+        )
+        tvs = sales_ob.target_vs_actual(
+            target_row=target_row, confirmed_actual=summary["confirmed_this_month"],
+        )
+        if tvs["target_entered"]:
+            out.append({
+                "label": "Sales vs target",
+                "value": f"${tvs['actual']:,.0f} / ${tvs['target']:,.0f}",
+                "delta": 0,
+                "tone": "negative" if (tvs.get("gap") or 0) < 0 else "positive",
+                "missing": False,
+                "href": "/app/pipeline",
+            })
+        else:
+            out.append({
+                "label": "Sales confirmed",
+                "value": f"${tvs['actual']:,.0f}" if summary["line_count"] else "No target set",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": not tvs["target_entered"],
+                "href": "/app/pipeline",
+            })
+        fwd = summary["forward_pipeline"]
+        fwd_total = sum(
+            (b.get("expected") or 0) + (b.get("in_negotiation") or 0) + (b.get("confirmed") or 0)
+            for b in fwd
+        )
+        out.append({
+            "label": "Order book (3mo)",
+            "value": f"${fwd_total:,.0f}" if summary["line_count"] else "No data",
+            "delta": 0,
+            "tone": "neutral",
+            "missing": summary["line_count"] == 0,
+            "href": "/app/pipeline",
+        })
+
+    maint_dept = depts.get(dept_catalog.TYPE_ENGINEERING_MAINTENANCE)
+    if maint_dept:
+        spare_rows = await db.maintenance_spares.find(
+            {"department_id": maint_dept["department_id"]}, {"_id": 0},
+        ).to_list(2000)
+        below_n = len(maint_ops.spares_below_threshold(spare_rows))
+        sched_rows = await db.maintenance_schedules.find(
+            {"department_id": maint_dept["department_id"]}, {"_id": 0},
+        ).to_list(2000)
+        overdue_n = len(maint_ops.overdue_schedules(sched_rows))
+        contract_rows = await db.maintenance_contracts.find(
+            {"department_id": maint_dept["department_id"]}, {"_id": 0},
+        ).to_list(2000)
+        renew_n = len(maint_ops.contracts_needing_attention(contract_rows))
+        out.append({
+            "label": "Spares low",
+            "value": str(below_n),
+            "delta": 0,
+            "tone": "negative" if below_n else "positive",
+            "missing": False,
+            "href": "/app/maintenance" if below_n else None,
+        })
+        out.append({
+            "label": "Maint overdue",
+            "value": str(overdue_n),
+            "delta": 0,
+            "tone": "negative" if overdue_n else "positive",
+            "missing": False,
+            "href": "/app/maintenance" if overdue_n else None,
+        })
+        out.append({
+            "label": "AMC renewals",
+            "value": str(renew_n),
+            "delta": 0,
+            "tone": "negative" if renew_n else "positive",
+            "missing": False,
+            "href": "/app/maintenance" if renew_n else None,
+        })
+        month_start, month_end = decision_engine.month_period_bounds()
+        resolved = await db.maintenance_tickets.find(
+            {
+                "department_id": maint_dept["department_id"],
+                "status": "resolved",
+                "$or": [
+                    {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
+                    {
+                        "resolved_at": {"$exists": False},
+                        "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
+                    },
+                ],
+            },
+            {"_id": 0, "cost": 1},
+        ).to_list(5000)
+        ticket_costs = []
+        for t in resolved:
+            if t.get("cost") is None:
+                continue
+            try:
+                ticket_costs.append(float(t["cost"]))
+            except (TypeError, ValueError):
+                pass
+        ledger = await db.maintenance_costs.find(
+            {"department_id": maint_dept["department_id"], "month": month_start.strftime("%Y-%m")},
+            {"_id": 0, "amount": 1},
+        ).to_list(2000)
+        ledger_costs = []
+        for row in ledger:
+            try:
+                ledger_costs.append(float(row.get("amount") or 0))
+            except (TypeError, ValueError):
+                pass
+        overhead = maint_ops.overhead_rollup(
+            ticket_costs=ticket_costs,
+            ledger_costs=ledger_costs,
+            budget=maint_dept.get("monthly_budget"),
+            budget_entered=bool(maint_dept.get("monthly_budget_entered")),
+        )
+        if overhead["budget_entered"]:
+            gap = overhead.get("gap") or 0
+            out.append({
+                "label": "Maint overhead",
+                "value": f"${overhead['actual']:,.0f} / ${overhead['budget']:,.0f}",
+                "delta": 0,
+                "tone": "negative" if gap > 0 else "positive",
+                "missing": False,
+                "href": "/app/maintenance",
+            })
+        else:
+            out.append({
+                "label": "Maint overhead",
+                "value": f"${overhead['actual']:,.0f}",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": overhead["actual"] == 0,
+                "href": "/app/maintenance",
             })
 
     return out
@@ -9836,6 +10016,14 @@ async def list_procurement_requests(
     )
     items.sort(key=_procurement_queue_sort_key)
     lead_time_summary = proc_metrics.department_lead_time_summary(items)
+    month_start, month_end = decision_engine.month_period_bounds()
+    spend = proc_spend.spend_rollup(
+        items,
+        period_start=month_start,
+        period_end=month_end,
+        budget=dept.get("monthly_budget"),
+        budget_entered=bool(dept.get("monthly_budget_entered")),
+    )
 
     payload_out = {
         "department_id": dept["department_id"],
@@ -9848,6 +10036,9 @@ async def list_procurement_requests(
         "can_approve": is_lead,
         "my_user_id": principal["user_id"],
         "lead_time_summary": lead_time_summary,
+        "spend": spend,
+        "monthly_budget": dept.get("monthly_budget"),
+        "monthly_budget_entered": bool(dept.get("monthly_budget_entered")),
     }
     simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
     return payload_out
@@ -10812,6 +11003,7 @@ class MaintenanceTicketPatch(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     assigned_technician: Optional[str] = None
+    cost: Optional[float] = None
 
 
 @api_router.get("/maintenance/tickets")
@@ -10857,6 +11049,60 @@ async def list_maintenance_tickets(
     downtime = decision_engine.compute_downtime(
         rows, period_start=month_start, period_end=month_end,
     )
+    # Operational rollups (spares / schedules / contracts / overhead).
+    spare_rows = await db.maintenance_spares.find(
+        {"department_id": dept["department_id"]}, {"_id": 0},
+    ).to_list(2000)
+    below = maint_ops.spares_below_threshold(spare_rows)
+    sched_rows = await db.maintenance_schedules.find(
+        {"department_id": dept["department_id"]}, {"_id": 0},
+    ).to_list(2000)
+    overdue_sched = maint_ops.overdue_schedules(sched_rows)
+    contract_rows = await db.maintenance_contracts.find(
+        {"department_id": dept["department_id"]}, {"_id": 0},
+    ).to_list(2000)
+    needing_renewal = maint_ops.contracts_needing_attention(contract_rows)
+    # Overhead: ticket costs resolved this month + ledger.
+    resolved_month = await db.maintenance_tickets.find(
+        {
+            "department_id": dept["department_id"],
+            "status": "resolved",
+            "$or": [
+                {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
+                {
+                    "resolved_at": {"$exists": False},
+                    "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
+                },
+            ],
+        },
+        {"_id": 0, "cost": 1},
+    ).to_list(5000)
+    ticket_costs = []
+    for t in resolved_month:
+        if t.get("cost") is None:
+            continue
+        try:
+            ticket_costs.append(float(t["cost"]))
+        except (TypeError, ValueError):
+            pass
+    ledger = await db.maintenance_costs.find(
+        {"department_id": dept["department_id"], "month": month_start.strftime("%Y-%m")},
+        {"_id": 0, "amount": 1},
+    ).to_list(2000)
+    ledger_costs = []
+    for row in ledger:
+        try:
+            ledger_costs.append(float(row.get("amount") or 0))
+        except (TypeError, ValueError):
+            pass
+    overhead = maint_ops.overhead_rollup(
+        ticket_costs=ticket_costs,
+        ledger_costs=ledger_costs,
+        budget=dept.get("monthly_budget"),
+        budget_entered=bool(dept.get("monthly_budget_entered")),
+    )
+    overhead["period"] = month_start.strftime("%Y-%m")
+    overhead["period_label"] = month_start.strftime("%B %Y")
     payload_out = {
         "department_id": dept["department_id"],
         "name": dept.get("name") or "Engineering & Maintenance",
@@ -10868,6 +11114,13 @@ async def list_maintenance_tickets(
             "period": month_start.strftime("%Y-%m"),
             "period_label": month_start.strftime("%B %Y"),
         },
+        "spares_below_threshold_count": len(below),
+        "spares_below_threshold": below[:20],
+        "overdue_schedules_count": len(overdue_sched),
+        "overdue_schedules": overdue_sched[:20],
+        "contracts_needing_renewal_count": len(needing_renewal),
+        "contracts_needing_renewal": needing_renewal[:20],
+        "overhead": overhead,
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "can_assign": is_lead,
@@ -10997,6 +11250,14 @@ async def patch_maintenance_ticket(
         if st not in MAINTENANCE_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         upd["status"] = st
+    if payload.cost is not None:
+        try:
+            cost = float(payload.cost)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="cost must be a number")
+        if cost < 0:
+            raise HTTPException(status_code=400, detail="cost cannot be negative")
+        upd["cost"] = round(cost, 2)
     helm_dept_drafts.apply_status_completion(ticket, upd, done_status="resolved")
 
     if payload.assigned_technician is not None:
@@ -11012,11 +11273,40 @@ async def patch_maintenance_ticket(
     if not upd:
         return {"ok": True, "ticket": await _enrich_maintenance_ticket(ticket)}
 
+    # Stamp resolved_at when transitioning to resolved (for overhead month rollups).
+    becoming_resolved = (
+        upd.get("status") == "resolved" and ticket.get("status") != "resolved"
+    )
+    if becoming_resolved and "resolved_at" not in upd:
+        upd["resolved_at"] = datetime.now(timezone.utc).isoformat()
+
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.maintenance_tickets.update_one(
         {"id": ticket_id, "department_id": dept["department_id"]},
         {"$set": upd},
     )
+
+    # Best-effort: resolving a ticket updates matching schedule last_done_at.
+    if becoming_resolved or (upd.get("status") == "resolved"):
+        try:
+            eq_name = (upd.get("equipment_name") or ticket.get("equipment_name") or "").strip()
+            if eq_name:
+                done_at = upd.get("resolved_at") or upd.get("updated_at")
+                await db.maintenance_schedules.update_many(
+                    {
+                        "department_id": dept["department_id"],
+                        "equipment_name": {
+                            "$regex": f"^{re.escape(eq_name)}$",
+                            "$options": "i",
+                        },
+                    },
+                    {"$set": {"last_done_at": done_at, "updated_at": upd["updated_at"]}},
+                )
+        except Exception:
+            logger.exception(
+                "schedule auto-update failed for ticket %s", ticket_id,
+            )
+
     invalidate_workspace_list_cache(principal["workspace_id"], "maintenance", "production", "me_work", "calendar")
     return {"ok": True, "ticket": await _enrich_maintenance_ticket({**ticket, **upd})}
 
@@ -14605,6 +14895,13 @@ if not _serve_static:
         }
 
 
+dept_ops_wiring.register(
+    api_router,
+    db=db,
+    get_principal=get_principal,
+    invalidate_workspace_list_cache=invalidate_workspace_list_cache,
+    invalidate_departments_cache=invalidate_departments_cache,
+)
 app.include_router(api_router)
 
 
@@ -14725,6 +15022,18 @@ async def _ensure_indexes():
         (db.production_daily_logs, [("work_order_id", 1), ("date", 1)], {"unique": True}),
         (db.production_daily_logs, [("workspace_id", 1), ("date", -1)], {}),
         (db.production_daily_logs, [("department_id", 1), ("date", -1)], {}),
+        (db.sales_order_book, [("id", 1)], {"unique": True}),
+        (db.sales_order_book, [("department_id", 1), ("updated_at", -1)], {}),
+        (db.sales_order_book, [("workspace_id", 1), ("expected_close_month", 1)], {}),
+        (db.sales_targets, [("workspace_id", 1), ("month", 1)], {"unique": True}),
+        (db.maintenance_spares, [("id", 1)], {"unique": True}),
+        (db.maintenance_spares, [("department_id", 1)], {}),
+        (db.maintenance_schedules, [("id", 1)], {"unique": True}),
+        (db.maintenance_schedules, [("department_id", 1), ("equipment_name", 1)], {}),
+        (db.maintenance_contracts, [("id", 1)], {"unique": True}),
+        (db.maintenance_contracts, [("department_id", 1)], {}),
+        (db.maintenance_costs, [("id", 1)], {"unique": True}),
+        (db.maintenance_costs, [("department_id", 1), ("month", 1)], {}),
         (db.procurement_requests, [("id", 1)], {"unique": True}),
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),

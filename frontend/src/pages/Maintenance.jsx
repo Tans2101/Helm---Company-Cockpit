@@ -9,6 +9,7 @@ import {
 } from "@/components/kit";
 import { cn } from "@/lib/utils";
 import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
+import MaintenanceOpsPanels from "@/components/MaintenanceOpsPanels";
 
 const STATUS_META = {
   reported: { label: "Reported", className: "bg-helm-muted/12 text-helm-fg border-helm-muted/35" },
@@ -151,6 +152,7 @@ export default function Maintenance() {
       notes: selected.notes || "",
       status: selected.status || "reported",
       assigned_technician: selected.assigned_technician || "",
+      cost: selected.cost == null ? "" : String(selected.cost),
     });
   }, [selected]);
 
@@ -238,6 +240,15 @@ export default function Maintenance() {
     };
     if (isLead) {
       body.assigned_technician = draft.assigned_technician || null;
+    }
+    const costRaw = String(draft.cost ?? "").trim();
+    if (costRaw !== "") {
+      const costNum = Number(costRaw);
+      if (!Number.isFinite(costNum) || costNum < 0) {
+        toast.error("Repair cost must be a non-negative number");
+        return;
+      }
+      body.cost = costNum;
     }
     setBusy(true);
     try {
@@ -334,6 +345,37 @@ export default function Maintenance() {
           )}
         </div>
       )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5" data-testid="maintenance-ops-summary">
+        <div className="rounded-md border border-helm-line px-3 py-2.5">
+          <p className="text-[10px] font-mono uppercase text-helm-muted">Spares low</p>
+          <p className={cn("font-mono text-xl mt-1", (data?.spares_below_threshold_count || 0) > 0 ? "text-helm-status-negative" : "text-helm-fg")}>
+            {data?.spares_below_threshold_count ?? 0}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line px-3 py-2.5">
+          <p className="text-[10px] font-mono uppercase text-helm-muted">Schedules overdue</p>
+          <p className={cn("font-mono text-xl mt-1", (data?.overdue_schedules_count || 0) > 0 ? "text-helm-status-negative" : "text-helm-fg")}>
+            {data?.overdue_schedules_count ?? 0}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line px-3 py-2.5">
+          <p className="text-[10px] font-mono uppercase text-helm-muted">AMC renewals</p>
+          <p className={cn("font-mono text-xl mt-1", (data?.contracts_needing_renewal_count || 0) > 0 ? "text-helm-status-warning" : "text-helm-fg")}>
+            {data?.contracts_needing_renewal_count ?? 0}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line px-3 py-2.5">
+          <p className="text-[10px] font-mono uppercase text-helm-muted">Overhead</p>
+          <p className="font-mono text-sm text-helm-fg mt-1">
+            {data?.overhead?.budget_entered
+              ? `$${Number(data.overhead.actual || 0).toLocaleString()} / $${Number(data.overhead.budget || 0).toLocaleString()}`
+              : data?.overhead
+                ? `$${Number(data.overhead.actual || 0).toLocaleString()} · no budget`
+                : "—"}
+          </p>
+        </div>
+      </div>
 
       {visible.length === 0 ? (
         <EmptyState
@@ -507,6 +549,26 @@ export default function Maintenance() {
             />
           </label>
 
+          <label className="block space-y-1">
+            <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+              Repair cost (optional)
+            </span>
+            <input
+              data-testid="maintenance-edit-cost"
+              type="number"
+              min="0"
+              step="0.01"
+              disabled={!canEdit || busy}
+              value={draft.cost}
+              onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))}
+              placeholder="Leave blank if not entered"
+              className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+            />
+            <span className="text-[10px] text-helm-muted">
+              Counted in overhead for the month this ticket is resolved. Blank means not entered — not $0.
+            </span>
+          </label>
+
           <div className="flex flex-wrap gap-4 text-xs text-helm-muted">
             <span>Reported by: <span className="text-helm-fg">{personLabel(selected.reporter)}</span></span>
             <span>Status: <StatusBadge status={selected.status} /></span>
@@ -549,6 +611,8 @@ export default function Maintenance() {
         onConfirm={deleteTicket}
         testId="delete-maintenance-confirm"
       />
+
+      <MaintenanceOpsPanels ticketData={data} onTicketsReload={reload} />
 
       {adding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -10,6 +10,7 @@ import {
 import { FETCH_STALE_MS, fetchErrorMessage } from "@/hooks/useFetch";
 import { cn } from "@/lib/utils";
 import { PossiblyStaleBadge } from "@/components/AiSummaryMeta";
+import SalesOrderBook from "@/components/SalesOrderBook";
 
 const stageStyle = {
   lead: "text-helm-fg bg-helm-fg/5",
@@ -52,6 +53,7 @@ export default function Pipeline() {
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState(null);
   const [productionPrompt, setProductionPrompt] = useState(null);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
+  const [salesTab, setSalesTab] = useState("pipeline");
 
   const dealsQueryKey = ["deals", "pipeline", mineOnly ? "me" : "all"];
 
@@ -243,7 +245,7 @@ export default function Pipeline() {
     }
   };
 
-  const action = canWrite ? (
+  const action = salesTab === "pipeline" && canWrite ? (
     <button data-testid="add-deal-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover">
       <Plus className="w-4 h-4" /> New deal
     </button>
@@ -251,8 +253,34 @@ export default function Pipeline() {
 
   return (
     <div>
-      <PageHeader title="Sales Pipeline" subtitle="Log deals and stages. Pipeline signals roll straight into the CEO Briefing." action={action} />
+      <PageHeader title="Sales" subtitle="Pipeline and order book. Status rolls into the CEO Briefing." action={action} />
 
+      <div className="flex items-center gap-1 mb-5 border-b border-helm-line" data-testid="sales-tabs">
+        {[
+          { id: "pipeline", label: "Pipeline" },
+          { id: "order_book", label: "Order book" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            data-testid={`sales-tab-${t.id}`}
+            onClick={() => setSalesTab(t.id)}
+            className={cn(
+              "px-3 py-2 text-sm border-b-2 -mb-px transition-colors",
+              salesTab === t.id
+                ? "border-helm-gold text-helm-fg"
+                : "border-transparent text-helm-muted hover:text-helm-fg",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {salesTab === "order_book" ? (
+        <SalesOrderBook />
+      ) : (
+        <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -456,6 +484,8 @@ export default function Pipeline() {
         onCancel={() => setProductionPrompt(null)}
         testId="won-deal-production-prompt"
       />
+        </>
+      )}
     </div>
   );
 }

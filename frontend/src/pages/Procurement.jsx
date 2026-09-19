@@ -114,6 +114,20 @@ export default function Procurement() {
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
   const leadSummary = data?.lead_time_summary || null;
+  const spend = data?.spend || null;
+  const canManageBudget = Boolean(data?.is_lead || data?.is_ceo || data?.can_approve);
+  const [budgetDraft, setBudgetDraft] = useState("");
+  const [budgetBusy, setBudgetBusy] = useState(false);
+
+  useEffect(() => {
+    if (spend?.budget_entered && spend.budget != null) setBudgetDraft(String(spend.budget));
+    else if (data?.monthly_budget_entered && data?.monthly_budget != null) {
+      setBudgetDraft(String(data.monthly_budget));
+    } else {
+      setBudgetDraft("");
+    }
+  }, [spend?.budget, spend?.budget_entered, data?.monthly_budget, data?.monthly_budget_entered]);
+
   const visible = useMemo(() => {
     // Backend owns queue order; only filter closed locally.
     return showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status));
@@ -352,6 +366,38 @@ export default function Procurement() {
     }
   };
 
+  const saveProcurementBudget = async () => {
+    const t = Number(budgetDraft);
+    if (!Number.isFinite(t) || t < 0) {
+      toast.error("Enter a non-negative budget");
+      return;
+    }
+    setBudgetBusy(true);
+    try {
+      await api.put("/procurement/settings", { monthly_budget: t });
+      toast.success("Procurement budget saved");
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save budget");
+    } finally {
+      setBudgetBusy(false);
+    }
+  };
+
+  const clearProcurementBudget = async () => {
+    setBudgetBusy(true);
+    try {
+      await api.put("/procurement/settings", { clear_budget: true });
+      toast.success("Budget cleared");
+      setBudgetDraft("");
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not clear budget");
+    } finally {
+      setBudgetBusy(false);
+    }
+  };
+
   const action = (
     <button
       type="button"
@@ -452,6 +498,120 @@ export default function Procurement() {
               {r.expected_delivery_date ? ` · due ${r.expected_delivery_date}` : ""}
             </button>
           ))}
+        </div>
+      )}
+
+      {spend && (
+        <div
+          className={cn(
+            "rounded-md border px-3 py-3 mb-5 space-y-3",
+            spend.budget_entered && (spend.gap || 0) > 0
+              ? "border-helm-status-negative/35 bg-helm-status-negative/8"
+              : "border-helm-line bg-helm-card/40",
+          )}
+          data-testid="procurement-spend-card"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">
+                Spend this month{spend.period_label ? ` · ${spend.period_label}` : ""}
+              </p>
+              {spend.budget_entered ? (
+                <p
+                  className={cn(
+                    "font-mono text-xl mt-1",
+                    (spend.gap || 0) > 0 ? "text-helm-status-negative" : "text-helm-fg",
+                  )}
+                >
+                  ${Number(spend.actual || 0).toLocaleString()} actual vs $
+                  {Number(spend.budget || 0).toLocaleString()} budget
+                  {(spend.gap || 0) > 0
+                    ? ` · overrun $${Number(spend.gap).toLocaleString()}`
+                    : ""}
+                </p>
+              ) : (
+                <p className="font-mono text-xl text-helm-fg mt-1">
+                  ${Number(spend.actual || 0).toLocaleString()}
+                  <span className="text-sm text-helm-muted ml-2">no budget set</span>
+                </p>
+              )}
+              {(spend.unpriced_count || 0) > 0 && (
+                <p className="text-xs text-helm-status-warning mt-1" data-testid="procurement-unpriced-count">
+                  {spend.unpriced_count} request{spend.unpriced_count === 1 ? "" : "s"} have no cost
+                  recorded — total above may be incomplete
+                </p>
+              )}
+            </div>
+            {canManageBudget && (
+              <div className="flex flex-wrap items-end gap-2" data-testid="procurement-budget-controls">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase text-helm-muted">Monthly budget</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={budgetDraft}
+                    onChange={(e) => setBudgetDraft(e.target.value)}
+                    placeholder="Optional"
+                    className="w-36 rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                    data-testid="procurement-budget-input"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={budgetBusy}
+                  onClick={saveProcurementBudget}
+                  className="rounded-md bg-helm-gold text-helm-navy text-xs font-medium px-2.5 py-1.5 disabled:opacity-50"
+                  data-testid="procurement-budget-save"
+                >
+                  Save
+                </button>
+                {spend.budget_entered && (
+                  <button
+                    type="button"
+                    disabled={budgetBusy}
+                    onClick={clearProcurementBudget}
+                    className="rounded-md border border-helm-line text-helm-muted text-xs px-2.5 py-1.5 disabled:opacity-50"
+                    data-testid="procurement-budget-clear"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {((spend.by_vendor || []).length > 0 || (spend.by_item || []).length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-helm-line/60">
+              <div data-testid="procurement-spend-by-vendor">
+                <p className="text-[10px] font-mono uppercase text-helm-muted mb-1">By vendor</p>
+                <ul className="space-y-0.5 text-xs font-mono text-helm-muted">
+                  {(spend.by_vendor || []).slice(0, 6).map((v) => (
+                    <li key={v.vendor_name}>
+                      <span className="text-helm-fg">{v.vendor_name}</span>
+                      {": $"}
+                      {Number(v.total || 0).toLocaleString()}
+                      {" · "}
+                      {v.count}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div data-testid="procurement-spend-by-item">
+                <p className="text-[10px] font-mono uppercase text-helm-muted mb-1">By item</p>
+                <ul className="space-y-0.5 text-xs font-mono text-helm-muted">
+                  {(spend.by_item || []).slice(0, 6).map((v) => (
+                    <li key={v.item}>
+                      <span className="text-helm-fg">{v.item}</span>
+                      {": $"}
+                      {Number(v.total || 0).toLocaleString()}
+                      {" · "}
+                      {v.count}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
