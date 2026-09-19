@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck, Plug } from "lucide-react";
+import { Download, Trash2, AlertTriangle, ScrollText, Sun, Monitor, ShieldCheck, Plug, Building2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -19,11 +19,12 @@ export default function AccountSettings() {
   const { user, setUser, logout } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const location = useLocation();
-  const { data: company } = useCompanyQuery();
+  const { data: company, reload: reloadCompany } = useCompanyQuery();
   const isOwner = user?.role === "owner" || user?.pack === "owner";
   const canBilling = canManageBilling(user);
   const canExportActivity = isOwner || (user?.perms || []).includes("members:manage");
   const [busy, setBusy] = useState(null);
+  const [companyName, setCompanyName] = useState("");
   const [confirmAccount, setConfirmAccount] = useState("");
   const [confirmWorkspace, setConfirmWorkspace] = useState("");
   const [showAccountConfirm, setShowAccountConfirm] = useState(false);
@@ -34,6 +35,10 @@ export default function AccountSettings() {
     return d.toISOString().slice(0, 10);
   });
   const [actEnd, setActEnd] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    setCompanyName(company?.name || "");
+  }, [company?.name]);
 
   useEffect(() => {
     const hash = location.hash?.replace(/^#/, "");
@@ -50,6 +55,28 @@ export default function AccountSettings() {
   const applyTheme = (id) => {
     setTheme(id);
     if (user) setUser({ ...user, appearance: id });
+  };
+
+  const saveCompanyName = async () => {
+    const next = companyName.trim();
+    if (!next) {
+      toast.error("Company name is required");
+      return;
+    }
+    if (next === (company?.name || "").trim()) {
+      toast.message("Name is unchanged");
+      return;
+    }
+    setBusy("rename");
+    try {
+      await api.patch("/company", { name: next, company_setup_done: true });
+      toast.success("Company renamed");
+      reloadCompany();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not rename company");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const exportData = async () => {
@@ -239,6 +266,38 @@ export default function AccountSettings() {
           </p>
         )}
       </GlassCard>
+
+      {isOwner && (
+        <GlassCard id="company-name" className="p-5 mb-4 fade-up scroll-mt-24" data-testid="company-rename-card">
+          <div className="flex items-center gap-1.5 mb-2 text-helm-gold">
+            <Building2 className="w-4 h-4" />
+            <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Company name</span>
+          </div>
+          <p className="text-sm text-helm-muted mb-4 leading-relaxed">
+            Only the CEO can rename this company. The name shows in the sidebar workspace switcher and on exports.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              data-testid="company-rename-input"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveCompanyName()}
+              maxLength={120}
+              className="flex-1 rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2.5 focus:outline-none focus:border-helm-gold/40"
+              placeholder="Company name"
+            />
+            <button
+              type="button"
+              data-testid="company-rename-save"
+              onClick={saveCompanyName}
+              disabled={busy === "rename"}
+              className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60"
+            >
+              {busy === "rename" ? "Saving…" : "Save name"}
+            </button>
+          </div>
+        </GlassCard>
+      )}
 
       {isOwner && <InviteCeoCard />}
       <DepartmentsSettings />

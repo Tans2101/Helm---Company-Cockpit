@@ -3255,9 +3255,15 @@ class CompanySetupInput(BaseModel):
 async def update_company(payload: CompanySetupInput, principal=Depends(require("workspace:edit"))):
     updates = {}
     if payload.name is not None:
+        # Renaming the company is owner/CEO-only (workspace:edit is already owner-scoped;
+        # keep an explicit check so the rule stays obvious if packs change).
+        if not dept_access.is_workspace_ceo(principal):
+            raise HTTPException(status_code=403, detail="Only the CEO can rename the company")
         name = payload.name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="Company name is required")
+        if len(name) > 120:
+            raise HTTPException(status_code=400, detail="Company name is too long")
         updates["name"] = name
     if payload.industry is not None:
         updates["industry"] = payload.industry.strip()[:120]
