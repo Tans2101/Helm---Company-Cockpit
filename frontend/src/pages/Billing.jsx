@@ -348,7 +348,7 @@ export default function Billing() {
                     ? `${extractsUsed} / ${extractsLimit} document uploads (over limit)`
                     : `${extractsUsed} of ${extractsLimit} document uploads used`
                   : currentPlan === "free"
-                    ? "5 free AI extracts to try it, then upgrade"
+                    ? "5 AI document extracts to try it, then upgrade"
                     : "No document upload quota on this plan"}
               {askLimit > 0 && (
                 <span className="block mt-1" data-testid="ask-helm-usage-copy">

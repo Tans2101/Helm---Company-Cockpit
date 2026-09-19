@@ -75,7 +75,7 @@ export const CEO_DAY = [
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free includes 3 Trenston seats, 5 free AI extracts to try it (then upgrade), Ask Trenston (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Trenston quotas, more seats, and integrations." },
+  { q: "Is there a free plan?", a: "Yes. Free includes 3 Trenston seats, 5 AI document extracts to try it (then upgrade), Ask Trenston (10 messages/month), and the AI briefing. Paid plans add higher monthly AI document extract and Ask Trenston limits, more seats, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you will not be charged." },
   {
     q: "Can my leadership team use Trenston?",
@@ -225,11 +225,10 @@ export const PLANS = [
     highlighted: false,
     includes: [
       "Up to 3 Trenston seats",
-      "5 free AI extracts to try it, then upgrade",
+      "5 AI document extracts to try it, then upgrade",
       "Ask Trenston (10 messages/month)",
       "AI briefing",
       "Dashboard & decisions",
-      "No QuickBooks sync",
     ],
   },
   {
@@ -242,10 +241,9 @@ export const PLANS = [
     highlighted: true,
     includes: [
       "Up to 10 Trenston seats",
-      "AI document upload (30/billing period)",
-      "Ask Trenston (50 messages/billing period)",
-      "QuickBooks sync",
-      "Calendar",
+      "AI document extracts (30/month)",
+      "Ask Trenston (50 messages/month)",
+      "Integrations: Google, QuickBooks, Xero, SAP Business One, HubSpot, Slack",
       "7-day free trial",
     ],
   },
@@ -259,10 +257,10 @@ export const PLANS = [
     highlighted: false,
     includes: [
       "Up to 25 Trenston seats",
-      "AI document upload (150/billing period)",
-      "Ask Trenston (200 messages/billing period)",
-      "Priority QuickBooks sync",
-      "Advanced reports & CEO Pack",
+      "AI document extracts (150/month)",
+      "Ask Trenston (200 messages/month)",
+      "Everything in Starter",
+      "Advanced reports & CEO Pack (shareable leadership summary)",
       "7-day free trial",
     ],
   },
@@ -276,10 +274,10 @@ export const PLANS = [
     highlighted: false,
     includes: [
       "Up to 50 Trenston seats",
-      "AI document upload (500/billing period)",
-      "Ask Trenston (500 messages/billing period)",
-      "Priority support",
+      "AI document extracts (500/month)",
+      "Ask Trenston (500 messages/month)",
       "Everything in Growth",
+      "Priority support",
       "7-day free trial",
     ],
   },

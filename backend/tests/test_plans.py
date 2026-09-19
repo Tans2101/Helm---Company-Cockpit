@@ -47,7 +47,8 @@ def test_free_includes_trial_ai_features():
     assert plans.plan_allows("free", plans.FEATURE_INTEGRATIONS, billing_enforced=True) is False
     assert plans.plan_allows("free", plans.FEATURE_ADVANCED_REPORTS, billing_enforced=True) is False
     includes = " ".join(plans.PLANS["free"]["includes"])
-    assert "5 free AI extracts" in includes
+    assert "5 AI document extracts" in includes
+    assert "No QuickBooks" not in includes
     assert "No AI document upload" not in includes
 
 
@@ -128,11 +129,13 @@ def test_public_plan_list_shape():
     growth = next(r for r in rows if r["id"] == "growth")
     assert starter["seats"] == 10
     assert growth["seats"] == 25
-    assert any("Up to 10 team members" in line for line in starter["includes"])
-    assert any("Up to 25 team members" in line for line in growth["includes"])
+    assert any("Up to 10 Trenston seats" in line for line in starter["includes"])
+    assert any("Up to 25 Trenston seats" in line for line in growth["includes"])
+    assert any("QuickBooks" in line and "Xero" in line and "HubSpot" in line for line in starter["includes"])
+    assert any("CEO Pack" in line and "shareable" in line for line in growth["includes"])
     assert free["ai_extracts_lifetime"] == 5
     assert free["ask_helm_mo"] == 10
-    assert any("5 free AI extracts" in line for line in free["includes"])
+    assert any("5 AI document extracts" in line for line in free["includes"])
     biz = next(r for r in rows if r["id"] == "business")
 
 
