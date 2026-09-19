@@ -52,7 +52,7 @@ Zero customers today — still treat this as a cutover sequence. **Do not expect
 - [ ] Keep `helmcontrol.online` property to watch the redirect period
 
 ### 10. Manual brand follow-ups (not in code)
-- [ ] Instagram `@gethelmcontrol` → new handle/bio (code currently points at `@trenston` as a placeholder)
+- [ ] Instagram `@gethelmcontrol` → `@usetrenston` (code points at https://www.instagram.com/usetrenston/)
 - [ ] LinkedIn Experience entry: Helm Control → **Trenston**
 - [ ] Rename GitHub repo `Tans2101/Helm---Company-Cockpit` when ready (confirm Render + Vercel git links still resolve; `render.yaml` `repo:` still lists the old name until you rename)
 
