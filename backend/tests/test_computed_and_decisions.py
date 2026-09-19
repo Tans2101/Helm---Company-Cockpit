@@ -208,6 +208,18 @@ class TestOnboardingChecklist:
         for s in j["steps"]:
             assert "label" in s and "route" in s and isinstance(s["done"], bool)
         assert isinstance(j["complete"], bool)
+        assert "dismissed" in j
+        assert isinstance(j["dismissed"], bool)
+
+    def test_dismiss_hides_checklist(self, owner):
+        before = owner.get(f"{BASE_URL}/api/onboarding/checklist").json()
+        assert before.get("dismissed") is False
+        r = owner.post(f"{BASE_URL}/api/onboarding/checklist/dismiss")
+        assert r.status_code == 200
+        assert r.json()["dismissed"] is True
+        after = owner.get(f"{BASE_URL}/api/onboarding/checklist").json()
+        assert after["dismissed"] is True
+        assert isinstance(after["steps"], list) and len(after["steps"]) == 4
 
     def test_owner_workspace_financials_and_people_done(self, owner):
         j = owner.get(f"{BASE_URL}/api/onboarding/checklist").json()

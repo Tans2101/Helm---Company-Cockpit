@@ -4309,6 +4309,7 @@ async def delete_decision(decision_id: str, principal=Depends(require_section("d
 async def onboarding_checklist(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
     ws = c["workspace_id"]
+    dismissed = bool(c.get("setup_checklist_dismissed"))
     has_fin = await db.financial_entries.count_documents({"workspace_id": ws}) > 0
     people_n = len(c["people"]["people"])
     members_n = await db.memberships.count_documents({"workspace_id": ws, "status": "active"})
@@ -4328,7 +4329,19 @@ async def onboarding_checklist(principal=Depends(get_principal)):
                 {"step": step["id"]},
                 once_key=step["id"],
             )
-    return {"steps": steps, "complete": all(s["done"] for s in steps)}
+    complete = all(s["done"] for s in steps)
+    return {"steps": steps, "complete": complete, "dismissed": dismissed}
+
+
+@api_router.post("/onboarding/checklist/dismiss")
+async def dismiss_onboarding_checklist(principal=Depends(get_principal)):
+    """Hide the Briefing 'Finish setting up' card for this workspace."""
+    ws_id = principal["workspace_id"]
+    await db.workspaces.update_one(
+        {"workspace_id": ws_id},
+        {"$set": {"setup_checklist_dismissed": True}},
+    )
+    return {"ok": True, "dismissed": True}
 
 
 # ------------------------- Sales pipeline -------------------------

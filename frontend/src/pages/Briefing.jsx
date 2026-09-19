@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail } from "lucide-react";
+import { ArrowUpRight, Send, UserCheck, Users, CheckCircle2, Circle, Mail, X } from "lucide-react";
 import { useFetch, fetchErrorMessage } from "@/hooks/useFetch";
 import { useCompanyQuery } from "@/hooks/useCompanyQuery";
 import { api } from "@/lib/api";
@@ -25,9 +25,10 @@ function BriefLabel({ children, className }) {
 export default function Briefing() {
   const { data, loading: briefingLoading, error: briefingError, reload: reloadBriefing, setData } = useFetch("/briefing");
   const { data: company, loading: companyLoading, error: companyError, reload: reloadCompany } = useCompanyQuery();
-  const { data: checklist } = useFetch("/onboarding/checklist");
+  const { data: checklist, reload: reloadChecklist, setData: setChecklist } = useFetch("/onboarding/checklist");
   const [genLoading, setGenLoading] = useState(false);
   const [delegateBusy, setDelegateBusy] = useState(null);
+  const [dismissBusy, setDismissBusy] = useState(false);
   const navigate = useNavigate();
 
   const loading = briefingLoading || companyLoading;
@@ -103,10 +104,26 @@ export default function Briefing() {
     }
   };
 
+  const dismissChecklist = async () => {
+    if (dismissBusy) return;
+    setDismissBusy(true);
+    try {
+      await api.post("/onboarding/checklist/dismiss");
+      setChecklist((prev) => (prev ? { ...prev, dismissed: true } : prev));
+      toast.success("Setup checklist hidden");
+      reloadChecklist();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not hide checklist");
+    } finally {
+      setDismissBusy(false);
+    }
+  };
+
   const { greeting: timeGreet, briefingLabel } = dayPartGreeting();
   const greeting = `${timeGreet}, ${company?.ceo_name?.split(" ")[0] || "CEO"}`;
   const doneCount = checklist?.steps?.filter((s) => s.done).length ?? 0;
   const stepCount = checklist?.steps?.length ?? 0;
+  const showChecklist = Boolean(checklist && !checklist.complete && !checklist.dismissed);
   const metrics = data.metrics || [];
   const whatChanged = data.what_changed || [];
   const whatToDecide = data.what_to_decide || [];
@@ -122,11 +139,22 @@ export default function Briefing() {
         <p className="text-helm-muted mt-3 max-w-2xl text-base leading-relaxed">{data.headline}</p>
       </header>
 
-      {checklist && !checklist.complete && (
+      {showChecklist && (
         <section className="mb-6 fade-up rounded-xl border border-helm-fg/[0.08] bg-helm-card p-5" data-testid="onboarding-checklist">
           <div className="flex items-center gap-3 mb-4">
             <BriefLabel>Finish setting up</BriefLabel>
             <span className="ml-auto text-xs text-helm-muted tabular-nums">{doneCount}/{stepCount}</span>
+            <button
+              type="button"
+              data-testid="dismiss-setup-checklist"
+              onClick={dismissChecklist}
+              disabled={dismissBusy}
+              className="text-helm-muted hover:text-helm-fg transition-colors disabled:opacity-50 p-0.5"
+              aria-label="Hide setup checklist"
+              title="Hide"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <div className="h-1 rounded-full bg-helm-fg/[0.06] mb-4 overflow-hidden">
             <div
@@ -157,6 +185,19 @@ export default function Briefing() {
               </button>
             ))}
           </div>
+          <p className="mt-3 text-xs text-helm-muted">
+            Completes on its own when every step is done. Or{" "}
+            <button
+              type="button"
+              data-testid="dismiss-setup-checklist-text"
+              onClick={dismissChecklist}
+              disabled={dismissBusy}
+              className="underline underline-offset-2 hover:text-helm-fg transition-colors disabled:opacity-50"
+            >
+              hide this
+            </button>
+            {" "}anytime.
+          </p>
         </section>
       )}
 
