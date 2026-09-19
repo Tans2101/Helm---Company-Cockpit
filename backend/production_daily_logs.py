@@ -12,6 +12,14 @@ DEFAULT_OVERTIME_RATE_PER_HOUR = 0.0  # unset until CEO configures
 COMMON_UNITS = ("units", "kg", "liters", "boxes", "meters", "tons", "pieces")
 
 
+def normalize_unit(raw: Any, *, required: bool = False, field: str = "unit") -> str:
+    """Free-text unit (pick-list suggestion or custom). Never invent a default."""
+    u = (str(raw).strip() if raw is not None else "")[:32]
+    if required and not u:
+        raise ValueError(f"{field} is required (e.g. kg, liters, boxes, or your own)")
+    return u
+
+
 def _parse_date(raw: Any) -> Optional[date]:
     if raw is None:
         return None
@@ -186,18 +194,22 @@ def department_day_summary(
     *,
     day: Optional[str] = None,
 ) -> dict:
-    """Today's total target vs actual across active work orders."""
+    """Today's total target vs actual across active work orders.
+
+    Totals are only summed when all logged rows share one unit. Mixed units
+    return per-unit breakdowns instead of a bogus combined number.
+    """
     day = day or today_iso()
     active = [
         wo for wo in work_orders
         if (wo.get("status") or "") != "completed"
     ]
-    day_targets: list[float] = []
-    day_actuals: list[float] = []
     ot_hours: list[float] = []
     ot_costs: list[float] = []
     orders_with_log = 0
     orders_missing_log = 0
+    # unit_key → {target, actual, shortfall contributions}
+    by_unit: dict[str, dict] = {}
 
     for wo in active:
         wid = wo.get("id")
@@ -207,25 +219,54 @@ def department_day_summary(
             orders_missing_log += 1
             continue
         orders_with_log += 1
+        wo_unit = (wo.get("unit") or "").strip()
         for log in today_logs:
             e = enrich_daily_log(log, expected_yield_pct=wo.get("expected_yield_pct"))
+            u = (e.get("unit") or wo_unit or "").strip() or "(no unit)"
+            bucket = by_unit.setdefault(u, {"unit": u, "target": 0.0, "actual": 0.0,
+                                            "has_target": False, "has_actual": False})
             if e.get("target_quantity") is not None:
-                day_targets.append(float(e["target_quantity"]))
+                bucket["target"] += float(e["target_quantity"])
+                bucket["has_target"] = True
             if e.get("actual_quantity") is not None:
-                day_actuals.append(float(e["actual_quantity"]))
+                bucket["actual"] += float(e["actual_quantity"])
+                bucket["has_actual"] = True
             if e.get("overtime_hours") is not None:
                 ot_hours.append(float(e["overtime_hours"]))
             if e.get("overtime_cost") is not None:
                 ot_costs.append(float(e["overtime_cost"]))
 
-    total_target = round(sum(day_targets), 4) if day_targets else None
-    total_actual = round(sum(day_actuals), 4) if day_actuals else None
+    unit_rows = []
+    for u, b in sorted(by_unit.items(), key=lambda kv: kv[0]):
+        t = round(b["target"], 4) if b["has_target"] else None
+        a = round(b["actual"], 4) if b["has_actual"] else None
+        unit_rows.append({
+            "unit": u if u != "(no unit)" else "",
+            "total_target": t,
+            "total_actual": a,
+            "shortfall": (
+                round(t - a, 4) if t is not None and a is not None else None
+            ),
+        })
+
+    mixed = len(unit_rows) > 1
+    single = unit_rows[0] if len(unit_rows) == 1 else None
+    total_target = single["total_target"] if single and not mixed else None
+    total_actual = single["total_actual"] if single and not mixed else None
+    # When mixed, do not invent a combined total — callers show by_unit.
+    if mixed:
+        total_target = None
+        total_actual = None
+
     return {
         "date": day,
         "active_work_orders": len(active),
         "orders_with_log": orders_with_log,
         "orders_missing_log": orders_missing_log,
         "has_data": orders_with_log > 0,
+        "mixed_units": mixed,
+        "unit": (single["unit"] if single else None),
+        "by_unit": unit_rows,
         "total_target": total_target,
         "total_actual": total_actual,
         "shortfall": (

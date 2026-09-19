@@ -114,7 +114,7 @@ const emptyForm = () => ({
   linked_procurement_request_id: "",
   linked_maintenance_ticket_id: "",
   notes: "",
-  unit: "units",
+  unit: "",
   yield_tracking_enabled: false,
   expected_yield_pct: "",
   input_unit: "",
@@ -124,12 +124,12 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function emptyDailyLog(unit = "units") {
+function emptyDailyLog(unit = "") {
   return {
     date: todayIso(),
     target_quantity: "",
     actual_quantity: "",
-    unit: unit || "units",
+    unit: unit || "",
     overtime_hours: "",
     input_quantity: "",
     input_unit: "",
@@ -141,6 +141,78 @@ function formatQty(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
   const v = Number(n);
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000);
+}
+
+const CUSTOM_UNIT = "__custom__";
+
+/** Pick-list + free-text custom unit. Never invents a default. */
+function UnitField({
+  value,
+  onChange,
+  commonUnits,
+  disabled,
+  testId,
+  placeholder = "kg, liters, boxes…",
+  required = false,
+}) {
+  const known = commonUnits || [];
+  const knownKey = known.join("|");
+  const current = (value || "").trim();
+  const isKnown = known.includes(current);
+  const [mode, setMode] = useState(() => {
+    if (!current) return "";
+    return isKnown ? current : CUSTOM_UNIT;
+  });
+
+  useEffect(() => {
+    if (!current) {
+      setMode("");
+      return;
+    }
+    setMode(known.includes(current) ? current : CUSTOM_UNIT);
+    // knownKey tracks list identity without re-running on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, knownKey]);
+
+  const selectValue = mode === CUSTOM_UNIT ? CUSTOM_UNIT : (current && isKnown ? current : mode || "");
+
+  return (
+    <div className="space-y-1.5" data-testid={testId ? `${testId}-wrap` : undefined}>
+      <select
+        data-testid={testId}
+        disabled={disabled}
+        value={selectValue}
+        required={required}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === CUSTOM_UNIT) {
+            setMode(CUSTOM_UNIT);
+            if (isKnown || !current) onChange("");
+            return;
+          }
+          setMode(v);
+          onChange(v);
+        }}
+        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+      >
+        <option value="">{required ? "Select unit…" : "No unit set"}</option>
+        {known.map((u) => (
+          <option key={u} value={u}>{u}</option>
+        ))}
+        <option value={CUSTOM_UNIT}>Custom…</option>
+      </select>
+      {mode === CUSTOM_UNIT && (
+        <input
+          data-testid={testId ? `${testId}-custom` : undefined}
+          disabled={disabled}
+          value={current}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+        />
+      )}
+    </div>
+  );
 }
 
 export default function Production() {
@@ -217,12 +289,12 @@ export default function Production() {
       linked_maintenance_ticket_id: selected.linked_maintenance_ticket_id || "",
       assigned_user_ids: [...(selected.assigned_user_ids || [])],
       notes: selected.notes || "",
-      unit: selected.unit || "units",
+      unit: selected.unit || "",
       yield_tracking_enabled: Boolean(selected.yield_tracking_enabled),
       expected_yield_pct: selected.expected_yield_pct == null ? "" : String(selected.expected_yield_pct),
       input_unit: selected.input_unit || "",
     });
-    setLogForm(emptyDailyLog(selected.unit || "units"));
+    setLogForm(emptyDailyLog(selected.unit || ""));
     setCompleting(false);
   }, [selected]);
 
@@ -300,10 +372,18 @@ export default function Production() {
       notes: form.notes.trim(),
       linked_procurement_request_id: form.linked_procurement_request_id || null,
       linked_maintenance_ticket_id: form.linked_maintenance_ticket_id || null,
-      unit: (form.unit || "units").trim() || "units",
+      unit: (form.unit || "").trim(),
       yield_tracking_enabled: Boolean(form.yield_tracking_enabled),
       input_unit: form.yield_tracking_enabled ? (form.input_unit || "").trim() : "",
     };
+    if (!body.unit) {
+      toast.error("Choose a unit (kg, liters, boxes, or type your own)");
+      return;
+    }
+    if (!body.product) {
+      toast.error("What is being produced? Enter a product name");
+      return;
+    }
     if (form.quantity_planned !== "") {
       const q = Number(form.quantity_planned);
       if (!Number.isFinite(q)) {
@@ -348,9 +428,17 @@ export default function Production() {
     body.linked_procurement_request_id = draft.linked_procurement_request_id || "";
     body.linked_maintenance_ticket_id = draft.linked_maintenance_ticket_id || "";
     body.blocked = Boolean(draft.blocked);
-    body.unit = (draft.unit || "units").trim() || "units";
+    body.unit = (draft.unit || "").trim();
+    if (!body.unit) {
+      toast.error("Choose a unit (kg, liters, boxes, or type your own)");
+      return;
+    }
     body.yield_tracking_enabled = Boolean(draft.yield_tracking_enabled);
     body.input_unit = draft.yield_tracking_enabled ? (draft.input_unit || "").trim() : "";
+    if (!(draft.product || "").trim()) {
+      toast.error("What is being produced? Enter a product name");
+      return;
+    }
     if (draft.yield_tracking_enabled && draft.expected_yield_pct.trim() !== "") {
       const ey = Number(draft.expected_yield_pct);
       if (!Number.isFinite(ey) || ey < 0 || ey > 100) {
@@ -481,9 +569,17 @@ export default function Production() {
     }
     const body = {
       date,
-      unit: (logForm.unit || draft?.unit || "units").trim() || "units",
+      unit: (logForm.unit || draft?.unit || "").trim(),
       notes: (logForm.notes || "").trim(),
     };
+    if (!body.unit) {
+      toast.error("Choose a unit for today's log");
+      return;
+    }
+    if (logForm.target_quantity.trim() === "" && logForm.actual_quantity.trim() === "") {
+      toast.error("Enter today's target and/or actual quantity");
+      return;
+    }
     if (logForm.target_quantity.trim() !== "") {
       const t = Number(logForm.target_quantity);
       if (!Number.isFinite(t) || t < 0) {
@@ -523,7 +619,7 @@ export default function Production() {
     try {
       await api.post(`/production/work-orders/${selected.id}/daily-logs`, body);
       toast.success("Daily log saved");
-      setLogForm(emptyDailyLog(draft?.unit || "units"));
+      setLogForm(emptyDailyLog(draft?.unit || ""));
       const { data: res } = await api.get(`/production/work-orders/${selected.id}/daily-logs`);
       setDailyLogs(res?.logs || []);
       setDailyRollup(res?.rollup || null);
@@ -573,33 +669,61 @@ export default function Production() {
       >
         <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-today-output">
           <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">Today&apos;s output</p>
-          <p className={cn("font-mono text-xl mt-1", todaySummary?.has_data ? "text-helm-fg" : "text-helm-muted")}>
-            {todaySummary?.has_data
-              ? `${formatQty(todaySummary.total_actual)} / ${formatQty(todaySummary.total_target)}`
-              : "No data logged"}
-          </p>
+          {todaySummary?.has_data && todaySummary.mixed_units ? (
+            <div className="mt-1 space-y-0.5" data-testid="production-today-by-unit">
+              {(todaySummary.by_unit || []).map((row) => (
+                <p key={row.unit || "none"} className="font-mono text-sm text-helm-fg">
+                  {formatQty(row.total_actual)} / {formatQty(row.total_target)}
+                  {row.unit ? ` ${row.unit}` : ""}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className={cn("font-mono text-xl mt-1", todaySummary?.has_data ? "text-helm-fg" : "text-helm-muted")}>
+              {todaySummary?.has_data
+                ? `${formatQty(todaySummary.total_actual)} / ${formatQty(todaySummary.total_target)}${todaySummary.unit ? ` ${todaySummary.unit}` : ""}`
+                : "No data logged"}
+            </p>
+          )}
           <p className="text-[11px] text-helm-muted mt-0.5">
             {todaySummary?.has_data
-              ? `${todaySummary.orders_with_log} of ${todaySummary.active_work_orders} active logged`
+              ? `${todaySummary.orders_with_log} of ${todaySummary.active_work_orders} active logged${todaySummary.mixed_units ? " · mixed units" : ""}`
               : "Log daily target vs actual on open work orders"}
           </p>
         </div>
         <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-today-shortfall">
           <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">Today&apos;s shortfall</p>
-          <p
-            className={cn(
-              "font-mono text-xl mt-1",
-              !todaySummary?.has_data
-                ? "text-helm-muted"
-                : (todaySummary.shortfall || 0) > 0
-                  ? "text-helm-status-negative"
-                  : "text-helm-fg",
-            )}
-          >
-            {todaySummary?.has_data && todaySummary.shortfall != null
-              ? formatQty(todaySummary.shortfall)
-              : "No data logged"}
-          </p>
+          {todaySummary?.has_data && todaySummary.mixed_units ? (
+            <div className="mt-1 space-y-0.5">
+              {(todaySummary.by_unit || []).map((row) => (
+                <p
+                  key={`sf-${row.unit || "none"}`}
+                  className={cn(
+                    "font-mono text-sm",
+                    (row.shortfall || 0) > 0 ? "text-helm-status-negative" : "text-helm-fg",
+                  )}
+                >
+                  {row.shortfall != null ? formatQty(row.shortfall) : "—"}
+                  {row.unit ? ` ${row.unit}` : ""}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p
+              className={cn(
+                "font-mono text-xl mt-1",
+                !todaySummary?.has_data
+                  ? "text-helm-muted"
+                  : (todaySummary.shortfall || 0) > 0
+                    ? "text-helm-status-negative"
+                    : "text-helm-fg",
+              )}
+            >
+              {todaySummary?.has_data && todaySummary.shortfall != null
+                ? `${formatQty(todaySummary.shortfall)}${todaySummary.unit ? ` ${todaySummary.unit}` : ""}`
+                : "No data logged"}
+            </p>
+          )}
         </div>
         <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-ot-week">
           <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">OT this week</p>
@@ -737,8 +861,9 @@ export default function Production() {
                     <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">
                       {[
                         order.product || null,
-                        order.quantity_planned != null ? `plan ${order.quantity_planned}` : null,
-                        order.unit ? order.unit : null,
+                        order.quantity_planned != null
+                          ? `plan ${order.quantity_planned}${order.unit ? ` ${order.unit}` : ""}`
+                          : (order.unit || null),
                       ].filter(Boolean).join(" · ") || "—"}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-xs" data-testid={`wo-target-actual-${order.id}`}>
@@ -750,7 +875,9 @@ export default function Production() {
                           {order.unit ? ` ${order.unit}` : ""}
                         </span>
                       ) : (
-                        <span className="text-helm-muted">No data logged</span>
+                        <span className="text-helm-muted">
+                          {order.unit ? `No data logged · ${order.unit}` : "No data logged"}
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-helm-muted truncate max-w-[8rem]">{order.customer || "—"}</td>
@@ -809,27 +936,40 @@ export default function Production() {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Product</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">What&apos;s being produced</span>
               <input
                 data-testid="wo-product-input"
                 disabled={busy}
                 value={draft.product}
                 onChange={(e) => setDraft((d) => ({ ...d, product: e.target.value }))}
+                placeholder="Product / SKU / batch name"
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Qty planned</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Order qty planned</span>
               <input
                 data-testid="wo-qty-planned"
                 disabled={busy}
                 value={draft.quantity_planned}
                 onChange={(e) => setDraft((d) => ({ ...d, quantity_planned: e.target.value }))}
+                placeholder="Total for this work order"
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Unit</span>
+              <UnitField
+                testId="wo-unit-input"
+                value={draft.unit}
+                onChange={(v) => setDraft((d) => ({ ...d, unit: v }))}
+                commonUnits={commonUnits}
+                disabled={busy}
+                required
+              />
+            </div>
             <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Qty produced</span>
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Qty produced (on complete)</span>
               <input
                 data-testid="wo-qty-produced"
                 disabled={busy || draft.status !== "completed"}
@@ -838,20 +978,6 @@ export default function Production() {
                 placeholder={draft.status === "completed" ? "Required" : "Set on complete"}
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
-            </label>
-            <label className="space-y-1">
-              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Output unit</span>
-              <input
-                data-testid="wo-unit-input"
-                list="production-units"
-                disabled={busy}
-                value={draft.unit}
-                onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))}
-                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
-              />
-              <datalist id="production-units">
-                {commonUnits.map((u) => <option key={u} value={u} />)}
-              </datalist>
             </label>
             <label className="space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Customer</span>
@@ -888,7 +1014,7 @@ export default function Production() {
                 className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
               />
             </label>
-            <label className="space-y-1">
+            <label className="space-y-1 md:col-span-2">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Linked procurement</span>
               <select
                 data-testid="wo-linked-procurement"
@@ -941,18 +1067,17 @@ export default function Production() {
             </label>
             {draft.yield_tracking_enabled && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label className="space-y-1">
+                <div className="space-y-1">
                   <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Input unit</span>
-                  <input
-                    data-testid="wo-input-unit"
-                    list="production-units"
-                    disabled={busy}
+                  <UnitField
+                    testId="wo-input-unit"
                     value={draft.input_unit}
-                    onChange={(e) => setDraft((d) => ({ ...d, input_unit: e.target.value }))}
-                    placeholder="e.g. kg"
-                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+                    onChange={(v) => setDraft((d) => ({ ...d, input_unit: v }))}
+                    commonUnits={commonUnits}
+                    disabled={busy}
+                    placeholder="e.g. kg of raw material"
                   />
-                </label>
+                </div>
                 <label className="space-y-1">
                   <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected yield %</span>
                   <input
@@ -969,8 +1094,13 @@ export default function Production() {
           </div>
 
           <div className="rounded-md border border-helm-line p-3 space-y-3" data-testid="wo-daily-log-section">
-            <div className="flex items-center justify-between gap-2">
-              <SectionLabel>Daily production log</SectionLabel>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <SectionLabel>Daily production log</SectionLabel>
+                <p className="text-[11px] text-helm-muted mt-0.5">
+                  Each day&apos;s target is set here for this work order only — not shared with other orders of the same product.
+                </p>
+              </div>
               {(dailyRollup || selected.daily_rollup) && (
                 <p className="text-[11px] text-helm-muted font-mono" data-testid="wo-daily-rollup">
                   {(dailyRollup || selected.daily_rollup)?.has_logs
@@ -1002,36 +1132,38 @@ export default function Production() {
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Day target</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">This day&apos;s target</span>
                   <input
                     data-testid="daily-log-target"
                     disabled={busy}
                     value={logForm.target_quantity}
                     onChange={(e) => setLogForm((f) => ({ ...f, target_quantity: e.target.value }))}
+                    placeholder="Set independently each day"
                     className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Day actual</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">This day&apos;s actual</span>
                   <input
                     data-testid="daily-log-actual"
                     disabled={busy}
                     value={logForm.actual_quantity}
                     onChange={(e) => setLogForm((f) => ({ ...f, actual_quantity: e.target.value }))}
+                    placeholder="What was produced today"
                     className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
                   />
                 </label>
-                <label className="space-y-1">
+                <div className="space-y-1">
                   <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Unit</span>
-                  <input
-                    data-testid="daily-log-unit"
-                    list="production-units"
-                    disabled={busy}
+                  <UnitField
+                    testId="daily-log-unit"
                     value={logForm.unit}
-                    onChange={(e) => setLogForm((f) => ({ ...f, unit: e.target.value }))}
-                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                    onChange={(v) => setLogForm((f) => ({ ...f, unit: v }))}
+                    commonUnits={commonUnits}
+                    disabled={busy}
+                    required
                   />
-                </label>
+                </div>
                 <label className="space-y-1">
                   <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">OT hours</span>
                   <input
@@ -1055,17 +1187,16 @@ export default function Production() {
                         className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
                       />
                     </label>
-                    <label className="space-y-1">
+                    <div className="space-y-1">
                       <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Input unit</span>
-                      <input
-                        data-testid="daily-log-input-unit"
-                        list="production-units"
-                        disabled={busy}
+                      <UnitField
+                        testId="daily-log-input-unit"
                         value={logForm.input_unit || draft.input_unit}
-                        onChange={(e) => setLogForm((f) => ({ ...f, input_unit: e.target.value }))}
-                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                        onChange={(v) => setLogForm((f) => ({ ...f, input_unit: v }))}
+                        commonUnits={commonUnits}
+                        disabled={busy}
                       />
-                    </label>
+                    </div>
                   </>
                 )}
                 <div className="col-span-2 md:col-span-3">
@@ -1340,38 +1471,42 @@ export default function Production() {
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs text-helm-muted">Product
+                <label className="block text-xs text-helm-muted">What&apos;s being produced
                   <input
                     data-testid="new-wo-product"
                     value={form.product}
                     onChange={(e) => setForm((o) => ({ ...o, product: e.target.value }))}
+                    placeholder="Product / SKU / batch"
                     className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                   />
                 </label>
-                <label className="block text-xs text-helm-muted">Qty planned
+                <label className="block text-xs text-helm-muted">Order qty planned
                   <input
                     data-testid="new-wo-qty-planned"
                     type="number"
                     value={form.quantity_planned}
                     onChange={(e) => setForm((o) => ({ ...o, quantity_planned: e.target.value }))}
+                    placeholder="Total for this order"
                     className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                   />
                 </label>
+              </div>
+              <div className="block text-xs text-helm-muted">Unit
+                <div className="mt-1">
+                  <UnitField
+                    testId="new-wo-unit"
+                    value={form.unit}
+                    onChange={(v) => setForm((o) => ({ ...o, unit: v }))}
+                    commonUnits={commonUnits}
+                    required
+                  />
+                </div>
               </div>
               <label className="block text-xs text-helm-muted">Customer
                 <input
                   data-testid="new-wo-customer"
                   value={form.customer}
                   onChange={(e) => setForm((o) => ({ ...o, customer: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
-                />
-              </label>
-              <label className="block text-xs text-helm-muted">Output unit
-                <input
-                  data-testid="new-wo-unit"
-                  list="production-units"
-                  value={form.unit}
-                  onChange={(e) => setForm((o) => ({ ...o, unit: e.target.value }))}
                   className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                 />
               </label>
@@ -1386,15 +1521,16 @@ export default function Production() {
               </label>
               {form.yield_tracking_enabled && (
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-xs text-helm-muted">Input unit
-                    <input
-                      data-testid="new-wo-input-unit"
-                      list="production-units"
-                      value={form.input_unit}
-                      onChange={(e) => setForm((o) => ({ ...o, input_unit: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
-                    />
-                  </label>
+                  <div className="block text-xs text-helm-muted">Input unit
+                    <div className="mt-1">
+                      <UnitField
+                        testId="new-wo-input-unit"
+                        value={form.input_unit}
+                        onChange={(v) => setForm((o) => ({ ...o, input_unit: v }))}
+                        commonUnits={commonUnits}
+                      />
+                    </div>
+                  </div>
                   <label className="block text-xs text-helm-muted">Expected yield %
                     <input
                       data-testid="new-wo-expected-yield"

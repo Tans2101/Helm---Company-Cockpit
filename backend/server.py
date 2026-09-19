@@ -3495,13 +3495,28 @@ async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
         week_logs = [log for logs in logs_by_wo.values() for log in logs]
         ot = prod_daily.period_overtime_rollup(week_logs)
         if day_summary.get("has_data"):
-            t = day_summary.get("total_target")
-            a = day_summary.get("total_actual")
-            value = f"{a:g} / {t:g}" if t is not None and a is not None else (
-                f"{a:g} logged" if a is not None else "Logged"
-            )
-            shortfall = day_summary.get("shortfall")
-            tone = "negative" if shortfall is not None and shortfall > 0 else "positive"
+            if day_summary.get("mixed_units"):
+                parts = []
+                for row in day_summary.get("by_unit") or []:
+                    u = row.get("unit") or ""
+                    a = row.get("total_actual")
+                    t = row.get("total_target")
+                    if a is not None and t is not None:
+                        parts.append(f"{a:g}/{t:g}{(' ' + u) if u else ''}")
+                value = " · ".join(parts) if parts else "Mixed units"
+                tone = "negative" if any(
+                    (r.get("shortfall") or 0) > 0 for r in (day_summary.get("by_unit") or [])
+                ) else "positive"
+            else:
+                t = day_summary.get("total_target")
+                a = day_summary.get("total_actual")
+                u = day_summary.get("unit") or ""
+                suffix = f" {u}" if u else ""
+                value = f"{a:g} / {t:g}{suffix}" if t is not None and a is not None else (
+                    f"{a:g}{suffix} logged" if a is not None else "Logged"
+                )
+                shortfall = day_summary.get("shortfall")
+                tone = "negative" if shortfall is not None and shortfall > 0 else "positive"
             out.append({
                 "label": "Today's output",
                 "value": value,
@@ -8842,6 +8857,14 @@ async def _enrich_work_order(
     maintenance_by_id: dict | None = None,
 ) -> dict:
     out = {k: v for k, v in order.items() if k != "_id"}
+    # Old records may lack unit — surface empty, never invent "units".
+    if "unit" not in out or out.get("unit") is None:
+        out["unit"] = ""
+    else:
+        out["unit"] = str(out.get("unit") or "").strip()
+    if "input_unit" not in out or out.get("input_unit") is None:
+        out["input_unit"] = ""
+    out["yield_tracking_enabled"] = bool(out.get("yield_tracking_enabled"))
     out["assignees"] = await _enrich_assignee_ids(out.get("assigned_user_ids") or [], users)
     link = out.get("linked_procurement_request_id")
     if link:
@@ -8927,7 +8950,7 @@ class ProductionWorkOrderCreate(BaseModel):
     notes: str = ""
     blocked: bool = False
     blocked_reason: Optional[dict] = None
-    unit: str = "units"
+    unit: str = ""
     yield_tracking_enabled: bool = False
     expected_yield_pct: Optional[float] = None
     input_unit: str = ""
@@ -9147,7 +9170,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "source_deal_id": (payload.source_deal_id or "").strip() or None,
         "assigned_user_ids": assignees,
         "notes": (payload.notes or "").strip()[:2000],
-        "unit": ((payload.unit or "units").strip() or "units")[:32],
+        "unit": "",
         "yield_tracking_enabled": bool(payload.yield_tracking_enabled),
         "expected_yield_pct": None,
         "input_unit": (payload.input_unit or "").strip()[:32],
@@ -9155,6 +9178,10 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "updated_at": now,
         "completed_at": None,
     }
+    try:
+        order["unit"] = prod_daily.normalize_unit(payload.unit, required=True, field="unit")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if payload.expected_yield_pct is not None:
         try:
             ey = float(payload.expected_yield_pct)
@@ -9216,9 +9243,12 @@ async def patch_production_work_order(
     if payload.notes is not None:
         upd["notes"] = payload.notes.strip()[:2000]
     if payload.unit is not None:
-        upd["unit"] = (payload.unit.strip() or "units")[:32]
+        try:
+            upd["unit"] = prod_daily.normalize_unit(payload.unit, required=True, field="unit")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     if payload.input_unit is not None:
-        upd["input_unit"] = payload.input_unit.strip()[:32]
+        upd["input_unit"] = prod_daily.normalize_unit(payload.input_unit, required=False, field="input_unit")
     if payload.yield_tracking_enabled is not None:
         upd["yield_tracking_enabled"] = bool(payload.yield_tracking_enabled)
     if payload.expected_yield_pct is not None:
@@ -9391,7 +9421,7 @@ async def list_production_daily_logs(work_order_id: str, principal=Depends(get_p
         "work_order_id": work_order_id,
         "yield_tracking_enabled": bool(order.get("yield_tracking_enabled")),
         "expected_yield_pct": order.get("expected_yield_pct"),
-        "unit": order.get("unit") or "units",
+        "unit": order.get("unit") or "",
         "input_unit": order.get("input_unit") or "",
         "logs": logs,
         "rollup": prod_daily.rollup_work_order_logs(
@@ -9428,8 +9458,19 @@ async def upsert_production_daily_log(
         raise HTTPException(status_code=400, detail="Enter a target and/or actual quantity for the day")
     if not order.get("yield_tracking_enabled"):
         in_qty = None
-    unit = (payload.unit or order.get("unit") or "units").strip()[:32] or "units"
-    input_unit = (payload.input_unit or order.get("input_unit") or "").strip()[:32]
+    try:
+        unit = prod_daily.normalize_unit(
+            payload.unit or order.get("unit") or "",
+            required=True,
+            field="unit",
+        )
+        input_unit = prod_daily.normalize_unit(
+            payload.input_unit or order.get("input_unit") or "",
+            required=False,
+            field="input_unit",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     rate = dept.get("overtime_rate_per_hour")
     try:
         rate_f = float(rate) if rate is not None else None

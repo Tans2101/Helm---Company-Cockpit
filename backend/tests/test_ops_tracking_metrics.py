@@ -145,12 +145,12 @@ def test_overtime_cost():
 
 def test_department_day_summary_missing_logs():
     wos = [
-        {"id": "w1", "status": "in_production"},
-        {"id": "w2", "status": "in_production"},
-        {"id": "w3", "status": "completed"},
+        {"id": "w1", "status": "in_production", "unit": "kg"},
+        {"id": "w2", "status": "in_production", "unit": "kg"},
+        {"id": "w3", "status": "completed", "unit": "kg"},
     ]
     logs = {
-        "w1": [{"date": "2026-09-10", "target_quantity": 10, "actual_quantity": 7, "overtime_hours": 1, "overtime_rate_per_hour": 15}],
+        "w1": [{"date": "2026-09-10", "target_quantity": 10, "actual_quantity": 7, "unit": "kg", "overtime_hours": 1, "overtime_rate_per_hour": 15}],
     }
     s = pdl.department_day_summary(wos, logs, day="2026-09-10")
     assert s["active_work_orders"] == 2
@@ -158,4 +158,35 @@ def test_department_day_summary_missing_logs():
     assert s["orders_missing_log"] == 1
     assert s["total_target"] == 10
     assert s["total_actual"] == 7
+    assert s["unit"] == "kg"
+    assert s["mixed_units"] is False
     assert s["overtime_cost"] == 15.0
+
+
+def test_department_day_summary_mixed_units():
+    wos = [
+        {"id": "w1", "status": "in_production", "unit": "kg"},
+        {"id": "w2", "status": "in_production", "unit": "liters"},
+    ]
+    logs = {
+        "w1": [{"date": "2026-09-10", "target_quantity": 10, "actual_quantity": 8, "unit": "kg"}],
+        "w2": [{"date": "2026-09-10", "target_quantity": 100, "actual_quantity": 90, "unit": "liters"}],
+    }
+    s = pdl.department_day_summary(wos, logs, day="2026-09-10")
+    assert s["mixed_units"] is True
+    assert s["total_target"] is None
+    assert s["total_actual"] is None
+    assert len(s["by_unit"]) == 2
+    by = {r["unit"]: r for r in s["by_unit"]}
+    assert by["kg"]["total_actual"] == 8
+    assert by["liters"]["total_actual"] == 90
+
+
+def test_normalize_unit_required():
+    assert pdl.normalize_unit(" kg ", required=True) == "kg"
+    try:
+        pdl.normalize_unit("", required=True)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+    assert pdl.normalize_unit(None, required=False) == ""
