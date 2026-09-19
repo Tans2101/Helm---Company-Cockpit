@@ -596,7 +596,7 @@ async def create_gmail_draft(
     body: str,
     thread_id: str = "",
 ) -> tuple[str, str, dict]:
-    """Create a Gmail draft (Helm never sends). Returns (draft_id, open_url, tokens)."""
+    """Create a Gmail draft (Trenston never sends). Returns (draft_id, open_url, tokens)."""
     if not has_scope(tokens, "gmail.compose"):
         raise GoogleAuthError("Gmail draft access not granted. Reconnect Google")
     tokens = await refresh_google_token(tokens, client_id, client_secret)

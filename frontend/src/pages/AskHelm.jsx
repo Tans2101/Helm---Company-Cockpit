@@ -63,8 +63,8 @@ export default function AskHelm() {
         const message = apiErrorMessage(
           body,
           reason === "permission"
-            ? "You don't have access to Ask Helm. Ask a workspace owner if you need it."
-            : "Ask Helm isn't included in your plan",
+            ? "You don't have access to Ask Trenston. Ask a workspace owner if you need it."
+            : "Ask Trenston isn't included in your plan",
         );
         if (reason === "permission") {
           setMessages((m) => {
@@ -80,7 +80,7 @@ export default function AskHelm() {
         return;
       }
       if (res.status === 429) {
-        let detail = "You've used your Ask Helm messages this month. Upgrade to continue.";
+        let detail = "You've used your Ask Trenston messages this month. Upgrade to continue.";
         try {
           const body = await res.json();
           if (body?.detail) detail = apiErrorMessage(body, detail);
@@ -128,7 +128,7 @@ export default function AskHelm() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)]">
-      <PageHeader title="Ask Helm" subtitle="Your executive AI chief-of-staff, grounded in your live company data." />
+      <PageHeader title="Ask Trenston" subtitle="Your executive AI chief-of-staff, grounded in your live company data." />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-6">
         {messages.length === 0 && (
@@ -169,7 +169,7 @@ export default function AskHelm() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Ask Helm anything about your company…"
+            placeholder="Ask Trenston anything about your company…"
             className="flex-1 bg-transparent text-helm-fg text-sm placeholder:text-helm-muted focus:outline-none py-1.5"
           />
           <button data-testid="ask-send-btn" onClick={() => send()} disabled={streaming || !input.trim()}

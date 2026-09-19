@@ -8,9 +8,9 @@ import { helmAppUrl, helmSignInUrl, helmSignUpUrl } from "@/lib/helmUrls";
 function clerkProxyUrl() {
   if (typeof window === "undefined") return undefined;
   const host = window.location.hostname;
-  if (!host.endsWith("helmcontrol.online") && !host.endsWith("vercel.app")) return undefined;
+  if (!host.endsWith("trenston.com") && !host.endsWith("vercel.app")) return undefined;
   // Clerk requires proxy on primary apex domain, not www.
-  if (host.endsWith("helmcontrol.online")) return "https://helmcontrol.online/__clerk";
+  if (host.endsWith("trenston.com")) return "https://trenston.com/__clerk";
   return `${window.location.origin.replace(/\/$/, "")}/__clerk`;
 }
 

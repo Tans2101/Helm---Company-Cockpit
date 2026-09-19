@@ -1,4 +1,4 @@
-# Render Blueprint — Helm API
+# Render Blueprint — Trenston API
 # Production database is MongoDB Atlas (MONGO_URL). Do not provision a second Mongo.
 # If a leftover helm-mongo private service still exists on Render, delete it after
 # confirming /api/health shows Atlas.
@@ -23,19 +23,19 @@ services:
       - key: MONGO_URL
         sync: false
       - key: DB_NAME
-        value: helm
+        value: trenston
       - key: SESSION_SECRET
         generateValue: true
       - key: OAUTH_STATE_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://www.helmcontrol.online
+        value: https://www.trenston.com
       - key: APP_URL
-        value: https://www.helmcontrol.online
+        value: https://www.trenston.com
       - key: CORS_ORIGINS
-        value: https://www.helmcontrol.online,https://helmcontrol.online
+        value: https://www.trenston.com,https://trenston.com,https://www.helmcontrol.online,https://helmcontrol.online
       - key: COOKIE_DOMAIN
-        value: helmcontrol.online
+        value: trenston.com
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE
@@ -52,13 +52,13 @@ services:
         value: claude-sonnet-5
       - key: CLERK_SECRET_KEY
         sync: false
-        # Must be sk_live_ from the clerk.helmcontrol.online Clerk instance (same as CLERK_PUBLISHABLE_KEY).
+        # Must be sk_live_ from the clerk.trenston.com Clerk instance (same as CLERK_PUBLISHABLE_KEY).
       - key: CLERK_PUBLISHABLE_KEY
-        value: pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA
+        value: pk_live_Y2xlcmsudHJlbnN0b24uY29tJA
       - key: CLERK_JWKS_URL
-        value: https://clerk.helmcontrol.online/.well-known/jwks.json
+        value: https://clerk.trenston.com/.well-known/jwks.json
       - key: CLERK_PRIMARY_ORIGIN
-        value: https://www.helmcontrol.online
+        value: https://www.trenston.com
       - key: SETUP_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID
@@ -115,8 +115,8 @@ services:
         sync: false
       - key: SENDER_EMAIL
         sync: false
-        # After Resend verifies send.helmcontrol.online, set:
-        # Helm <contact@helmcontrol.online>
+        # After Resend verifies send.trenston.com, set:
+        # Trenston <contact@trenston.com>
         # Until then, Resend will reject sends from this domain.
       - key: INTERNAL_CRON_SECRET
         sync: false
@@ -139,7 +139,7 @@ services:
       - key: INTERNAL_CRON_SECRET
         sync: false
       - key: RETENTION_CRON_URL
-        value: https://www.helmcontrol.online/api/internal/run-retention-checks
+        value: https://www.trenston.com/api/internal/run-retention-checks
 
   - type: cron
     name: helm-accounting-sync
@@ -157,7 +157,7 @@ services:
       - key: INTERNAL_CRON_SECRET
         sync: false
       - key: ACCOUNTING_SYNC_CRON_URL
-        value: https://www.helmcontrol.online/api/internal/run-accounting-sync
+        value: https://www.trenston.com/api/internal/run-accounting-sync
 
   # Daily insights refresh + high-severity email/Slack.
   # Fixed 12:00 UTC for a first pass (not yet per-workspace timezone).
@@ -177,7 +177,7 @@ services:
       - key: INTERNAL_CRON_SECRET
         sync: false
       - key: DAILY_ALERTS_CRON_URL
-        value: https://www.helmcontrol.online/api/internal/run-daily-alerts
+        value: https://www.trenston.com/api/internal/run-daily-alerts
 
   # Weekly pack PDF emailed to CEO/owner (separate from daily alerts).
   - type: cron
@@ -196,4 +196,4 @@ services:
       - key: INTERNAL_CRON_SECRET
         sync: false
       - key: WEEKLY_DIGEST_CRON_URL
-        value: https://www.helmcontrol.online/api/internal/run-weekly-digest
+        value: https://www.trenston.com/api/internal/run-weekly-digest

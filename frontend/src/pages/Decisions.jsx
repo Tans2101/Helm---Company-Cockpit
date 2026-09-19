@@ -25,7 +25,7 @@ export default function Decisions() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals. You confirm before anything becomes a real call." />
+        <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Trenston drafts suggestions from live signals. You confirm before anything becomes a real call." />
         <SkeletonCardList count={4} />
       </div>
     );
@@ -112,13 +112,13 @@ export default function Decisions() {
 
   return (
     <div>
-      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Helm drafts suggestions from live signals. You confirm before anything becomes a real call." action={addBtn} />
+      <PageHeader title="Decision Center" subtitle="Every open decision, ranked by impact. Trenston drafts suggestions from live signals. You confirm before anything becomes a real call." action={addBtn} />
 
       <div className={cn(suggestions.length > 0 && "mb-8")} data-testid="suggested-decisions">
         {suggestions.length > 0 && (
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-4 h-4 text-helm-status-warning" />
-            <SectionLabel>Suggested by Helm</SectionLabel>
+            <SectionLabel>Suggested by Trenston</SectionLabel>
             <span className="font-mono text-xs text-helm-status-warning/80">{suggestions.length}</span>
           </div>
         )}
@@ -139,7 +139,7 @@ export default function Decisions() {
       </div>
 
       {decisions.length === 0 && suggestions.length === 0 ? (
-        <EmptyState title="No decisions yet" body="Log the calls that need to be made, or refresh suggestions so Helm can draft from runway, deals, tasks, and blockers."
+        <EmptyState title="No decisions yet" body="Log the calls that need to be made, or refresh suggestions so Trenston can draft from runway, deals, tasks, and blockers."
           action={canAct ? <button data-testid="empty-new-decision-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover"><Plus className="w-4 h-4" /> Log first decision</button> : null} />
       ) : (
         <>

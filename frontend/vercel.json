@@ -1,8 +1,8 @@
 {
   "build": {
     "env": {
-      "REACT_APP_HELM_ORIGIN": "https://www.helmcontrol.online",
-      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA",
+      "REACT_APP_HELM_ORIGIN": "https://www.trenston.com",
+      "REACT_APP_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsudHJlbnN0b24uY29tJA",
       "REACT_APP_GOOGLE_SITE_VERIFICATION": "",
       "GENERATE_SOURCEMAP": "false"
     }
@@ -54,9 +54,36 @@
   ],
   "redirects": [
     {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "helmcontrol.online"
+        }
+      ],
+      "destination": "https://www.trenston.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.helmcontrol.online"
+        }
+      ],
+      "destination": "https://www.trenston.com/:path*",
+      "permanent": true
+    },
+    {
       "source": "/:path((?!__clerk).*)",
-      "has": [{ "type": "host", "value": "helmcontrol.online" }],
-      "destination": "https://www.helmcontrol.online/:path",
+      "has": [
+        {
+          "type": "host",
+          "value": "trenston.com"
+        }
+      ],
+      "destination": "https://www.trenston.com/:path",
       "permanent": true
     }
   ],

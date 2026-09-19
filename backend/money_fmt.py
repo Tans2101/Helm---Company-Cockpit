@@ -1,4 +1,4 @@
-"""Currency symbols and compact money formatting for Helm.
+"""Currency symbols and compact money formatting for Trenston.
 
 Add new codes to CURRENCY_SYMBOLS later without changing call sites elsewhere —
 callers pass the workspace's financial_settings.currency (default usd).

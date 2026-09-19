@@ -1,4 +1,4 @@
-"""HubSpot CRM — token refresh and deal sync into Helm Pipeline."""
+"""HubSpot CRM — token refresh and deal sync into Trenston Pipeline."""
 from __future__ import annotations
 
 import os
@@ -14,7 +14,7 @@ AUTH_URL = "https://app.hubspot.com/oauth/authorize"
 TOKEN_URL = "https://api.hubapi.com/oauth/v1/token"
 API_BASE = "https://api.hubapi.com"
 
-# Read deals + company names + pipeline stage labels for mapping into Helm stages.
+# Read deals + company names + pipeline stage labels for mapping into Trenston stages.
 HUBSPOT_SCOPES = " ".join([
     "oauth",
     "crm.objects.deals.read",
@@ -80,7 +80,7 @@ async def refresh_hubspot_token(tokens: dict) -> dict:
 
 
 def map_hubspot_stage(stage_label: str, stage_id: str = "") -> str:
-    """Map HubSpot pipeline stage labels/ids onto Helm DEAL_STAGES."""
+    """Map HubSpot pipeline stage labels/ids onto Trenston DEAL_STAGES."""
     text = f"{stage_label or ''} {stage_id or ''}".strip().lower()
     if not text:
         return "lead"
@@ -115,7 +115,7 @@ def _parse_close_date(raw: Optional[str]) -> str:
 
 
 def map_hubspot_deal(deal: dict, stage_labels: dict[str, str], company_names: dict[str, str]) -> Optional[dict]:
-    """Map a HubSpot CRM deal object into Helm deal fields (+ hubspot_deal_id)."""
+    """Map a HubSpot CRM deal object into Trenston deal fields (+ hubspot_deal_id)."""
     deal_id = str(deal.get("id") or "").strip()
     if not deal_id:
         return None

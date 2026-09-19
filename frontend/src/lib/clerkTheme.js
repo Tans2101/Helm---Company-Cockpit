@@ -1,4 +1,4 @@
-/** Shared Clerk SignIn/SignUp appearance — Helm dark marketing (ink/cream/gold). */
+/** Shared Clerk SignIn/SignUp appearance — Trenston dark marketing (ink/cream/gold). */
 import palette from "@/design/palette.json";
 
 export const clerkAppearance = {

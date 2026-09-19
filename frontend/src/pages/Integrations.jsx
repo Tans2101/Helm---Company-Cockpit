@@ -100,7 +100,7 @@ function IntegrationCard({ it, canManage, canUseConnection, canConnectGoogle, on
 
       {isUnavailable && (
         <p className="text-xs text-helm-muted mt-3 leading-relaxed" data-testid={`${it.id}-unavailable-hint`}>
-          This connection isn’t available for your workspace yet. Try again later, or use Helm without it.
+          This connection isn’t available for your workspace yet. Try again later, or use Trenston without it.
         </p>
       )}
 
@@ -151,7 +151,7 @@ function IntegrationCard({ it, canManage, canUseConnection, canConnectGoogle, on
           onClick={() => onNavigate(it.cta_route)}
           className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-helm-line text-helm-fg text-sm py-2 hover:bg-helm-fg/5"
         >
-          <ArrowRight className="w-3.5 h-3.5" /> {it.cta_label || "Open in Helm"}
+          <ArrowRight className="w-3.5 h-3.5" /> {it.cta_label || "Open in Trenston"}
         </button>
       )}
 
@@ -211,7 +211,7 @@ export default function Integrations() {
             : connected === "hubspot"
               ? "HubSpot"
             : connected;
-      toast.success(`${name} connected. Your data will flow into Helm`);
+      toast.success(`${name} connected. Your data will flow into Trenston`);
       setParams({});
       reload();
     } else if (params.get("xero_select")) {
@@ -224,7 +224,7 @@ export default function Integrations() {
         err === "xero_org"
           ? "No Xero organisations were available on that account."
           : err === "token"
-            ? "Google accepted the grant, but Helm could not save the connection. Try Connect again."
+            ? "Google accepted the grant, but Trenston could not save the connection. Try Connect again."
             : "Could not complete the connection. Try again or use a different account.",
       );
       setParams({});
@@ -241,7 +241,7 @@ export default function Integrations() {
       <div>
         <PageHeader
           title="Integrations"
-          subtitle="Connect your calendar, accounting, and tools. Helm pulls your data in so the briefing, financials, and calendar stay current."
+          subtitle="Connect your calendar, accounting, and tools. Trenston pulls your data in so the briefing, financials, and calendar stay current."
         />
         <SkeletonCardList count={5} />
       </div>
@@ -278,7 +278,7 @@ export default function Integrations() {
       if (res.configured && res.authorization_url) {
         window.location.href = res.authorization_url;
       } else {
-        toast.info(res.message || "This connection isn't available yet on your Helm instance.");
+        toast.info(res.message || "This connection isn't available yet on your Trenston instance.");
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start connection");
@@ -374,7 +374,7 @@ export default function Integrations() {
     <div>
       <PageHeader
         title="Integrations"
-        subtitle="Connect your calendar, accounting, and tools. Helm pulls your data in so the briefing, financials, and calendar stay current."
+        subtitle="Connect your calendar, accounting, and tools. Trenston pulls your data in so the briefing, financials, and calendar stay current."
       />
 
       <GlassCard className="p-4 mb-8 fade-up border-helm-line">
@@ -393,7 +393,7 @@ export default function Integrations() {
         <GlassCard className="p-5 mb-8 fade-up border-helm-gold/35" data-testid="xero-tenant-picker">
           <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-helm-muted mb-2">Choose Xero organisation</p>
           <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-            Your Xero login can access more than one organisation. Pick which one Helm should sync into Financials.
+            Your Xero login can access more than one organisation. Pick which one Trenston should sync into Financials.
           </p>
           <div className="space-y-2">
             {data.xero_pending_tenants.map((t) => (
@@ -426,7 +426,7 @@ export default function Integrations() {
             <h3 className="text-helm-fg font-medium">Slack</h3>
             <p className="text-[11px] font-mono uppercase tracking-wide text-helm-muted mt-0.5">Alerts</p>
             <p className="text-sm text-helm-muted mt-2 leading-relaxed flex-1 min-h-[40px]">
-              Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel. Leave blank to disable.
+              Paste a Slack Incoming Webhook URL to post high-severity Trenston alerts to a channel. Leave blank to disable.
             </p>
             <label className="text-xs text-helm-muted block mt-3">
               Incoming webhook URL
@@ -498,7 +498,7 @@ export default function Integrations() {
           <GlassCard className="w-full max-w-md p-5">
             <h3 className="text-helm-fg font-medium text-lg">Connect SAP Business One</h3>
             <p className="text-sm text-helm-muted mt-1 leading-relaxed">
-              Enter your Service Layer URL and company login. Helm encrypts these credentials and syncs A/R + A/P invoices into Financials.
+              Enter your Service Layer URL and company login. Trenston encrypts these credentials and syncs A/R + A/P invoices into Financials.
             </p>
             <div className="mt-4 space-y-3">
               <label className="block text-xs font-mono uppercase tracking-wide text-helm-muted">

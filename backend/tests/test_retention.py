@@ -99,9 +99,9 @@ def test_trial_email_links_to_app_briefing():
     html = retention.trial_email_html(
         workspace_name="Northwind",
         bullets=["Open decision: Hire GTM"],
-        briefing_url="https://www.helmcontrol.online/app",
+        briefing_url="https://www.trenston.com/app",
     )
-    assert "https://www.helmcontrol.online/app" in html
+    assert "https://www.trenston.com/app" in html
     assert "card" in html.lower() or "charged" in html.lower()
     assert "Hire GTM" in html
 
@@ -148,11 +148,11 @@ async def test_run_sends_each_email_once_then_skips():
         mock_db,
         now=NOW,
         trial_days=7,
-        app_base_url="https://www.helmcontrol.online",
+        app_base_url="https://www.trenston.com",
         send_email=fake_send,
         recipient_emails=fake_recipients,
         signing_secret="retention-test-secret",
-        api_base_url="https://www.helmcontrol.online",
+        api_base_url="https://www.trenston.com",
     )
     assert stats["trial_sent"] == 1
     assert stats["inactivity_sent"] == 1
@@ -171,11 +171,11 @@ async def test_run_sends_each_email_once_then_skips():
         mock_db,
         now=NOW + timedelta(hours=20),
         trial_days=7,
-        app_base_url="https://www.helmcontrol.online",
+        app_base_url="https://www.trenston.com",
         send_email=fake_send,
         recipient_emails=fake_recipients,
         signing_secret="retention-test-secret",
-        api_base_url="https://www.helmcontrol.online",
+        api_base_url="https://www.trenston.com",
     )
     assert stats2["trial_sent"] == 0
     assert stats2["inactivity_sent"] == 0
@@ -206,7 +206,7 @@ async def test_run_skips_empty_workspace():
         mock_db,
         now=NOW,
         trial_days=7,
-        app_base_url="https://www.helmcontrol.online",
+        app_base_url="https://www.trenston.com",
         send_email=fake_send,
         recipient_emails=AsyncMock(return_value=["ceo@x.test"]),
     )
@@ -244,11 +244,11 @@ async def test_suppressed_recipient_skips_send():
         mock_db,
         now=NOW,
         trial_days=7,
-        app_base_url="https://www.helmcontrol.online",
+        app_base_url="https://www.trenston.com",
         send_email=fake_send,
         recipient_emails=AsyncMock(return_value=["ceo@northwind.test"]),
         signing_secret="retention-test-secret",
-        api_base_url="https://www.helmcontrol.online",
+        api_base_url="https://www.trenston.com",
     )
     assert sent == []
     assert stats["suppressed_skipped"] >= 1
@@ -265,7 +265,7 @@ async def test_suppressed_recipient_skips_send():
         client = TestClient(server.app)
         r = client.post("/api/internal/run-retention-checks")
         assert r.status_code == 401
-        r2 = client.post("/api/internal/run-retention-checks", headers={"X-Helm-Cron-Secret": "wrong"})
+        r2 = client.post("/api/internal/run-retention-checks", headers={"X-Trenston-Cron-Secret": "wrong"})
         assert r2.status_code == 401
     server.app.dependency_overrides.clear()
 
@@ -285,7 +285,7 @@ def test_endpoint_runs_with_cron_header():
         client = TestClient(server.app)
         r = client.post(
             "/api/internal/run-retention-checks",
-            headers={"X-Helm-Cron-Secret": "cron-secret-test"},
+            headers={"X-Trenston-Cron-Secret": "cron-secret-test"},
         )
     assert r.status_code == 200, r.text
     assert called.get("ok") is True

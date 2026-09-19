@@ -125,7 +125,7 @@ def test_accounting_sync_endpoint_requires_cron_secret():
         assert client.post("/api/internal/run-accounting-sync").status_code == 401
         assert client.post(
             "/api/internal/run-accounting-sync",
-            headers={"X-Helm-Cron-Secret": "wrong"},
+            headers={"X-Trenston-Cron-Secret": "wrong"},
         ).status_code == 401
 
 
@@ -141,7 +141,7 @@ def test_accounting_sync_endpoint_runs_with_cron_header():
         client = TestClient(server.app)
         res = client.post(
             "/api/internal/run-accounting-sync",
-            headers={"X-Helm-Cron-Secret": "cron-secret-test"},
+            headers={"X-Trenston-Cron-Secret": "cron-secret-test"},
         )
     assert res.status_code == 200
     assert res.json()["workspaces_scanned"] == 0

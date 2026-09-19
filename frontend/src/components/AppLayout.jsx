@@ -27,7 +27,7 @@ import { prefetchRouteHandlers } from "@/lib/prefetchRoute";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 import { SITE_SEARCH_ACTIONS } from "@/lib/siteSearchActions";
 
 const NAV = [
@@ -40,7 +40,7 @@ const NAV = [
   { to: "/app/reports", label: "Reports", icon: FileText, id: "reports" },
   { to: "/app/calendar", label: "Calendar", icon: Calendar, id: "calendar" },
   { to: "/app/people", label: "People", icon: Contact, id: "people" },
-  { to: "/app/ask", label: "Ask Helm", icon: MessageSquareText, id: "ask" },
+  { to: "/app/ask", label: "Ask Trenston", icon: MessageSquareText, id: "ask" },
   { to: "/app/members", label: "Team & Access", icon: UsersRound, id: "members", perm: "members:invite" },
 ];
 
@@ -99,7 +99,7 @@ function WorkspaceSwitcher({ onNavigate, billingEnforced }) {
     try {
       if (!user?.age_confirmed) {
         const ok = window.confirm(
-          "Confirm you are 18 or older (or using Helm under a parent/guardian) to create a company.",
+          "Confirm you are 18 or older (or using Trenston under a parent/guardian) to create a company.",
         );
         if (!ok) return;
         await api.patch("/account/age-confirmation", { confirmed: true });
@@ -434,7 +434,7 @@ export default function AppLayout() {
   const needsCompanySetup = company?.role === "owner" && company?.company_setup_done === false;
 
   if (companyLoading && !company) {
-    return <LoadingScreen label="Loading Helm" />;
+    return <LoadingScreen label="Loading Trenston" />;
   }
 
   if (needsCompanySetup) {
@@ -447,7 +447,7 @@ export default function AppLayout() {
     <div className="app-shell min-h-screen">
       {pastDue && (
         <div className="lg:pl-[220px] bg-helm-status-warning/12 border-b border-helm-status-warning/35 px-5 py-2.5 text-center text-sm text-helm-fg" data-testid="global-past-due-banner">
-          Payment past due: <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Helm access.
+          Payment past due: <button type="button" onClick={() => window.location.href = "/app/billing"} className="underline font-medium text-helm-status-warning">update billing</button> to keep Trenston access.
         </div>
       )}
       {/* Desktop nav rail — same surface as the page, no enclosed panel */}
@@ -459,7 +459,7 @@ export default function AppLayout() {
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-helm-bg/95 backdrop-blur-md border-b border-helm-line">
         <div className="flex items-center gap-2">
           <HelmMark size={28} className="rounded-md" />
-          <span className="text-helm-fg font-semibold text-sm">Helm</span>
+          <span className="text-helm-fg font-semibold text-sm">Trenston</span>
         </div>
         <div className="flex items-center gap-1">
           <button

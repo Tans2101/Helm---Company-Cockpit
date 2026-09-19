@@ -1,5 +1,5 @@
 /**
- * Helm visual identity — named colors from palette.json.
+ * Trenston visual identity — named colors from palette.json.
  *
  * Brand (use these names in UI):
  *   helm-navy  — primary text, icons, line work, headings (foreground, never a page fill)

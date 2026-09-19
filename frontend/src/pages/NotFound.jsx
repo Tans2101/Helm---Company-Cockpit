@@ -17,7 +17,7 @@ export default function NotFound() {
       <EmptyState
         icon={Compass}
         title="Page not found"
-        body="This URL doesn't match any page in Helm. Check the link, or head back and pick up where you left off."
+        body="This URL doesn't match any page in Trenston. Check the link, or head back and pick up where you left off."
         action={
           <Link
             to={homeTo}

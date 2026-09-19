@@ -176,7 +176,7 @@ ASK_HELM_ACTION = "ask_helm"
 
 
 async def get_period_ask_count(db, workspace_id: str, period_key: str) -> int:
-    """Ask Helm messages used in this billing period (separate from AI extracts)."""
+    """Ask Trenston messages used in this billing period (separate from AI extracts)."""
     doc = await db.document_usage_periods.find_one(
         {"workspace_id": workspace_id, "period": period_key, "action": ASK_HELM_ACTION},
         {"_id": 0, "count": 1},
@@ -185,7 +185,7 @@ async def get_period_ask_count(db, workspace_id: str, period_key: str) -> int:
 
 
 async def acquire_period_ask_slot(db, workspace_id: str, period_key: str, limit: int) -> bool:
-    """Atomically consume one Ask Helm slot for the billing period. False when at cap."""
+    """Atomically consume one Ask Trenston slot for the billing period. False when at cap."""
     from pymongo import ReturnDocument
     from pymongo.errors import DuplicateKeyError
 

@@ -37,8 +37,8 @@ async def test_notify_sends_only_when_assignee_changes():
 
     with patch.object(server, "db", mock_db), \
          patch.object(server, "send_notification_email", new=fake_notify), \
-         patch.object(server, "APP_URL", "https://www.helmcontrol.online"), \
-         patch.object(server, "FRONTEND_URL", "https://www.helmcontrol.online"):
+         patch.object(server, "APP_URL", "https://www.trenston.com"), \
+         patch.object(server, "FRONTEND_URL", "https://www.trenston.com"):
         # No change
         r0 = await server.notify_task_delegated(
             assignee_user_id="u_alex",

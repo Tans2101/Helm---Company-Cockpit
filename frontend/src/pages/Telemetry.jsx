@@ -26,7 +26,7 @@ const GOLD = palette.gold;
 const SLATE = palette.slate;
 const CREAM = palette.cream;
 
-/** Helm gold intensity scale for Bklit heatmap levels 0–4. */
+/** Trenston gold intensity scale for Bklit heatmap levels 0–4. */
 const ACTIVITY_LEVEL_COLORS = [
   "rgba(245, 240, 230, 0.08)",
   "rgba(201, 168, 75, 0.28)",
@@ -337,7 +337,7 @@ export default function Telemetry() {
             <div className="mt-5 pt-4 border-t border-helm-line" data-testid="helm-noticed-risks">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
-                <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm noticed</span>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Trenston noticed</span>
               </div>
               <div className="space-y-2">
                 {suggestedRisks.map((s) => (
@@ -371,7 +371,7 @@ export default function Telemetry() {
         <SectionLabel className="mb-4">Activity</SectionLabel>
         {activityTotal === 0 || heatmapColumns.length === 0 ? (
           <p className="text-sm text-helm-muted leading-relaxed">
-            Not enough workspace activity yet to show a pattern. As your team uses Helm, this calendar fills in.
+            Not enough workspace activity yet to show a pattern. As your team uses Trenston, this calendar fills in.
           </p>
         ) : (
           <HeatmapInteractionProvider>

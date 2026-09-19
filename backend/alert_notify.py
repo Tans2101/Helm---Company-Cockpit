@@ -49,18 +49,18 @@ def build_alert_email_html(workspace_name: str, alerts: list, app_url: str) -> s
 <tr><td style="padding:28px 32px;">
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0;">High-severity alert</p>
 <h1 style="color:#ffffff;font-size:22px;font-weight:400;margin:10px 0 0 0;">{_esc(workspace_name)}</h1>
-<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:14px 0 0 0;">Helm detected {len(alerts)} high-severity signal{"s" if len(alerts) != 1 else ""} that need your attention:</p>
+<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:14px 0 0 0;">Trenston detected {len(alerts)} high-severity signal{"s" if len(alerts) != 1 else ""} that need your attention:</p>
 <ul style="color:#a1a1aa;font-size:14px;line-height:1.5;margin:18px 0 0 0;padding-left:18px;">{items}</ul>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
-<a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Decisions in Helm &rarr;</a>
+<a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Decisions in Trenston &rarr;</a>
 </td></tr></table>
 </td></tr></table>
 </td></tr></table></body></html>"""
 
 
 def build_slack_text(workspace_name: str, alerts: list, app_url: str) -> str:
-    lines = [f"*Helm high-severity alert: {workspace_name}*"]
+    lines = [f"*Trenston high-severity alert: {workspace_name}*"]
     for a in alerts:
         title = a.get("title") or (a.get("signal") or {}).get("summary") or "Alert"
         detail = a.get("description") or (a.get("signal") or {}).get("detail") or ""

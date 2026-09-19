@@ -325,7 +325,7 @@ export default function Billing() {
 
       <div className="text-center mb-8 fade-up">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-3">Pricing</p>
-        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Choose your Helm plan</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Choose your Trenston plan</h1>
         <p className="text-helm-muted mt-3">
           Paid plans include a <span className="text-helm-fg">7-day free trial</span>. Downgrades take effect next billing cycle.
         </p>
@@ -353,8 +353,8 @@ export default function Billing() {
               {askLimit > 0 && (
                 <span className="block mt-1" data-testid="ask-helm-usage-copy">
                   {askOver || askAtLimit
-                    ? `Ask Helm ${askUsed} / ${askLimit} messages${periodEndLabel ? ` — resets ${periodEndLabel}` : ""}`
-                    : `Ask Helm ${askUsed} of ${askLimit} messages used${periodEndLabel ? ` (resets ${periodEndLabel})` : ""}`}
+                    ? `Ask Trenston ${askUsed} / ${askLimit} messages${periodEndLabel ? ` — resets ${periodEndLabel}` : ""}`
+                    : `Ask Trenston ${askUsed} of ${askLimit} messages used${periodEndLabel ? ` (resets ${periodEndLabel})` : ""}`}
                 </span>
               )}
             </p>
@@ -392,7 +392,7 @@ export default function Billing() {
             )}
             {askLimit > 0 && (
               <UsageRing
-                label="Ask Helm"
+                label="Ask Trenston"
                 unit="messages"
                 used={askUsed}
                 limit={askLimit}

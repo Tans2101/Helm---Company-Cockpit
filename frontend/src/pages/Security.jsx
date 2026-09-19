@@ -37,7 +37,7 @@ const WHERE_DATA_LIVES = [
   {
     icon: Database,
     title: "MongoDB Atlas",
-    body: "Primary company data (workspaces, financials, pipeline, decisions, and team records) lives in a dedicated MongoDB Atlas database (DB_NAME=helm), not in the browser and not in a Render-managed Mongo sidecar.",
+    body: "Primary company data (workspaces, financials, pipeline, decisions, and team records) lives in a dedicated MongoDB Atlas database (DB_NAME=trenston), not in the browser and not in a Render-managed Mongo sidecar.",
   },
   {
     icon: Cloud,
@@ -47,12 +47,12 @@ const WHERE_DATA_LIVES = [
   {
     icon: UserRoundCheck,
     title: "Clerk",
-    body: "Sign-in identity and authentication sessions are handled by Clerk (clerk.helmcontrol.online). Helm stores the account details needed to run your workspace, not payment cards.",
+    body: "Sign-in identity and authentication sessions are handled by Clerk (clerk.trenston.com). Trenston stores the account details needed to run your workspace, not payment cards.",
   },
   {
     icon: CreditCard,
     title: "Paddle",
-    body: "Paid subscriptions go through Paddle as merchant of record. Card numbers never pass through Helm’s application database.",
+    body: "Paid subscriptions go through Paddle as merchant of record. Card numbers never pass through Trenston’s application database.",
   },
 ];
 
@@ -67,7 +67,7 @@ const ENCRYPTION = [
   },
   {
     title: "At rest — platform storage",
-    body: "MongoDB Atlas and Cloudflare R2 provide their own encrypted storage for the clusters and buckets Helm uses. Helm does not claim an additional application-level encryption layer over every document field beyond credential sealing described above.",
+    body: "MongoDB Atlas and Cloudflare R2 provide their own encrypted storage for the clusters and buckets Trenston uses. Trenston does not claim an additional application-level encryption layer over every document field beyond credential sealing described above.",
   },
 ];
 
@@ -90,7 +90,7 @@ const THIRD_PARTIES = [
   },
   {
     name: "Anthropic",
-    why: "AI features (Ask Helm, bill/receipt extract, briefing and digest summaries, decision suggestions) send the minimum workspace context needed for that request.",
+    why: "AI features (Ask Trenston, bill/receipt extract, briefing and digest summaries, decision suggestions) send the minimum workspace context needed for that request.",
   },
   {
     name: "Clerk, Paddle, Resend, Vercel Analytics",
@@ -100,15 +100,15 @@ const THIRD_PARTIES = [
 
 const RETENTION = [
   "Account deletion wipes personal account data immediately — there is no post-deletion hold period for that wipe path.",
-  "Workspace owners can delete the company workspace; Helm removes workspace-scoped MongoDB records and associated private R2 objects. If object storage is unreachable, deletion fails visibly so it can be retried instead of silently leaving files behind.",
+  "Workspace owners can delete the company workspace; Trenston removes workspace-scoped MongoDB records and associated private R2 objects. If object storage is unreachable, deletion fails visibly so it can be retried instead of silently leaving files behind.",
   "Workspace owners can export a data package (integration tokens stripped). Non-owners get their own account data plus a membership summary.",
   "Trial and inactivity retention emails are driven by a daily Render cron (helm-retention-checks) — reminders, not silent data deletion without the controls above.",
 ];
 
 const STAFF_ACCESS = [
-  "Helm is founder-operated. The people who administer production (Render, Vercel, MongoDB Atlas, Cloudflare R2, Clerk, Paddle) can, in principle, reach infrastructure that holds customer data — the same as any small SaaS with shared ops credentials.",
+  "Trenston is founder-operated. The people who administer production (Render, Vercel, MongoDB Atlas, Cloudflare R2, Clerk, Paddle) can, in principle, reach infrastructure that holds customer data — the same as any small SaaS with shared ops credentials.",
   "There is no separate large support organization with standing read access to every workspace. We do not browse customer financials or documents for marketing or product curiosity.",
-  "When access is needed to debug a customer-reported issue, we do it for that purpose and with the customer’s knowledge whenever practical. Prefer contacting contact@helmcontrol.online for security or access questions.",
+  "When access is needed to debug a customer-reported issue, we do it for that purpose and with the customer’s knowledge whenever practical. Prefer contacting contact@trenston.com for security or access questions.",
 ];
 
 const CONTROLS = [
@@ -130,7 +130,7 @@ const CONTROLS = [
   {
     icon: FileCheck2,
     title: "Uploads are inspected",
-    body: "Helm enforces a 15 MB size cap and checks PDF, PNG, and JPEG file signatures before accepting a document, reducing the risk from disguised or oversized files.",
+    body: "Trenston enforces a 15 MB size cap and checks PDF, PNG, and JPEG file signatures before accepting a document, reducing the risk from disguised or oversized files.",
   },
   {
     icon: ShieldCheck,
@@ -140,16 +140,16 @@ const CONTROLS = [
   {
     icon: Trash2,
     title: "Deletion is designed to finish",
-    body: "Workspace deletion removes workspace-scoped database records and associated private files. If object storage is unavailable, Helm fails visibly so deletion can be retried instead of silently leaving files behind.",
+    body: "Workspace deletion removes workspace-scoped database records and associated private files. If object storage is unavailable, Trenston fails visibly so deletion can be retried instead of silently leaving files behind.",
   },
 ];
 
 const PRACTICES = [
   "Integration access is opt-in and can be disconnected at any time.",
   "Google Calendar and Gmail are personal: each teammate connects their own Google account and only sees their meetings and threads. Shared company OAuth (QuickBooks, Xero, HubSpot, SAP) can be used only by the teammate who connected them, or by a workspace owner. Legacy unstamped company connections are limited to owners until someone reconnects.",
-  "Google is not read-only. Connecting your Google account grants Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm — not a full mailbox or Drive dump.",
+  "Google is not read-only. Connecting your Google account grants Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Trenston — not a full mailbox or Drive dump.",
   "Workspaces that connected Google under the original Calendar + Gmail read grant keep that narrower access until an owner reconnects and accepts the wider consent screen.",
-  "Payment card details are handled by Paddle, not stored on Helm servers.",
+  "Payment card details are handled by Paddle, not stored on Trenston servers.",
   "Authentication is handled by Clerk using secure session controls.",
   "Sensitive credentials and provider token responses are excluded from application logs.",
   "Uploaded documents are sent to Anthropic only when an AI extract feature needs to process them.",
@@ -162,19 +162,19 @@ const QUESTIONS = [
     a: "No. Queries are scoped to the signed-in workspace. Members of another company cannot read your financials, documents, or decisions.",
   },
   {
-    q: "Does Helm store our full email inbox?",
-    a: "No. Helm reads Gmail metadata and short snippets (sender, subject, preview, thread link) for the briefing. Full message bodies are not stored as a mailbox archive. If compose access is granted, Helm can create a Gmail draft when you click Draft reply. It does not send mail. You send from Gmail.",
+    q: "Does Trenston store our full email inbox?",
+    a: "No. Trenston reads Gmail metadata and short snippets (sender, subject, preview, thread link) for the briefing. Full message bodies are not stored as a mailbox archive. If compose access is granted, Trenston can create a Gmail draft when you click Draft reply. It does not send mail. You send from Gmail.",
   },
   {
-    q: "What Google access does Helm request now?",
-    a: "Connecting your Google account requests Calendar read and write (Helm can create or update events when you ask), Gmail read for briefing snippets plus gmail.compose for drafts only (not gmail.send), Google Sheets to create a Financials export spreadsheet, and drive.file so you can pick a bill in Drive. Google’s consent screen may label compose as managing drafts and sending; Helm only posts to Gmail’s drafts API. Each teammate connects their own Google — never a shared workspace mailbox. Reconnect Google to add missing write scopes.",
+    q: "What Google access does Trenston request now?",
+    a: "Connecting your Google account requests Calendar read and write (Trenston can create or update events when you ask), Gmail read for briefing snippets plus gmail.compose for drafts only (not gmail.send), Google Sheets to create a Financials export spreadsheet, and drive.file so you can pick a bill in Drive. Google’s consent screen may label compose as managing drafts and sending; Trenston only posts to Gmail’s drafts API. Each teammate connects their own Google — never a shared workspace mailbox. Reconnect Google to add missing write scopes.",
   },
   {
     q: "Who can see uploaded bills and legal files?",
     a: "Authorized people in your workspace. Files sit in a private bucket and are served through short-lived signed links, not public URLs.",
   },
   {
-    q: "Is Helm SOC 2 or ISO 27001 certified?",
+    q: "Is Trenston SOC 2 or ISO 27001 certified?",
     a: "Not yet. We do not claim SOC 2, ISO 27001, HIPAA, or similar certifications we have not earned. This page describes the controls that are in the product and infrastructure today.",
   },
   {
@@ -188,7 +188,7 @@ export default function Security() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = "Security at Helm";
+    document.title = "Security at Trenston";
   }, []);
 
   return (
@@ -207,7 +207,7 @@ export default function Security() {
             >
               <LockKeyhole className="h-3.5 w-3.5 text-helm-gold" />
               <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-helm-gold">
-                Security at Helm
+                Security at Trenston
               </span>
             </motion.div>
             <motion.h1
@@ -218,7 +218,7 @@ export default function Security() {
               className="font-display mx-auto mt-7 max-w-3xl text-4xl font-medium leading-[1.08] tracking-tight md:text-6xl"
             >
               Your company runs on trust.
-              <span className="block text-helm-slate">Helm is built to protect it.</span>
+              <span className="block text-helm-slate">Trenston is built to protect it.</span>
             </motion.h1>
             <motion.p
               variants={fade}
@@ -228,7 +228,7 @@ export default function Security() {
               className="mx-auto mt-7 max-w-2xl text-base leading-relaxed text-helm-slate md:text-lg"
             >
               Cash, decisions, documents, and connected systems are the operating picture of a company.
-              Helm is designed so that picture stays inside the workspace that owns it, from sign-in through deletion.
+              Trenston is designed so that picture stays inside the workspace that owns it, from sign-in through deletion.
             </motion.p>
             <motion.p
               variants={fade}
@@ -263,7 +263,7 @@ export default function Security() {
               Companies cannot treat a cockpit as optional infrastructure.
             </h2>
             <p className="mt-5 max-w-3xl leading-relaxed text-helm-slate">
-              Helm holds the numbers leadership uses to decide, the files finance and legal attach,
+              Trenston holds the numbers leadership uses to decide, the files finance and legal attach,
               and the tokens that connect accounting, CRM, and calendar. That is why security is
               part of the product, not a footnote on a pricing page.
             </p>
@@ -278,7 +278,7 @@ export default function Security() {
                 Cloudflare is for files. The company record is MongoDB.
               </h2>
               <p className="mt-4 leading-relaxed text-helm-slate">
-                Helm is not a Cloudflare database product. Business records sit in MongoDB Atlas.
+                Trenston is not a Cloudflare database product. Business records sit in MongoDB Atlas.
                 Cloudflare R2 holds private uploaded files. Identity and payments use specialized providers.
               </p>
             </div>
@@ -327,7 +327,7 @@ export default function Security() {
             </h2>
             <p className="mt-4 max-w-3xl text-sm leading-relaxed text-helm-slate">
               Cross-checked against the product integration catalog. Optional connections only run after someone in your
-              workspace connects them. Platform providers below are required to operate Helm itself.
+              workspace connects them. Platform providers below are required to operate Trenston itself.
             </p>
             <ul className="mt-10 space-y-3">
               {THIRD_PARTIES.map((item) => (
@@ -358,7 +358,7 @@ export default function Security() {
               </ul>
             </div>
             <div>
-              <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Who at Helm can access data</p>
+              <p className="font-mono text-xs uppercase tracking-[0.28em] text-helm-gold">Who at Trenston can access data</p>
               <h2 className="font-display mt-4 text-3xl font-medium tracking-tight">Staff access</h2>
               <ul className="mt-6 space-y-3">
                 {STAFF_ACCESS.map((line) => (
@@ -380,7 +380,7 @@ export default function Security() {
                 Controls across the data lifecycle
               </h2>
               <p className="mt-4 leading-relaxed text-helm-slate">
-                No single control carries the whole burden. Helm combines encryption, access boundaries,
+                No single control carries the whole burden. Trenston combines encryption, access boundaries,
                 private storage, validation, and deletion that is meant to complete.
               </p>
             </div>
@@ -413,7 +413,7 @@ export default function Security() {
                 Clear about where data goes
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-helm-slate">
-                Helm is not the only system involved in delivering the product. We identify the providers
+                Trenston is not the only system involved in delivering the product. We identify the providers
                 we use and limit each integration to the access needed for its feature.
               </p>
               <Link to="/privacy" className="mt-6 inline-flex items-center gap-2 text-sm text-helm-gold hover:text-helm-gold-hover">
@@ -459,12 +459,12 @@ export default function Security() {
                 </h2>
                 <p className="mt-4 max-w-2xl text-sm leading-relaxed text-helm-slate">
                   We do not claim certifications we have not earned or promise that any system is
-                  invulnerable. We review Helm&apos;s controls, address identified risks, and communicate
+                  invulnerable. We review Trenston&apos;s controls, address identified risks, and communicate
                   our current practices plainly.
                 </p>
                 <p className="mt-4 text-sm text-helm-slate">
                   Found a security concern?{" "}
-                  <a className="text-helm-gold hover:underline" href="mailto:contact@helmcontrol.online?subject=Helm%20security%20report">
+                  <a className="text-helm-gold hover:underline" href="mailto:contact@trenston.com?subject=Trenston%20security%20report">
                     Report it privately
                   </a>
                   .

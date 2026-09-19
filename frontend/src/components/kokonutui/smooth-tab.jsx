@@ -1,5 +1,5 @@
 /**
- * @author: @kokonutui / Helm
+ * @author: @kokonutui / Trenston
  * @description: Smooth Tab — sliding active indicator (KokonutUI, restyled)
  * Vertical or horizontal track for nav active-state indication.
  * @website: https://kokonutui.com

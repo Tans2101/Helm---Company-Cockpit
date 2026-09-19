@@ -20,7 +20,7 @@ import {
   TAGLINE,
   VALUES,
   VISION,
-  WHAT_HELM_IS,
+  WHAT_TRENSTON_IS,
   WHO_HELM_IS_FOR,
   MISSION,
 } from "@/lib/marketingCopy";
@@ -32,7 +32,7 @@ const fade = {
 };
 
 const ABOUT_FACTS = [
-  { label: "What Helm is", body: WHAT_HELM_IS },
+  { label: "What Trenston is", body: WHAT_TRENSTON_IS },
   { label: "Who it's for", body: AUDIENCE },
   { label: "Problem we solve", body: ABOUT_PROBLEM },
   { label: "Founded", body: FOUNDED_DATE },
@@ -55,7 +55,7 @@ export default function About() {
             className="font-mono text-xs uppercase tracking-[0.3em] text-helm-slate">{CATEGORY}</motion.p>
           <motion.h1 variants={fade} initial="hidden" animate="show" custom={1}
             className="font-display mt-8 text-5xl md:text-6xl font-medium tracking-[-0.03em] leading-[1.05]">
-            About Helm
+            About Trenston
           </motion.h1>
         </div>
       </section>
@@ -89,7 +89,7 @@ export default function About() {
       <section className="px-6 py-20 border-t border-helm-cream/[0.05]">
         <div className="mx-auto max-w-3xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-          <h2 className="font-display text-3xl font-medium tracking-tight">Why we built Helm</h2>
+          <h2 className="font-display text-3xl font-medium tracking-tight">Why we built Trenston</h2>
           <p className="mt-5 text-helm-slate leading-relaxed">{ABOUT_STORY}</p>
         </div>
       </section>
@@ -97,7 +97,7 @@ export default function About() {
       <section className="px-6 py-20 border-t border-helm-cream/[0.05]" data-testid="about-founder">
         <div className="mx-auto max-w-3xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-          <h2 className="font-display text-3xl font-medium tracking-tight">Who&apos;s behind Helm</h2>
+          <h2 className="font-display text-3xl font-medium tracking-tight">Who&apos;s behind Trenston</h2>
           <p className="mt-5 text-helm-cream/80 leading-relaxed" data-testid="founder-credit">{FOUNDER_NOTE}</p>
           <FounderCredit
             className="mt-4"
@@ -119,7 +119,7 @@ export default function About() {
             <p className="mt-5 text-helm-slate leading-relaxed">{VISION}</p>
           </div>
           <div>
-            <h2 className="font-display text-3xl font-medium tracking-tight">Who Helm is for</h2>
+            <h2 className="font-display text-3xl font-medium tracking-tight">Who Trenston is for</h2>
             <div className="mt-8 border-t border-helm-cream/[0.06]">
               {WHO_HELM_IS_FOR.map((item) => (
                 <div key={item.title} className="grid sm:grid-cols-[11rem_1fr] gap-2 sm:gap-8 py-6 border-b border-helm-cream/[0.06]">
@@ -147,7 +147,7 @@ export default function About() {
             </div>
           </div>
           <div>
-            <h2 className="font-display text-3xl font-medium tracking-tight">What makes Helm different</h2>
+            <h2 className="font-display text-3xl font-medium tracking-tight">What makes Trenston different</h2>
             <p className="mt-5 text-sm text-helm-slate leading-relaxed">{ABOUT_DIFFERENTIATOR}</p>
           </div>
         </div>

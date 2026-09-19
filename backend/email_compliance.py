@@ -1,6 +1,6 @@
 """CAN-SPAM / marketing-email compliance helpers for Resend sends.
 
-Classification of every Helm Resend template (audit):
+Classification of every Trenston Resend template (audit):
 
   Commercial (must include physical address + working unsubscribe):
     - weekly digest / weekly pack PDF  (_weekly_digest_email_html)
@@ -12,7 +12,7 @@ Classification of every Helm Resend template (audit):
     - task delegation notification      (_task_delegation_email_html)
     - high-severity decision alerts     (alert_notify.build_alert_email_html)
 
-  Not sent by Helm Resend (Clerk / Paddle):
+  Not sent by Trenston Resend (Clerk / Paddle):
     - password resets, magic links, billing receipts
 
 Unsubscribe is honored immediately: the click writes an email_suppressions
@@ -35,14 +35,14 @@ logger = logging.getLogger("helm.email_compliance")
 
 # Matches frontend/src/lib/marketingCopy.js COMPANY_LOCATION and Privacy.jsx.
 COMPANY_POSTAL_ADDRESS = "BGC, Taguig, Philippines"
-COMPANY_LEGAL_NAME = "Helm Control"
+COMPANY_LEGAL_NAME = "Trenston"
 
 # One category covers all commercial Resend templates so a single click stops
 # weekly pack + retention emails without affecting transactional alerts/invites.
 CATEGORY_COMMERCIAL = "commercial"
 
 CATEGORY_LABELS = {
-    CATEGORY_COMMERCIAL: "Helm product emails (weekly pack and catch-up reminders)",
+    CATEGORY_COMMERCIAL: "Trenston product emails (weekly pack and catch-up reminders)",
 }
 
 TOKEN_TTL_SECONDS = 365 * 24 * 3600
@@ -140,7 +140,7 @@ def marketing_footer_html(*, unsubscribe_url: str, postal_address: str = COMPANY
 <tr><td style="padding:20px 36px 28px 36px;border-top:1px solid rgba(255,255,255,0.06);">
 <p style="color:#52525b;font-size:12px;margin:0;line-height:1.6;">
 {name}<br>{addr}<br><br>
-You received this because you use Helm. 
+You received this because you use Trenston. 
 <a href="{unsub}" style="color:#a1a1aa;text-decoration:underline;">Unsubscribe</a>
  from these emails.
 </p>
@@ -155,7 +155,7 @@ def inject_marketing_footer(html_body: str, *, unsubscribe_url: str) -> str:
     """
     footer = marketing_footer_html(unsubscribe_url=unsubscribe_url)
     body = html_body or ""
-    # Common Helm shell: footer row belongs inside the inner card table.
+    # Common Trenston shell: footer row belongs inside the inner card table.
     marker = "</table>\n</td></tr></table></body></html>"
     if marker in body and "Unsubscribe" not in body:
         # Insert before the final inner </table> that closes the card.

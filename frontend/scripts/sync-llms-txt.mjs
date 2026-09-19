@@ -10,20 +10,20 @@ import { loadMarketingPlans, plansPlainLines } from "./loadMarketingPlans.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(__dirname, "..");
-const ORIGIN = "https://www.helmcontrol.online";
+const ORIGIN = "https://www.trenston.com";
 
 export function buildLlmsTxt() {
   const { PLANS, TAGLINE, CATEGORY, AUDIENCE } = loadMarketingPlans();
   const lines = [
-    "# Helm",
+    "# Trenston",
     "",
     `> ${CATEGORY}. ${TAGLINE}`,
     "",
     AUDIENCE,
     "",
-    "Helm is a CEO operating system: one cockpit for money, pipeline, people,",
+    "Trenston is a CEO operating system: one cockpit for money, pipeline, people,",
     "department work, and decisions — Briefing, Decision Center, Financials,",
-    "Ask Helm, and department lanes (Production, Procurement, Legal, HR,",
+    "Ask Trenston, and department lanes (Production, Procurement, Legal, HR,",
     "Maintenance, Sales).",
     "",
     "## Canonical pages",

@@ -270,7 +270,7 @@ export default function Briefing() {
                             snippet: t.snippet || "",
                           });
                           if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
-                          toast.success("Opened a Gmail draft. Helm did not send it");
+                          toast.success("Opened a Gmail draft. Trenston did not send it");
                         } catch (e) {
                           toast.error(e?.response?.data?.detail || "Reconnect Google to create drafts");
                         }

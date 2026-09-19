@@ -1,4 +1,4 @@
-"""Ask Helm context respects department membership for every department type."""
+"""Ask Trenston context respects department membership for every department type."""
 from __future__ import annotations
 
 import os
@@ -497,7 +497,7 @@ async def test_ask_helm_department_slice_uses_accessible_department_ids():
     assert "department_id" not in filt
 
 
-# Catalog coverage: every department type Ask Helm can surface must be membership-gated
+# Catalog coverage: every department type Ask Trenston can surface must be membership-gated
 # (Accounting/Finance uses the Financials section grant, not department membership alone).
 _ASK_DEPT_SLICES = (
     (dept_catalog.TYPE_SALES, "deals", "pipeline"),
@@ -510,7 +510,7 @@ _ASK_DEPT_SLICES = (
 
 
 def test_ask_scopes_every_non_finance_catalog_department():
-    """No department queue is left as an unconditional Ask Helm exception."""
+    """No department queue is left as an unconditional Ask Trenston exception."""
     catalog_types = {d["type"] for d in dept_catalog.DEPARTMENT_CATALOG}
     sliced = {t for t, _c, _k in _ASK_DEPT_SLICES}
     assert dept_catalog.TYPE_ACCOUNTING_FINANCE in catalog_types

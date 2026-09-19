@@ -1,5 +1,5 @@
 /**
- * @author: @kokonutui / Helm
+ * @author: @kokonutui / Trenston
  * @description: Profile Dropdown — sidebar identity menu (KokonutUI, restyled)
  * @website: https://kokonutui.com
  */

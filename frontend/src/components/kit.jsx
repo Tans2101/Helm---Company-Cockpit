@@ -161,7 +161,7 @@ export function EmptyState({ icon: Icon, title, body, action }) {
   );
 }
 
-/** In-app confirm — replaces native window.confirm so dialogs match Helm. */
+/** In-app confirm — replaces native window.confirm so dialogs match Trenston. */
 export function ConfirmDialog({
   open,
   title,

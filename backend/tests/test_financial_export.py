@@ -197,7 +197,7 @@ def test_pdf_endpoint_returns_attachment():
         server.app.dependency_overrides.clear()
     assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("application/pdf")
-    assert "Helm-Financial-Export-Forge-Co-2026-09.pdf" in r.headers.get("content-disposition", "")
+    assert "Trenston-Financial-Export-Forge-Co-2026-09.pdf" in r.headers.get("content-disposition", "")
     assert r.content.startswith(b"%PDF")
 
 

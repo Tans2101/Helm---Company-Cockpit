@@ -42,7 +42,7 @@ import decision_engine
 import money_fmt
 from money_fmt import fmt_money, normalize_currency, currency_symbol, CURRENCY_SYMBOLS, entered_cash_amount
 from pagination import clamp_limit, apply_before_filter, next_cursor
-from helm_config import HELM_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
+from helm_config import TRENSTON_CANONICAL_ORIGIN, is_stale_deploy_url, public_api_origin, registrable_cookie_domain
 from static_frontend import mount_static_frontend, should_serve_static
 from seed_data import build_workspace, sample_financial_entries, gen_join_code
 from finance_entry import normalize_entry_name, require_entry_name
@@ -147,7 +147,7 @@ DB_NAME = os.environ["DB_NAME"]
 #   DB_NAME            Database name (e.g. helm)
 #   SESSION_SECRET     Long random string — never use placeholders in production
 #   OAUTH_STATE_SECRET Long random string — required in production (no fallback)
-#   FRONTEND_URL       Public app URL (e.g. https://www.helmcontrol.online)
+#   FRONTEND_URL       Public app URL (e.g. https://www.trenston.com)
 #   APP_URL            Same as FRONTEND_URL for post-OAuth redirects
 #   CORS_ORIGINS       Comma-separated allowed browser origins (same as frontend)
 #   COOKIE_SECURE      true behind HTTPS
@@ -156,7 +156,7 @@ DB_NAME = os.environ["DB_NAME"]
 #   ALLOW_DEMO_LOGIN   false
 #   DEMO_RESET_ENABLED false (recommended)
 #   CLERK_SECRET_KEY + CLERK_JWKS_URL   OR   GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
-#   ANTHROPIC_API_KEY  AI briefing / Ask Helm
+#   ANTHROPIC_API_KEY  AI briefing / Ask Trenston
 #   PADDLE_*           Billing (when BILLING_ENFORCED=true)
 #   INTEGRATION_ENCRYPTION_KEY  Fernet key for Google/QuickBooks/SAP credentials at rest
 #                               (python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
@@ -183,7 +183,7 @@ db = client[DB_NAME]
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'change-me-in-production')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', '').strip().rstrip('/')
 if is_stale_deploy_url(FRONTEND_URL):
-    FRONTEND_URL = HELM_CANONICAL_ORIGIN
+    FRONTEND_URL = TRENSTON_CANONICAL_ORIGIN
 ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "false").lower() in ("1", "true", "yes")
 DEMO_RESET_ENABLED = os.environ.get("DEMO_RESET_ENABLED", "false").lower() in ("1", "true", "yes")
 # HTTPS cookies: default false for local dev; set true on Render (see docs/DEPLOY.md).
@@ -196,7 +196,7 @@ if not OAUTH_STATE_SECRET:
     OAUTH_STATE_SECRET = SESSION_SECRET
 APP_URL = (os.environ.get("APP_URL") or FRONTEND_URL or "").rstrip("/")
 if is_stale_deploy_url(APP_URL):
-    APP_URL = HELM_CANONICAL_ORIGIN
+    APP_URL = TRENSTON_CANONICAL_ORIGIN
 # Display fallback — tier prices live in plans.PLANS; PRO_PRICE kept for legacy envs.
 PRO_PRICE = float(os.environ.get("PRO_PRICE", "99"))
 # When false (default), feature gates are open; paywall + quotas apply when true.
@@ -345,7 +345,7 @@ def _check_join_rate_limit(ip: str):
     _join_attempts[ip] = attempts
 
 # ------------------------- Access packs / permissions -------------------------
-# Every employee can do daily work: read, move/create their tasks, ask Helm, post a daily update.
+# Every employee can do daily work: read, move/create their tasks, ask Trenston, post a daily update.
 BASE_PERMS = {"read", "tasks:move", "tasks:create", "ask:use", "updates:write"}
 PACK_PERMS = {
     "member": BASE_PERMS,
@@ -621,7 +621,7 @@ async def can_access_financials(
     membership: Optional[dict] = None,
     workspace: Optional[dict] = None,
 ) -> bool:
-    """Single gate for MRR/runway/burn and related figures across Helm surfaces.
+    """Single gate for MRR/runway/burn and related figures across Trenston surfaces.
 
     Same rule as Financials page write access: pack `finance:write` or a CEO
     section grant / legacy department grant for `financials`.
@@ -635,7 +635,7 @@ async def can_access_financials(
     )
 
 
-# Phrases that request financial figures Ask Helm must not answer without access.
+# Phrases that request financial figures Ask Trenston must not answer without access.
 _FINANCE_ASK_RE = re.compile(
     r"\b("
     r"mrr|arr|runway|burn(?:\s*rate)?|cash(?:\s*balance)?|revenue|revenues|"
@@ -654,7 +654,7 @@ FINANCIALS_ACCESS_DENIED_MESSAGE = (
 
 
 def message_requests_financials(message: str) -> bool:
-    """True when an Ask Helm message is asking for gated financial figures."""
+    """True when an Ask Trenston message is asking for gated financial figures."""
     text = (message or "").strip()
     if not text:
         return False
@@ -727,7 +727,7 @@ def _require_internal_cron(request: Request) -> None:
             detail="Retention cron disabled (set INTERNAL_CRON_SECRET)",
         )
     provided = (
-        request.headers.get("X-Helm-Cron-Secret")
+        request.headers.get("X-Trenston-Cron-Secret")
         or request.headers.get("X-Setup-Secret")
         or ""
     ).strip()
@@ -774,14 +774,14 @@ def _invite_email_html(inviter_name: str, workspace_name: str, role: str, app_ur
 <tr><td style="padding:32px 36px 8px 36px;">
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="width:34px;height:34px;background:rgba(201,169,98,0.15);border:1px solid rgba(201,169,98,0.35);border-radius:8px;text-align:center;vertical-align:middle;color:#c9a962;font-weight:600;font-size:15px;">H</td>
-<td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Helm</td>
+<td style="padding-left:10px;color:#ffffff;font-size:16px;font-weight:600;">Trenston</td>
 </tr></table>
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:22px 0 0 0;">You've been added</p>
 <h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{inviter_name} invited you to<br><span style="color:#c9a962;">{workspace_name}</span></h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Helm, the CEO Operating System. Sign in with Google to see the briefing, decisions, financials and more.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">You now have <b style="color:#ffffff;">{role}</b> access to this company's command center on Trenston, the CEO Operating System. Sign in with Google to see the briefing, decisions, financials and more.</p>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
-<a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Helm &rarr;</a>
+<a href="{app_url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Trenston &rarr;</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="padding:20px 36px 30px 36px;border-top:1px solid rgba(255,255,255,0.06);">
@@ -798,7 +798,7 @@ async def send_invite_email(to_email: str, inviter_name: str, workspace_name: st
     resend.api_key = RESEND_API_KEY
     params = {
         "from": SENDER_EMAIL, "to": [to_email],
-        "subject": f"{inviter_name} invited you to {workspace_name} on Helm",
+        "subject": f"{inviter_name} invited you to {workspace_name} on Trenston",
         "html": _invite_email_html(inviter_name, workspace_name, role, app_url),
     }
     try:
@@ -871,7 +871,7 @@ async def send_notification_email(
 
 
 def _app_base_url() -> str:
-    return (APP_URL or FRONTEND_URL or HELM_CANONICAL_ORIGIN or "").rstrip("/")
+    return (APP_URL or FRONTEND_URL or TRENSTON_CANONICAL_ORIGIN or "").rstrip("/")
 
 
 def _task_delegation_email_html(
@@ -899,11 +899,11 @@ def _task_delegation_email_html(
 <tr><td style="padding:32px 36px 8px 36px;">
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0;">Task delegated</p>
 <h1 style="color:#ffffff;font-size:22px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">{title}</h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:16px 0 0 0;">{delegator} assigned you a task in <b style="color:#ffffff;">{workspace}</b> on Helm.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:16px 0 0 0;">{delegator} assigned you a task in <b style="color:#ffffff;">{workspace}</b> on Trenston.</p>
 {note_block}
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
-<a href="{url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open task in Helm &rarr;</a>
+<a href="{url}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open task in Trenston &rarr;</a>
 </td></tr></table>
 </td></tr>
 </table>
@@ -1016,14 +1016,14 @@ async def _notify_high_severity_alerts(workspace_id: str, decision_suggestions: 
     if not fresh:
         return {"emailed": False, "slack": False, "new_alerts": 0}
 
-    app_url = APP_URL or FRONTEND_URL or HELM_CANONICAL_ORIGIN
+    app_url = APP_URL or FRONTEND_URL or TRENSTON_CANONICAL_ORIGIN
     ws_name = c.get("name") or "Your workspace"
     html = an.build_alert_email_html(ws_name, fresh, app_url)
     slack_text = an.build_slack_text(ws_name, fresh, app_url)
     recipients = await _alert_recipient_emails(workspace_id)
     email_result = await send_resend_email(
         to=recipients,
-        subject=f"Helm alert: {len(fresh)} high-severity signal{'s' if len(fresh) != 1 else ''}: {ws_name}",
+        subject=f"Trenston alert: {len(fresh)} high-severity signal{'s' if len(fresh) != 1 else ''}: {ws_name}",
         html=html,
     )
     slack_result = {"ok": False, "reason": "not_configured"}
@@ -1059,7 +1059,7 @@ def _looks_like_jwt(token: str) -> bool:
 
 
 async def _user_from_clerk_jwt(token: str):
-    """Authenticate via Clerk session JWT (no Helm cookie required)."""
+    """Authenticate via Clerk session JWT (no Trenston cookie required)."""
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=401, detail="Clerk is not configured")
     try:
@@ -1108,7 +1108,7 @@ async def _user_from_request(request: Request):
         except HTTPException as exc:
             if exc.status_code != 401:
                 raise
-            # Fall back to Helm session cookie when Clerk JWT is stale/invalid.
+            # Fall back to Trenston session cookie when Clerk JWT is stale/invalid.
 
     token = request.cookies.get("session_token")
     if not token and bearer:
@@ -1204,7 +1204,7 @@ def _is_analytics_admin(principal: dict | None) -> bool:
 
 
 async def require_analytics_admin(principal=Depends(get_principal)):
-    """Helm operator only — not a workspace owner/admin permission."""
+    """Trenston operator only — not a workspace owner/admin permission."""
     if not _is_analytics_admin(principal):
         raise HTTPException(status_code=403, detail="Not available")
     return principal
@@ -1276,7 +1276,7 @@ async def require_pro(principal=Depends(get_principal)):
         return principal
     c = await get_ws(principal["workspace_id"])
     if not helm_plans.is_paid_plan(c.get("plan")):
-        raise HTTPException(status_code=403, detail="A paid Helm plan is required for this action")
+        raise HTTPException(status_code=403, detail="A paid Trenston plan is required for this action")
     return principal
 
 
@@ -1311,7 +1311,7 @@ def require_pro_perm(action: str):
             c = await get_ws(principal["workspace_id"])
             if not workspace_allows(c, feature):
                 if action == "ask:use":
-                    plan_message = "Ask Helm isn't included in your plan"
+                    plan_message = "Ask Trenston isn't included in your plan"
                 else:
                     plan_message = "Upgrade your plan to use this feature"
                 raise HTTPException(
@@ -1576,7 +1576,7 @@ def invalidate_workspace_list_cache(workspace_id: str, *kinds: str) -> None:
     """Drop cached department list payloads after a successful write.
 
     This is the primary freshness guarantee; the 20s TTL is only a fallback for
-    writes that bypass Helm (e.g. external accounting sync).
+    writes that bypass Trenston (e.g. external accounting sync).
     """
     if not workspace_id:
         return
@@ -1862,7 +1862,7 @@ def financials_for_synthesis(fin: dict) -> dict:
             "net burn is zero or negative with cash entered — say cash is growing / no "
             "burn, not that runway is missing. If mrr_known is false, recurring revenue was never "
             "logged (expense-only or one-time sales are not confirmed $0 MRR). If burn_known is false, "
-            "say burn is not in Helm yet."
+            "say burn is not in Trenston yet."
         ),
     }
 
@@ -2030,7 +2030,7 @@ def dept_queue_for_synthesis(
     empty_label: str = "This department queue",
     dept_type: Optional[str] = None,
 ) -> dict:
-    """Compact status counts for Ask Helm — no row-level PII beyond aggregates."""
+    """Compact status counts for Ask Trenston — no row-level PII beyond aggregates."""
     rows = list(rows or [])
     annotated = helm_freshness.annotate_possibly_stale(
         rows, dept_type=dept_type,
@@ -2126,7 +2126,7 @@ async def _ask_helm_department_slice(
     enabled_dept: Optional[dict] = None,
     access_ids: Any = _ASK_HELM_ACCESS_LOOKUP,
 ):
-    """Load Ask Helm rows with the same membership rule as department pages.
+    """Load Ask Trenston rows with the same membership rule as department pages.
 
     Returns ``(rows, enabled, visible)``. CEO → visible with unfiltered ids (None bypass).
 
@@ -2169,7 +2169,7 @@ def risks_for_synthesis(c: dict) -> dict:
         "unknown_fields": ["risk_radar"],
         "instructions_for_missing_data": (
             "Risk radar has not been filled in by this workspace. Do not invent risks "
-            "or treat a sample list as real. Say risk tracking is not in Helm yet."
+            "or treat a sample list as real. Say risk tracking is not in Trenston yet."
         ),
     }
 
@@ -2228,7 +2228,7 @@ def ask_context_for_synthesis(
     maintenance_enabled: bool = False,
     maintenance_visible: bool = True,
 ) -> dict:
-    """Ask Helm snapshot: live facts only, with unknown vs confirmed-zero distinguished.
+    """Ask Trenston snapshot: live facts only, with unknown vs confirmed-zero distinguished.
 
     Department-backed slices are omitted or marked restricted unless the requester
     can access that department — same membership rule as the department pages
@@ -2466,7 +2466,7 @@ async def auth_config():
         "clerk_secret_mode_match": mode_match,
         "clerk_primary_origin": clerk_auth.clerk_primary_origin() if clerk_on else None,
         "clerk_post_auth_url": clerk_auth.clerk_post_auth_url() if clerk_on else None,
-        "helm_canonical_origin": HELM_CANONICAL_ORIGIN,
+        "helm_canonical_origin": TRENSTON_CANONICAL_ORIGIN,
         "clerk_multi_domain": clerk_auth.clerk_multi_domain_auth() if clerk_on else False,
         "clerk_api_ok": api_ok,
         "clerk_jwks_ok": jwks_ok,
@@ -2691,7 +2691,7 @@ def _bearer_token(request: Request) -> str:
 
 @api_router.post("/auth/clerk/exchange")
 async def clerk_exchange(request: Request, response: Response):
-    """Clerk JWT → Helm session payload (+ optional httpOnly cookie)."""
+    """Clerk JWT → Trenston session payload (+ optional httpOnly cookie)."""
     if not clerk_auth.clerk_configured():
         raise HTTPException(status_code=400, detail="Clerk is not configured")
     await _require_mongo()
@@ -2706,7 +2706,7 @@ async def clerk_exchange(request: Request, response: Response):
     if not await clerk_auth.clerk_jwks_ok():
         raise HTTPException(
             status_code=503,
-            detail="Clerk signing keys unavailable. Check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online",
+            detail="Clerk signing keys unavailable. Check CLERK_SECRET_KEY on Render matches clerk.trenston.com",
         )
     token = _bearer_token(request)
     if not token:
@@ -2778,7 +2778,7 @@ async def create_workspace(payload: CreateWsInput, user=Depends(get_user)):
     if not (user_doc or {}).get("age_confirmed"):
         raise HTTPException(
             status_code=403,
-            detail="Confirm you are 18 or older (or using Helm under a parent/guardian) before creating a company",
+            detail="Confirm you are 18 or older (or using Trenston under a parent/guardian) before creating a company",
         )
     ws_id = f"ws_{uuid.uuid4().hex[:12]}"
     doc = build_workspace(ws_id, payload.name.strip() or "New Company", user["user_id"], empty=True)
@@ -4188,7 +4188,7 @@ async def approve_decision_suggestion(suggestion_id: str, principal=Depends(requ
         {"$set": {"decisions": decisions, "decision_suggestions": suggestions}},
     )
     invalidate_workspace_list_cache(principal["workspace_id"], "me_work", "calendar")
-    await log_activity(principal, "decisions", "suggestion.approve", f"Accepted Helm suggestion: {decision['title']}")
+    await log_activity(principal, "decisions", "suggestion.approve", f"Accepted Trenston suggestion: {decision['title']}")
     return {"ok": True, "decision": decision}
 
 
@@ -4254,7 +4254,7 @@ async def assign_delegate_suggestion(suggestion_id: str, principal=Depends(requi
         {"workspace_id": c["workspace_id"]},
         {"$set": {"tasks": t, "delegate_suggestions": suggestions}},
     )
-    await log_activity(principal, "tasks", "delegate.assign", f"Assigned from Helm: {item['title']} → {assignee_name}")
+    await log_activity(principal, "tasks", "delegate.assign", f"Assigned from Trenston: {item['title']} → {assignee_name}")
     await notify_task_delegated(
         assignee_user_id=assignee_uid,
         previous_assignee_user_id=None,
@@ -5769,7 +5769,7 @@ async def export_financials_to_sheets(principal=Depends(require_section("financi
         {"workspace_id": principal["workspace_id"]}, dept_ids,
     )
     entries = await db.financial_entries.find(entry_filt, {"_id": 0}).sort("month", -1).to_list(5000)
-    company = c.get("name") or "Helm"
+    company = c.get("name") or "Trenston"
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     summary_rows = [
         ["Metric", "Value"],
@@ -6571,7 +6571,7 @@ def _computed_report_cards(c, fin, items, ups, headcount, prior=None, *, include
     shipped_change = _plain_weekly_change(curr["shipped_week"], previous.get("shipped_week"), unit=" items")
 
     if first_week:
-        fin_summary = "This is your first weekly baseline. Next week Helm will explain what changed."
+        fin_summary = "This is your first weekly baseline. Next week Trenston will explain what changed."
         team_summary = "This is your first weekly baseline for team size, updates, and blockers."
         exec_summary = "This is your first weekly baseline for completed and open work."
     else:
@@ -7394,7 +7394,7 @@ async def _google_calendar_snapshot(
 
 
 def _calendar_week_start(day) -> datetime:
-    """Week starts Sunday (matches Helm calendar UI)."""
+    """Week starts Sunday (matches Trenston calendar UI)."""
     sunday_offset = (day.weekday() + 1) % 7
     start = day - timedelta(days=sunday_offset)
     return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
@@ -7424,7 +7424,7 @@ def _normalize_seed_events(meetings: list[dict], day) -> list[dict]:
     return out
 
 
-# Extensible registry of department date fields → Helm Calendar.
+# Extensible registry of department date fields → Trenston Calendar.
 # Add a row here when a new department ships a date field; the collector below
 # picks it up automatically (no changes needed in GET /calendar).
 CALENDAR_DATE_SOURCES = [
@@ -7753,7 +7753,7 @@ def can_manage_helm_calendar_event(
     *,
     accessible_department_ids: Optional[set[str]] = None,
 ) -> bool:
-    """Whether principal may edit/delete this Helm calendar event.
+    """Whether principal may edit/delete this Trenston calendar event.
 
     Pack calendar:write (CEO/owner/exec) → any helm event.
     Otherwise (with calendar section grant already required by the route):
@@ -10474,7 +10474,7 @@ async def delete_maintenance_ticket(ticket_id: str, principal=Depends(get_princi
 # ------------------------- HR onboarding / employees / offboarding -------------------------
 HR_DEFAULT_TEMPLATE_STEPS = ("Offer", "Paperwork", "Orientation", "Active")
 HR_DEFAULT_OFFBOARDING_STEPS = (
-    "Revoke Helm/system access",
+    "Revoke Trenston/system access",
     "Collect company equipment",
     "Process final pay",
     "Conduct exit interview",
@@ -11569,7 +11569,7 @@ async def patch_hr_leave_request(
     return {"ok": True, "request": {**row, **upd}}
 
 
-# ------------------------- Ask Helm -------------------------
+# ------------------------- Ask Trenston -------------------------
 class AskInput(BaseModel):
     message: str
 
@@ -11625,7 +11625,7 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    f"You've used your {ask_limit} Ask Helm messages this billing period. "
+                    f"You've used your {ask_limit} Ask Trenston messages this billing period. "
                     f"Your allowance resets on {reset_label}. Upgrade for a higher limit."
                 ),
             )
@@ -11723,7 +11723,7 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
     context["data_as_of"] = freshness.get("data_as_of")
     context["data_freshness_sources"] = freshness.get("sources") or {}
     system = (
-        f"You are Helm, the CEO's executive AI chief-of-staff for {c['name']}. "
+        f"You are Trenston, the CEO's executive AI chief-of-staff for {c['name']}. "
         "Answer like a sharp, trusted operator: direct, quantified, decisive. "
         "Use the live company snapshot provided. Keep answers tight. "
         "Write plainly. Avoid em dashes. Prefer periods, commas, or plain connecting words instead, "
@@ -11731,12 +11731,12 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
         "Never treat missing figures as zero. Follow every instructions_for_missing_data "
         "block in the snapshot (company_profile, financials, pipeline, onboarding, "
         "production, procurement, legal, maintenance, risks). "
-        "If a field is null or listed in unknown_fields, say the data is not in Helm yet. "
+        "If a field is null or listed in unknown_fields, say the data is not in Trenston yet. "
         "Do not infer it and do not describe it as zero. "
         "Only state a number, date, or figure that appears literally in the snapshot. "
         "Never invent, estimate, or round into a figure that is not present. "
         "If financials.access is \"restricted\", the user does not have access to financial "
-        "data in Helm. Tell them clearly they cannot see revenue, burn, runway, or related "
+        "data in Trenston. Tell them clearly they cannot see revenue, burn, runway, or related "
         "figures and should ask someone with Financials access. Do not invent numbers, "
         "describe them as zero, or estimate them from pipeline deal values or other clues. "
         "If pipeline, onboarding, production, procurement, legal, or maintenance has "
@@ -13482,7 +13482,7 @@ class AgeConfirmInput(BaseModel):
 async def confirm_age(payload: AgeConfirmInput, user=Depends(get_user)):
     """Record that the account holder confirmed they are 18+ (or guardian-supervised)."""
     if not payload.confirmed:
-        raise HTTPException(status_code=400, detail="Age confirmation is required to use Helm")
+        raise HTTPException(status_code=400, detail="Age confirmation is required to use Trenston")
     now = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
         {"user_id": user["user_id"]},
@@ -13762,10 +13762,10 @@ def _weekly_digest_email_html(*, workspace_name: str, app_url: str, unsubscribe_
 <tr><td style="padding:32px 36px 8px 36px;">
 <p style="color:#c9a962;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin:0;">Weekly pack</p>
 <h1 style="color:#ffffff;font-size:24px;font-weight:400;margin:10px 0 0 0;line-height:1.3;">This week's briefing for<br><span style="color:#c9a962;">{name}</span></h1>
-<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">Your Helm weekly pack is attached as a PDF. No need to log in to read it — open the attachment, or review it in the app when you are ready.</p>
+<p style="color:#a1a1aa;font-size:15px;line-height:1.6;margin:18px 0 0 0;">Your Trenston weekly pack is attached as a PDF. No need to log in to read it — open the attachment, or review it in the app when you are ready.</p>
 <table cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;"><tr>
 <td style="background:#c9a962;border-radius:8px;">
-<a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Reports in Helm &rarr;</a>
+<a href="{link}" style="display:inline-block;padding:12px 26px;color:#09090b;font-size:14px;font-weight:600;text-decoration:none;">Open Reports in Trenston &rarr;</a>
 </td></tr></table>
 </td></tr>
 {footer}
@@ -13834,7 +13834,7 @@ async def run_weekly_digest_cron() -> dict:
                 one_click = ec.api_unsubscribe_url(api_base, addr, secret=SESSION_SECRET)
                 email_result = await send_resend_email(
                     to=[addr],
-                    subject=f"Your Helm weekly pack: {ws_name}",
+                    subject=f"Your Trenston weekly pack: {ws_name}",
                     html=_weekly_digest_email_html(
                         workspace_name=ws_name,
                         app_url=app_url,
@@ -13934,7 +13934,7 @@ async def email_unsubscribe_get(token: str = ""):
     """One-click unsubscribe (email link). Suppresses immediately, then redirects to confirmation."""
     import email_compliance as ec
 
-    frontend = _app_base_url() or HELM_CANONICAL_ORIGIN
+    frontend = _app_base_url() or TRENSTON_CANONICAL_ORIGIN
     try:
         result = await _apply_unsubscribe_token(token, source="link_get")
         dest = (
@@ -13996,7 +13996,7 @@ async def health():
 
 @api_router.get("/")
 async def root():
-    return {"service": "Helm CEO Operating System"}
+    return {"service": "Trenston CEO Operating System"}
 
 
 _serve_static = should_serve_static()
@@ -14006,8 +14006,8 @@ if not _serve_static:
     async def api_root():
         """Friendly response when someone opens the Render host directly (API-only)."""
         return {
-            "service": "Helm CEO Operating System API",
-            "message": "This URL is the API backend. Open your Vercel app to use Helm.",
+            "service": "Trenston CEO Operating System API",
+            "message": "This URL is the API backend. Open your Vercel app to use Trenston.",
             "health": "/api/health",
             "auth": "/api/auth/config",
             "frontend": FRONTEND_URL or None,

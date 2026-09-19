@@ -49,18 +49,18 @@ def test_token_rejects_tamper_and_expiry():
 
 
 def test_marketing_footer_has_address_and_unsubscribe():
-    html = ec.marketing_footer_html(unsubscribe_url="https://www.helmcontrol.online/unsubscribe?token=abc")
+    html = ec.marketing_footer_html(unsubscribe_url="https://www.trenston.com/unsubscribe?token=abc")
     assert ec.COMPANY_POSTAL_ADDRESS in html
     assert "Unsubscribe" in html
-    assert "https://www.helmcontrol.online/unsubscribe?token=abc" in html
+    assert "https://www.trenston.com/unsubscribe?token=abc" in html
 
 
 def test_retention_email_includes_footer_when_url_set():
     html = retention.trial_email_html(
         workspace_name="Northwind",
         bullets=["Open decision: Hire GTM"],
-        briefing_url="https://www.helmcontrol.online/app",
-        unsubscribe_url="https://www.helmcontrol.online/unsubscribe?token=xyz",
+        briefing_url="https://www.trenston.com/app",
+        unsubscribe_url="https://www.trenston.com/unsubscribe?token=xyz",
     )
     assert "Unsubscribe" in html
     assert ec.COMPANY_POSTAL_ADDRESS in html
@@ -70,21 +70,21 @@ def test_retention_email_includes_footer_when_url_set():
 def test_weekly_digest_html_includes_footer():
     html = server._weekly_digest_email_html(
         workspace_name="Acme",
-        app_url="https://www.helmcontrol.online",
-        unsubscribe_url="https://www.helmcontrol.online/unsubscribe?token=digest",
+        app_url="https://www.trenston.com",
+        unsubscribe_url="https://www.trenston.com/unsubscribe?token=digest",
     )
     assert "Unsubscribe" in html
     assert ec.COMPANY_POSTAL_ADDRESS in html
 
 
 def test_invite_and_alert_templates_have_no_unsubscribe():
-    invite = server._invite_email_html("Ada", "Acme", "Owner", "https://www.helmcontrol.online/app")
+    invite = server._invite_email_html("Ada", "Acme", "Owner", "https://www.trenston.com/app")
     assert "Unsubscribe" not in invite
     assert ec.COMPANY_POSTAL_ADDRESS not in invite
     alert = __import__("alert_notify").build_alert_email_html(
         "Acme",
         [{"title": "Cash risk", "description": "Runway low"}],
-        "https://www.helmcontrol.online",
+        "https://www.trenston.com",
     )
     assert "Unsubscribe" not in alert
 
@@ -146,7 +146,7 @@ def test_unsubscribe_get_redirects_after_suppress():
     fake_db.email_suppressions = _Coll()
 
     with patch.object(server, "SESSION_SECRET", SECRET), patch.object(server, "db", fake_db), patch.object(
-        server, "APP_URL", "https://www.helmcontrol.online"
+        server, "APP_URL", "https://www.trenston.com"
     ):
         client = TestClient(server.app, follow_redirects=False)
         r = client.get(f"/api/email/unsubscribe?token={token}")

@@ -1,6 +1,6 @@
 """Canonical integration definitions — user-facing connectable services only.
 
-Platform infrastructure (Anthropic, R2, Resend, Paddle) is configured by the Helm
+Platform infrastructure (Anthropic, R2, Resend, Paddle) is configured by the Trenston
 host and must not appear as end-user "integrations".
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Sync your Google Calendar meetings into Helm Calendar and your briefing. Connecting also enables your Gmail threads, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
+        "description": "Sync your Google Calendar meetings into Trenston Calendar and your briefing. Connecting also enables your Gmail threads, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
         "value": "See today's schedule, prep time, and deadlines in one place, with no tab switching.",
         "cta_route": "/app/calendar",
         "cta_label": "Open calendar",
@@ -33,7 +33,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Surface important threads from your Gmail in your briefing, and draft replies without Helm sending mail as you. Same Google connect as Calendar — personal to you.",
+        "description": "Surface important threads from your Gmail in your briefing, and draft replies without Trenston sending mail as you. Same Google connect as Calendar — personal to you.",
         "value": "Stay on top of customer and investor email without living in your inbox.",
         "cta_route": "/app",
         "cta_label": "Open briefing",
@@ -106,7 +106,7 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Pull HubSpot CRM deals into Helm Pipeline and Telemetry, built for SMB and mid-market teams.",
+        "description": "Pull HubSpot CRM deals into Trenston Pipeline and Telemetry, built for SMB and mid-market teams.",
         "value": "Open pipeline, stage, and win/loss land in the same board as deals you create manually.",
         "cta_route": "/app/sales",
         "cta_label": "Open pipeline",

@@ -1,5 +1,5 @@
 import { Component } from "react";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -12,7 +12,7 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("Helm render error:", error, info);
+    console.error("Trenston render error:", error, info);
   }
 
   retry = () => {

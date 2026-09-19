@@ -45,7 +45,7 @@ const Tasks = lazy(() => import("@/pages/Tasks"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const People = lazy(() => import("@/pages/People"));
-const AskHelm = lazy(() => import("@/pages/AskHelm"));
+const AskTrenston = lazy(() => import("@/pages/AskHelm"));
 const Members = lazy(() => import("@/pages/Members"));
 const Integrations = lazy(() => import("@/pages/Integrations"));
 const Billing = lazy(() => import("@/pages/Billing"));
@@ -71,7 +71,7 @@ function ClerkOAuthCallback() {
   );
 }
 
-function HelmToaster() {
+function TrenstonToaster() {
   const { resolvedTheme } = useTheme();
   const light = resolvedTheme === "light";
   return (
@@ -106,15 +106,15 @@ function AppRouter() {
     const path = location.pathname.replace(/\/$/, "") || "/";
     const page = seoForPath(path);
     const titles = {
-      "/login": "Sign in · Helm",
-      "/sign-up": "Create account · Helm",
-      "/app": "Briefing · Helm",
-      "/app/ask": "Ask Helm",
-      "/app/financials": "Financials · Helm",
-      "/app/billing": "Billing · Helm",
-      "/app/settings": "Settings · Helm",
-      "/app/members": "Team & Access · Helm",
-      "/app/integrations": "Integrations · Helm",
+      "/login": "Sign in · Trenston",
+      "/sign-up": "Create account · Trenston",
+      "/app": "Briefing · Trenston",
+      "/app/ask": "Ask Trenston",
+      "/app/financials": "Financials · Trenston",
+      "/app/billing": "Billing · Trenston",
+      "/app/settings": "Settings · Trenston",
+      "/app/members": "Team & Access · Trenston",
+      "/app/integrations": "Integrations · Trenston",
     };
     if (page) {
       document.title = page.title;
@@ -123,9 +123,9 @@ function AppRouter() {
     } else if (path.startsWith("/app/")) {
       const segment = path.split("/")[2] || "app";
       const label = segment.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-      document.title = `${label} · Helm`;
+      document.title = `${label} · Trenston`;
     } else {
-      document.title = "Helm";
+      document.title = "Trenston";
     }
 
     const canonicalHref = canonicalForPath(path);
@@ -200,7 +200,7 @@ function AppRouter() {
           <Route path="reports" element={<Reports />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="people" element={<People />} />
-          <Route path="ask" element={<AskHelm />} />
+          <Route path="ask" element={<AskTrenston />} />
           <Route path="members" element={<Members />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="billing" element={<Billing />} />
@@ -238,7 +238,7 @@ function ClerkAuthShell() {
   );
 }
 
-function HelmAppShell() {
+function TrenstonAppShell() {
   return (
     <AuthProvider>
       <ErrorBoundary>

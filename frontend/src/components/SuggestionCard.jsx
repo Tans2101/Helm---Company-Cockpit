@@ -38,7 +38,7 @@ export default function SuggestionCard({
             <div className="mt-4 rounded-lg border border-helm-line border-l-2 border-l-helm-status-warning/70 bg-helm-card p-3">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-helm-status-warning" />
-                <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Helm recommendation</span>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-helm-status-warning">Trenston recommendation</span>
                 <ConfidenceBadge
                   confidence={s.confidence}
                   confidenceUnavailable={s.confidence_unavailable}

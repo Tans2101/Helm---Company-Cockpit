@@ -1,4 +1,4 @@
-/** Guardrail: Helm must not load fonts from Google's CDN (GDPR / privacy). */
+/** Guardrail: Trenston must not load fonts from Google's CDN (GDPR / privacy). */
 const fs = require("fs");
 const path = require("path");
 

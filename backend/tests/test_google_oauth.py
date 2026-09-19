@@ -92,7 +92,7 @@ def test_map_gmail_message_external():
             ]
         },
     }
-    mapped = gcal._map_gmail_message(msg, own_domain="helmcontrol.online")
+    mapped = gcal._map_gmail_message(msg, own_domain="trenston.com")
     assert mapped is not None
     assert mapped["subject"] == "Q3 proposal"
     assert mapped["sender"] == "Ada Lovelace"

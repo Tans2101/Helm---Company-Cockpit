@@ -17,7 +17,7 @@ os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_oauth_callback")
 os.environ.setdefault("GOOGLE_CLIENT_ID", "test-google-client")
 os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-google-secret")
-os.environ.setdefault("APP_URL", "https://www.helmcontrol.online")
+os.environ.setdefault("APP_URL", "https://www.trenston.com")
 
 import server  # noqa: E402
 

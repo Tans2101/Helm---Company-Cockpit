@@ -62,7 +62,7 @@ export default function MarketingFooter() {
           </nav>
         </div>
         <p className="text-center text-[11px] text-helm-slate inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
-          <span>© {new Date().getFullYear()} Helm ·</span>
+          <span>© {new Date().getFullYear()} Trenston ·</span>
           <FounderCredit creditClassName="text-[11px] text-helm-slate" />
         </p>
       </div>

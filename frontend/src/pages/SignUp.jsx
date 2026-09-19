@@ -105,7 +105,7 @@ function SignUpClerk() {
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Create your account</h2>
-          <p className="text-helm-slate text-sm mt-2">Google or email. Activate Helm after sign-up.</p>
+          <p className="text-helm-slate text-sm mt-2">Google or email. Activate Trenston after sign-up.</p>
           {passwordMinLength > 8 && (
             <p className="mt-3 text-sm text-helm-gold/90">
               Email sign-up needs a password of at least {passwordMinLength} characters

@@ -36,7 +36,7 @@ function FaqItem({ item, open, onToggle }) {
   );
 }
 
-export default function HelmHowToUse({ className }) {
+export default function TrenstonHowToUse({ className }) {
   const [openFaq, setOpenFaq] = useState(0);
 
   return (
@@ -61,7 +61,7 @@ export default function HelmHowToUse({ className }) {
       </p>
 
       <section>
-        <SectionLabel className="mb-4">Who you are in Helm</SectionLabel>
+        <SectionLabel className="mb-4">Who you are in Trenston</SectionLabel>
         <div className="space-y-3">
           {HOW_TO_USE_AUDIENCES.map((item) => (
             <GlassCard key={item.title} className="p-5">
@@ -75,7 +75,7 @@ export default function HelmHowToUse({ className }) {
       <section>
         <SectionLabel className="mb-2">What the words mean</SectionLabel>
         <p className="text-sm text-helm-muted mb-5 leading-relaxed">
-          Helm uses a few product names that are easy to mix up with everyday English. Read these once, then use the quick reference at the bottom when you only need a reminder of where something lives.
+          Trenston uses a few product names that are easy to mix up with everyday English. Read these once, then use the quick reference at the bottom when you only need a reminder of where something lives.
         </p>
         <div className="space-y-4">
           {HOW_TO_USE_CONCEPTS.map((item) => (
@@ -94,7 +94,7 @@ export default function HelmHowToUse({ className }) {
       <section>
         <SectionLabel className="mb-2">A simple first walkthrough</SectionLabel>
         <p className="text-sm text-helm-muted mb-5 leading-relaxed">
-          Follow these in order the first time you use Helm. Later steps are for owners and people with report or integration access; invited teammates can stop after My Day and their department lane.
+          Follow these in order the first time you use Trenston. Later steps are for owners and people with report or integration access; invited teammates can stop after My Day and their department lane.
         </p>
         <ol className="space-y-3">
           {HOW_TO_USE_STEPS.map((step, index) => (

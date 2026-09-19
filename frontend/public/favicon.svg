@@ -13,7 +13,7 @@
   <polygon points="24.66,38.08 17.09,31.00 27.01,34.02" fill="#e0bd7c"/>
   <polygon points="34.02,27.01 31.00,17.09 38.08,24.66" fill="#e0bd7c"/>
   <circle cx="50" cy="50" r="27" stroke="#f5f0e6" stroke-width="2.2" fill="none"/>
-  <line x1="41" y1="36" x2="41" y2="64" stroke="#f5f0e6" stroke-width="3.2" stroke-linecap="round"/>
-  <line x1="59" y1="36" x2="59" y2="64" stroke="#f5f0e6" stroke-width="3.2" stroke-linecap="round"/>
-  <line x1="41" y1="54" x2="59" y2="46" stroke="#e0bd7c" stroke-width="3.2" stroke-linecap="round"/>
+  <line x1="36" y1="38" x2="64" y2="38" stroke="#f5f0e6" stroke-width="3.4" stroke-linecap="round"/>
+  <line x1="50" y1="38" x2="50" y2="66" stroke="#f5f0e6" stroke-width="3.4" stroke-linecap="round"/>
+  <line x1="42" y1="52" x2="58" y2="46" stroke="#e0bd7c" stroke-width="2.8" stroke-linecap="round"/>
 </svg>

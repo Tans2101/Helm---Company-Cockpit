@@ -1,4 +1,4 @@
-# Helm — CEO Operating System (PRD)
+# Trenston — CEO Operating System (PRD)
 
 ## Product
 CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finance, sales, people, and ops into a morning briefing and decision workflow. Tagline: **CEO Operating System**. Dark graphite + gold UI.
@@ -8,7 +8,7 @@ CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finan
 |-------|------------|
 | Frontend | React 19 (CRA), Vercel, Clerk sign-in |
 | API | FastAPI on Render, Python 3.12 |
-| Database | MongoDB Atlas (`DB_NAME=helm`) |
+| Database | MongoDB Atlas (`DB_NAME=trenston`) |
 | Auth | Clerk (primary) or first-party Google OAuth fallback |
 | AI | Direct Anthropic API (`backend/llm.py`) |
 | Billing | Paddle only (nonce checkout + webhook idempotency) |

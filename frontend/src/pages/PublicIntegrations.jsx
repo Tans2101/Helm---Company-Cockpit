@@ -114,7 +114,7 @@ export default function PublicIntegrations() {
               Planned connections
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-helm-slate">
-              These appear in Helm&apos;s internal catalog as future work. They are not available to connect and are not
+              These appear in Trenston&apos;s internal catalog as future work. They are not available to connect and are not
               part of today&apos;s product.
             </p>
             <ul className="mt-8 space-y-4">

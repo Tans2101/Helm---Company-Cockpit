@@ -17,6 +17,6 @@ describe("crawler pricing artifacts", () => {
       if (p.price > 0) expect(txt).toContain(`$${p.price}/mo`);
       else expect(txt).toMatch(/Free: \$0/);
     }
-    expect(txt).toContain("https://www.helmcontrol.online/pricing");
+    expect(txt).toContain("https://www.trenston.com/pricing");
   });
 });

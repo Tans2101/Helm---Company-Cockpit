@@ -1,10 +1,10 @@
-# Helm — CEO Operating System
+# Trenston — CEO Operating System
 
-Helm is a multi-tenant executive cockpit: morning briefing, decisions, financials, pipeline, team pulse, and Ask Helm AI.
+Trenston is a multi-tenant executive cockpit: morning briefing, decisions, financials, pipeline, team pulse, and Ask Trenston AI.
 
 ## Ownership model (production)
 
-Helm is designed to run on **your** infrastructure — not Emergent:
+Trenston is designed to run on **your** infrastructure — not Emergent:
 
 | Concern | Production choice |
 |---------|-------------------|
@@ -28,7 +28,7 @@ Production fix in this codebase:
 - Upsert by `google_sub`, then normalized `email.lower()`
 - Sparse unique indexes on `email` and `google_sub`
 - **Atlas** (or other durable Mongo) — required on Render
-- Sessions issued by Helm (not Emergent)
+- Sessions issued by Trenston (not Emergent)
 
 ## Deploy (Render + Vercel)
 
@@ -76,7 +76,7 @@ Point Paddle to `https://<api>.onrender.com/api/webhook/paddle`.
 2. `ALLOW_DEMO_LOGIN=false`, `DEMO_RESET_ENABLED=false`, `COOKIE_SECURE=true`
 3. Atlas Mongo + `/api/health` → `mongo: true`
 4. Google login twice → **same** `user_id` and workspace (not a fresh onboarding every time)
-5. Anthropic key set; Ask Helm / briefing work
+5. Anthropic key set; Ask Trenston / briefing work
 6. Paddle checkout + portal
 7. `/privacy` and `/terms` placeholders replaced with your company details
 

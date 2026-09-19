@@ -1,4 +1,4 @@
-# What you must do to launch Helm (I cannot do these for you)
+# What you must do to launch Trenston (I cannot do these for you)
 
 ## Before first customer
 
@@ -8,9 +8,9 @@ Only dashboard clicks I cannot do from here:
 
 1. **Render** → if a private service named `helm-mongo` still exists, delete it. The API is not using it.
 2. **MongoDB Atlas** → cluster → Backup: turn on whatever your tier includes (or take a snapshot).
-3. **Public email** `contact@helmcontrol.online` is on the site/legal pages. Still set it in **Clerk** (support email) and **Paddle** (seller/customer email).
-4. **DMARC** (Namecheap TXT, Host `_dmarc`): `v=DMARC1; p=none; rua=mailto:contact@helmcontrol.online`
-5. **Resend**: add domain `send.helmcontrol.online` (not the root — Workspace already owns MX on `@`). Paste Resend’s DNS, then set Render `SENDER_EMAIL` to `Helm <contact@helmcontrol.online>`. Do **not** add a second SPF on `@`.
+3. **Public email** `contact@trenston.com` is on the site/legal pages. Still set it in **Clerk** (support email) and **Paddle** (seller/customer email).
+4. **DMARC** (Namecheap TXT, Host `_dmarc`): `v=DMARC1; p=none; rua=mailto:contact@trenston.com`
+5. **Resend**: add domain `send.trenston.com` (not the root — Workspace already owns MX on `@`). Paste Resend’s DNS, then set Render `SENDER_EMAIL` to `Trenston <contact@trenston.com>`. Do **not** add a second SPF on `@`.
 
 ---
 
@@ -36,7 +36,7 @@ Render (API) + Vercel (frontend) + MongoDB Atlas + Clerk + Anthropic + Paddle.
 
 When `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` are set on Render and
 `REACT_APP_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` are set as protected
-Vercel environment variables, Helm uses **Clerk for login** automatically.
+Vercel environment variables, Trenston uses **Clerk for login** automatically.
 The secret must be configured independently on each host; the API never
 returns it to the frontend deployment.
 
@@ -158,7 +158,7 @@ After `INTEGRATION_ENCRYPTION_KEY` is set on Render (and the API has redeployed)
 
 ```bash
 cd backend
-INTEGRATION_ENCRYPTION_KEY=... MONGO_URL=... DB_NAME=helm \
+INTEGRATION_ENCRYPTION_KEY=... MONGO_URL=... DB_NAME=trenston \
   python scripts/migrate_encrypt_integration_tokens.py
 ```
 
@@ -179,7 +179,7 @@ Safe to re-run. New OAuth connections are encrypted automatically; this only mig
 6. Redeploy  
 7. Domains → Add your domain purchased/managed in Vercel  
 
-**Done when:** `https://your-domain/` loads the Helm landing page.
+**Done when:** `https://your-domain/` loads the Trenston landing page.
 
 Then go back to Render and set `FRONTEND_URL`, `APP_URL`, `CORS_ORIGINS` to that domain and redeploy API.
 
@@ -223,15 +223,15 @@ curl -sf -X POST "https://YOUR-API.onrender.com/api/admin/cleanup-orphaned-docum
 
 ## 7b. Retention emails (trial ending + inactivity)
 
-Helm does not run an in-process scheduler. A **Render Cron Job** (see `render.yaml` → `helm-retention-checks`) hits once a day:
+Trenston does not run an in-process scheduler. A **Render Cron Job** (see `render.yaml` → `helm-retention-checks`) hits once a day:
 
-`POST https://www.helmcontrol.online/api/internal/run-retention-checks`
+`POST https://www.trenston.com/api/internal/run-retention-checks`
 
 Protect it with a shared secret (same value on the web service and the cron job):
 
 ```bash
-curl -sf -X POST "https://www.helmcontrol.online/api/internal/run-retention-checks" \
-  -H "X-Helm-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
+curl -sf -X POST "https://www.trenston.com/api/internal/run-retention-checks" \
+  -H "X-Trenston-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
 ```
 
 Set `INTERNAL_CRON_SECRET` on both services to the same dedicated random
@@ -245,14 +245,14 @@ value. Do not reuse `SETUP_SECRET`.
 
 ## 7c. Accounting auto-sync (QuickBooks + Xero)
 
-Helm does not keep an in-process scheduler for accounting. A **Render Cron Job**
+Trenston does not keep an in-process scheduler for accounting. A **Render Cron Job**
 (see `render.yaml` → `helm-accounting-sync`) runs hourly and hits:
 
-`POST https://www.helmcontrol.online/api/internal/run-accounting-sync`
+`POST https://www.trenston.com/api/internal/run-accounting-sync`
 
 ```bash
-curl -sf -X POST "https://www.helmcontrol.online/api/internal/run-accounting-sync" \
-  -H "X-Helm-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
+curl -sf -X POST "https://www.trenston.com/api/internal/run-accounting-sync" \
+  -H "X-Trenston-Cron-Secret: YOUR_INTERNAL_CRON_SECRET"
 ```
 
 Uses the same `INTERNAL_CRON_SECRET` as retention. For each workspace with a live
@@ -269,7 +269,7 @@ Expired grants are cleared so owners can reconnect in Integrations. Manual
 2. Sign in → create a company once  
 3. Sign out → sign in again with the **same Google account**  
 4. Confirm you land in the **same** company (not empty onboarding)  
-5. Ask Helm / briefing (needs Anthropic)  
+5. Ask Trenston / briefing (needs Anthropic)  
 6. Billing page loads (needs Paddle)  
 
 **Done when:** login #2 restores the same workspace.

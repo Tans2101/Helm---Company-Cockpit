@@ -133,7 +133,7 @@ export default function ReportsDailyDigest({ canWrite }) {
         <div>
           <SectionLabel>Today&apos;s Reports</SectionLabel>
           <p className="text-sm text-helm-muted max-w-xl mt-1">
-            Drop the day&apos;s Excel, CSV, or PDF reports here. Helm reads each file and folds the numbers into one short briefing you can open anytime.
+            Drop the day&apos;s Excel, CSV, or PDF reports here. Trenston reads each file and folds the numbers into one short briefing you can open anytime.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -200,7 +200,7 @@ export default function ReportsDailyDigest({ canWrite }) {
       ) : reports.length === 0 ? (
         <p className="text-sm text-helm-muted leading-relaxed" data-testid="digest-empty">
           No reports for this day yet.
-          {canWrite ? " Add the first file above and Helm will write a grounded summary from what is actually in it." : ""}
+          {canWrite ? " Add the first file above and Trenston will write a grounded summary from what is actually in it." : ""}
         </p>
       ) : (
         <>

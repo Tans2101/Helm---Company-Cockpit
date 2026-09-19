@@ -1,6 +1,6 @@
 # Cloudflare R2 setup (document uploads)
 
-Helm stores bill/receipt uploads in a **private** Cloudflare R2 bucket (S3-compatible). Users never see R2 credentials — you configure them once on Render.
+Trenston stores bill/receipt uploads in a **private** Cloudflare R2 bucket (S3-compatible). Users never see R2 credentials — you configure them once on Render.
 
 Until these vars are set, Financials → **Upload a bill** returns `503 Document storage is not configured`.
 
@@ -35,7 +35,7 @@ Render → **helm-company-cockpit** → **Environment** → add:
 | `R2_BUCKET_NAME` | Exact bucket name, e.g. `helm-documents` |
 | `R2_ENDPOINT` | Optional if `R2_ACCOUNT_ID` is set. Otherwise: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
 
-Helm derives `R2_ENDPOINT` from `R2_ACCOUNT_ID` when the endpoint is blank.
+Trenston derives `R2_ENDPOINT` from `R2_ACCOUNT_ID` when the endpoint is blank.
 
 **Redeploy** the Render service after saving (env changes need a new deploy).
 
@@ -46,7 +46,7 @@ Helm derives `R2_ENDPOINT` from `R2_ACCOUNT_ID` when the endpoint is blank.
 With `SETUP_SECRET` from Render:
 
 ```bash
-curl -sf "https://www.helmcontrol.online/api/setup/status" \
+curl -sf "https://www.trenston.com/api/setup/status" \
   -H "X-Setup-Secret: YOUR_SETUP_SECRET"
 ```
 

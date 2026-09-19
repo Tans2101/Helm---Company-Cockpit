@@ -298,7 +298,7 @@ export default function Financials() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Helm turns it into live MRR, runway and burn across the whole cockpit." />
+        <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Trenston turns it into live MRR, runway and burn across the whole cockpit." />
         <SkeletonKPIRow count={4} />
         <div className="grid lg:grid-cols-2 gap-4 mb-6">
           <SkeletonChart />
@@ -467,7 +467,7 @@ export default function Financials() {
 
   return (
     <div>
-      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Helm turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
+      <PageHeader title="Financials" subtitle="Your finance team logs revenue and expenses here. Trenston turns it into live MRR, runway and burn across the whole cockpit." action={actions} />
 
       {csvPreview && (
         <GlassCard className="p-5 mb-6 fade-up" data-testid="csv-import-preview">
@@ -635,7 +635,7 @@ export default function Financials() {
 
       {!data.has_data ? (
         <EmptyState icon={Wallet} title="No financials logged yet"
-          body="Log your revenue and expenses and Helm computes MRR, ARR, runway and burn automatically."
+          body="Log your revenue and expenses and Trenston computes MRR, ARR, runway and burn automatically."
           action={canWrite ? (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button data-testid="empty-upload-bill-btn" onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}

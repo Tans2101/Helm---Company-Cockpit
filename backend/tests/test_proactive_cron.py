@@ -29,7 +29,7 @@ def test_daily_alerts_endpoint_requires_cron_secret():
         assert client.post("/api/internal/run-daily-alerts").status_code == 401
         assert client.post(
             "/api/internal/run-daily-alerts",
-            headers={"X-Helm-Cron-Secret": "wrong"},
+            headers={"X-Trenston-Cron-Secret": "wrong"},
         ).status_code == 401
 
 
@@ -45,7 +45,7 @@ def test_daily_alerts_endpoint_runs_with_cron_header():
         client = TestClient(server.app)
         res = client.post(
             "/api/internal/run-daily-alerts",
-            headers={"X-Helm-Cron-Secret": "cron-secret-test"},
+            headers={"X-Trenston-Cron-Secret": "cron-secret-test"},
         )
     assert res.status_code == 200
     assert res.json()["workspaces_scanned"] == 0
@@ -57,7 +57,7 @@ def test_weekly_digest_endpoint_requires_cron_secret():
         assert client.post("/api/internal/run-weekly-digest").status_code == 401
         assert client.post(
             "/api/internal/run-weekly-digest",
-            headers={"X-Helm-Cron-Secret": "wrong"},
+            headers={"X-Trenston-Cron-Secret": "wrong"},
         ).status_code == 401
 
 
@@ -73,7 +73,7 @@ def test_weekly_digest_endpoint_runs_with_cron_header():
         client = TestClient(server.app)
         res = client.post(
             "/api/internal/run-weekly-digest",
-            headers={"X-Helm-Cron-Secret": "cron-secret-test"},
+            headers={"X-Trenston-Cron-Secret": "cron-secret-test"},
         )
     assert res.status_code == 200
     assert res.json()["sent"] == 0
@@ -173,7 +173,7 @@ def test_run_weekly_digest_emails_pdf_and_debounces():
         ),
         patch(
             "weekly_pack_export.pdf_filename",
-            return_value="Helm-Weekly-Pack-Send-Co-2026-09-17.pdf",
+            return_value="Trenston-Weekly-Pack-Send-Co-2026-09-17.pdf",
         ),
         patch.object(server, "_iso_week_key", return_value=week),
     ):

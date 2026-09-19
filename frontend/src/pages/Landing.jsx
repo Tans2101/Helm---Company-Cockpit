@@ -107,7 +107,7 @@ export default function Landing() {
             <motion.p variants={fade} initial="hidden" animate="show" custom={4} className="mt-8 text-xs text-helm-slate">{AUDIENCE}</motion.p>
             <motion.p variants={fade} initial="hidden" animate="show" custom={5} className="mt-3 text-xs text-helm-slate">
               <Link to="/security" className="text-helm-slate hover:text-helm-cream transition-colors">
-                How Helm protects company data →
+                How Trenston protects company data →
               </Link>
             </motion.p>
           </div>
@@ -134,7 +134,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">What CEOs open Helm for.</h2>
+            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">What CEOs open Trenston for.</h2>
           </motion.div>
           <div className="mt-16 space-y-0 border-t border-helm-cream/[0.06]">
             {CEO_DAY.map((step, i) => (
@@ -154,7 +154,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">How Helm fits together.</h2>
+            <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">How Trenston fits together.</h2>
           </motion.div>
           <div className="mt-16 grid md:grid-cols-3 gap-12 md:gap-10">
             {HOW_IT_WORKS.map((s, i) => (

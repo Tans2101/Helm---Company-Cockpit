@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/kit";
 import { consumeReferralCode, withReferralPayload } from "@/lib/referral";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 export default function WorkspaceGate() {
   const { user, logout } = useAuth();
@@ -18,7 +18,7 @@ export default function WorkspaceGate() {
   const create = async () => {
     if (!name.trim()) { toast.error("Name your company"); return; }
     if (!ageConfirmed && !user?.age_confirmed) {
-      toast.error("Confirm you are 18+ (or using Helm under a parent/guardian)");
+      toast.error("Confirm you are 18+ (or using Trenston under a parent/guardian)");
       return;
     }
     setBusy(true);
@@ -51,7 +51,7 @@ export default function WorkspaceGate() {
           <div className="flex items-center gap-2.5">
             <HelmMark size={36} className="rounded-md" />
             <div>
-              <p className="text-helm-fg font-semibold tracking-tight leading-none">Helm</p>
+              <p className="text-helm-fg font-semibold tracking-tight leading-none">Trenston</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Company Workspace</p>
             </div>
           </div>
@@ -59,8 +59,8 @@ export default function WorkspaceGate() {
         </div>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold">Welcome, {user?.name?.split(" ")[0] || "there"}</p>
-        <h1 className="font-display mt-3 text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Join your company on Helm.</h1>
-        <p className="mt-3 text-helm-muted">If your team already uses Helm, join with an invite code. Starting fresh? Create your company.</p>
+        <h1 className="font-display mt-3 text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Join your company on Trenston.</h1>
+        <p className="mt-3 text-helm-muted">If your team already uses Trenston, join with an invite code. Starting fresh? Create your company.</p>
 
         {!mode && (
           <div className="mt-10 grid sm:grid-cols-2 gap-4 fade-up">
@@ -114,7 +114,7 @@ export default function WorkspaceGate() {
                   className="mt-0.5 rounded border-helm-line"
                 />
                 <span>
-                  I confirm I am 18 or older, or I am using Helm under a parent or guardian&apos;s supervision.
+                  I confirm I am 18 or older, or I am using Trenston under a parent or guardian&apos;s supervision.
                 </span>
               </label>
             )}

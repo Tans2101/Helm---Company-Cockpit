@@ -1,4 +1,4 @@
-"""Helm pricing tiers — Free / Starter / Growth / Business.
+"""Trenston pricing tiers — Free / Starter / Growth / Business.
 
 Paddle price IDs come from env vars (no hardcoded IDs). Entitlements work
 from workspace.plan alone so QA can set plan without checkout.
@@ -37,7 +37,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "id": PLAN_FREE,
         "label": "Free",
         "price": 0,
-        "for": "Small teams trying Helm",
+        "for": "Small teams trying Trenston",
         "seats": 3,
         "ai_extracts_mo": 0,
         "ai_extracts_lifetime": 5,
@@ -56,7 +56,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 3 team members",
             "5 free AI extracts to try it, then upgrade",
-            "Ask Helm (10 messages/month)",
+            "Ask Trenston (10 messages/month)",
             "AI briefing",
             "Dashboard & decisions",
             "No QuickBooks sync",
@@ -84,7 +84,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 10 team members",
             "AI document upload (30/billing period)",
-            "Ask Helm (50 messages/billing period)",
+            "Ask Trenston (50 messages/billing period)",
             "QuickBooks sync",
             "Calendar",
             "7-day free trial",
@@ -112,7 +112,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 25 team members",
             "AI document upload (150/billing period)",
-            "Ask Helm (200 messages/billing period)",
+            "Ask Trenston (200 messages/billing period)",
             "Priority QuickBooks sync",
             "Advanced reports & CEO Pack",
             "7-day free trial",
@@ -140,7 +140,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "includes": [
             "Up to 50 team members",
             "AI document upload (500/billing period)",
-            "Ask Helm (500 messages/billing period)",
+            "Ask Trenston (500 messages/billing period)",
             "Priority support",
             "Everything in Growth",
             "7-day free trial",
@@ -223,7 +223,7 @@ def ai_extracts_lifetime_limit(plan: str | None) -> int:
 
 
 def ask_helm_monthly_limit(plan: str | None) -> int:
-    """Monthly Ask Helm message cap for the plan (billing-period keyed). 0 = disabled."""
+    """Monthly Ask Trenston message cap for the plan (billing-period keyed). 0 = disabled."""
     return int(plan_def(plan).get("ask_helm_mo") or 0)
 
 

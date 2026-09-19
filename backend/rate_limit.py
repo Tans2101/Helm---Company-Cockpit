@@ -17,7 +17,7 @@ INSIGHTS_COLLECTION = "insights_rate_events"
 ASK_HELM_COLLECTION = "ask_helm_rate_events"
 ASK_HELM_WINDOW_SECONDS = 30 * 24 * 3600
 ASK_HELM_FREE_MONTHLY_LIMIT = 10
-# Document AI Invoice Parser is billed to Helm's GCP project (trial credits).
+# Document AI Invoice Parser is billed to Trenston's GCP project (trial credits).
 # 0 disables Document AI (Claude-only). Defaults keep a small daily budget.
 DOCUMENT_AI_COLLECTION = "document_ai_usage"
 DOCUMENT_AI_WINDOW_SECONDS = 86400

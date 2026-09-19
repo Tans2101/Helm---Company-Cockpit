@@ -1,7 +1,7 @@
-# Helm production setup — helmcontrol.online
+# Trenston production setup — trenston.com
 
-**Live app:** https://www.helmcontrol.online  
-**API (proxied):** https://www.helmcontrol.online/api/* → Render
+**Live app:** https://www.trenston.com  
+**API (proxied):** https://www.trenston.com/api/* → Render
 
 ---
 
@@ -12,7 +12,7 @@
 | Domain registrar | Namecheap |
 | Website | Vercel (`frontend/`) |
 | API | Render (`backend/`, service `helm-company-cockpit`) |
-| Auth | Clerk (`clerk.helmcontrol.online`) |
+| Auth | Clerk (`clerk.trenston.com`) |
 | Database | MongoDB Atlas |
 
 ---
@@ -23,24 +23,24 @@ Render → **helm-company-cockpit** → **Environment**:
 
 | Variable | Value |
 |----------|-------|
-| `FRONTEND_URL` | `https://www.helmcontrol.online` |
-| `APP_URL` | `https://www.helmcontrol.online` |
-| `CORS_ORIGINS` | `https://www.helmcontrol.online,https://helmcontrol.online` |
-| `COOKIE_DOMAIN` | `helmcontrol.online` |
+| `FRONTEND_URL` | `https://www.trenston.com` |
+| `APP_URL` | `https://www.trenston.com` |
+| `CORS_ORIGINS` | `https://www.trenston.com,https://trenston.com` |
+| `COOKIE_DOMAIN` | `trenston.com` |
 | `CLERK_SECRET_KEY` | `sk_live_...` from Clerk API Keys |
 | `CLERK_PUBLISHABLE_KEY` | `pk_live_Y2xlcmsuaGVsbWNvbnRyb2wub25saW5lJA` (or from Clerk) |
-| `CLERK_JWKS_URL` | `https://clerk.helmcontrol.online/.well-known/jwks.json` |
-| `CLERK_PRIMARY_ORIGIN` | `https://www.helmcontrol.online` |
+| `CLERK_JWKS_URL` | `https://clerk.trenston.com/.well-known/jwks.json` |
+| `CLERK_PRIMARY_ORIGIN` | `https://www.trenston.com` |
 | `SETUP_SECRET` | auto-generated (for `/api/setup/clerk-sync`) |
 
-Verify: https://www.helmcontrol.online/api/auth/config → `clerk_enabled: true`, `clerk_keys_aligned: true`
+Verify: https://www.trenston.com/api/auth/config → `clerk_enabled: true`, `clerk_keys_aligned: true`
 
 ---
 
 ## Step 2 — Vercel
 
 1. Project **helm-company-cockpit** → Root Directory = `frontend`
-2. Domains: `helmcontrol.online`, `www.helmcontrol.online`
+2. Domains: `trenston.com`, `www.trenston.com`
 3. Redeploy after merges to `main`
 
 `vercel.json` rewrites `/api/*` to Render.
@@ -51,8 +51,8 @@ Verify: https://www.helmcontrol.online/api/auth/config → `clerk_enabled: true`
 
 | Area | Setting |
 |------|---------|
-| **Account Portal → Redirects** | All after sign-in / sign-up URLs → **`https://www.helmcontrol.online/app`** |
-| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
+| **Account Portal → Redirects** | All after sign-in / sign-up URLs → **`https://www.trenston.com/app`** |
+| **Developers** → Allowed origins | `https://www.trenston.com`, `https://trenston.com`, `http://localhost:3000` |
 
 Sync origins (after deploy sets `SETUP_SECRET`):
 
@@ -74,9 +74,9 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
 
 ## Smoke test
 
-1. https://www.helmcontrol.online/login
+1. https://www.trenston.com/login
 2. Sign up / sign in (Google or email)
-3. Land on https://www.helmcontrol.online/app
+3. Land on https://www.trenston.com/app
 4. After R2 is configured ([docs/R2_SETUP.md](R2_SETUP.md)): Financials → Upload a bill
 
 ---
@@ -87,6 +87,6 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
 |---------|-----|
 | Sign-up button does nothing | Redeploy Render + Vercel; check `/api/auth/config` for `clerk_keys_aligned: true` |
 | Clerk shows apexcoach | Expected until Clerk primary domain is changed; redirects must point to helmcontrol |
-| Login loops | Set `COOKIE_DOMAIN=helmcontrol.online` on Render |
-| API JSON on wrong URL | Use `www.helmcontrol.online`, not `onrender.com` directly |
+| Login loops | Set `COOKIE_DOMAIN=trenston.com` on Render |
+| API JSON on wrong URL | Use `www.trenston.com`, not `onrender.com` directly |
 | Bill upload → storage not configured | Set R2 env on Render per [R2_SETUP.md](R2_SETUP.md) and redeploy |

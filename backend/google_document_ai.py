@@ -1,6 +1,6 @@
-"""Google Cloud Document AI — Invoice Parser for Helm bill uploads.
+"""Google Cloud Document AI — Invoice Parser for Trenston bill uploads.
 
-Uses a service account on the Helm GCP project (operator credentials),
+Uses a service account on the Trenston GCP project (operator credentials),
 not the workspace owner's Google login. When unset, callers fall through
 to Claude. This is the intended use of the GCP $300 trial credits.
 """
@@ -104,7 +104,7 @@ def _entity_month(entity: dict) -> Optional[str]:
 
 
 def map_invoice_document(document: dict) -> dict:
-    """Turn a Document AI invoice document into Helm extract fields."""
+    """Turn a Document AI invoice document into Trenston extract fields."""
     entities = document.get("entities") or []
     by_type: dict[str, list[dict]] = {}
     for ent in entities:
@@ -147,7 +147,7 @@ def map_invoice_document(document: dict) -> dict:
 
 
 async def extract_invoice(file_bytes: bytes, content_type: str) -> Optional[dict]:
-    """Process a bill/receipt. Returns Helm extract dict, or None if not configured / API failed."""
+    """Process a bill/receipt. Returns Trenston extract dict, or None if not configured / API failed."""
     if not document_ai_configured():
         return None
     if content_type not in ("application/pdf", "image/png", "image/jpeg"):

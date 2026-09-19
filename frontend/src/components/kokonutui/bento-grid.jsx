@@ -1,6 +1,6 @@
 /**
- * @author: @dorianbaffier / Helm
- * @description: Bento Grid — Helm metrics layout (KokonutUI, restyled)
+ * @author: @dorianbaffier / Trenston
+ * @description: Bento Grid — Trenston metrics layout (KokonutUI, restyled)
  * @website: https://kokonutui.com
  */
 
@@ -92,7 +92,7 @@ function gridClass(total) {
 }
 
 /**
- * Helm briefing metrics bento — driven entirely by `metrics` from the briefing API.
+ * Trenston briefing metrics bento — driven entirely by `metrics` from the briefing API.
  * Missing metrics with `href` are clickable and navigate to where data can be added.
  */
 export default function BentoGrid({ metrics = [], className }) {

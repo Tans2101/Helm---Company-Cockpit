@@ -1,6 +1,6 @@
-# Integrations — Helm Control
+# Integrations — Trenston
 
-Helm integrations are split into **OAuth connections** (per workspace) and **platform services** (configured once on Render). Set variables on your Render web service unless noted for Vercel.
+Trenston integrations are split into **OAuth connections** (per workspace) and **platform services** (configured once on Render). Set variables on your Render web service unless noted for Vercel.
 
 Users never create API keys. Once you paste keys on Render, owners click **Connect** in the app.
 
@@ -25,7 +25,7 @@ Because Vercel proxies `/api` → Render, register the **www** URLs:
 **Google Cloud → Credentials → your OAuth client → Authorized redirect URIs**
 
 ```
-https://www.helmcontrol.online/api/oauth/google/callback
+https://www.trenston.com/api/oauth/google/callback
 ```
 
 Also enable **Google Calendar API**, **Gmail API**, **Google Sheets API**, **Google Drive API**, and **Google Picker API** for the project.
@@ -53,7 +53,7 @@ DOCUMENT_AI_GLOBAL_DAILY_LIMIT=80
 DOCUMENT_AI_WORKSPACE_DAILY_LIMIT=8
 ```
 
-Over those daily caps Helm still extracts bills with Claude; it just stops calling Document AI so GCP credits are not exhausted. `0` turns Document AI off.
+Over those daily caps Trenston still extracts bills with Claude; it just stops calling Document AI so GCP credits are not exhausted. `0` turns Document AI off.
 
 See `GOOGLE_WORKSPACE_AND_CLOUD.txt` for the exact Cloud Console clicks.
 
@@ -67,7 +67,7 @@ GOOGLE_CLOUD_PROJECT_NUMBER
 **Intuit Developer → your app → Keys → Redirect URI**
 
 ```
-https://www.helmcontrol.online/api/oauth/quickbooks/callback
+https://www.trenston.com/api/oauth/quickbooks/callback
 ```
 
 Scopes needed: Accounting (`com.intuit.quickbooks.accounting`).
@@ -75,11 +75,11 @@ Scopes needed: Accounting (`com.intuit.quickbooks.accounting`).
 **Xero Developer → your app → Redirect URI**
 
 ```
-https://www.helmcontrol.online/api/oauth/xero/callback
+https://www.trenston.com/api/oauth/xero/callback
 ```
 
 Scopes needed: `offline_access`, `accounting.transactions.read` (plus openid profile email).
-If the user can access multiple Xero organisations, Helm asks them to pick one after Connect.
+If the user can access multiple Xero organisations, Trenston asks them to pick one after Connect.
 
 Workspaces typically connect **either** QuickBooks **or** Xero; both can coexist without interfering.
 
@@ -94,17 +94,17 @@ Credentials are encrypted at rest (`INTEGRATION_ENCRYPTION_KEY`). After Connect,
 **HubSpot Developer → your app → Redirect URL**
 
 ```
-https://www.helmcontrol.online/api/oauth/hubspot/callback
+https://www.trenston.com/api/oauth/hubspot/callback
 ```
 
 Scopes needed: `oauth`, `crm.objects.deals.read`, `crm.objects.companies.read`, `crm.schemas.deals.read`.
-After Connect, use **Sync to Pipeline** to pull deals into Helm’s Sales board (same shape as manually created deals).
+After Connect, use **Sync to Pipeline** to pull deals into Trenston’s Sales board (same shape as manually created deals).
 
 Verify live config with the Render `SETUP_SECRET`:
 
 ```
 curl -H "X-Setup-Secret: YOUR_SETUP_SECRET" \
-  https://www.helmcontrol.online/api/setup/status
+  https://www.trenston.com/api/setup/status
 ```
 
 Look under `integrations` / `oauth_redirect_uris` — `configured: true` means the env vars are present.
@@ -118,7 +118,7 @@ Look under `integrations` / `oauth_redirect_uris` — `configured: true` means t
 5. Accounting: after Connect (and org pick for Xero if needed), click **Sync to Financials**.
    SAP B1: enter Service Layer URL + company login in the Connect modal, then Sync.
 6. HubSpot: after Connect, click **Sync to Pipeline**.
-7. Financials uploads need R2 + Anthropic; Ask Helm / briefing need Anthropic.
+7. Financials uploads need R2 + Anthropic; Ask Trenston / briefing need Anthropic.
 
 ## Coming soon
 

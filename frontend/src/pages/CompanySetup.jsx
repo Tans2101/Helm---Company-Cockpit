@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   FOUNDER_ROLES, COMPANY_STAGES, INDUSTRIES, TEAM_SIZES, SETUP_STEPS,
 } from "@/lib/companySetupCopy";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 const ROLE_ICONS = {
   CEO: Crown,
@@ -87,7 +87,7 @@ export default function CompanySetup({ company }) {
           <div className="flex items-center gap-2.5 mb-8">
             <HelmMark size={36} className="rounded-md" />
             <div>
-              <p className="text-helm-fg font-semibold tracking-tight leading-none">Helm</p>
+              <p className="text-helm-fg font-semibold tracking-tight leading-none">Trenston</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Set up your company</p>
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function CompanySetup({ company }) {
             Let's set up your company.
           </h1>
           <p className="mt-3 text-helm-muted text-sm leading-relaxed max-w-lg">
-            A few details so Helm can tailor your briefing, decisions, and AI to how you actually run the business.
+            A few details so Trenston can tailor your briefing, decisions, and AI to how you actually run the business.
           </p>
 
           {/* Progress */}
@@ -127,7 +127,7 @@ export default function CompanySetup({ company }) {
                   </div>
                   <div>
                     <h2 className="text-lg text-helm-fg tracking-tight">What's your role?</h2>
-                    <p className="text-xs text-helm-muted mt-0.5">Helm is built for leaders who run the company.</p>
+                    <p className="text-xs text-helm-muted mt-0.5">Trenston is built for leaders who run the company.</p>
                   </div>
                 </div>
                 <div className="grid gap-2">
@@ -238,7 +238,7 @@ export default function CompanySetup({ company }) {
                   </div>
                   <div>
                     <h2 className="text-lg text-helm-fg tracking-tight">Team & context</h2>
-                    <p className="text-xs text-helm-muted mt-0.5">Helm calibrates runway views and planning defaults to your size.</p>
+                    <p className="text-xs text-helm-muted mt-0.5">Trenston calibrates runway views and planning defaults to your size.</p>
                   </div>
                 </div>
                 <div className="space-y-5">
@@ -317,7 +317,7 @@ export default function CompanySetup({ company }) {
                   ))}
                 </dl>
                 <p className="mt-5 text-xs text-helm-muted leading-relaxed">
-                  Next you'll choose whether to explore with sample data or start clean, then activate Helm when you're ready.
+                  Next you'll choose whether to explore with sample data or start clean, then activate Trenston when you're ready.
                 </p>
               </div>
             )}

@@ -1,5 +1,5 @@
 /**
- * @author: @kokonutui / Helm
+ * @author: @kokonutui / Trenston
  * @description: Action Search Bar — ⌘K quick nav (KokonutUI, restyled)
  * @website: https://kokonutui.com
  */

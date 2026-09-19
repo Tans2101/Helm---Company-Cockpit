@@ -1,30 +1,30 @@
-# Put Helm on helmcontrol.online (Namecheap + Vercel + Render API)
+# Put Trenston on trenston.com (Namecheap + Vercel + Render API)
 
-**App:** https://www.helmcontrol.online  
+**App:** https://www.trenston.com  
 **API:** https://helm-company-cockpit.onrender.com (proxied via Vercel `/api/*`)
 
 ## Who hosts what?
 
 | Piece | Provider | Role |
 |-------|----------|------|
-| **Domain registration** | **Namecheap** | You own `helmcontrol.online` here |
-| **Website (React UI)** | **Vercel** | Serves `www.helmcontrol.online` |
+| **Domain registration** | **Namecheap** | You own `trenston.com` here |
+| **Website (React UI)** | **Vercel** | Serves `www.trenston.com` |
 | **API (FastAPI)** | **Render** | `helm-company-cockpit.onrender.com` — **not** the public website |
 | **DNS** | Namecheap Advanced DNS | A/CNAME records point `@` and `www` to Vercel |
 
-The **Render deploy button** updates the **API only**. Vercel serves the site and proxies `/api/*` to Render, so users on `helmcontrol.online` hit Vercel first.
+The **Render deploy button** updates the **API only**. Vercel serves the site and proxies `/api/*` to Render, so users on `trenston.com` hit Vercel first.
 
-Clerk primary domain is **helmcontrol.online** (`clerk.helmcontrol.online`).
+Clerk primary domain is **trenston.com** (`clerk.trenston.com`).
 
 ---
 
 ## Step 1 — Namecheap DNS (~3 min)
 
-Namecheap → **Domain List** → **helmcontrol.online** → **Manage** → **Advanced DNS**
+Namecheap → **Domain List** → **trenston.com** → **Manage** → **Advanced DNS**
 
 ### Option A — Use Vercel nameservers (easiest)
 
-1. Vercel → **Domains** → **Add** → `helmcontrol.online`
+1. Vercel → **Domains** → **Add** → `trenston.com`
 2. Vercel shows two nameservers (e.g. `ns1.vercel-dns.com`, `ns2.vercel-dns.com`)
 3. Namecheap → **Domain** tab → **Nameservers** → **Custom DNS** → paste Vercel nameservers
 4. Save (propagation can take up to 24h; often 15–30 min)
@@ -43,8 +43,8 @@ Remove any parking-page records Namecheap adds by default.
 ## Step 2 — Vercel (~2 min)
 
 1. **helm-company-cockpit** → **Settings** → **Domains** → add:
-   - `helmcontrol.online`
-   - `www.helmcontrol.online` (optional)
+   - `trenston.com`
+   - `www.trenston.com` (optional)
 2. **Settings** → **General** → **Root Directory** = `frontend`
 3. **Environment Variables**:
    - `REACT_APP_CLERK_PUBLISHABLE_KEY` = matching `pk_live_...` (same instance as Render `CLERK_SECRET_KEY`)
@@ -61,9 +61,9 @@ Remove any parking-page records Namecheap adds by default.
 
 | Area | Setting |
 |------|---------|
-| **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.helmcontrol.online/app`** |
-| **Developers** → Allowed origins | `https://www.helmcontrol.online`, `https://helmcontrol.online`, `http://localhost:3000` |
-| **Domains** | CNAME below. If `clerk.helmcontrol.online` SSL is pending, Helm uses a **proxy** at `https://www.helmcontrol.online/__clerk` (set automatically via clerk-sync). |
+| **Account Portal → Redirects** | Set **every** after sign-in / sign-up fallback & force URL to **`https://www.trenston.com/app`** |
+| **Developers** → Allowed origins | `https://www.trenston.com`, `https://trenston.com`, `http://localhost:3000` |
+| **Domains** | CNAME below. If `clerk.trenston.com` SSL is pending, Trenston uses a **proxy** at `https://www.trenston.com/__clerk` (set automatically via clerk-sync). |
 
 ### Clerk DNS (Namecheap Advanced DNS)
 
@@ -90,9 +90,9 @@ curl -X POST https://helm-company-cockpit.onrender.com/api/setup/clerk-sync \
 
 ## Step 4 — Test
 
-1. https://www.helmcontrol.online/login
+1. https://www.trenston.com/login
 2. Sign in with Google
-3. Land on https://helmcontrol.online/app
+3. Land on https://trenston.com/app
 
 While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 
@@ -104,7 +104,7 @@ While DNS propagates, use https://helm-company-cockpit.vercel.app/login
 |---------|-----|
 | Vercel "Invalid Configuration" | DNS must point to `76.76.21.21` / `cname.vercel-dns.com`, not Render |
 | Login loops | `POST /api/setup/clerk-sync` after deploy |
-| Page stuck on "Loading sign-in" | Redeploy Vercel + Render. Verify `GET /__clerk/v1/client` returns JSON. Run `POST /api/setup/clerk-sync` if needed. Also verify `clerk.helmcontrol.online` DNS + CAA (`pki.goog`, `digicert.com`). |
-| **Google sign-in blocked — `redirect_uri_mismatch`** | In Google Cloud Console → Credentials → the OAuth client used in Clerk → SSO → Google, add **both** `https://clerk.helmcontrol.online/v1/oauth_callback` and `https://accounts.helmcontrol.online/v1/oauth_callback`. JS origins: `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`, `https://accounts.helmcontrol.online`. Wait 1–5 min after saving. |
-| Clerk redirect to wrong site | Account Portal → `https://helmcontrol.online/app` |
+| Page stuck on "Loading sign-in" | Redeploy Vercel + Render. Verify `GET /__clerk/v1/client` returns JSON. Run `POST /api/setup/clerk-sync` if needed. Also verify `clerk.trenston.com` DNS + CAA (`pki.goog`, `digicert.com`). |
+| **Google sign-in blocked — `redirect_uri_mismatch`** | In Google Cloud Console → Credentials → the OAuth client used in Clerk → SSO → Google, add **both** `https://clerk.trenston.com/v1/oauth_callback` and `https://accounts.trenston.com/v1/oauth_callback`. JS origins: `https://trenston.com`, `https://www.trenston.com`, `https://clerk.trenston.com`, `https://accounts.trenston.com`. Wait 1–5 min after saving. |
+| Clerk redirect to wrong site | Account Portal → `https://trenston.com/app` |
 | API errors | Check Render `/api/health` → `"mongo": true` |

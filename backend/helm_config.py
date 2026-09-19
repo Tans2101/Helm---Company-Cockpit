@@ -1,17 +1,22 @@
-"""Canonical Helm URLs — single source of truth for production domain."""
+"""Canonical Trenston URLs — single source of truth for production domain."""
 from __future__ import annotations
 
 import os
 
 # www is the live Vercel host; apex redirects to www via DNS/Vercel.
-HELM_CANONICAL_ORIGIN = os.environ.get(
-    "HELM_CANONICAL_ORIGIN", "https://www.helmcontrol.online"
-).strip().rstrip("/")
+# Accept legacy HELM_CANONICAL_ORIGIN during the rename cutover.
+TRENSTON_CANONICAL_ORIGIN = (
+    os.environ.get("TRENSTON_CANONICAL_ORIGIN", "").strip()
+    or os.environ.get("HELM_CANONICAL_ORIGIN", "").strip()
+    or "https://www.trenston.com"
+).rstrip("/")
 
-HELM_APP_PATH = "/app"
-HELM_APP_URL = f"{HELM_CANONICAL_ORIGIN}{HELM_APP_PATH}"
+TRENSTON_APP_PATH = "/app"
+TRENSTON_APP_URL = f"{TRENSTON_CANONICAL_ORIGIN}{TRENSTON_APP_PATH}"
 
-HELM_PRIMARY_HOSTS = ("helmcontrol.online",)
+TRENSTON_PRIMARY_HOSTS = ("trenston.com",)
+# Legacy hosts kept so mid-migration cookies/CORS still resolve during 301 cutover.
+LEGACY_PRIMARY_HOSTS = ("helmcontrol.online", "apexcoach.tech")
 
 
 def is_stale_deploy_url(url: str) -> bool:
@@ -21,7 +26,7 @@ def is_stale_deploy_url(url: str) -> bool:
 
 
 def registrable_cookie_domain(host: str | None) -> str | None:
-    """Cookie domain that works for both apex and www (e.g. helmcontrol.online)."""
+    """Cookie domain that works for both apex and www (e.g. trenston.com)."""
     if not host or host in ("localhost", "127.0.0.1"):
         return None
     if host.endswith(".vercel.app") or host.endswith(".onrender.com"):
@@ -33,4 +38,4 @@ def registrable_cookie_domain(host: str | None) -> str | None:
 
 def public_api_origin() -> str:
     """Public HTTPS origin for OAuth callbacks (Vercel proxies /api to Render)."""
-    return HELM_CANONICAL_ORIGIN
+    return TRENSTON_CANONICAL_ORIGIN

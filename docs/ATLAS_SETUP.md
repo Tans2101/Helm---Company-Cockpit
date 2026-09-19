@@ -1,6 +1,6 @@
-# MongoDB Atlas — step-by-step for Helm
+# MongoDB Atlas — step-by-step for Trenston
 
-Helm stores **all company data** in MongoDB (users, workspaces, financials, deals, billing state, etc.). You need **MongoDB Atlas** — a hosted, persistent database.
+Trenston stores **all company data** in MongoDB (users, workspaces, financials, deals, billing state, etc.). You need **MongoDB Atlas** — a hosted, persistent database.
 
 On Render, set:
 - `MONGO_URL` = connection string below
@@ -13,7 +13,7 @@ On Render, set:
 1. Go to **https://cloud.mongodb.com**
 2. Sign up or log in
 3. Create an **Organization** (default name is fine)
-4. Create a **Project** (e.g. `Helm`)
+4. Create a **Project** (e.g. `Trenston`)
 
 ---
 
@@ -66,7 +66,7 @@ mongodb+srv://helm_user:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&
 6. Replace `<password>` with your real database user password  
    - If the password contains `@ # / ?` etc., [URL-encode](https://www.mongodb.com/docs/atlas/troubleshoot-connection/#special-characters-in-connection-string-password) them
 
-You do **not** need `/helm` in the URI — Helm uses `DB_NAME=helm` separately.
+You do **not** need `/helm` in the URI — Trenston uses `DB_NAME=trenston` separately.
 
 ---
 
@@ -81,7 +81,7 @@ You do **not** need `/helm` in the URI — Helm uses `DB_NAME=helm` separately.
 | `DB_NAME` | `helm` |
 
 3. Save and **Redeploy**
-4. In Atlas → **Backup** (or cluster **…** menu): turn on the backups your tier includes. On a free cluster that may only be on-demand snapshots — take one after first real data. Paid Flex/dedicated can enable cloud backup. Do this before inviting anyone; there is no second copy of Helm data unless Atlas has it.
+4. In Atlas → **Backup** (or cluster **…** menu): turn on the backups your tier includes. On a free cluster that may only be on-demand snapshots — take one after first real data. Paid Flex/dedicated can enable cloud backup. Do this before inviting anyone; there is no second copy of Trenston data unless Atlas has it.
 
 ---
 
@@ -103,6 +103,6 @@ If `mongo` is `false`, check: wrong password, IP not allowed, or typo in `MONGO_
 
 ---
 
-## Why this matters for Helm
+## Why this matters for Trenston
 
-Emergent previews often used **ephemeral** databases — data disappeared between deploys, so every Google login felt like a **brand-new account**. Atlas is **durable**: same Google/Clerk user → same Helm user → same company workspace.
+Emergent previews often used **ephemeral** databases — data disappeared between deploys, so every Google login felt like a **brand-new account**. Atlas is **durable**: same Google/Clerk user → same Trenston user → same company workspace.

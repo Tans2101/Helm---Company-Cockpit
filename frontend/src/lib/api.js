@@ -30,7 +30,7 @@ export function apiErrorMessage(detailOrError, fallback = "Something went wrong"
   return fallback;
 }
 
-/** `permission` | `plan` | null from a 403 body (Ask Helm, billing gates). */
+/** `permission` | `plan` | null from a 403 body (Ask Trenston, billing gates). */
 export function apiForbiddenReason(detailOrBody) {
   const detail = detailOrBody?.detail ?? detailOrBody?.response?.data?.detail ?? detailOrBody;
   if (detail && typeof detail === "object" && !Array.isArray(detail) && detail.reason) {

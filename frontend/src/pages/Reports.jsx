@@ -200,7 +200,7 @@ export default function Reports() {
       a.href = url;
       const disposition = res.headers["content-disposition"] || "";
       const match = disposition.match(/filename="([^"]+)"/);
-      a.download = match?.[1] || `Helm-Financial-Export.${kind}`;
+      a.download = match?.[1] || `Trenston-Financial-Export.${kind}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -224,7 +224,7 @@ export default function Reports() {
       a.href = url;
       const disposition = res.headers["content-disposition"] || "";
       const match = disposition.match(/filename="([^"]+)"/);
-      a.download = match?.[1] || "Helm-Weekly-Pack.pdf";
+      a.download = match?.[1] || "Trenston-Weekly-Pack.pdf";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -279,7 +279,7 @@ export default function Reports() {
 
       <GlassCard className="p-4 mb-6 fade-up border-helm-line">
         <p className="text-sm text-helm-muted leading-relaxed">
-          <span className="text-helm-fg">What happens here:</span> Helm tracks money, team, and completed work week over week.
+          <span className="text-helm-fg">What happens here:</span> Trenston tracks money, team, and completed work week over week.
           Turn a trend card into a report when you want context on the record. Then draft the CEO Pack for a
           plain-English update you can share.
         </p>
@@ -440,7 +440,7 @@ export default function Reports() {
             <SectionLabel>CEO Pack</SectionLabel>
             <p className="text-sm text-helm-muted max-w-xl mt-1">
               A one-page leadership update: what happened, what needs your attention, and what to do next.
-              Helm drafts it from the week-over-week trends above and any reports your team added.
+              Trenston drafts it from the week-over-week trends above and any reports your team added.
             </p>
           </div>
           {canGeneratePack ? (

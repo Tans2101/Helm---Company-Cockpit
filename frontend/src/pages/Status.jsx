@@ -129,7 +129,7 @@ export default function Status() {
             </motion.h1>
             <motion.p variants={fade} initial="hidden" animate="show" custom={2}
               className="mt-6 max-w-2xl text-lg leading-relaxed text-helm-slate">
-              Live checks against Helm&apos;s production stack. No invented historical uptime charts.
+              Live checks against Trenston&apos;s production stack. No invented historical uptime charts.
             </motion.p>
             <motion.div variants={fade} initial="hidden" animate="show" custom={3}
               className={`mt-8 inline-flex items-center gap-3 rounded-full border px-4 py-2 text-sm ${toneFor(worst)}`}>

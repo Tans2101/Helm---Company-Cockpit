@@ -21,7 +21,7 @@ export default function Onboarding() {
   return (
     <div className="max-w-4xl mx-auto py-8 fade-up">
       <div className="text-center">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-helm-gold">Welcome to Helm</p>
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-helm-gold">Welcome to Trenston</p>
         <h1 className="font-display mt-4 text-3xl md:text-4xl font-normal tracking-tight text-helm-fg">Let's set up your cockpit.</h1>
         <p className="mt-3 text-helm-muted max-w-md mx-auto">Explore with a fully-loaded sample company, or start clean and bring in your own data.</p>
       </div>
@@ -33,7 +33,7 @@ export default function Onboarding() {
           </div>
           <h3 className="mt-5 text-xl text-helm-fg tracking-tight">Explore with sample data</h3>
           <p className="mt-2 text-sm text-helm-muted leading-relaxed flex-1">
-            Load "Northwind Robotics", a realistic company with financials, decisions, tasks and a team. See exactly how Helm works in 10 seconds.
+            Load "Northwind Robotics", a realistic company with financials, decisions, tasks and a team. See exactly how Trenston works in 10 seconds.
           </p>
           <ul className="mt-4 space-y-1.5">
             {["6 months of financials", "Live briefing & decisions", "Full team & telemetry"].map((f) => (
@@ -53,10 +53,10 @@ export default function Onboarding() {
           </div>
           <h3 className="mt-5 text-xl text-helm-fg tracking-tight">Start clean</h3>
           <p className="mt-2 text-sm text-helm-muted leading-relaxed flex-1">
-            Begin with an empty cockpit and make it yours. Log your financials, invite your team, and connect your tools. Helm builds your command center around real data.
+            Begin with an empty cockpit and make it yours. Log your financials, invite your team, and connect your tools. Trenston builds your command center around real data.
           </p>
           <ul className="mt-4 space-y-1.5">
-            {["Log financials in Helm", "Invite your finance team", "Connect Google, QuickBooks & more"].map((f) => (
+            {["Log financials in Trenston", "Invite your finance team", "Connect Google, QuickBooks & more"].map((f) => (
               <li key={f} className="flex items-center gap-2 text-xs text-helm-muted"><Check className="w-3.5 h-3.5 text-helm-muted" />{f}</li>
             ))}
           </ul>

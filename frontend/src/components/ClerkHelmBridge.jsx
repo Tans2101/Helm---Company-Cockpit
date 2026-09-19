@@ -28,7 +28,7 @@ async function exchangeClerkSession(token) {
   }
 }
 
-/** Sync Clerk session → Helm user via POST /auth/clerk/exchange */
+/** Sync Clerk session → Trenston user via POST /auth/clerk/exchange */
 export default function ClerkHelmBridge() {
   const {
     isLoaded, isSignedIn, getToken, userId, sessionId, sessionStatus,
@@ -119,7 +119,7 @@ export default function ClerkHelmBridge() {
               ? detail
               : `Sign-in failed (${status || "network"}).`,
           );
-          console.error("Clerk Helm sync failed", e?.response?.data || e);
+          console.error("Clerk Trenston sync failed", e?.response?.data || e);
           return;
         }
       }

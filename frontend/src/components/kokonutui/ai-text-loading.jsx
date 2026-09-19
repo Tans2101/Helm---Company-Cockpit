@@ -1,6 +1,6 @@
 /**
- * @author: @kokonutui / Helm
- * @description: AI Text Loading — Ask Helm waiting state (KokonutUI, restyled)
+ * @author: @kokonutui / Trenston
+ * @description: AI Text Loading — Ask Trenston waiting state (KokonutUI, restyled)
  * @website: https://kokonutui.com
  */
 

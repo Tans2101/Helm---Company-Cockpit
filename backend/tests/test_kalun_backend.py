@@ -132,7 +132,7 @@ def test_free_plan_gates_integration_toggle(auth):
     assert r.status_code == 403
 
 
-# ---- Ask Helm (streaming) ----
+# ---- Ask Trenston (streaming) ----
 def test_ask_helm_available_on_free(auth):
     _ensure_free(auth)
     r = auth.post(f"{BASE_URL}/api/ask", json={"message": "One-sentence health check."}, stream=True, timeout=60)

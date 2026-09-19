@@ -557,12 +557,12 @@ export default function CalendarPage() {
       <div>
         <div className="mb-8">
           <h1 className="font-display text-3xl font-normal tracking-tight text-helm-fg">Calendar</h1>
-          <p className="text-helm-muted text-sm mt-2">Week view with your meetings and Helm deadlines.</p>
+          <p className="text-helm-muted text-sm mt-2">Week view with your meetings and Trenston deadlines.</p>
         </div>
         <EmptyState
           icon={CalendarPlus}
           title="Sync your calendar"
-          body="Connect your Google Calendar to see your meetings alongside Helm deadlines. Microsoft Teams sync is on the roadmap."
+          body="Connect your Google Calendar to see your meetings alongside Trenston deadlines. Microsoft Teams sync is on the roadmap."
           action={googleAvailable ? (
             <button data-testid="connect-calendar-btn" onClick={connectGoogle} disabled={connecting}
               className="inline-flex items-center gap-1.5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2 hover:bg-helm-gold-hover disabled:opacity-60">
@@ -586,7 +586,7 @@ export default function CalendarPage() {
         <div>
           <h1 className="font-display text-2xl md:text-3xl font-normal tracking-tight text-helm-fg">Calendar</h1>
           <p className="text-helm-muted text-sm mt-1">
-            {googleConnected ? "Synced with your Google Calendar" : "Helm events and deadlines. Connect your Google to sync personal meetings"}
+            {googleConnected ? "Synced with your Google Calendar" : "Trenston events and deadlines. Connect your Google to sync personal meetings"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">

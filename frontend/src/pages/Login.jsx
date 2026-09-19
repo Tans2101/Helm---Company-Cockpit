@@ -98,13 +98,13 @@ function LoginClerk() {
             {HERO_SUB}
           </p>
         </div>
-        <p className="text-xs text-helm-muted">Know what matters whenever you open Helm.</p>
+        <p className="text-xs text-helm-muted">Know what matters whenever you open Trenston.</p>
       </div>
 
       <div className="flex items-center justify-center p-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Enter the cockpit</h2>
-          <p className="text-helm-slate text-sm mt-2">Sign in, then activate Helm to use the cockpit.</p>
+          <p className="text-helm-slate text-sm mt-2">Sign in, then activate Trenston to use the cockpit.</p>
 
           {urlError === "session_retired" && (
             <p className="mt-4 text-sm text-helm-status-warning">That sign-in link has expired. Please sign in again below.</p>
@@ -143,7 +143,7 @@ function LoginClerk() {
           )}
 
           <p className="mt-3 text-center text-xs text-helm-slate">
-            Password rules are set in Clerk (not Helm). Use Google for fastest sign-in.
+            Password rules are set in Clerk (not Trenston). Use Google for fastest sign-in.
           </p>
 
           <div className="mt-6 flex items-center gap-2 text-xs text-helm-slate">

@@ -123,7 +123,7 @@ def collect_change_bullets(
         sev = (s.get("severity") or (s.get("signal") or {}).get("severity") or "").lower()
         title = (s.get("title") or (s.get("signal") or {}).get("summary") or "").strip()
         if sev == "high" and title:
-            bullets.append(f"Helm signal: {title}")
+            bullets.append(f"Trenston signal: {title}")
         if len(bullets) >= MAX_BULLETS:
             break
 
@@ -199,13 +199,13 @@ def trial_email_html(
 ) -> str:
     name = workspace_name or "your company"
     intro = (
-        f"Your Helm trial for <b style='color:#ffffff;'>{_esc(name)}</b> ends in 2 days. "
+        f"Your Trenston trial for <b style='color:#ffffff;'>{_esc(name)}</b> ends in 2 days. "
         "If you stay on the plan, the card on file will be charged when the trial converts. "
         "Here's what you'd be keeping:"
     )
     return _email_shell(
         kicker="Trial ending",
-        heading="Your Helm trial ends in 2 days",
+        heading="Your Trenston trial ends in 2 days",
         intro=intro,
         bullets=bullets,
         cta_url=briefing_url,
@@ -346,7 +346,7 @@ async def run_retention_checks(
                                 headers = ec.list_unsubscribe_headers(one_click)
                             result = await send_email(
                                 addr,
-                                "Your Helm trial ends in 2 days",
+                                "Your Trenston trial ends in 2 days",
                                 trial_email_html(
                                     workspace_name=name,
                                     bullets=bullets,

@@ -305,7 +305,7 @@ def test_offboarding_sets_departed_only_when_complete(hr_api):
     r = client.get("/api/hr/offboarding/template")
     assert r.status_code == 200
     names = [s["name"] for s in sorted(r.json()["template"]["steps"], key=lambda x: x["order"])]
-    assert names[0] == "Revoke Helm/system access"
+    assert names[0] == "Revoke Trenston/system access"
     assert "Update employee status to departed" in names
     assert len(off_templates.rows) == 1
 

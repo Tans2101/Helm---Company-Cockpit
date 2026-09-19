@@ -1,6 +1,11 @@
 {
-  "intro": "What actually shipped in Helm — not a roadmap. Entries are written by hand in plain language.",
+  "intro": "What actually shipped \u2014 not a roadmap. Entries are written by hand in plain language. Older notes may still say Helm; the product is now Trenston.",
   "entries": [
+    {
+      "date": "2026-09-19",
+      "title": "Helm Control is now Trenston",
+      "description": "The product formerly called Helm Control is now Trenston at trenston.com. Same cockpit, new name and domain \u2014 bookmarks to helmcontrol.online redirect here."
+    },
     {
       "date": "2026-09-19",
       "title": "Faster tab switching across the cockpit",
@@ -9,7 +14,7 @@
     {
       "date": "2026-09-19",
       "title": "Google Calendar and Gmail are personal connections",
-      "description": "Each teammate connects their own Google account. Meetings and Gmail threads stay on that person’s connection — not a shared workspace mailbox."
+      "description": "Each teammate connects their own Google account. Meetings and Gmail threads stay on that person\u2019s connection \u2014 not a shared workspace mailbox."
     },
     {
       "date": "2026-09-19",
@@ -19,7 +24,7 @@
     {
       "date": "2026-09-19",
       "title": "Public integrations page",
-      "description": "A marketing page that lists what each connection actually does today — Google, QuickBooks, Xero, SAP Business One, HubSpot, and Slack webhook alerts."
+      "description": "A marketing page that lists what each connection actually does today \u2014 Google, QuickBooks, Xero, SAP Business One, HubSpot, and Slack webhook alerts."
     },
     {
       "date": "2026-09-18",
@@ -29,7 +34,7 @@
     {
       "date": "2026-09-18",
       "title": "Honest financial zeros vs missing data",
-      "description": "Burn, MRR, and runway distinguish “not entered” from a confirmed zero, and future-dated ledger rows no longer inflate current metrics."
+      "description": "Burn, MRR, and runway distinguish \u201cnot entered\u201d from a confirmed zero, and future-dated ledger rows no longer inflate current metrics."
     },
     {
       "date": "2026-09-18",
@@ -38,8 +43,8 @@
     },
     {
       "date": "2026-09-18",
-      "title": "Ask Helm stays inside your access lanes",
-      "description": "Ask Helm and department context respect membership and finance:write — no cross-lane leakage of Sales, HR, or financial figures you cannot open in the UI."
+      "title": "Ask Trenston stays inside your access lanes",
+      "description": "Ask Trenston and department context respect membership and finance:write \u2014 no cross-lane leakage of Sales, HR, or financial figures you cannot open in the UI."
     },
     {
       "date": "2026-09-18",
@@ -49,7 +54,7 @@
     {
       "date": "2026-09-17",
       "title": "Secure document library",
-      "description": "Private Cloudflare R2 storage with signed downloads for bills, receipts, and legal files — plus tighter controls on legal document access."
+      "description": "Private Cloudflare R2 storage with signed downloads for bills, receipts, and legal files \u2014 plus tighter controls on legal document access."
     },
     {
       "date": "2026-09-17",
@@ -68,7 +73,7 @@
     },
     {
       "date": "2026-09-16",
-      "title": "⌘K search across settings and site pages",
+      "title": "\u2318K search across settings and site pages",
       "description": "Quick search reaches settings sections and public marketing pages from inside the signed-in app."
     }
   ]

@@ -1,5 +1,5 @@
 /**
- * Clerk FAPI edge proxy — Dashboard proxy URL: https://helmcontrol.online/__clerk
+ * Clerk FAPI edge proxy — Dashboard proxy URL: https://trenston.com/__clerk
  * Proxies directly to frontend-api.clerk.services (Render cannot TLS to FAPI).
  * CLERK_SECRET_KEY must be configured directly as a protected Vercel environment variable.
  */
@@ -27,7 +27,7 @@ export default async function middleware(request) {
 
   const proto = request.headers.get("x-forwarded-proto") || "https";
   // Clerk validates proxy URL on primary apex (must match Dashboard registration).
-  const proxyUrl = "https://helmcontrol.online/__clerk";
+  const proxyUrl = "https://trenston.com/__clerk";
 
   const xff = request.headers.get("x-forwarded-for");
   const clientIp = xff ? xff.split(",")[0].trim() : "127.0.0.1";
@@ -36,7 +36,7 @@ export default async function middleware(request) {
   headers.set("Clerk-Proxy-Url", proxyUrl);
   headers.set("Clerk-Secret-Key", secret);
   headers.set("X-Forwarded-For", clientIp);
-  headers.set("Origin", "https://helmcontrol.online");
+  headers.set("Origin", "https://trenston.com");
   for (const key of ["authorization", "content-type", "accept", "accept-language", "user-agent", "cookie"]) {
     const val = request.headers.get(key);
     if (val) headers.set(key, val);

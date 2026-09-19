@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { COMPANY_LOCATION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 export default function Terms() {
   return (
@@ -8,7 +8,7 @@ export default function Terms() {
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-helm-slate hover:text-helm-cream transition-colors mb-10">
           <HelmMark size={24} className="rounded" />
-          Back to Helm
+          Back to Trenston
         </Link>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-4">Legal</p>
@@ -19,9 +19,9 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Agreement</h2>
             <p>
-              By accessing or using <span className="text-helm-cream">Helm</span>, you agree to these Terms of Service with{" "}
-              <span className="text-helm-cream">Helm Control</span> (“we”, “us”), operated by{" "}
-              <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>. If you use Helm on behalf of a company,
+              By accessing or using <span className="text-helm-cream">Trenston</span>, you agree to these Terms of Service with{" "}
+              <span className="text-helm-cream">Trenston</span> (“we”, “us”), operated by{" "}
+              <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>. If you use Trenston on behalf of a company,
               you represent that you have authority to bind that company.
               Contact:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
@@ -32,9 +32,9 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Eligibility</h2>
             <p>
-              Helm is open to individuals and businesses worldwide. There is no geographic restriction.
-              Users under 18 should only use Helm under a parent or guardian&apos;s supervision, at the guardian&apos;s
-              discretion. Helm does not independently verify age or guardian consent.
+              Trenston is open to individuals and businesses worldwide. There is no geographic restriction.
+              Users under 18 should only use Trenston under a parent or guardian&apos;s supervision, at the guardian&apos;s
+              discretion. Trenston does not independently verify age or guardian consent.
             </p>
           </section>
 
@@ -49,7 +49,7 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Acceptable use</h2>
             <p>
-              You may not misuse Helm, attempt unauthorized access, disrupt the service, reverse engineer it except where
+              You may not misuse Trenston, attempt unauthorized access, disrupt the service, reverse engineer it except where
               permitted by law, or upload unlawful, infringing, or harmful content. You must only submit data you have the
               right to process, including when using AI features or connecting third-party integrations.
             </p>
@@ -58,9 +58,9 @@ export default function Terms() {
           <section className="rounded-lg border border-helm-line border-l-2 border-l-helm-gold/70 bg-helm-card p-5">
             <h2 className="text-lg text-helm-gold font-normal tracking-tight mb-2">AI accuracy: please read</h2>
             <p className="text-helm-fg">
-              Helm uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to
+              Trenston uses AI (Anthropic&apos;s Claude) to read uploaded documents and suggest financial entries, and to
               generate AI briefings and summaries. <span className="text-helm-cream font-medium">You must independently verify
-              all AI-suggested data before relying on it for real business decisions.</span> Helm and its creators are
+              all AI-suggested data before relying on it for real business decisions.</span> Trenston and its creators are
               not liable for financial or operational decisions made based on unverified AI output. AI features are
               assistive tools, not legal, financial, tax, or other professional advice.
             </p>
@@ -91,19 +91,19 @@ export default function Terms() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Limitation of liability</h2>
             <p>
-              To the fullest extent permitted by law, Helm Control and its suppliers are not liable for indirect,
+              To the fullest extent permitted by law, Trenston and its suppliers are not liable for indirect,
               incidental, special, consequential, or punitive damages, or for lost profits, data, or business
-              opportunities arising from your use of Helm.{" "}
+              opportunities arising from your use of Trenston.{" "}
               <span className="text-helm-cream">Our total liability to you for any claim relating to the service is capped
-              at the total amount you have paid Helm in membership fees.</span>{" "}
-              If you have not paid for Helm, that amount is zero.
+              at the total amount you have paid Trenston in membership fees.</span>{" "}
+              If you have not paid for Trenston, that amount is zero.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Account suspension &amp; termination</h2>
             <p>
-              You may stop using Helm and delete your account at any time from{" "}
+              You may stop using Trenston and delete your account at any time from{" "}
               <Link to="/app/settings" className="text-helm-gold hover:underline">Account Settings</Link>.
               Account deletion wipes your data immediately.
               We reserve the right to suspend or terminate accounts for abuse, non-payment, or violation of these Terms
@@ -135,13 +135,13 @@ export default function Terms() {
             <p>
               Questions about these Terms:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
-              {" "}· Helm Control · {COMPANY_LOCATION}.
+              {" "}· Trenston · {COMPANY_LOCATION}.
             </p>
           </section>
         </div>
 
         <p className="mt-12 text-xs text-helm-slate border-t border-helm-cream/5 pt-6">
-          This policy will be reviewed by legal counsel as Helm grows; contact us with questions.
+          This policy will be reviewed by legal counsel as Trenston grows; contact us with questions.
         </p>
       </div>
     </div>

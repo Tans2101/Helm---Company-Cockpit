@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { COMPANY_LOCATION, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 export default function Privacy() {
   return (
@@ -8,7 +8,7 @@ export default function Privacy() {
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-helm-slate hover:text-helm-cream transition-colors mb-10">
           <HelmMark size={24} className="rounded" />
-          Back to Helm
+          Back to Trenston
         </Link>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-4">Legal</p>
@@ -19,9 +19,9 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who we are</h2>
             <p>
-              This Privacy Policy explains how <span className="text-helm-cream">Helm Control</span> (“we”, “us”),
+              This Privacy Policy explains how <span className="text-helm-cream">Trenston</span> (“we”, “us”),
               operated by <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>,
-              collects and uses information when you use <span className="text-helm-cream">Helm</span>, our company cockpit product.
+              collects and uses information when you use <span className="text-helm-cream">Trenston</span>, our company cockpit product.
               Contact:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>.
               Postal address: {COMPANY_LOCATION}.
@@ -29,11 +29,11 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who can use Helm</h2>
+            <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who can use Trenston</h2>
             <p>
-              Helm is open to individuals and businesses worldwide. There is no geographic restriction.
+              Trenston is open to individuals and businesses worldwide. There is no geographic restriction.
               Before creating a company workspace, you must confirm that you are 18 or older, or that you are using
-              Helm under a parent or guardian&apos;s supervision. Helm records that confirmation on your account.
+              Trenston under a parent or guardian&apos;s supervision. Trenston records that confirmation on your account.
               We do not independently verify age or guardian consent beyond that acknowledgment.
             </p>
           </section>
@@ -51,7 +51,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Financial &amp; business data</h2>
             <p>
-              Helm stores the business data you enter or generate in the product, for example revenue and expense entries,
+              Trenston stores the business data you enter or generate in the product, for example revenue and expense entries,
               categories, tasks, decisions, reports, team roster, pipeline deals, and related workspace content.
               Financial figures come from what you manually enter or from documents you upload.
             </p>
@@ -63,7 +63,7 @@ export default function Privacy() {
               Documents you upload (such as bills, receipts, or invoices) are stored in a private{" "}
               <span className="text-helm-cream">Cloudflare R2</span> bucket. Files are not publicly accessible.
               When you upload a document for extraction, it is sent to <span className="text-helm-cream">Anthropic&apos;s Claude API</span>{" "}
-              for automated parsing. <span className="text-helm-cream">No human at Helm views your uploaded documents</span>,
+              for automated parsing. <span className="text-helm-cream">No human at Trenston views your uploaded documents</span>,
               only the automated Claude process does, solely to extract suggested entries for your workspace.
             </p>
           </section>
@@ -71,16 +71,16 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Google data</h2>
             <p>
-              If you connect Google from Integrations, Helm requests access to{" "}
+              If you connect Google from Integrations, Trenston requests access to{" "}
               <span className="text-helm-cream">Google Calendar</span> (read events, and write events when you
-              create or update them in Helm), <span className="text-helm-cream">Gmail</span> (read message
-              metadata and short snippets for the briefing; compose access to create drafts. Helm does not
+              create or update them in Trenston), <span className="text-helm-cream">Gmail</span> (read message
+              metadata and short snippets for the briefing; compose access to create drafts. Trenston does not
               send mail), <span className="text-helm-cream">Google Sheets</span> (create a Financials export
               spreadsheet you trigger), and <span className="text-helm-cream">Google Drive</span> files you
-              pick in Helm (bill import via <span className="font-mono text-xs">drive.file</span>, not full Drive).
+              pick in Trenston (bill import via <span className="font-mono text-xs">drive.file</span>, not full Drive).
               For Gmail we do not store full email bodies as a mailbox archive, only the metadata needed to
-              render the current briefing. Helm does not request <span className="font-mono text-xs">gmail.send</span>.
-              Each teammate connects their own Google account; Helm never surfaces another person&apos;s Google
+              render the current briefing. Trenston does not request <span className="font-mono text-xs">gmail.send</span>.
+              Each teammate connects their own Google account; Trenston never surfaces another person&apos;s Google
               Calendar or Gmail to you. Nothing from Google is accessed until you explicitly connect.
               Company-shared OAuth grants (QuickBooks, Xero, HubSpot, SAP) may only be used by the teammate who
               connected them, or by a workspace owner.
@@ -110,7 +110,7 @@ export default function Privacy() {
             <p>
               Paid subscriptions are processed by <span className="text-helm-cream">Paddle</span> as merchant of record.
               Paddle collects billing details and may share limited transaction and customer identifiers with us so we can
-              activate and manage your plan. We do not store full card numbers on Helm servers.
+              activate and manage your plan. We do not store full card numbers on Trenston servers.
               See our{" "}
               <Link to="/refunds" className="text-helm-gold hover:underline">Refund &amp; Billing Policy</Link>{" "}
               and the{" "}
@@ -130,14 +130,14 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">AI processing</h2>
             <p>
-              Helm uses a third-party AI provider, <span className="text-helm-cream">Anthropic (Claude)</span>, for
-              features including Ask Helm chat, document and bill/receipt extraction, Decision Engine suggestions,
-              Weekly Pack and Briefing summaries, and report digests. When you use those features, Helm transmits
+              Trenston uses a third-party AI provider, <span className="text-helm-cream">Anthropic (Claude)</span>, for
+              features including Ask Trenston chat, document and bill/receipt extraction, Decision Engine suggestions,
+              Weekly Pack and Briefing summaries, and report digests. When you use those features, Trenston transmits
               relevant workspace data to Anthropic for processing. That can include financial figures and entries,
               uploaded documents and reports, and operational or department records assembled for context (for
-              example pipeline, people, or department queue data used by Ask Helm). Anthropic uses that context only
+              example pipeline, people, or department queue data used by Ask Trenston). Anthropic uses that context only
               to generate the requested response or suggested entries for your workspace. Do not submit data you are
-              not authorized to process with third-party AI providers. Helm does not claim SOC 2, HIPAA, GDPR, or
+              not authorized to process with third-party AI providers. Trenston does not claim SOC 2, HIPAA, GDPR, or
               similar certifications based solely on this disclosure.
             </p>
           </section>
@@ -154,10 +154,10 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Analytics &amp; tracking</h2>
             <p>
-              Helm uses Vercel Web Analytics to count visitors and page views. It is cookieless and does not
+              Trenston uses Vercel Web Analytics to count visitors and page views. It is cookieless and does not
               identify you personally. We also record first-party product usage events (for example which
-              departments you enable) in our own MongoDB so we can improve Helm. That usage data stays in
-              Helm&apos;s database and is not sent to Google Analytics or other advertising or analytics vendors.
+              departments you enable) in our own MongoDB so we can improve Trenston. That usage data stays in
+              Trenston&apos;s database and is not sent to Google Analytics or other advertising or analytics vendors.
               We do not use Google Analytics, session-recording, or advertising trackers.
             </p>
           </section>
@@ -168,7 +168,7 @@ export default function Privacy() {
               <li><span className="text-helm-cream">MongoDB Atlas</span>: primary database for account and business data</li>
               <li><span className="text-helm-cream">Cloudflare R2</span>: uploaded document files (private bucket)</li>
               <li><span className="text-helm-cream">Clerk</span>: authentication and login/session data</li>
-              <li><span className="text-helm-cream">Anthropic</span>: processes AI feature inputs (documents, Ask Helm context, summaries)</li>
+              <li><span className="text-helm-cream">Anthropic</span>: processes AI feature inputs (documents, Ask Trenston context, summaries)</li>
               <li><span className="text-helm-cream">Paddle</span>: payment processing</li>
               <li><span className="text-helm-cream">Resend</span>: transactional email</li>
               <li><span className="text-helm-cream">Vercel</span>: hosting and cookieless web analytics (page views)</li>
@@ -199,7 +199,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Security practices</h2>
             <p>
-              How Helm protects workspaces, credentials, and uploaded files is described on our{" "}
+              How Trenston protects workspaces, credentials, and uploaded files is described on our{" "}
               <Link to="/security" className="text-helm-gold hover:underline">Security</Link> page.
             </p>
           </section>
@@ -209,13 +209,13 @@ export default function Privacy() {
             <p>
               Privacy questions:{" "}
               <a href={PUBLIC_CONTACT_MAILTO} className="text-helm-gold hover:underline">{PUBLIC_CONTACT_EMAIL}</a>
-              {" "}· Helm Control · {COMPANY_LOCATION}.
+              {" "}· Trenston · {COMPANY_LOCATION}.
             </p>
           </section>
         </div>
 
         <p className="mt-12 text-xs text-helm-slate border-t border-helm-cream/5 pt-6">
-          This policy will be reviewed by legal counsel as Helm grows; contact us with questions.
+          This policy will be reviewed by legal counsel as Trenston grows; contact us with questions.
         </p>
       </div>
     </div>

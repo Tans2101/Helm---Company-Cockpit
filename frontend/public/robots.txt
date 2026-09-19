@@ -17,4 +17,4 @@ Disallow: /login/sso-callback
 Disallow: /sign-up/sso-callback
 Disallow: /payment/
 
-Sitemap: https://www.helmcontrol.online/sitemap.xml
+Sitemap: https://www.trenston.com/sitemap.xml

@@ -8,32 +8,34 @@ export const FOUNDER_ROLE = "CEO & Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
 /** Public LinkedIn profile — also used as Person JSON-LD sameAs on /about. */
 export const FOUNDER_LINKEDIN_URL = "https://www.linkedin.com/in/tansher-dhawan-0a0848332/";
-export const PUBLIC_CONTACT_EMAIL = "contact@helmcontrol.online";
+export const PUBLIC_CONTACT_EMAIL = "contact@trenston.com";
 export const PUBLIC_CONTACT_MAILTO = `mailto:${PUBLIC_CONTACT_EMAIL}`;
-export const PUBLIC_INSTAGRAM_HANDLE = "@gethelmcontrol";
-export const PUBLIC_INSTAGRAM_URL = "https://www.instagram.com/gethelmcontrol/";
+export const PUBLIC_INSTAGRAM_HANDLE = "@trenston";
+export const PUBLIC_INSTAGRAM_URL = "https://www.instagram.com/trenston/";
 export const FOUNDED_DATE = "September 2026";
 export const COMPANY_LOCATION = "BGC, Taguig, Philippines";
-export const WHAT_HELM_IS =
-  "Helm brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.";
+export const WHAT_TRENSTON_IS =
+  "Trenston brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.";
+/** @deprecated use WHAT_TRENSTON_IS */
+export const WHAT_HELM_IS = WHAT_TRENSTON_IS;
 export const ABOUT_PROBLEM =
-  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Helm exists to close that gap.";
+  "Company owners running a business of this size spend their mornings opening a dozen tools and asking people for status updates just to know what is happening. Trenston exists to close that gap.";
 export const FOUNDER_NOTE =
-  "Tansher Dhawan built Helm himself: he writes the code and still does the day-to-day department redesigns and fixes. There is no separate product team behind the curtain. What you see in the cockpit is what he is actively shipping.";
+  "Tansher Dhawan built Trenston himself: he writes the code and still does the day-to-day department redesigns and fixes. There is no separate product team behind the curtain. What you see in the cockpit is what he is actively shipping.";
 
 export const HERO_SUB =
-  "Helm gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
+  "Trenston gives owners one clear view of money, people, work, and decisions. Open it whenever you need signal: see what changed, make the call, and get back to running the business.";
 
 export const MISSION =
-  "Helm exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes, spreadsheets, and status chases every morning.";
+  "Trenston exists so a CEO can open one place and see what the business is actually saying today: money, pipeline, people, and the work in motion, without reconstructing that picture from inboxes, spreadsheets, and status chases every morning.";
 
 export const VISION =
-  "The near direction is to deepen that same cockpit across every lane operators already run in Helm (Briefing, Decisions, Financials, Production, Procurement, Legal, HR, Maintenance, Sales) so the morning open is the company, not another reconstruction project.";
+  "The near direction is to deepen that same cockpit across every lane operators already run in Trenston (Briefing, Decisions, Financials, Production, Procurement, Legal, HR, Maintenance, Sales) so the morning open is the company, not another reconstruction project.";
 export const ABOUT_DIFFERENTIATOR =
-  "Helm is grounded in the workspace's live data, not a generic chart library. Ask Helm answers from actual financials and pipeline; Financials refuses to dress missing cash or runway up as $0; Decision Center keeps the call and its outcome visible instead of letting approvals vanish into chat; department status rolls into the Briefing so the morning picture is company-wide, not one lane at a time.";
+  "Trenston is grounded in the workspace's live data, not a generic chart library. Ask Trenston answers from actual financials and pipeline; Financials refuses to dress missing cash or runway up as $0; Decision Center keeps the call and its outcome visible instead of letting approvals vanish into chat; department status rolls into the Briefing so the morning picture is company-wide, not one lane at a time.";
 
 export const ABOUT_STORY =
-  "Running a company means your financials, your open decisions, your team's day-to-day work, and what is happening in each department all live in different places: a spreadsheet here, a person's head there, a chat thread nobody can find again. You are not choosing between competing dashboards. You do not have a single one that is honest about what needs you right now versus what can wait. Nobody has the whole picture, least of all the person responsible for it. That is the gap Helm was built to close: pull money, decisions, people, and work into one place that shows what changed and what to decide, instead of making you assemble the picture yourself every time. What got built is a CEO operating system — Briefing, Decision Center, Financials and runway, Ask Helm, and department workflows for Production, Procurement, Legal, HR, Maintenance, and Sales — synthesized into what needs the owner's attention.";
+  "Running a company means your financials, your open decisions, your team's day-to-day work, and what is happening in each department all live in different places: a spreadsheet here, a person's head there, a chat thread nobody can find again. You are not choosing between competing dashboards. You do not have a single one that is honest about what needs you right now versus what can wait. Nobody has the whole picture, least of all the person responsible for it. That is the gap Trenston was built to close: pull money, decisions, people, and work into one place that shows what changed and what to decide, instead of making you assemble the picture yourself every time. What got built is a CEO operating system — Briefing, Decision Center, Financials and runway, Ask Trenston, and department workflows for Production, Procurement, Legal, HR, Maintenance, and Sales — synthesized into what needs the owner's attention.";
 
 export const VALUES = [
   {
@@ -42,22 +44,22 @@ export const VALUES = [
   },
   {
     title: "Quiet control",
-    body: "Helm does not run engagement loops or notification spam. You open Financials, Decisions, or a department board when you need them; the product is not designed to chase your attention through the day.",
+    body: "Trenston does not run engagement loops or notification spam. You open Financials, Decisions, or a department board when you need them; the product is not designed to chase your attention through the day.",
   },
   {
     title: "Honest synthesis",
-    body: "Missing cash, MRR, burn, or runway on Financials show as \"Add data,\" not $0. Ask Helm answers from live workspace data and is told to admit gaps instead of inventing figures. Decision Center tracks real outcomes so a call does not disappear after you make it.",
+    body: "Missing cash, MRR, burn, or runway on Financials show as \"Add data,\" not $0. Ask Trenston answers from live workspace data and is told to admit gaps instead of inventing figures. Decision Center tracks real outcomes so a call does not disappear after you make it.",
   },
 ];
 
 export const WHO_HELM_IS_FOR = [
   {
     title: "CEOs of companies up to 50",
-    body: "You're still in the weeds but shouldn't be drowning in them. Helm gives you a clear view to share with your leadership team without hiring a chief of staff.",
+    body: "You're still in the weeds but shouldn't be drowning in them. Trenston gives you a clear view to share with your leadership team without hiring a chief of staff.",
   },
   {
     title: "Owner-operators & traditional businesses",
-    body: "Manufacturing, services, agencies, family companies. Helm is a cockpit for running the operation, not a tool only venture-backed startups use.",
+    body: "Manufacturing, services, agencies, family companies. Trenston is a cockpit for running the operation, not a tool only venture-backed startups use.",
   },
   {
     title: "Leadership teams",
@@ -67,15 +69,15 @@ export const WHO_HELM_IS_FOR = [
 
 export const CEO_DAY = [
   { title: "Briefing", body: "Three columns: what changed, what to decide, what to delegate, plus AI synthesis from your live data, and important Gmail threads with AI draft replies you review before sending." },
-  { title: "Decision Center", body: "Pending approvals ranked by impact. Helm recommends which to tackle first and why." },
-  { title: "Ask Helm", body: "\"What's our biggest risk this quarter?\" answered from your financials and pipeline, not the internet." },
+  { title: "Decision Center", body: "Pending approvals ranked by impact. Trenston recommends which to tackle first and why." },
+  { title: "Ask Trenston", body: "\"What's our biggest risk this quarter?\" answered from your financials and pipeline, not the internet." },
   { title: "CEO Pack", body: "A summary of growth, cash, team pulse, and open decisions, generated in one click, ready to share with your leadership team." },
 ];
 
 export const PRICING_FAQ = [
-  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Helm quotas, more seats, and integrations." },
+  { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Trenston (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Trenston quotas, more seats, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
-  { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
+  { q: "Can my leadership team use Trenston?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
   {
     q: "What integrations are included?",
     a: "Paid plans can connect Google, QuickBooks or Xero, SAP Business One, HubSpot, and Slack webhook alerts. Free stays manual-only.",
@@ -102,7 +104,7 @@ export const INTEGRATIONS_PUBLIC_BLURB =
   "Connect the tools you already use so Financials, Briefing, Pipeline, and alerts stay current. Manual entry stays available when a system is not connected.";
 
 export const PUBLIC_INTEGRATIONS_INTRO =
-  "Helm connects to the tools your team already uses — nothing to migrate, nothing to duplicate.";
+  "Trenston connects to the tools your team already uses — nothing to migrate, nothing to duplicate.";
 
 /** Public /integrations cards — text wordmarks only (vendor logos need written permission). */
 export const PUBLIC_INTEGRATIONS = [
@@ -111,7 +113,7 @@ export const PUBLIC_INTEGRATIONS = [
     name: "Google Calendar & Gmail",
     category: "Calendar & email",
     description:
-      "Each teammate connects their own Google account. Sync your meetings into Helm Calendar and your briefing — plus Gmail thread surfacing, Sheets export, calendar write, Gmail drafts, and Drive bill import. Teammates never see each other's Google data.",
+      "Each teammate connects their own Google account. Sync your meetings into Trenston Calendar and your briefing — plus Gmail thread surfacing, Sheets export, calendar write, Gmail drafts, and Drive bill import. Teammates never see each other's Google data.",
     feeds: "Feeds Calendar & Briefing",
     scope:
       "Gmail is snippet-level thread surfacing (sender, subject, preview) plus optional draft replies you review and send in Gmail — not full inbox or message-body access.",
@@ -145,7 +147,7 @@ export const PUBLIC_INTEGRATIONS = [
     name: "HubSpot",
     category: "Sales",
     description:
-      "Pull HubSpot CRM deals into Helm Pipeline and Telemetry, built for SMB and mid-market teams.",
+      "Pull HubSpot CRM deals into Trenston Pipeline and Telemetry, built for SMB and mid-market teams.",
     feeds: "Feeds Pipeline & Telemetry",
   },
   {
@@ -153,7 +155,7 @@ export const PUBLIC_INTEGRATIONS = [
     name: "Slack",
     category: "Alerts",
     description:
-      "Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel.",
+      "Paste a Slack Incoming Webhook URL to post high-severity Trenston alerts to a channel.",
     feeds: "Delivers high-severity alerts",
     scope:
       "Webhook-based alerts only — not a full Slack app. No OAuth, no DMs, no slash commands.",
@@ -161,7 +163,7 @@ export const PUBLIC_INTEGRATIONS = [
 ];
 
 export const PUBLIC_INTEGRATIONS_ATTRIBUTION =
-  "Google, QuickBooks, Xero, SAP, HubSpot, and Slack are trademarks of their respective owners. Helm is not affiliated with or endorsed by these companies.";
+  "Google, QuickBooks, Xero, SAP, HubSpot, and Slack are trademarks of their respective owners. Trenston is not affiliated with or endorsed by these companies.";
 
 /** Not shipped — keep clearly labeled as coming soon on public pages. */
 export const PUBLIC_INTEGRATIONS_COMING_SOON = [
@@ -170,7 +172,7 @@ export const PUBLIC_INTEGRATIONS_COMING_SOON = [
     name: "GitHub",
     category: "Engineering",
     description:
-      "Planned: track PR velocity and engineering delivery alongside business KPIs. Not available to connect today — do not treat this as a live Helm integration.",
+      "Planned: track PR velocity and engineering delivery alongside business KPIs. Not available to connect today — do not treat this as a live Trenston integration.",
   },
 ];
 
@@ -179,7 +181,7 @@ export const FEATURE_CATEGORIES = [
     id: "intelligence",
     label: "Executive intelligence",
     intro: "AI grounded in your company, not generic chatbot answers.",
-    modules: ["Briefing", "Decision Center", "Ask Helm", "CEO Pack", "Gmail thread surfacing + AI draft replies"],
+    modules: ["Briefing", "Decision Center", "Ask Trenston", "CEO Pack", "Gmail thread surfacing + AI draft replies"],
   },
   {
     id: "finance",
@@ -190,7 +192,7 @@ export const FEATURE_CATEGORIES = [
   {
     id: "operations",
     label: "Production, procurement & maintenance",
-    intro: "Not three separate trackers. When production is blocked, Helm shows you exactly why, and jumps that item to the top of whichever queue is holding it up.",
+    intro: "Not three separate trackers. When production is blocked, Trenston shows you exactly why, and jumps that item to the top of whichever queue is holding it up.",
     modules: [
       "Work order tracking",
       "Vendor memory",
@@ -214,14 +216,14 @@ export const PLANS = [
     id: "free",
     label: "Free",
     price: 0,
-    for: "Small teams trying Helm",
+    for: "Small teams trying Trenston",
     seats: 3,
     trialDays: 0,
     highlighted: false,
     includes: [
       "Up to 3 team members",
       "5 free AI extracts to try it, then upgrade",
-      "Ask Helm (10 messages/month)",
+      "Ask Trenston (10 messages/month)",
       "AI briefing",
       "Dashboard & decisions",
       "No QuickBooks sync",
@@ -238,7 +240,7 @@ export const PLANS = [
     includes: [
       "Up to 10 team members",
       "AI document upload (30/billing period)",
-      "Ask Helm (50 messages/billing period)",
+      "Ask Trenston (50 messages/billing period)",
       "QuickBooks sync",
       "Calendar",
       "7-day free trial",
@@ -255,7 +257,7 @@ export const PLANS = [
     includes: [
       "Up to 25 team members",
       "AI document upload (150/billing period)",
-      "Ask Helm (200 messages/billing period)",
+      "Ask Trenston (200 messages/billing period)",
       "Priority QuickBooks sync",
       "Advanced reports & CEO Pack",
       "7-day free trial",
@@ -272,7 +274,7 @@ export const PLANS = [
     includes: [
       "Up to 50 team members",
       "AI document upload (500/billing period)",
-      "Ask Helm (500 messages/billing period)",
+      "Ask Trenston (500 messages/billing period)",
       "Priority support",
       "Everything in Growth",
       "7-day free trial",
@@ -327,15 +329,15 @@ export const PROBLEMS = [
 
 export const HOW_IT_WORKS = [
   { n: "01", title: "Your team updates the work", body: "Finance, sales, operations, and other departments use their own simple queues. Connect QuickBooks, Xero, SAP Business One, or Google where useful." },
-  { n: "02", title: "Helm prepares your briefing", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
-  { n: "03", title: "You decide and hand off", body: "Approve, follow up, or assign the next step. Helm keeps the owner and outcome visible so decisions do not disappear." },
+  { n: "02", title: "Trenston prepares your briefing", body: "Money, work, blockers, and open decisions are put in one short briefing. Missing information is called out plainly." },
+  { n: "03", title: "You decide and hand off", body: "Approve, follow up, or assign the next step. Trenston keeps the owner and outcome visible so decisions do not disappear." },
 ];
 
 export const FEATURE_HIGHLIGHTS = [
   { title: "Briefing", body: "What changed, what to decide, what to delegate, synthesized from your live company data." },
   { title: "Decision Center", body: "Approvals with AI recommendations and confidence scores, plus a recently resolved list so calls do not disappear." },
   { title: "Runway & Burn", body: "Revenue, expenses, and cash tracking. Always know where the money stands." },
-  { title: "Ask Helm", body: "Your executive AI chief-of-staff, grounded in your live company data." },
+  { title: "Ask Trenston", body: "Your executive AI chief-of-staff, grounded in your live company data." },
 ];
 
 /** Department lanes — enable only what the company actually uses. */
@@ -358,7 +360,7 @@ export const DEPARTMENTS_SECTION = {
     {
       name: "Accounting & Finance",
       icon: "landmark",
-      body: "Your finance team logs revenue and expenses. Helm turns that into live cash, revenue, and spend across the cockpit.",
+      body: "Your finance team logs revenue and expenses. Trenston turns that into live cash, revenue, and spend across the cockpit.",
     },
     {
       name: "Sales",
@@ -386,7 +388,7 @@ export const DEPARTMENTS_SECTION = {
 export const FEATURE_MODULES = [
   {
     title: "Briefing",
-    ceoValue: "Know what changed and what needs you whenever you open Helm.",
+    ceoValue: "Know what changed and what needs you whenever you open Trenston.",
     body: "Three columns: what changed, what to decide, what to delegate, plus AI synthesis when you need the full picture.",
     example: "Revenue is ahead of plan, but engineering capacity risk is rising. Approve the infra reservation.",
   },
@@ -394,19 +396,19 @@ export const FEATURE_MODULES = [
     title: "Decision Center",
     ceoValue: "Every open decision, ranked by impact.",
     body: "Approve, follow up, or delegate with AI confidence scores. Resolved calls stay visible with status and owner so they do not disappear after you act.",
-    example: "Six pending approvals. Helm recommends the $40K reservation first: 4.2-month payback.",
+    example: "Six pending approvals. Trenston recommends the $40K reservation first: 4.2-month payback.",
   },
   {
     title: "Won deals become revenue",
     ceoValue: "Close the deal once. Financials and production follow.",
     body: "Moving a deal to won logs the revenue automatically and offers a production work order from the same deal, so pipeline and financials stay linked.",
-    example: "Acme Enterprise closes at $25k. Revenue appears in Financials; Helm asks if you want a work order started.",
+    example: "Acme Enterprise closes at $25k. Revenue appears in Financials; Trenston asks if you want a work order started.",
   },
   {
     title: "Deal ownership & follow-ups",
     ceoValue: "Real owners, planned next steps, not free-text ghosts.",
     body: "Deals link to Sales teammates, with next-step and follow-up dates so quiet deals surface before they stall.",
-    example: "Riley owns the negotiation. Call-back Thursday is on the card, and Helm reminds before it slips.",
+    example: "Riley owns the negotiation. Call-back Thursday is on the card, and Trenston reminds before it slips.",
   },
   {
     title: "Telemetry",
@@ -415,10 +417,10 @@ export const FEATURE_MODULES = [
     example: "MRR up 8% MoM. Open tasks down. One team member overloaded.",
   },
   {
-    title: "Ask Helm",
+    title: "Ask Trenston",
     ceoValue: "Your executive chief-of-staff, on call.",
     body: "Ask anything about your company, grounded in live workspace data, not generic AI.",
-    example: "What's our biggest risk this quarter? Helm answers from your actual financials and pipeline.",
+    example: "What's our biggest risk this quarter? Trenston answers from your actual financials and pipeline.",
   },
   {
     title: "CEO Pack",
@@ -430,7 +432,7 @@ export const FEATURE_MODULES = [
     title: "Gmail thread surfacing + AI draft replies",
     ceoValue: "Inbox signal without living in email.",
     body: "Surfaces important Gmail threads in the cockpit and drafts replies you can send, grounded in company context, not a blank compose box.",
-    example: "A customer thread needs a decision. Helm drafts the reply; you edit and send.",
+    example: "A customer thread needs a decision. Trenston drafts the reply; you edit and send.",
   },
   {
     title: "Work order tracking",
@@ -442,13 +444,13 @@ export const FEATURE_MODULES = [
     title: "Vendor memory",
     ceoValue: "Re-order without starting from scratch.",
     body: "Procurement remembers past vendors and prices per item, tracks expected delivery, and flags overdue requests by priority.",
-    example: "Same bracket as last quarter. Helm recalls the vendor and last price when you raise the request.",
+    example: "Same bracket as last quarter. Trenston recalls the vendor and last price when you raise the request.",
   },
   {
     title: "Equipment reliability alerts",
     ceoValue: "Notice the machine that keeps coming back.",
     body: "Maintenance tickets for equipment issues, plus reliability alerts when the same machine repeats, and ticket-open downtime totals.",
-    example: "Press #3 logged three tickets in 90 days. Helm flags it before the next breakdown.",
+    example: "Press #3 logged three tickets in 90 days. Trenston flags it before the next breakdown.",
   },
   {
     title: "Cross-department blocking",
@@ -473,10 +475,10 @@ export const FEATURE_MODULES = [
 
 /** Public Help page: plain-language orientation for first-time users. */
 export const HOW_TO_USE_INTRO = {
-  title: "How to use Helm",
+  title: "How to use Trenston",
   subtitle: "A plain guide for owners and teammates who are new here.",
   lead:
-    "Helm brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.",
+    "Trenston brings together what is happening across your company (money, sales, people, and day-to-day work) in one place, so you do not have to bounce between five tools or chase three people for a status update. It shows what needs a decision from you, lets you hand off what does not, and keeps a simple record of what happened.",
 };
 
 export const HOW_TO_USE_AUDIENCES = [
@@ -496,21 +498,21 @@ export const HOW_TO_USE_CONCEPTS = [
   {
     term: "Briefing",
     explanation:
-      "Briefing is Helm's homepage for leadership. It pulls together what changed recently, what still needs a call from you, and what you could hand off. Open it when you want the company picture without opening every other tool.",
+      "Briefing is Trenston's homepage for leadership. It pulls together what changed recently, what still needs a call from you, and what you could hand off. Open it when you want the company picture without opening every other tool.",
     example:
       "You open Briefing and see cash was updated, two deals moved stage, and one approval is waiting. You handle the approval and leave the rest for later.",
   },
   {
     term: "My Day",
     explanation:
-      "My Day is your personal workspace inside Helm. It holds private sticky notes, your tasks, and an optional team update you can share. Every teammate gets My Day, not only the owner.",
+      "My Day is your personal workspace inside Trenston. It holds private sticky notes, your tasks, and an optional team update you can share. Every teammate gets My Day, not only the owner.",
     example:
       "Before a busy afternoon you jot three priorities on private notes, check your open tasks, and post a short team update so others know what you are focused on.",
   },
   {
     term: "Decisions",
     explanation:
-      "In Helm, a Decision is a specific call that needs approval, rejection, or a clear owner, not just a vague to-do. Decision Center collects those calls, can draft suggestions from live company data, and keeps resolved items visible so you can see what landed.",
+      "In Trenston, a Decision is a specific call that needs approval, rejection, or a clear owner, not just a vague to-do. Decision Center collects those calls, can draft suggestions from live company data, and keeps resolved items visible so you can see what landed.",
     example:
       "A budget request shows up as a Decision. You approve it, or you delegate it to your finance lead. Later it appears under recently resolved so it does not disappear after you act.",
   },
@@ -522,11 +524,11 @@ export const HOW_TO_USE_CONCEPTS = [
       "You enable Procurement and Production. Purchasing lives in Procurement; shop-floor work orders live in Production. People only see the lanes they are on.",
   },
   {
-    term: "Ask Helm",
+    term: "Ask Trenston",
     explanation:
-      "Ask Helm is a question box grounded in your live workspace data. You type a question in plain language and get an answer from what Helm already knows about the company, not from a generic internet chatbot.",
+      "Ask Trenston is a question box grounded in your live workspace data. You type a question in plain language and get an answer from what Trenston already knows about the company, not from a generic internet chatbot.",
     example:
-      "You ask \"What is stuck in procurement?\" and Helm answers from open purchase requests and blockers, instead of giving generic advice.",
+      "You ask \"What is stuck in procurement?\" and Trenston answers from open purchase requests and blockers, instead of giving generic advice.",
   },
   {
     term: "Telemetry",
@@ -538,7 +540,7 @@ export const HOW_TO_USE_CONCEPTS = [
   {
     term: "Financials",
     explanation:
-      "Financials is where revenue, expenses, and cash are logged so Helm can show MRR, burn, and runway elsewhere in the cockpit. Your finance team (or anyone granted access) can enter numbers manually, import a CSV, or connect accounting tools when available.",
+      "Financials is where revenue, expenses, and cash are logged so Trenston can show MRR, burn, and runway elsewhere in the cockpit. Your finance team (or anyone granted access) can enter numbers manually, import a CSV, or connect accounting tools when available.",
     example:
       "Finance logs this month's expenses and updates cash. Briefing and Telemetry then reflect the new runway without a separate spreadsheet chase.",
   },
@@ -559,9 +561,9 @@ export const HOW_TO_USE_CONCEPTS = [
   {
     term: "Integrations",
     explanation:
-      "Integrations connect outside tools such as Google Calendar, QuickBooks, Xero, SAP Business One, or HubSpot so Helm can pull events, accounting, and CRM data automatically. Nothing requires an integration: you can enter the same information manually if you prefer.",
+      "Integrations connect outside tools such as Google Calendar, QuickBooks, Xero, SAP Business One, or HubSpot so Trenston can pull events, accounting, and CRM data automatically. Nothing requires an integration: you can enter the same information manually if you prefer.",
     example:
-      "You connect Google Calendar so meetings show in Helm, while expenses keep being entered by hand until QuickBooks or SAP Business One is ready.",
+      "You connect Google Calendar so meetings show in Trenston, while expenses keep being entered by hand until QuickBooks or SAP Business One is ready.",
   },
 ];
 
@@ -569,13 +571,13 @@ export const HOW_TO_USE_STEPS = [
   {
     title: "Open Briefing",
     body:
-      "Go to Briefing (shown as /app once you are signed in). This is Helm's homepage: what changed, what needs a decision, and what you could hand off. Start sessions here when you want the company picture first.",
+      "Go to Briefing (shown as /app once you are signed in). This is Trenston's homepage: what changed, what needs a decision, and what you could hand off. Start sessions here when you want the company picture first.",
     audience: "everyone",
   },
   {
     title: "Act on one Decision",
     body:
-      "Open Decisions (/app/decisions). Pick one item that needs a call, then approve it, reject it, or assign a clear owner. Helm keeps the result in recently resolved so the call does not vanish after you act.",
+      "Open Decisions (/app/decisions). Pick one item that needs a call, then approve it, reject it, or assign a clear owner. Trenston keeps the result in recently resolved so the call does not vanish after you act.",
     audience: "everyone",
   },
   {
@@ -608,12 +610,12 @@ export const HOW_TO_USE_FAQ = [
   {
     q: "Why can't I see Financials or Telemetry?",
     a:
-      "Those screens are restricted on purpose. Owners always have them. Finance packs can open Financials, and some packs (such as Executive or Operations) can open Telemetry. Everyone else only sees them if an owner grants that section in Team & Access. If a screen is missing, ask your owner for access rather than assuming Helm is broken.",
+      "Those screens are restricted on purpose. Owners always have them. Finance packs can open Financials, and some packs (such as Executive or Operations) can open Telemetry. Everyone else only sees them if an owner grants that section in Team & Access. If a screen is missing, ask your owner for access rather than assuming Trenston is broken.",
   },
   {
     q: "What if my company doesn't use QuickBooks, SAP Business One, or Google Calendar?",
     a:
-      "That is fine. Helm works with manual entry everywhere an integration is not connected. Connect tools when they help; nothing in the product requires them to get value from Briefing, Decisions, or department queues.",
+      "That is fine. Trenston works with manual entry everywhere an integration is not connected. Connect tools when they help; nothing in the product requires them to get value from Briefing, Decisions, or department queues.",
   },
   {
     q: "What happens after I approve or delegate a decision in Decision Center?",
@@ -621,9 +623,9 @@ export const HOW_TO_USE_FAQ = [
       "The decision moves out of the open queue. Approved, rejected, and delegated items stay visible under recently resolved so you can confirm the outcome and who owns the follow-through. Delegating to yourself keeps the item open so you can still approve or reject it.",
   },
   {
-    q: "What's the difference between asking Ask Helm and checking Decisions?",
+    q: "What's the difference between asking Ask Trenston and checking Decisions?",
     a:
-      "Ask Helm answers a question you type right now, using your live company data. Decisions is the queue of calls that already need approval or judgment, including suggestions Helm drafts for you to confirm. Use Ask Helm when you have a specific question; use Decisions when something is waiting on a yes, no, or owner.",
+      "Ask Trenston answers a question you type right now, using your live company data. Decisions is the queue of calls that already need approval or judgment, including suggestions Trenston drafts for you to confirm. Use Ask Trenston when you have a specific question; use Decisions when something is waiting on a yes, no, or owner.",
   },
   {
     q: "Who can see what I write in My Day?",
@@ -642,7 +644,7 @@ export const HOW_TO_USE_MODULES = [
   { nav: "Briefing", path: "/app", tip: "Company homepage: what changed, what to decide, what to hand off." },
   { nav: "My Day", path: "/app/me", tip: "Your private notes, tasks, and optional team update." },
   { nav: "Decisions", path: "/app/decisions", tip: "Approve, reject, or assign ownership; review what already resolved." },
-  { nav: "Ask Helm", path: "/app/ask", tip: "Ask a question about your live company data." },
+  { nav: "Ask Trenston", path: "/app/ask", tip: "Ask a question about your live company data." },
   { nav: "Telemetry", path: "/app/telemetry", tip: "One-screen snapshot of key numbers and risks (access required)." },
   { nav: "Financials", path: "/app/financials", tip: "Log revenue, expenses, and cash (access required)." },
   { nav: "Pipeline", path: "/app/sales", tip: "Deal stages and open pipeline value." },

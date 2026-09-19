@@ -76,7 +76,7 @@ export default function InviteCeoCard() {
         <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Refer a founder</span>
       </div>
       <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-        Share Helm with another business owner you know. This is a tracking link only, so no discount or credit is applied.
+        Share Trenston with another business owner you know. This is a tracking link only, so no discount or credit is applied.
       </p>
       {error && (
         <p className="text-xs text-helm-muted mb-3" data-testid="referral-load-hint">

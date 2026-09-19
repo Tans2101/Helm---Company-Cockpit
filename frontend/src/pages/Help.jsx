@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
-import HelmHowToUse from "@/components/HelmHowToUse";
+import TrenstonHowToUse from "@/components/HelmHowToUse";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import { CATEGORY } from "@/lib/marketingCopy";
 
@@ -20,7 +20,7 @@ export default function Help() {
             Help
           </h1>
           <p className="mt-6 text-lg text-helm-slate leading-relaxed">
-            New to Helm? Start here. This page explains what the product does, what each part is for, and how owners and invited teammates use it differently.
+            New to Trenston? Start here. This page explains what the product does, what each part is for, and how owners and invited teammates use it differently.
           </p>
         </div>
       </section>

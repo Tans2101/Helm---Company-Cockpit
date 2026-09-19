@@ -21,14 +21,14 @@ def test_fallback_with_snippet_keeps_disclaimer_and_preview():
         subject="Q3 pricing",
         snippet="Can we lock pricing by Friday?",
     )
-    assert "Drafted in Helm" in body
+    assert "Drafted in Trenston" in body
     assert "Can we lock pricing by Friday?" in body
     assert "Following up on:" not in body
 
 
 def test_fallback_without_snippet_uses_subject_only():
     body = helm_llm.fallback_gmail_draft_body(subject="Q3 pricing", snippet="")
-    assert "Drafted in Helm" in body
+    assert "Drafted in Trenston" in body
     assert "Following up on: Q3 pricing" in body
     assert "On their last note:" not in body
 
@@ -43,7 +43,7 @@ async def test_ai_draft_uses_model_text_and_appends_disclaimer():
             snippet="Can we lock pricing by Friday?",
         )
     assert "Friday works" in body
-    assert "Drafted in Helm" in body
+    assert "Drafted in Trenston" in body
     assert "[your name]" in body
 
 
@@ -59,7 +59,7 @@ async def test_ai_draft_empty_snippet_still_calls_model_with_guardrail():
     user_prompt = complete.await_args.args[1]
     assert "no preview available" in user_prompt
     assert "Following up on Q3 pricing" in body
-    assert "Drafted in Helm" in body
+    assert "Drafted in Trenston" in body
 
 
 @pytest.mark.asyncio

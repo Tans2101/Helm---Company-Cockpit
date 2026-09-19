@@ -27,7 +27,7 @@ def main() -> int:
         method="POST",
         headers={
             "Content-Type": "application/json",
-            "X-Helm-Cron-Secret": SECRET,
+            "X-Trenston-Cron-Secret": SECRET,
         },
     )
     try:

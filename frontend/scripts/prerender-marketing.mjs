@@ -95,9 +95,9 @@ function pricingJsonLd(plans, origin) {
   return {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: "Helm",
+    name: "Trenston",
     description: "CEO Operating System — Briefing, decisions, financials, and department lanes.",
-    brand: { "@type": "Brand", name: "Helm" },
+    brand: { "@type": "Brand", name: "Trenston" },
     url: `${origin}/pricing`,
     offers: {
       "@type": "AggregateOffer",
@@ -145,7 +145,7 @@ function pricingStaticHtml(plans) {
     .join("\n");
 
   return `<main id="helm-prerender-pricing">
-  <h1>Helm pricing</h1>
+  <h1>Trenston pricing</h1>
   <p>Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
   <p>Canonical plan list (source: frontend/src/lib/marketingCopy.js PLANS):</p>
   ${cards}

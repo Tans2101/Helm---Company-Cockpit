@@ -48,7 +48,7 @@ export default function Features() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }}>
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-3xl md:text-4xl font-medium tracking-tight max-w-xl leading-tight">
-              Production, Procurement, and Decision Center as they appear in Helm.
+              Production, Procurement, and Decision Center as they appear in Trenston.
             </h2>
           </motion.div>
           <div className="mt-12">
@@ -60,7 +60,7 @@ export default function Features() {
       <section className="px-6 pb-16 border-t border-helm-cream/[0.05] pt-16">
         <div className="mx-auto max-w-3xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate mb-6">Included in Helm</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate mb-6">Included in Trenston</p>
           <ul className="space-y-3">
             {PRO_FEATURES.map((f) => (
               <li key={f} className="text-sm text-helm-cream/85 border-b border-helm-cream/[0.06] pb-3">
@@ -121,14 +121,14 @@ export default function Features() {
           <p className="mt-4 text-sm text-helm-slate">Free to start. Full cockpit on every plan.</p>
           <button type="button" onClick={enter}
             className="mt-10 group inline-flex items-center gap-2 rounded-md bg-helm-cream text-helm-navy font-medium px-6 py-3 hover:bg-helm-gold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold">
-            {authed ? "Open your cockpit" : "Get started with Helm"}
+            {authed ? "Open your cockpit" : "Get started with Trenston"}
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </button>
           <p className="mt-6 text-sm text-helm-slate flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
             <Link to="/pricing" className="hover:text-helm-cream transition-colors">
               View pricing
             </Link>
-            <Link to="/about" className="hover:text-helm-cream transition-colors">About Helm</Link>
+            <Link to="/about" className="hover:text-helm-cream transition-colors">About Trenston</Link>
             <Link to="/integrations" className="hover:text-helm-cream transition-colors">Integrations</Link>
             <Link to="/security" className="hover:text-helm-cream transition-colors">Security</Link>
             <Link to="/changelog" className="hover:text-helm-cream transition-colors">Changelog</Link>

@@ -11,11 +11,11 @@ from urllib.parse import urlparse
 import httpx
 import jwt
 
-from helm_config import HELM_CANONICAL_ORIGIN, HELM_PRIMARY_HOSTS, is_stale_deploy_url
+from helm_config import TRENSTON_CANONICAL_ORIGIN, TRENSTON_PRIMARY_HOSTS, is_stale_deploy_url
 
 logger = logging.getLogger(__name__)
 
-HELM_CLERK_JWKS_URL = "https://clerk.helmcontrol.online/.well-known/jwks.json"
+TRENSTON_CLERK_JWKS_URL = "https://clerk.trenston.com/.well-known/jwks.json"
 CLERK_BAPI = "https://api.clerk.com/v1"
 CLERK_FAPI = os.environ.get("CLERK_FAPI_URL", "https://frontend-api.clerk.services").rstrip("/")
 
@@ -24,17 +24,17 @@ def _resolve_clerk_jwks_url() -> str:
     env = os.environ.get("CLERK_JWKS_URL", "").strip()
     if env:
         return env
-    return HELM_CLERK_JWKS_URL
+    return TRENSTON_CLERK_JWKS_URL
 
 
 CLERK_SECRET_KEY = os.environ.get("CLERK_SECRET_KEY", "")
 CLERK_JWKS_URL = _resolve_clerk_jwks_url()
 
 _raw_frontend = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
-FRONTEND_URL = HELM_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_frontend) else _raw_frontend
+FRONTEND_URL = TRENSTON_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_frontend) else _raw_frontend
 
 _raw_app = os.environ.get("APP_URL", "").strip().rstrip("/")
-APP_URL_CLERK = HELM_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_app) else (_raw_app or FRONTEND_URL)
+APP_URL_CLERK = TRENSTON_CANONICAL_ORIGIN if is_stale_deploy_url(_raw_app) else (_raw_app or FRONTEND_URL)
 
 # Extra origins from CORS_ORIGINS env (e.g. legacy apexcoach during migration).
 _extra_cors = {
@@ -43,7 +43,10 @@ _extra_cors = {
     if o.strip()
 }
 
-HELM_CLERK_ORIGINS = {
+TRENSTON_CLERK_ORIGINS = {
+    "https://trenston.com",
+    "https://www.trenston.com",
+    # Legacy domains during DNS/301 cutover (remove once helmcontrol.online is retired).
     "https://helmcontrol.online",
     "https://www.helmcontrol.online",
     "https://apexcoach.tech",
@@ -95,14 +98,14 @@ def _origin_registrable_host(origin: str) -> str:
 
 
 def clerk_post_auth_url() -> str | None:
-    """Public Helm /app after Clerk auth.
+    """Public Trenston /app after Clerk auth.
 
     JWKS host clerk.example.com implies https://example.com, but the live site
-    may be https://www.example.com. Use the public Helm origin when they are
+    may be https://www.example.com. Use the public Trenston origin when they are
     the same registrable domain so forceRedirectUrl matches Clerk's allow list.
     """
     clerk_prim = clerk_primary_origin()
-    helm = primary_frontend_origin() or HELM_CANONICAL_ORIGIN
+    helm = primary_frontend_origin() or TRENSTON_CANONICAL_ORIGIN
     if clerk_prim and helm:
         if _origin_registrable_host(clerk_prim) == _origin_registrable_host(helm):
             return f"{helm.rstrip('/')}/app"
@@ -112,9 +115,9 @@ def clerk_post_auth_url() -> str | None:
 
 
 def clerk_multi_domain_auth() -> bool:
-    """True when Clerk's app domain is a different site than public Helm (satellite)."""
+    """True when Clerk's app domain is a different site than public Trenston (satellite)."""
     clerk_prim = (clerk_primary_origin() or "").rstrip("/")
-    helm_prim = (primary_frontend_origin() or HELM_CANONICAL_ORIGIN or "").rstrip("/")
+    helm_prim = (primary_frontend_origin() or TRENSTON_CANONICAL_ORIGIN or "").rstrip("/")
     if not clerk_prim or not helm_prim:
         return False
     return _origin_registrable_host(clerk_prim) != _origin_registrable_host(helm_prim)
@@ -177,9 +180,9 @@ def resolve_clerk_publishable_key() -> str:
 
 
 def helm_frontend_origins() -> list[str]:
-    """Origins Helm must register with Clerk for browser auth."""
+    """Origins Trenston must register with Clerk for browser auth."""
     origins = {o for o in (
-        *HELM_CLERK_ORIGINS,
+        *TRENSTON_CLERK_ORIGINS,
         FRONTEND_URL,
         APP_URL_CLERK,
     ) if o}
@@ -187,19 +190,19 @@ def helm_frontend_origins() -> list[str]:
 
 
 def primary_frontend_origin() -> str | None:
-    """Production frontend origin — helmcontrol.online when configured."""
-    for host in HELM_PRIMARY_HOSTS:
+    """Production frontend origin — trenston.com when configured."""
+    for host in TRENSTON_PRIMARY_HOSTS:
         for origin in helm_frontend_origins():
             if not origin.startswith("https://") or host not in origin:
                 continue
             if origin.startswith("https://www."):
                 return origin
-    for host in HELM_PRIMARY_HOSTS:
+    for host in TRENSTON_PRIMARY_HOSTS:
         for origin in helm_frontend_origins():
             if origin.startswith("https://") and host in origin:
                 return origin
-    if HELM_CANONICAL_ORIGIN and HELM_CANONICAL_ORIGIN.startswith("https://"):
-        return HELM_CANONICAL_ORIGIN
+    if TRENSTON_CANONICAL_ORIGIN and TRENSTON_CANONICAL_ORIGIN.startswith("https://"):
+        return TRENSTON_CANONICAL_ORIGIN
     preferred = (FRONTEND_URL, APP_URL_CLERK)
     for origin in preferred:
         if origin and origin.startswith("https://") and "localhost" not in origin:
@@ -351,7 +354,7 @@ async def clerk_jwks_ok() -> bool:
 
 
 async def _clerk_primary_domain_record() -> dict[str, Any] | None:
-    """Fetch Clerk BAPI domain row for helmcontrol.online (if configured)."""
+    """Fetch Clerk BAPI domain row for trenston.com (if configured)."""
     if not clerk_configured():
         return None
     try:
@@ -360,7 +363,7 @@ async def _clerk_primary_domain_record() -> dict[str, Any] | None:
             if r.status_code >= 400:
                 return None
             for d in (r.json().get("data") or []):
-                if d.get("name") in {"helmcontrol.online", "www.helmcontrol.online"}:
+                if d.get("name") in {"trenston.com", "www.trenston.com"}:
                     return d
     except Exception:
         logger.debug("clerk domain list failed", exc_info=True)
@@ -418,8 +421,8 @@ async def _clerk_google_client_id() -> str | None:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 data={
                     "strategy": "oauth_google",
-                    "redirect_url": f"{HELM_CANONICAL_ORIGIN}/app",
-                    "action_complete_redirect_url": f"{HELM_CANONICAL_ORIGIN}/app",
+                    "redirect_url": f"{TRENSTON_CANONICAL_ORIGIN}/app",
+                    "action_complete_redirect_url": f"{TRENSTON_CANONICAL_ORIGIN}/app",
                 },
                 cookies=cookies,
             )
@@ -462,10 +465,10 @@ async def clerk_google_oauth_status() -> dict[str, Any]:
         else "https://console.cloud.google.com/apis/credentials"
     )
     result["javascript_origins"] = [
-        "https://helmcontrol.online",
-        "https://www.helmcontrol.online",
-        "https://clerk.helmcontrol.online",
-        "https://accounts.helmcontrol.online",
+        "https://trenston.com",
+        "https://www.trenston.com",
+        "https://clerk.trenston.com",
+        "https://accounts.trenston.com",
     ]
     try:
         from urllib.parse import urlencode
@@ -526,8 +529,8 @@ async def clerk_custom_domain_ssl_ok() -> bool:
 
 
 def clerk_proxy_url() -> str | None:
-    """Public Clerk FAPI proxy — must be on Clerk primary apex (helmcontrol.online), not www."""
-    origin = clerk_primary_origin() or HELM_CANONICAL_ORIGIN
+    """Public Clerk FAPI proxy — must be on Clerk primary apex (trenston.com), not www."""
+    origin = clerk_primary_origin() or TRENSTON_CANONICAL_ORIGIN
     if not origin:
         return None
     host = urlparse(origin).hostname or ""
@@ -547,7 +550,7 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     target = f"{CLERK_FAPI}/{path}".rstrip("/")
     if qs:
         target = f"{target}?{qs}"
-    proxy_base = clerk_proxy_url() or f"{HELM_CANONICAL_ORIGIN}/__clerk"
+    proxy_base = clerk_proxy_url() or f"{TRENSTON_CANONICAL_ORIGIN}/__clerk"
 
     forward: dict[str, str] = {}
     for key in (
@@ -563,7 +566,7 @@ async def proxy_clerk_fapi(path: str, request: Any) -> Any:
     xff = request.headers.get("x-forwarded-for", "")
     client_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "127.0.0.1")
     forward["X-Forwarded-For"] = client_ip
-    forward["Origin"] = HELM_CANONICAL_ORIGIN or proxy_base.rsplit("/__clerk", 1)[0]
+    forward["Origin"] = TRENSTON_CANONICAL_ORIGIN or proxy_base.rsplit("/__clerk", 1)[0]
 
     body = await request.body()
 
@@ -692,7 +695,7 @@ async def _verify_clerk_session_via_bapi(token: str) -> dict[str, Any]:
         r = await client.get(f"{CLERK_BAPI}/sessions/{sid}", headers=_bapi_headers())
     if r.status_code in (401, 403):
         raise ValueError(
-            "CLERK_SECRET_KEY rejected by Clerk API. Use sk_live_ from clerk.helmcontrol.online on Render"
+            "CLERK_SECRET_KEY rejected by Clerk API. Use sk_live_ from clerk.trenston.com on Render"
         )
     if r.status_code == 404:
         raise ValueError(
@@ -755,7 +758,7 @@ async def decode_clerk_jwt(token: str) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("clerk jwks verify failed: %s (%s)", type(exc).__name__, exc)
         raise ValueError(
-            "Could not verify Clerk session. Check CLERK_SECRET_KEY on Render matches clerk.helmcontrol.online"
+            "Could not verify Clerk session. Check CLERK_SECRET_KEY on Render matches clerk.trenston.com"
         ) from exc
 
 
@@ -779,7 +782,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
         if r.status_code in (401, 403):
             raise ValueError(
                 "CLERK_SECRET_KEY rejected by Clerk API. Use the sk_live_ key from the same "
-                "instance as pk_live on Vercel (clerk.helmcontrol.online)"
+                "instance as pk_live on Vercel (clerk.trenston.com)"
             )
         if r.status_code == 404 and attempt < retries - 1:
             await asyncio.sleep(0.5 * (attempt + 1))
@@ -788,7 +791,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
             raise ValueError(
                 "Clerk user not found via API. Render CLERK_SECRET_KEY is likely from a "
                 "different Clerk instance than your publishable key. In Clerk Dashboard → API keys "
-                "(clerk.helmcontrol.online), copy Secret key → Render CLERK_SECRET_KEY and redeploy."
+                "(clerk.trenston.com), copy Secret key → Render CLERK_SECRET_KEY and redeploy."
             )
         if r.status_code >= 400:
             break
@@ -814,7 +817,7 @@ async def fetch_clerk_user_profile(clerk_user_id: str, *, retries: int = 4) -> d
 
 
 async def verify_clerk_session_token(token: str) -> dict[str, Any]:
-    """Validate Clerk session JWT and return stable identity fields for Helm users."""
+    """Validate Clerk session JWT and return stable identity fields for Trenston users."""
     payload = await decode_clerk_jwt(token)
     clerk_user_id = payload.get("sub")
     if not clerk_user_id:
@@ -823,7 +826,7 @@ async def verify_clerk_session_token(token: str) -> dict[str, Any]:
 
 
 async def sync_clerk_satellite_domain(primary: str) -> dict[str, Any]:
-    """Register Helm Vercel host as Clerk satellite domain so OAuth can redirect back."""
+    """Register Trenston Vercel host as Clerk satellite domain so OAuth can redirect back."""
     from urllib.parse import urlparse
 
     host = urlparse(primary).hostname
@@ -996,7 +999,7 @@ def _redirect_url_values(payload: Any) -> set[str]:
 
 
 async def sync_clerk_redirect_urls() -> dict[str, Any]:
-    """Register Helm paths Clerk may redirect to after sign-up / OAuth."""
+    """Register Trenston paths Clerk may redirect to after sign-up / OAuth."""
     result: dict[str, Any] = {"attempted": True, "ok": False, "added": [], "existing": []}
     if not clerk_configured():
         result["reason"] = "not_configured"
@@ -1079,7 +1082,7 @@ async def clerk_signup_policy() -> dict[str, Any]:
 
 
 async def sync_clerk_account_portal(primary: str, app_url: str | None = None) -> dict[str, Any]:
-    """Point Clerk Account Portal post-auth redirects back to Helm (not accounts.dev)."""
+    """Point Clerk Account Portal post-auth redirects back to Trenston (not accounts.dev)."""
     target = (app_url or f"{primary.rstrip('/')}/app").rstrip("/")
     if not target.endswith("/app"):
         target = f"{target}/app"
@@ -1144,7 +1147,7 @@ async def sync_clerk_account_portal(primary: str, app_url: str | None = None) ->
 
 
 async def sync_clerk_instance() -> dict[str, Any]:
-    """Register Helm Vercel origin with Clerk — required for dev instances on production URL."""
+    """Register Trenston Vercel origin with Clerk — required for dev instances on production URL."""
     global _last_sync_status
     wanted = helm_frontend_origins()
     primary = primary_frontend_origin()
@@ -1240,15 +1243,15 @@ async def sync_clerk_instance() -> dict[str, Any]:
             else:
                 status["reason"] = "ok"
                 logger.info(
-                    "Clerk instance synced for Helm (env=%s, origins=%s, dev_origin=%s)",
+                    "Clerk instance synced for Trenston (env=%s, origins=%s, dev_origin=%s)",
                     status["environment_type"],
                     ", ".join(wanted),
                     patch_body.get("development_origin"),
                 )
 
-            if is_dev_fapi and primary and not any(h in primary for h in HELM_PRIMARY_HOSTS):
+            if is_dev_fapi and primary and not any(h in primary for h in TRENSTON_PRIMARY_HOSTS):
                 status["warnings"].append(
-                    "Using Clerk development FAPI. Register helmcontrol.online in Clerk Dashboard → Domains."
+                    "Using Clerk development FAPI. Register trenston.com in Clerk Dashboard → Domains."
                 )
 
             portal_primary = clerk_primary_origin() or primary
@@ -1299,7 +1302,7 @@ async def sync_clerk_instance() -> dict[str, Any]:
 
 
 async def ensure_allowed_origins() -> bool:
-    """Back-compat wrapper — sync full Clerk instance settings for Helm."""
+    """Back-compat wrapper — sync full Clerk instance settings for Trenston."""
     result = await sync_clerk_instance()
     return bool(result.get("synced"))
 

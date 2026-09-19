@@ -8,7 +8,7 @@ export const STATUS_COMPONENTS = [
   {
     id: "web",
     name: "Web app",
-    detail: "Marketing site and cockpit UI on Vercel (www.helmcontrol.online).",
+    detail: "Marketing site and cockpit UI on Vercel (www.trenston.com).",
     check: "page",
   },
   {

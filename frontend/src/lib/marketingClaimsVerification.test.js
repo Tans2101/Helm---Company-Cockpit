@@ -23,7 +23,7 @@ describe("marketing claim verification log", () => {
   test("About Honest synthesis claims remain present", () => {
     const honest = VALUES.find((v) => v.title === "Honest synthesis");
     expect(honest.body).toContain("Add data");
-    expect(honest.body).toContain("Ask Helm");
+    expect(honest.body).toContain("Ask Trenston");
     expect(honest.body).toContain("Decision Center");
   });
 
@@ -96,7 +96,7 @@ describe("marketing claim verification log", () => {
   });
 
   test("founder note stays factual and short (no new personal details)", () => {
-    expect(FOUNDER_NOTE).toMatch(/built Helm himself/i);
+    expect(FOUNDER_NOTE).toMatch(/built Trenston himself/i);
     expect(FOUNDER_NOTE).toMatch(/no separate product team/i);
     expect(FOUNDER_NOTE.toLowerCase()).not.toMatch(/\b(age|student|family|linkedin|photo)\b/);
   });

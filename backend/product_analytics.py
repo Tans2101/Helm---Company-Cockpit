@@ -1,4 +1,4 @@
-"""First-party product usage events — Helm's MongoDB only, no third-party trackers."""
+"""First-party product usage events — Trenston's MongoDB only, no third-party trackers."""
 from __future__ import annotations
 
 import logging

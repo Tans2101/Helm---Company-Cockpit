@@ -1,7 +1,7 @@
-Helm — how we use Google Workspace and Google Cloud Console
+Trenston — how we use Google Workspace and Google Cloud Console
 ============================================================
 
-This file is the operator source of truth. It describes what Helm actually
+This file is the operator source of truth. It describes what Trenston actually
 does in code today, which Google product it talks to, which console you
 click, and which secrets live on Render. It is not a wishlist.
 
@@ -13,18 +13,18 @@ There are two different Google systems. Do not mix them.
 
   2) Google Workspace
      The customer's Gmail / Calendar / Drive / Sheets, accessed only after
-     they click Connect Google in Helm. Helm never stores Workspace mail
-     bodies. Helm the company may also run its own Workspace for helmcontrol.online
+     they click Connect Google in Trenston. Trenston never stores Workspace mail
+     bodies. Trenston the company may also run its own Workspace for trenston.com
      email — that is unrelated to product OAuth.
 
 Clerk Google sign-in is a third OAuth client (Clerk dashboard + Google
 Cloud credentials for login). That is identity, not Calendar/Gmail.
 
 ---------------------------------------------------------------------------
-A. Cloud Console project (Helm operator)
+A. Cloud Console project (Trenston operator)
 ---------------------------------------------------------------------------
 
-Use ONE GCP project for Helm (recommended name: helm-company-cockpit).
+Use ONE GCP project for Trenston (recommended name: helm-company-cockpit).
 
 Enable these APIs on that project:
 
@@ -36,15 +36,15 @@ Enable these APIs on that project:
     - Google Drive API
     - Google Picker API   (needed for "From Drive" on Financials)
 
-  GCP trial credits (Helm's own service account, not the customer):
+  GCP trial credits (Trenston's own service account, not the customer):
     - Cloud Document AI API
     - (optional later) Vertex AI API — not wired in code yet
 
 OAuth consent screen
   User type: External
-  App name: Helm
+  App name: Trenston
   Support email: your Workspace / founder Gmail
-  Authorized domains: helmcontrol.online
+  Authorized domains: trenston.com
   Scopes (must match backend/server.py GOOGLE_SCOPES):
     openid
     https://www.googleapis.com/auth/userinfo.email
@@ -57,22 +57,22 @@ OAuth consent screen
   Publishing: Testing is fine while the app is in trial. Production users
   outside the test list need Google app verification. Restricted scopes
   (Gmail, Drive, Calendar) will eventually require verification / CASA.
-  Do not request gmail.send or full Drive. Helm drafts mail; the user sends.
+  Do not request gmail.send or full Drive. Trenston drafts mail; the user sends.
 
 OAuth 2.0 Client ID (Web application)
   This is GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on Render.
   Authorized JavaScript origins:
-    https://www.helmcontrol.online
-    https://helmcontrol.online
+    https://www.trenston.com
+    https://trenston.com
   Authorized redirect URIs:
-    https://www.helmcontrol.online/api/oauth/google/callback
+    https://www.trenston.com/api/oauth/google/callback
   Also keep Clerk's callback on the Clerk Google client (separate client):
-    https://clerk.helmcontrol.online/v1/oauth_callback
+    https://clerk.trenston.com/v1/oauth_callback
 
 API key (Browser key) — Google Picker only
   Restrict to HTTP referrers:
-    https://www.helmcontrol.online/*
-    https://helmcontrol.online/*
+    https://www.trenston.com/*
+    https://trenston.com/*
   Restrict to Picker API + Drive API.
   Paste on Render as GOOGLE_PICKER_API_KEY.
   Also set GOOGLE_CLOUD_PROJECT_NUMBER (Project number, not project id)
@@ -93,15 +93,15 @@ Document AI processor (this is what the $300 is for)
   Document AI → Create processor → Invoice Parser (or Expense Parser).
   Region: us (or the location in GCP_DOCUMENT_AI_LOCATION).
   Copy the processor ID into GCP_DOCUMENT_AI_PROCESSOR_ID.
-  Helm sends uploaded bills here first. High-confidence totals skip Claude.
+  Trenston sends uploaded bills here first. High-confidence totals skip Claude.
   Low-confidence / failures fall through to Anthropic. When credits expire,
-  leave the processor; Helm still works on Claude alone if ANTHROPIC_API_KEY
+  leave the processor; Trenston still works on Claude alone if ANTHROPIC_API_KEY
   is set.
 
   Spend caps (Mongo, rolling 24h TTL) — over-limit skips Document AI, uses Claude:
     DOCUMENT_AI_GLOBAL_DAILY_LIMIT=80      all workspaces combined; 0 = off
     DOCUMENT_AI_WORKSPACE_DAILY_LIMIT=8    per company; 0 = off
-  Invoice Parser is billed per page on the Helm GCP project. These defaults
+  Invoice Parser is billed per page on the Trenston GCP project. These defaults
   keep trial credits from being burned by a busy tenant. Tighten further
   on Render if needed.
 
@@ -109,25 +109,25 @@ Do NOT move Render, Vercel, MongoDB Atlas, R2, Clerk, Resend, or Paddle
 onto GCP to "use the credits". Those stay where they are.
 
 ---------------------------------------------------------------------------
-B. What Helm does with the customer's Google Workspace
+B. What Trenston does with the customer's Google Workspace
 ---------------------------------------------------------------------------
 
 Trigger: each teammate (Integrations → Connect your Google). One consent
 covers Calendar, Gmail, Sheets, Drive-file, and compose for that person.
 
 Tokens are encrypted at rest (INTEGRATION_ENCRYPTION_KEY) in the
-user_google_tokens collection, keyed by (workspace_id, user_id). Helm
-refreshes them. If Google revokes, Helm asks reconnect. Teammates never
+user_google_tokens collection, keyed by (workspace_id, user_id). Trenston
+refreshes them. If Google revokes, Trenston asks reconnect. Teammates never
 see each other's Google Calendar or Gmail.
 
 1) Calendar read  (already live)
-   Pulls primary calendar into Helm Calendar and the briefing.
+   Pulls primary calendar into Trenston Calendar and the briefing.
    Scope: calendar.readonly
 
 2) Calendar write  (new)
    Checkbox on Add event: "Also add to Google Calendar".
    Creates / patches / deletes the matching event on the user's primary
-   calendar. Helm still stores its own copy.
+   calendar. Trenston still stores its own copy.
    Scope: calendar.events
 
 3) Gmail read  (already live)
@@ -136,19 +136,19 @@ see each other's Google Calendar or Gmail.
    Scope: gmail.readonly
 
 4) Gmail drafts  (new)
-   Briefing → "Draft reply in Gmail" creates a Draft. Helm never sends.
+   Briefing → "Draft reply in Gmail" creates a Draft. Trenston never sends.
    Scope: gmail.compose
 
 5) Sheets export  (new)
    Financials → "Export to Sheets" creates a spreadsheet the user owns
-   (Summary + Ledger). Helm does not keep a copy of the Sheet.
+   (Summary + Ledger). Trenston does not keep a copy of the Sheet.
    Scope: spreadsheets
 
 6) Drive file picker  (new)
    Financials → "From Drive" opens Google Picker, downloads only the file
    they picked, stores it in Cloudflare R2, then runs the same extract
    pipeline as a local upload.
-   Scope: drive.file  (only files the user picks / that Helm created)
+   Scope: drive.file  (only files the user picks / that Trenston created)
 
 Existing workspaces that connected before these scopes shipped must click
 Reconnect Google (Integrations) once so Google re-issues a refresh token
@@ -181,9 +181,9 @@ Optional (not used in code; do not set unless you later wire Vertex):
 D. What we explicitly do not use
 ---------------------------------------------------------------------------
 
-  - gmail.send              Helm must not send as the user
+  - gmail.send              Trenston must not send as the user
   - drive (full)            too sensitive; picker uses drive.file
-  - Google Tasks            Helm has its own Tasks board
+  - Google Tasks            Trenston has its own Tasks board
   - Chat / Meet SDK         Calendar already shows Meet links in events
   - Maps, Ads, Analytics 4  not part of the cockpit
   - Identity Platform       Clerk is sign-in
@@ -196,7 +196,7 @@ E. Quick check after paste
 
 1. Redeploy the Render API.
 2. curl -H "X-Setup-Secret: YOUR_SETUP_SECRET" \
-     https://www.helmcontrol.online/api/setup/status
+     https://www.trenston.com/api/setup/status
    Look at integrations.google_calendar.configured and
    integrations.document_ai.configured.
 3. In the app: Integrations → Reconnect Google (accept all scopes).

@@ -35,5 +35,5 @@ async def test_require_pro_perm_plan_reason_for_ask():
             await dep(principal)
     assert ei.value.status_code == 403
     assert ei.value.detail["reason"] == "plan"
-    assert "Ask Helm" in ei.value.detail["message"]
+    assert "Ask Trenston" in ei.value.detail["message"]
     assert ei.value.detail.get("feature") == "ask_helm"

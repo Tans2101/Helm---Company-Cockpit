@@ -1,4 +1,4 @@
-/** Absolute Helm URLs for Clerk redirects (must be full URL, not relative). */
+/** Absolute Trenston URLs for Clerk redirects (must be full URL, not relative). */
 export function helmOrigin() {
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin;

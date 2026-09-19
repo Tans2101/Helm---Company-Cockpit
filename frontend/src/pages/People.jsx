@@ -180,8 +180,8 @@ export default function People() {
           <AlertTriangle className="w-4 h-4 text-helm-status-warning shrink-0" />
           <p className="text-sm text-helm-fg flex-1">
             {unassignedCount === 1
-              ? "1 person has no department, so their work won't show up anywhere in Helm."
-              : `${unassignedCount} people have no department, so their work won't show up anywhere in Helm.`}
+              ? "1 person has no department, so their work won't show up anywhere in Trenston."
+              : `${unassignedCount} people have no department, so their work won't show up anywhere in Trenston.`}
           </p>
           <Link
             to="/app/members"
@@ -218,7 +218,7 @@ export default function People() {
                       ? "bg-helm-gold/12 border border-helm-gold/35 text-helm-gold"
                       : "bg-transparent border border-dashed border-helm-muted/50 text-helm-muted",
                   )}
-                  title={p.has_access ? "Has Helm login" : "Roster only, no login"}
+                  title={p.has_access ? "Has Trenston login" : "Roster only, no login"}
                   data-testid={`person-avatar-${p.id}`}
                 >
                   {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}

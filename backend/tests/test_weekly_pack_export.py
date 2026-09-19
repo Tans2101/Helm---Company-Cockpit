@@ -34,14 +34,14 @@ Paragraph with <special> & characters.
 
 def test_pdf_filename_includes_workspace_and_date():
     name = pack_pdf.pdf_filename("Acme Manufacturing", datetime(2026, 9, 8, tzinfo=timezone.utc))
-    assert name == "Helm-Weekly-Pack-Acme-Manufacturing-2026-09-08.pdf"
+    assert name == "Trenston-Weekly-Pack-Acme-Manufacturing-2026-09-08.pdf"
 
 
 def test_pdf_filename_strips_unsafe_chars():
     name = pack_pdf.pdf_filename('North/West "Co"')
     assert "/" not in name
     assert '"' not in name
-    assert name.startswith("Helm-Weekly-Pack-")
+    assert name.startswith("Trenston-Weekly-Pack-")
     assert name.endswith(".pdf")
 
 
@@ -90,7 +90,7 @@ def test_export_pdf_endpoint_returns_attachment():
         server.app.dependency_overrides.clear()
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/pdf")
-    assert "Helm-Weekly-Pack-Forge-Co" in r.headers.get("content-disposition", "")
+    assert "Trenston-Weekly-Pack-Forge-Co" in r.headers.get("content-disposition", "")
     assert r.content.startswith(b"%PDF")
 
 

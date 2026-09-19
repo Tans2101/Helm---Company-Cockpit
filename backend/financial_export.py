@@ -19,7 +19,7 @@ from money_fmt import currency_symbol, entered_cash_amount, normalize_currency
 import weekly_pack_export as pack_pdf
 
 _FIN_FOOTER = (
-    "Generated with Helm. Income Statement and Cash Summary for the selected period. "
+    "Generated with Trenston. Income Statement and Cash Summary for the selected period. "
     "This is not a balance sheet."
 )
 _MONEY_FORMAT = '#,##0.00'
@@ -42,12 +42,12 @@ def period_label(period: str) -> str:
 
 def financial_pdf_filename(workspace_name: str, period: str) -> str:
     slug = pack_pdf.slug_filename_part(workspace_name)
-    return f"Helm-Financial-Export-{slug}-{period}.pdf"
+    return f"Trenston-Financial-Export-{slug}-{period}.pdf"
 
 
 def financial_xlsx_filename(workspace_name: str, period: str) -> str:
     slug = pack_pdf.slug_filename_part(workspace_name)
-    return f"Helm-Financial-Export-{slug}-{period}.xlsx"
+    return f"Trenston-Financial-Export-{slug}-{period}.xlsx"
 
 
 def _expand_ledger(entries: list[dict[str, Any]], now: Optional[datetime] = None):

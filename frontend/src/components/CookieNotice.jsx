@@ -30,7 +30,7 @@ export default function CookieNotice() {
     >
       <div className="mx-auto max-w-3xl flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-helm-line bg-helm-card px-4 py-3.5 shadow-2xl">
         <p className="flex-1 text-sm text-helm-fg leading-relaxed">
-          Helm uses a session cookie to keep you signed in, a small preference to remember this notice,
+          Trenston uses a session cookie to keep you signed in, a small preference to remember this notice,
           and cookieless Vercel Analytics for page views. No advertising cookies. Details in our{" "}
           <Link to="/privacy" className="text-helm-gold hover:underline">Privacy Policy</Link>.
         </p>

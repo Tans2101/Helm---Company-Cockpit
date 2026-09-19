@@ -32,7 +32,7 @@ def slug_filename_part(name: str, fallback: str = "workspace") -> str:
 
 def pdf_filename(workspace_name: str, when: datetime | None = None) -> str:
     day = (when or datetime.now(timezone.utc)).date().isoformat()
-    return f"Helm-Weekly-Pack-{slug_filename_part(workspace_name)}-{day}.pdf"
+    return f"Trenston-Weekly-Pack-{slug_filename_part(workspace_name)}-{day}.pdf"
 
 
 def _inline_xml(text: str) -> str:
@@ -164,7 +164,7 @@ def markdown_to_flowables(markdown: str, styles: dict) -> list:
     return story
 
 
-_PACK_FOOTER = "Generated with Helm. Share with your leadership team, investors, or accountant."
+_PACK_FOOTER = "Generated with Trenston. Share with your leadership team, investors, or accountant."
 
 
 def render_document_pdf(
@@ -197,11 +197,11 @@ def render_document_pdf(
         topMargin=0.75 * inch,
         bottomMargin=0.75 * inch,
         title=pdf_title or f"{kicker}: {company}",
-        author="Helm",
+        author="Trenston",
     )
     styles = _styles()
     story = [
-        Paragraph(_inline_xml(kicker or "Helm"), styles["kicker"]),
+        Paragraph(_inline_xml(kicker or "Trenston"), styles["kicker"]),
         Paragraph(_inline_xml(company), styles["title"]),
         Paragraph(_inline_xml(date_label), styles["meta"]),
         HRFlowable(width="100%", thickness=0.6, color=_GOLD, spaceAfter=12),

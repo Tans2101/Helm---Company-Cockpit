@@ -32,8 +32,8 @@ const SKIP_DIR_NAMES = new Set([
 
 /** Stale / wrong figures we specifically want to catch. */
 const FORBIDDEN = [
-  { re: /\$8\s*\/\s*(mo|month|user)/i, label: "$8/mo (retired Helm Pro price)" },
-  { re: /Helm Pro only/i, label: "Helm Pro only (retired single-tier claim)" },
+  { re: /\$8\s*\/\s*(mo|month|user)/i, label: "$8/mo (retired Trenston Pro price)" },
+  { re: /Trenston Pro only/i, label: "Trenston Pro only (retired single-tier claim)" },
 ];
 
 function walk(dir, files = []) {

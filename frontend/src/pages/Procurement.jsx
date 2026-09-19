@@ -640,7 +640,7 @@ export default function Procurement() {
           <div className="relative w-full max-w-sm rounded-md border border-helm-line bg-helm-card p-5 space-y-3">
             <p className="text-sm font-medium text-helm-fg">Expected delivery date?</p>
             <p className="text-sm text-helm-muted leading-relaxed">
-              Optional: add a vendor delivery date so Helm can flag this request if it runs late.
+              Optional: add a vendor delivery date so Trenston can flag this request if it runs late.
             </p>
             <input
               type="date"

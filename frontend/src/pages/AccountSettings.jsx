@@ -167,13 +167,13 @@ export default function AccountSettings() {
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Security</span>
         </div>
         <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-          How Helm encrypts credentials, isolates workspaces, stores private files, and handles deletion.
+          How Trenston encrypts credentials, isolates workspaces, stores private files, and handles deletion.
         </p>
         <Link
           to="/security"
           className="inline-flex items-center text-sm text-helm-gold hover:text-helm-gold-hover"
         >
-          Read how Helm protects company data →
+          Read how Trenston protects company data →
         </Link>
       </GlassCard>
 
@@ -183,7 +183,7 @@ export default function AccountSettings() {
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Appearance</span>
         </div>
         <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-          Choose how the Helm cockpit looks. Light mode is the default for reading dense data.
+          Choose how the Trenston cockpit looks. Light mode is the default for reading dense data.
           Your choice is saved to your account and follows you across devices.
         </p>
         <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Color theme">

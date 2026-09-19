@@ -1,7 +1,7 @@
-"""Per-workspace data template for Helm — Northwind Robotics sample + empty scaffold.
+"""Per-workspace data template for Trenston — Northwind Robotics sample + empty scaffold.
 
 Financials are NOT stored here — they are computed from the `financial_entries`
-collection so the finance team can log data straight into Helm.
+collection so the finance team can log data straight into Trenston.
 """
 import uuid
 import secrets

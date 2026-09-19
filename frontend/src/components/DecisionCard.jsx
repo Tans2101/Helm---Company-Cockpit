@@ -61,7 +61,7 @@ export default function DecisionCard({
             <span className={cn("text-[10px] font-mono uppercase tracking-wider rounded px-1.5 py-0.5 border", statusStyle[d.status])}>{d.status}</span>
             {isAi && (
               <span className="text-[10px] font-mono uppercase tracking-wider text-helm-status-warning/90 border border-helm-status-warning/35 rounded px-1.5 py-0.5">
-                From Helm
+                From Trenston
               </span>
             )}
             <span className="text-[10px] font-mono text-helm-muted">Impact: {d.impact} · Due {d.due}</span>
@@ -90,7 +90,7 @@ export default function DecisionCard({
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Sparkles className={cn("w-3.5 h-3.5", isAi ? "text-helm-status-warning" : "text-helm-gold")} />
                 <span className={cn("text-[11px] font-mono uppercase tracking-wider", isAi ? "text-helm-status-warning" : "text-helm-gold")}>
-                  {isAi ? "Helm recommendation" : "Recommendation"}
+                  {isAi ? "Trenston recommendation" : "Recommendation"}
                 </span>
                 <ConfidenceBadge
                   confidence={d.confidence}

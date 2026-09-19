@@ -1,7 +1,7 @@
 /**
- * @author: @dorianbaffier / Helm
+ * @author: @dorianbaffier / Trenston
  * @description: Switch Button — light/dark toggle visuals (KokonutUI, restyled)
- * Driven by Helm ThemeContext — not next-themes.
+ * Driven by Trenston ThemeContext — not next-themes.
  * @website: https://kokonutui.com
  */
 
@@ -9,7 +9,7 @@ import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Visual light↔dark switch. Parent owns theme state via Helm `useTheme()`.
+ * Visual light↔dark switch. Parent owns theme state via Trenston `useTheme()`.
  * When `mode` is "system", the icon reflects `resolvedMode` but clicking
  * sets an explicit light/dark (caller decides).
  */

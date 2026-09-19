@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import HelmMark from "@/components/HelmMark";
+import TrenstonMark from "@/components/HelmMark";
 
 export default function Refunds() {
   return (
@@ -7,7 +7,7 @@ export default function Refunds() {
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-16 md:py-24">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-helm-slate hover:text-helm-cream transition-colors mb-10">
           <HelmMark size={24} className="rounded" />
-          Back to Helm
+          Back to Trenston
         </Link>
 
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-helm-gold mb-4">Legal</p>
@@ -18,19 +18,19 @@ export default function Refunds() {
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Who this covers</h2>
             <p>
-              This policy applies to paid Helm subscriptions sold by{" "}
-              <span className="text-helm-cream">Helm Control</span> (operated by{" "}
+              This policy applies to paid Trenston subscriptions sold by{" "}
+              <span className="text-helm-cream">Trenston</span> (operated by{" "}
               <span className="text-helm-cream">Tansher Dhawan, CEO &amp; Founder</span>) through{" "}
               <span className="text-helm-cream">Paddle</span> (merchant of record).
               Contact:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>.
+              <a href="mailto:contact@trenston.com" className="text-helm-gold hover:underline">contact@trenston.com</a>.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Plans &amp; pricing</h2>
             <p>
-              Helm offers tiered plans (including a free tier and paid plans). Features, member limits, and prices for
+              Trenston offers tiered plans (including a free tier and paid plans). Features, member limits, and prices for
               your selected plan are shown on the{" "}
               <Link to="/app/billing" className="text-helm-gold hover:underline">Billing</Link> page and marketing pricing.
               We may update plan pricing or inclusions with notice; changes apply to future billing periods.
@@ -51,9 +51,9 @@ export default function Refunds() {
             <p className="text-helm-fg">
               <span className="text-helm-cream font-medium">Once a payment is processed, it is non-refundable.</span>{" "}
               This includes the first charge after a trial and any subsequent renewal charges. Please use the free trial
-              to evaluate Helm before your card is charged. If you believe a charge was made in error (for example a
+              to evaluate Trenston before your card is charged. If you believe a charge was made in error (for example a
               duplicate transaction), contact us at{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
+              <a href="mailto:contact@trenston.com" className="text-helm-gold hover:underline">contact@trenston.com</a>
               {" "}and we will work with Paddle to investigate.
             </p>
           </section>
@@ -73,7 +73,7 @@ export default function Refunds() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Payment processor</h2>
             <p>
               All payments are handled by Paddle as merchant of record. Invoices, taxes, payment methods, and customer
-              billing records are managed through Paddle. Helm does not store full card numbers.
+              billing records are managed through Paddle. Trenston does not store full card numbers.
             </p>
           </section>
 
@@ -102,14 +102,14 @@ export default function Refunds() {
             <h2 className="text-lg text-helm-cream font-normal tracking-tight mb-2">Contact</h2>
             <p>
               Billing questions:{" "}
-              <a href="mailto:contact@helmcontrol.online" className="text-helm-gold hover:underline">contact@helmcontrol.online</a>
-              {" "}· Helm Control.
+              <a href="mailto:contact@trenston.com" className="text-helm-gold hover:underline">contact@trenston.com</a>
+              {" "}· Trenston.
             </p>
           </section>
         </div>
 
         <p className="mt-12 text-xs text-helm-slate border-t border-helm-cream/5 pt-6">
-          This policy will be reviewed by legal counsel as Helm grows; contact us with questions.
+          This policy will be reviewed by legal counsel as Trenston grows; contact us with questions.
         </p>
       </div>
     </div>

@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { CATEGORY } from "@/lib/marketingCopy";
-import helmMark from "@/assets/helm-mark.svg";
-import helmMarkNavy from "@/assets/helm-mark-navy.svg";
+import trenstonMark from "@/assets/trenston-mark.svg";
+import trenstonMarkNavy from "@/assets/trenston-mark-navy.svg";
 
-/** Clickable Helm mark — always routes to the marketing home page. */
+/** Clickable Trenston mark — always routes to the marketing home page. */
 export default function MarketingLogo({ size = "md", showTagline = false, className = "", dark = false }) {
   const box = size === "sm" ? "w-7 h-7" : "w-9 h-9";
   const name = size === "sm" ? "text-sm" : "text-base";
@@ -15,7 +15,7 @@ export default function MarketingLogo({ size = "md", showTagline = false, classN
       data-testid="helm-logo-home"
     >
       <img
-        src={dark ? helmMarkNavy : helmMark}
+        src={dark ? trenstonMarkNavy : trenstonMark}
         alt=""
         width={size === "sm" ? 28 : 36}
         height={size === "sm" ? 28 : 36}
@@ -23,7 +23,7 @@ export default function MarketingLogo({ size = "md", showTagline = false, classN
         draggable={false}
       />
       <div>
-        <p className={`font-semibold tracking-tight leading-none ${name} ${dark ? "text-helm-cream" : "text-helm-navy"}`}>Helm</p>
+        <p className={`font-semibold tracking-tight leading-none ${name} ${dark ? "text-helm-cream" : "text-helm-navy"}`}>Trenston</p>
         {showTagline && (
           <p className={`text-[10px] font-mono uppercase tracking-[0.2em] mt-1 ${dark ? "text-helm-slate" : "text-helm-slate"}`}>{CATEGORY}</p>
         )}

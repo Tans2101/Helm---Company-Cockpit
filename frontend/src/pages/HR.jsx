@@ -752,7 +752,7 @@ export default function HR() {
                   <SectionLabel>Employee</SectionLabel>
                   <p className="text-helm-fg text-sm mt-1">{selectedEmp.name}</p>
                   <p className="text-xs text-helm-muted mt-1">
-                    Employment record only. Helm never stores medical data, government IDs, compensation, or protected characteristics.
+                    Employment record only. Trenston never stores medical data, government IDs, compensation, or protected characteristics.
                   </p>
                 </div>
                 <button type="button" onClick={() => setSelectedEmpId(null)} className="text-helm-muted hover:text-helm-fg">
@@ -825,7 +825,7 @@ export default function HR() {
                 myLinkedEmployees.length
                   ? "Submit a leave request. Approved dates appear on the Calendar."
                   : isLead
-                    ? "Link an employee to a Helm user (or create records via onboarding) before requesting leave."
+                    ? "Link an employee to a Trenston user (or create records via onboarding) before requesting leave."
                     : "Ask an HR lead to link your account to an employee record, then you can request leave."
               }
               action={myLinkedEmployees.length ? (

@@ -1,4 +1,4 @@
-"""Shared helpers for Helm backend integration tests."""
+"""Shared helpers for Trenston backend integration tests."""
 import os
 
 import pymongo

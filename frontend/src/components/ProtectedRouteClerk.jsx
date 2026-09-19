@@ -9,7 +9,7 @@ import ClerkLoadError from "@/components/ClerkLoadError";
 import { useClerkReady } from "@/hooks/useClerkReady";
 import { clerkSessionComplete, CLERK_AUTH_OPTS } from "@/lib/clerkSession";
 
-/** Protected routes when Clerk is enabled — wait for Clerk→Helm session exchange. */
+/** Protected routes when Clerk is enabled — wait for Clerk→Trenston session exchange. */
 export default function ProtectedRouteClerk() {
   const { user, sessionError, clearSessionError } = useAuth();
   const {

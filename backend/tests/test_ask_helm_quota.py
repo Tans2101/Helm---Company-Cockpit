@@ -1,4 +1,4 @@
-"""Ask Helm billing-period quota (separate from AI extracts)."""
+"""Ask Trenston billing-period quota (separate from AI extracts)."""
 from __future__ import annotations
 
 import asyncio
@@ -72,7 +72,7 @@ async def test_acquire_lifetime_extract_slot_respects_limit():
 
 @pytest.mark.asyncio
 async def test_concurrent_extract_slots_only_one_succeeds_at_boundary():
-    """Two acquires with one slot left: only one wins (mirrors Ask Helm)."""
+    """Two acquires with one slot left: only one wins (mirrors Ask Trenston)."""
     state = {"count": 1}
     limit = 2
 
@@ -151,7 +151,7 @@ async def test_get_period_ask_count_defaults_zero():
 
 @pytest.mark.asyncio
 async def test_ask_and_extract_use_distinct_actions():
-    """Extract and Ask Helm must not share the same usage counter row."""
+    """Extract and Ask Trenston must not share the same usage counter row."""
     calls = []
 
     async def _find_one(filt, *a, **k):

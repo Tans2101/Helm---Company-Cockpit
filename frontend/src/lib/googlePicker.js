@@ -1,4 +1,4 @@
-/** Google Drive Picker — uses a short-lived token from the Helm API. */
+/** Google Drive Picker — uses a short-lived token from the Trenston API. */
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {

@@ -4,7 +4,7 @@
 Run from backend/ (or with PYTHONPATH=backend) after INTEGRATION_ENCRYPTION_KEY is set:
 
   cd backend
-  INTEGRATION_ENCRYPTION_KEY=... MONGO_URL=... DB_NAME=helm \\
+  INTEGRATION_ENCRYPTION_KEY=... MONGO_URL=... DB_NAME=trenston \\
     python scripts/migrate_encrypt_integration_tokens.py
 
 Safe to re-run: already-sealed blobs are skipped. Does not revoke or reconnect

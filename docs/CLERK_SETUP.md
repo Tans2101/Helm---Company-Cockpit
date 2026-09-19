@@ -1,8 +1,8 @@
-# Clerk — step-by-step for Helm sign-in
+# Clerk — step-by-step for Trenston sign-in
 
 Clerk handles **Google sign-in and sessions** so you don’t need Emergent or hand-rolled Google OAuth for login.
 
-Helm still uses **MongoDB Atlas** for all company data. Clerk only replaces the **login door**.
+Trenston still uses **MongoDB Atlas** for all company data. Clerk only replaces the **login door**.
 
 ---
 
@@ -10,7 +10,7 @@ Helm still uses **MongoDB Atlas** for all company data. Clerk only replaces the 
 
 1. Go to **https://clerk.com** and sign up / log in
 2. **Create application**
-3. Name: **Helm**
+3. Name: **Trenston**
 4. When asked how users sign in, enable **Google** (and Email if you want)
 5. Finish setup — you land in the Clerk Dashboard
 
@@ -52,13 +52,13 @@ Add to Render:
 1. **Configure** → **SSO connections** → **Google**
 2. Enable **Google** for sign-up and sign-in
 3. Toggle **Use custom credentials** (required for **production** / `pk_live_` instances)
-4. Copy the **Authorized redirect URI** shown in Clerk (for `clerk.helmcontrol.online` it is exactly):
+4. Copy the **Authorized redirect URI** shown in Clerk (for `clerk.trenston.com` it is exactly):
    ```text
-   https://clerk.helmcontrol.online/v1/oauth_callback
+   https://clerk.trenston.com/v1/oauth_callback
    ```
 5. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → **APIs & Services** → **Credentials** → your **OAuth 2.0 Client ID**:
-   - **Authorized redirect URIs** → paste the URI from step 4 (must match **exactly** — no trailing slash, no `www`, not `accounts.helmcontrol.online`)
-   - **Authorized JavaScript origins** → add `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`
+   - **Authorized redirect URIs** → paste the URI from step 4 (must match **exactly** — no trailing slash, no `www`, not `accounts.trenston.com`)
+   - **Authorized JavaScript origins** → add `https://trenston.com`, `https://www.trenston.com`, `https://clerk.trenston.com`
 6. Paste the Google **Client ID** and **Client Secret** back into Clerk → Google → Save
 
 Development (`pk_test_`) can use Clerk’s shared Google credentials. Production (`pk_live_`) **cannot** — you must use your own Google Cloud OAuth client.
@@ -84,7 +84,7 @@ CLERK_SECRET_KEY=sk_test_...
 CLERK_JWKS_URL=https://....clerk.accounts.dev/.well-known/jwks.json
 ```
 
-When Clerk is set, Helm **automatically uses Clerk** instead of `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for login.
+When Clerk is set, Trenston **automatically uses Clerk** instead of `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for login.
 
 ### Vercel (frontend)
 
@@ -108,12 +108,12 @@ Redeploy **both** after adding env vars.
 
 ---
 
-## How it works in Helm
+## How it works in Trenston
 
 1. User signs in with **Clerk** (frontend)
 2. Frontend sends Clerk session JWT to `POST /api/auth/clerk`
 3. Backend verifies JWT, upserts user by **`clerk_id`** + email in Mongo
-4. Backend sets Helm’s **httpOnly session cookie** (same as before)
+4. Backend sets Trenston’s **httpOnly session cookie** (same as before)
 5. All workspaces, billing, AI, etc. work unchanged
 
 ---
@@ -122,7 +122,7 @@ Redeploy **both** after adding env vars.
 
 Clerk Google = **login only**.
 
-Helm’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail) stored on the workspace. You can set that up later in Google Cloud Console — it does not replace Clerk.
+Trenston’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail) stored on the workspace. You can set that up later in Google Cloud Console — it does not replace Clerk.
 
 ---
 
@@ -131,9 +131,9 @@ Helm’s **Integrations** page uses a **different** Google OAuth (Calendar/Gmail
 | Problem | Fix |
 |--------|-----|
 | Blank login / Clerk error | Check `REACT_APP_CLERK_PUBLISHABLE_KEY` on Vercel; redeploy |
-| 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render || **"Could not connect your account" after Google sign-in** | Google OAuth only needs the publishable key. Connecting your Helm account needs the matching **`sk_live_`** on Render from the **same** Clerk instance as `pk_live_` on Vercel (`clerk.helmcontrol.online`). In Clerk Dashboard → API keys, copy Secret key → Render `CLERK_SECRET_KEY`, redeploy Render. Check `/api/auth/config` → `clerk_secret_mode_match: true`, `clerk_api_ok: true`. |
-| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Add `https://clerk.helmcontrol.online/v1/oauth_callback` to Google Cloud Console → Credentials → Authorized redirect URIs. Verify: `GET /api/setup/google-oauth` → `"ok": true`. |
+| 401 on `/api/auth/clerk` | Check `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` on Render || **"Could not connect your account" after Google sign-in** | Google OAuth only needs the publishable key. Connecting your Trenston account needs the matching **`sk_live_`** on Render from the **same** Clerk instance as `pk_live_` on Vercel (`clerk.trenston.com`). In Clerk Dashboard → API keys, copy Secret key → Render `CLERK_SECRET_KEY`, redeploy Render. Check `/api/auth/config` → `clerk_secret_mode_match: true`, `clerk_api_ok: true`. |
+| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Add `https://clerk.trenston.com/v1/oauth_callback` to Google Cloud Console → Credentials → Authorized redirect URIs. Verify: `GET /api/setup/google-oauth` → `"ok": true`. |
 
-| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Clerk sends users to Google with `https://clerk.helmcontrol.online/v1/oauth_callback`. Add that **exact** URI under **Authorized redirect URIs** in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) for the OAuth client ID configured in Clerk → SSO → Google. Also add JS origins: `https://helmcontrol.online`, `https://www.helmcontrol.online`, `https://clerk.helmcontrol.online`. Wait 1–5 min after saving. Verify: `GET https://helm-company-cockpit.onrender.com/api/setup/google-oauth` → `"ok": true`. |
-| Password too long / strict (e.g. 15+ characters) | **Not set by Helm.** In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **User & authentication** → **Email** → **Password** → lower **Minimum password length** (default is often 8). Or sign in with **Google** to skip password entirely. |
+| **Google sign-in: `redirect_uri_mismatch` (Error 400)** | Clerk sends users to Google with `https://clerk.trenston.com/v1/oauth_callback`. Add that **exact** URI under **Authorized redirect URIs** in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) for the OAuth client ID configured in Clerk → SSO → Google. Also add JS origins: `https://trenston.com`, `https://www.trenston.com`, `https://clerk.trenston.com`. Wait 1–5 min after saving. Verify: `GET https://helm-company-cockpit.onrender.com/api/setup/google-oauth` → `"ok": true`. |
+| Password too long / strict (e.g. 15+ characters) | **Not set by Trenston.** In [Clerk Dashboard](https://dashboard.clerk.com) → **Configure** → **User & authentication** → **Email** → **Password** → lower **Minimum password length** (default is often 8). Or sign in with **Google** to skip password entirely. |
 | New account every login | Atlas `MONGO_URL` wrong or DB not persistent — see `docs/ATLAS_SETUP.md` |

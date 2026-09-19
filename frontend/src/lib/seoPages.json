@@ -1,78 +1,78 @@
 {
-  "origin": "https://www.helmcontrol.online",
-  "ogImage": "https://www.helmcontrol.online/og-share.png",
+  "origin": "https://www.trenston.com",
+  "ogImage": "https://www.trenston.com/og-share.png",
   "pages": {
     "/": {
-      "title": "Helm — Run the business. Don't chase it.",
-      "description": "Helm — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people.",
-      "ogTitle": "Helm — Run the business. Don't chase it.",
-      "ogDescription": "Helm — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people."
+      "title": "Trenston — Run the business. Don't chase it.",
+      "description": "Trenston — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people.",
+      "ogTitle": "Trenston — Run the business. Don't chase it.",
+      "ogDescription": "Trenston — Run the business. Don't chase it. Built for CEOs running companies of up to 50 people."
     },
     "/about": {
-      "title": "About Helm — CEO Operating System",
-      "description": "Why Helm exists: money, decisions, people, and department work in one cockpit for CEOs running companies of up to 50 people.",
-      "ogTitle": "About Helm",
-      "ogDescription": "Helm pulls financials, decisions, and day-to-day work into one place so CEOs see what needs them — not another dashboard to chase."
+      "title": "About Trenston — CEO Operating System",
+      "description": "Why Trenston exists: money, decisions, people, and department work in one cockpit for CEOs running companies of up to 50 people.",
+      "ogTitle": "About Trenston",
+      "ogDescription": "Trenston pulls financials, decisions, and day-to-day work into one place so CEOs see what needs them — not another dashboard to chase."
     },
     "/features": {
-      "title": "Features · Helm",
-      "description": "Briefing, Decision Center, Financials, Ask Helm, and department lanes — the full Helm cockpit for operators.",
-      "ogTitle": "Helm Features",
-      "ogDescription": "See what Helm includes: briefing, decisions, runway, Ask Helm, and department workflows in one CEO operating system."
+      "title": "Features · Trenston",
+      "description": "Briefing, Decision Center, Financials, Ask Trenston, and department lanes — the full Trenston cockpit for operators.",
+      "ogTitle": "Trenston Features",
+      "ogDescription": "See what Trenston includes: briefing, decisions, runway, Ask Trenston, and department workflows in one CEO operating system."
     },
     "/pricing": {
-      "title": "Pricing · Helm",
-      "description": "Helm plans: Free $0 (3 seats), Starter $15/mo (10 seats), Growth $39/mo (25 seats), Business $99/mo (50 seats). 7-day trials on paid plans.",
-      "ogTitle": "Helm Pricing",
+      "title": "Pricing · Trenston",
+      "description": "Trenston plans: Free $0 (3 seats), Starter $15/mo (10 seats), Growth $39/mo (25 seats), Business $99/mo (50 seats). 7-day trials on paid plans.",
+      "ogTitle": "Trenston Pricing",
       "ogDescription": "Free, Starter ($15/mo), Growth ($39/mo), and Business ($99/mo) — seats and AI quotas that scale with your company."
     },
     "/integrations": {
-      "title": "Integrations · Helm",
-      "description": "Connect Google, QuickBooks, Xero, SAP Business One, HubSpot, and Slack webhook alerts to Helm — no migration required.",
-      "ogTitle": "Helm Integrations",
-      "ogDescription": "What each Helm integration actually does: Calendar & Gmail, accounting, CRM, and Slack alerts — grounded in shipped product."
+      "title": "Integrations · Trenston",
+      "description": "Connect Google, QuickBooks, Xero, SAP Business One, HubSpot, and Slack webhook alerts to Trenston — no migration required.",
+      "ogTitle": "Trenston Integrations",
+      "ogDescription": "What each Trenston integration actually does: Calendar & Gmail, accounting, CRM, and Slack alerts — grounded in shipped product."
     },
     "/help": {
-      "title": "Help · Helm",
-      "description": "How to get started with Helm and where to find support.",
-      "ogTitle": "Helm Help",
-      "ogDescription": "Guides and answers for using Helm, the CEO operating system."
+      "title": "Help · Trenston",
+      "description": "How to get started with Trenston and where to find support.",
+      "ogTitle": "Trenston Help",
+      "ogDescription": "Guides and answers for using Trenston, the CEO operating system."
     },
     "/security": {
-      "title": "Security at Helm",
-      "description": "Where Helm hosts data (Vercel, Render, MongoDB Atlas, R2), what is encrypted, which third parties receive data, retention, and staff access — without unearned certifications.",
-      "ogTitle": "Security at Helm",
+      "title": "Security at Trenston",
+      "description": "Where Trenston hosts data (Vercel, Render, MongoDB Atlas, R2), what is encrypted, which third parties receive data, retention, and staff access — without unearned certifications.",
+      "ogTitle": "Security at Trenston",
       "ogDescription": "Hosting, encryption, integrations, retention, and access — the controls that are actually in the product today."
     },
     "/changelog": {
-      "title": "Changelog · Helm",
-      "description": "What actually shipped in Helm — integrations, performance, security, and cockpit improvements in plain language.",
-      "ogTitle": "Helm Changelog",
+      "title": "Changelog · Trenston",
+      "description": "What actually shipped in Trenston — integrations, performance, security, and cockpit improvements in plain language.",
+      "ogTitle": "Trenston Changelog",
       "ogDescription": "Real shipped changes only — not a roadmap."
     },
     "/status": {
-      "title": "Status · Helm",
-      "description": "Live health of Helm’s web app, API, and database. Public status tracking started September 19, 2026 — no fabricated historical uptime.",
-      "ogTitle": "Helm Status",
+      "title": "Status · Trenston",
+      "description": "Live health of Trenston’s web app, API, and database. Public status tracking started September 19, 2026 — no fabricated historical uptime.",
+      "ogTitle": "Trenston Status",
       "ogDescription": "Operational checks for Vercel, Render API, and MongoDB Atlas — honest about what we measure."
     },
     "/privacy": {
-      "title": "Privacy Policy · Helm",
-      "description": "How Helm collects, uses, and protects personal and company data.",
-      "ogTitle": "Privacy Policy · Helm",
-      "ogDescription": "Helm privacy policy — what we collect and how we use it."
+      "title": "Privacy Policy · Trenston",
+      "description": "How Trenston collects, uses, and protects personal and company data.",
+      "ogTitle": "Privacy Policy · Trenston",
+      "ogDescription": "Trenston privacy policy — what we collect and how we use it."
     },
     "/terms": {
-      "title": "Terms of Service · Helm",
-      "description": "Terms governing use of the Helm CEO operating system.",
-      "ogTitle": "Terms of Service · Helm",
-      "ogDescription": "Helm terms of service."
+      "title": "Terms of Service · Trenston",
+      "description": "Terms governing use of the Trenston CEO operating system.",
+      "ogTitle": "Terms of Service · Trenston",
+      "ogDescription": "Trenston terms of service."
     },
     "/refunds": {
-      "title": "Refunds · Helm",
-      "description": "Helm billing, trials, and refund policy.",
-      "ogTitle": "Refunds · Helm",
-      "ogDescription": "How trials, cancellations, and refunds work on Helm."
+      "title": "Refunds · Trenston",
+      "description": "Trenston billing, trials, and refund policy.",
+      "ogTitle": "Refunds · Trenston",
+      "ogDescription": "How trials, cancellations, and refunds work on Trenston."
     }
   }
 }

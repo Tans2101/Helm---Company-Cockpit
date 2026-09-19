@@ -36,7 +36,7 @@ Rules:
 """
 
 # Workspace missing-vs-zero does not apply to extract_with_claude: the model reads
-# document bytes, not Helm fields. Unreadable amounts already fail closed
+# document bytes, not Trenston fields. Unreadable amounts already fail closed
 # (do-not-guess + unparseable_amount).
 
 _client: Optional[AsyncAnthropic] = None
@@ -257,7 +257,7 @@ async def extract_financial_document(
     raise RuntimeError("No extraction engine configured")
 
 
-_DECISION_DRAFT_SYSTEM = """You are Helm, drafting a decision card for a CEO based on a real signal detected in their business data.
+_DECISION_DRAFT_SYSTEM = """You are Trenston, drafting a decision card for a CEO based on a real signal detected in their business data.
 Return ONLY strict JSON with no markdown and no prose:
 {"title": string, "description": string, "recommendation": string, "confidence": number, "category": string, "impact": "High"|"Medium"|"Low"}
 
@@ -270,7 +270,7 @@ Rules:
 - Company context may include unknown_fields and instructions_for_missing_data. Follow those instructions. Null financials are not zero. Do not claim $0 cash, 0 MRR, or that they are out of runway when those fields are unknown.
 """
 
-_DELEGATE_DRAFT_SYSTEM = """You are Helm, drafting a delegation card for a CEO based on a real operational signal.
+_DELEGATE_DRAFT_SYSTEM = """You are Trenston, drafting a delegation card for a CEO based on a real operational signal.
 Return ONLY strict JSON with no markdown and no prose:
 {"title": string, "detail": string, "suggested_owner_user_id": string, "suggested_owner_name": string}
 
@@ -369,7 +369,7 @@ async def draft_delegate(signal: dict, company_context: dict) -> dict:
     return _validate_delegate_draft(_parse_extract_json(raw), signal)
 
 
-_REPORT_SUMMARY_SYSTEM = """You are Helm, reading one business report on behalf of a CEO who receives many of these and cannot read each one in full.
+_REPORT_SUMMARY_SYSTEM = """You are Trenston, reading one business report on behalf of a CEO who receives many of these and cannot read each one in full.
 Return ONLY strict JSON with no markdown and no prose:
 {"summary": string, "key_figures": [{"label": string, "value": string}], "unclear": boolean}
 
@@ -381,7 +381,7 @@ Rules:
 - Write plainly. Avoid em dashes; use periods, commas, or plain connecting words instead, unless a sentence genuinely cannot be split any other way.
 """
 
-_REPORTS_DIGEST_SYSTEM = """You are Helm, combining several already-summarized business reports from the same day into one short briefing for a CEO.
+_REPORTS_DIGEST_SYSTEM = """You are Trenston, combining several already-summarized business reports from the same day into one short briefing for a CEO.
 Write 1-3 short paragraphs. Group related reports together where it makes sense (e.g. multiple reports about the same commodity or topic) rather than listing them one by one.
 Only state a number, date, or figure that appears literally in the input summaries or key_figures. Never invent, average, or estimate a number that is not present. If two reports appear to conflict, say so rather than picking one silently. Write plainly; avoid em dashes unless a sentence genuinely cannot be split any other way.
 Return plain prose only — no JSON, no markdown headings, no bullet lists.
@@ -521,9 +521,9 @@ async def combine_daily_report_digest(items: list[dict]) -> str:
     return _strip_markdown_fences(text or "").strip()
 
 
-GMAIL_DRAFT_DISCLAIMER = "(Drafted in Helm. Edit this in Gmail before you send.)"
+GMAIL_DRAFT_DISCLAIMER = "(Drafted in Trenston. Edit this in Gmail before you send.)"
 
-_GMAIL_REPLY_SYSTEM = """You draft short professional email replies for a CEO using Helm.
+_GMAIL_REPLY_SYSTEM = """You draft short professional email replies for a CEO using Trenston.
 Return ONLY the email body as plain text — no subject line, no markdown fences, no preamble.
 
 Rules:
@@ -558,7 +558,7 @@ def _strip_markdown_fences(text: str) -> str:
 
 
 async def draft_gmail_reply(*, subject: str = "", to_email: str = "", snippet: str = "") -> str:
-    """AI-written Gmail reply body with Helm disclaimer. Falls back on any AI failure."""
+    """AI-written Gmail reply body with Trenston disclaimer. Falls back on any AI failure."""
     subject = (subject or "").strip()[:200]
     to_email = (to_email or "").strip()[:200]
     snippet = (snippet or "").strip()[:500]

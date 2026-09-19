@@ -66,7 +66,7 @@ MANAGEABLE_SECTIONS: list[dict[str, str]] = [
         "id": "calendar",
         "label": "Calendar",
         "perm": "calendar:write",
-        "description": "Add, edit, and delete shared Helm calendar events.",
+        "description": "Add, edit, and delete shared Trenston calendar events.",
     },
 ]
 
