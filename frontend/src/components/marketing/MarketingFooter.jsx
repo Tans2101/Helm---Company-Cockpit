@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Instagram } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
 import {
   CATEGORY,
@@ -47,9 +48,11 @@ export default function MarketingFooter() {
               href={PUBLIC_INSTAGRAM_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-helm-slate hover:text-helm-cream transition-colors"
+              aria-label={`Instagram ${PUBLIC_INSTAGRAM_HANDLE}`}
+              title={`Instagram ${PUBLIC_INSTAGRAM_HANDLE}`}
+              className="mt-1 inline-flex w-fit text-helm-slate hover:text-helm-cream transition-colors"
             >
-              Instagram {PUBLIC_INSTAGRAM_HANDLE}
+              <Instagram className="h-4 w-4" aria-hidden />
             </a>
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-helm-slate" aria-label="Footer">
