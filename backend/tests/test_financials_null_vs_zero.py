@@ -97,6 +97,20 @@ def test_empty_workspace_finance_displays_are_add_data():
     assert server.format_burn_display(fin) == "Add data"
 
 
+def test_briefing_missing_metrics_link_to_add_data():
+    fin = _run_compute([], {})
+    metrics = {m["label"]: m for m in server._briefing_finance_metrics(fin)}
+    assert metrics["MRR"]["missing"] is True
+    assert metrics["MRR"]["href"] == "/app/financials#log-mrr"
+    assert metrics["Burn"]["href"] == "/app/financials#log-entry"
+    assert metrics["Runway"]["href"] == "/app/financials#cash"
+
+    with_cash = _run_compute([], {"cash": 10000, "currency": "usd"})
+    runway = next(m for m in server._briefing_finance_metrics(with_cash) if m["label"] == "Runway")
+    assert runway["missing"] is True
+    assert runway["href"] == "/app/financials#log-entry"
+
+
 def test_report_money_card_uses_add_data_not_dash():
     fin = {
         "mrr": "—",

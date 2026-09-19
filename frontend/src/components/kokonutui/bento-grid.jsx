@@ -6,6 +6,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Delta } from "@/components/kit";
 import { cn } from "@/lib/utils";
 
@@ -92,8 +93,10 @@ function gridClass(total) {
 
 /**
  * Helm briefing metrics bento — driven entirely by `metrics` from the briefing API.
+ * Missing metrics with `href` are clickable and navigate to where data can be added.
  */
 export default function BentoGrid({ metrics = [], className }) {
+  const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const list = Array.isArray(metrics) ? metrics : [];
   if (list.length === 0) return null;
@@ -111,40 +114,62 @@ export default function BentoGrid({ metrics = [], className }) {
         },
       }}
     >
-      {list.map((m, i) => (
-        <motion.div
-          key={m.label || i}
-          data-testid={`briefing-metric-${i}`}
-          className={cn(
-            "rounded-xl border border-helm-line bg-helm-card p-4",
-            cellClass(i, list.length),
-            i === 0 && list.length >= 3 && "md:p-5",
-          )}
-          variants={{
-            hidden: { opacity: 0, y: reduceMotion ? 0 : 12 },
-            visible: {
-              opacity: 1,
-              y: 0,
-              transition: { duration: reduceMotion ? 0 : 0.4, ease: [0.16, 1, 0.3, 1] },
-            },
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-helm-muted font-mono">{m.label}</span>
-            <span className={cn("w-1.5 h-1.5 rounded-full", toneDot[m.tone] || toneDot.neutral)} />
-          </div>
-          <div className={cn("mt-3 flex items-end justify-between gap-2", i === 0 && list.length >= 3 && "mt-4")}>
-            <AnimatedMetricValue
-              value={m.value}
-              missing={m.missing}
-              className={cn(
-                i === 0 && list.length >= 3 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl",
-              )}
-            />
-            <Delta value={m.delta} tone={m.tone} />
-          </div>
-        </motion.div>
-      ))}
+      {list.map((m, i) => {
+        const clickable = Boolean(m.href && m.missing);
+        const surfaceClass = cn(
+          "rounded-xl border border-helm-line bg-helm-card p-4 text-left w-full h-full",
+          i === 0 && list.length >= 3 && "md:p-5",
+          clickable && "cursor-pointer transition-colors hover:border-helm-gold/40 hover:bg-helm-fg/[0.02] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-helm-gold",
+        );
+        const body = (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-wider text-helm-muted font-mono">{m.label}</span>
+              <span className={cn("w-1.5 h-1.5 rounded-full", toneDot[m.tone] || toneDot.neutral)} />
+            </div>
+            <div className={cn("mt-3 flex items-end justify-between gap-2", i === 0 && list.length >= 3 && "mt-4")}>
+              <AnimatedMetricValue
+                value={m.value}
+                missing={m.missing}
+                className={cn(
+                  i === 0 && list.length >= 3 ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl",
+                  clickable && "underline decoration-helm-muted/40 underline-offset-4",
+                )}
+              />
+              <Delta value={m.delta} tone={m.tone} />
+            </div>
+          </>
+        );
+
+        return (
+          <motion.div
+            key={m.label || i}
+            data-testid={`briefing-metric-${i}`}
+            className={cellClass(i, list.length)}
+            variants={{
+              hidden: { opacity: 0, y: reduceMotion ? 0 : 12 },
+              visible: {
+                opacity: 1,
+                y: 0,
+                transition: { duration: reduceMotion ? 0 : 0.4, ease: [0.16, 1, 0.3, 1] },
+              },
+            }}
+          >
+            {clickable ? (
+              <button
+                type="button"
+                className={surfaceClass}
+                onClick={() => navigate(m.href)}
+                aria-label={`Add ${m.label} data`}
+              >
+                {body}
+              </button>
+            ) : (
+              <div className={surfaceClass}>{body}</div>
+            )}
+          </motion.div>
+        );
+      })}
     </motion.div>
   );
 }

@@ -3228,6 +3228,53 @@ def _schedule_insights_refresh(workspace_id: str) -> None:
         logger.debug("no running loop — skip background insights for %s", workspace_id)
 
 
+def _briefing_finance_metrics(fin: dict) -> list[dict]:
+    """Briefing KPI cards; missing values include hrefs to add the underlying data."""
+    mrr_known = bool(fin.get("mrr_known"))
+    burn_known = bool(fin.get("burn_known"))
+    runway_ready = fin.get("runway_months") is not None or bool(fin.get("runway_no_burn"))
+    return [
+        {
+            "label": "MRR",
+            "value": format_mrr_display(fin),
+            "delta": fin["mrr_delta"] if mrr_known else 0,
+            "tone": "positive" if mrr_known else "neutral",
+            "missing": not mrr_known,
+            "state": fin.get("mrr_state") or _figure_state(mrr_known, fin.get("mrr_value")),
+            "href": None if mrr_known else "/app/financials#log-mrr",
+        },
+        {
+            "label": "Runway",
+            "value": format_runway_display(fin),
+            "delta": 0,
+            "tone": "positive" if fin.get("runway_no_burn") else "neutral",
+            "missing": not runway_ready,
+            "state": fin.get("runway_state") or _runway_state(
+                runway_months=fin.get("runway_months"),
+                runway_no_burn=bool(fin.get("runway_no_burn")),
+            ),
+            "href": (
+                None
+                if runway_ready
+                else (
+                    "/app/financials#cash"
+                    if not fin.get("cash_entered")
+                    else "/app/financials#log-entry"
+                )
+            ),
+        },
+        {
+            "label": "Burn",
+            "value": format_burn_display(fin),
+            "delta": 0,
+            "tone": fin["burn_tone"] if burn_known else "neutral",
+            "missing": not burn_known,
+            "state": fin.get("burn_state") or _figure_state(burn_known, fin.get("burn_value")),
+            "href": None if burn_known else "/app/financials#log-entry",
+        },
+    ]
+
+
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
@@ -3250,35 +3297,7 @@ async def briefing(principal=Depends(get_principal)):
     metrics = []
     if has_fin_access:
         fin = await compute_financials(c["workspace_id"])
-        metrics = [
-            {
-                "label": "MRR",
-                "value": format_mrr_display(fin),
-                "delta": fin["mrr_delta"] if fin.get("mrr_known") else 0,
-                "tone": "positive" if fin.get("mrr_known") else "neutral",
-                "missing": not fin.get("mrr_known"),
-                "state": fin.get("mrr_state") or _figure_state(fin.get("mrr_known"), fin.get("mrr_value")),
-            },
-            {
-                "label": "Runway",
-                "value": format_runway_display(fin),
-                "delta": 0,
-                "tone": "positive" if fin.get("runway_no_burn") else "neutral",
-                "missing": fin["runway_months"] is None and not fin.get("runway_no_burn"),
-                "state": fin.get("runway_state") or _runway_state(
-                    runway_months=fin.get("runway_months"),
-                    runway_no_burn=bool(fin.get("runway_no_burn")),
-                ),
-            },
-            {
-                "label": "Burn",
-                "value": format_burn_display(fin),
-                "delta": 0,
-                "tone": fin["burn_tone"] if fin.get("burn_known") else "neutral",
-                "missing": not fin.get("burn_known"),
-                "state": fin.get("burn_state") or _figure_state(fin.get("burn_known"), fin.get("burn_value")),
-            },
-        ]
+        metrics = _briefing_finance_metrics(fin)
         nrr = b.get("nrr")
         if nrr:
             metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})

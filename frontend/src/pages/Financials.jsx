@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -69,6 +69,7 @@ function itemNameFromExtract(extracted) {
 
 export default function Financials() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data, loading, error, reload } = useFetch("/financials");
   const { data: activityData, reload: reloadActs } = useFetch("/activities");
   const [showForm, setShowForm] = useState(false);
@@ -369,6 +370,27 @@ export default function Financials() {
     setCurrency(data.settings?.currency || data.currency || "usd");
     setShowSettings(true);
   };
+
+  // Deep links from Briefing "Add data" metrics (#log-mrr, #log-entry, #cash).
+  useEffect(() => {
+    const hash = (location.hash || "").replace(/^#/, "");
+    if (!hash || loading || !data?.can_write) return undefined;
+    if (hash === "log-mrr" || hash === "log-entry") {
+      setForm(emptyForm());
+      setShowForm(true);
+      setShowSettings(false);
+    } else if (hash === "cash") {
+      setCash(data.cash_entered ? String(data.settings?.cash ?? 0) : "");
+      setGm(data.settings?.gross_margin != null ? String(data.settings.gross_margin) : "");
+      setCurrency(data.settings?.currency || data.currency || "usd");
+      setShowSettings(true);
+      setShowForm(false);
+    } else {
+      return undefined;
+    }
+    window.history.replaceState(null, "", location.pathname);
+    return undefined;
+  }, [location.hash, location.pathname, loading, data]);
 
   const previewCsv = async (file) => {
     if (!file) return;
