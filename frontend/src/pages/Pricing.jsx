@@ -57,7 +57,7 @@ export default function Pricing() {
             custom={2}
             className="mt-6 text-lg text-helm-slate leading-relaxed"
           >
-            Start free. Paid plans include a 7-day trial. Cancel anytime. Plans scale with Trenston seats
+            Start free. Paid plans include a 7-day free trial. Cancel anytime. Plans scale with Trenston seats
             (product logins — separate from your company&apos;s employee headcount) and AI usage — not a single flat Pro tier.
           </motion.p>
         </div>

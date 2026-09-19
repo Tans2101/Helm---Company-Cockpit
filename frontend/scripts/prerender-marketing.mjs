@@ -146,7 +146,7 @@ function pricingStaticHtml(plans) {
 
   return `<main id="helm-prerender-pricing">
   <h1>Trenston pricing</h1>
-  <p>Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
+  <p>Start free. Paid plans include a 7-day free trial. Cancel anytime.</p>
   <p>Canonical plan list (source: frontend/src/lib/marketingCopy.js PLANS):</p>
   ${cards}
   <p><a href="/features">Features</a> · <a href="/about">About</a> · <a href="/security">Security</a></p>

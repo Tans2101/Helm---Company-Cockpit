@@ -207,7 +207,7 @@ export default function Landing() {
           <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} className="mb-14 max-w-2xl">
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">Plans that scale with you</h2>
-            <p className="mt-4 text-helm-slate">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
+            <p className="mt-4 text-helm-slate">Start free. Paid plans include a 7-day free trial. Cancel anytime.</p>
             <Link to="/pricing" className="inline-flex items-center gap-2 mt-4 text-sm text-helm-cream hover:text-helm-gold transition-colors">
               Full pricing page <ArrowRight className="w-4 h-4" />
             </Link>
@@ -294,7 +294,7 @@ export default function Landing() {
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
-          <p className="mt-8 text-xs text-helm-slate">Free to start · 7-day paid trials · Sign in with Google</p>
+          <p className="mt-8 text-xs text-helm-slate">Free to start · 7-day free trials · Sign in with Google</p>
         </motion.div>
       </section>
 

@@ -16,6 +16,7 @@ const FOOTER_LINKS = [
   { to: "/integrations", label: "Integrations" },
   { to: "/pricing", label: "Pricing" },
   { to: "/about", label: "About" },
+  { href: PUBLIC_CONTACT_MAILTO, label: "Contact" },
   { to: "/help", label: "Help" },
   { to: "/security", label: "Security" },
   { to: "/changelog", label: "Changelog" },
@@ -71,9 +72,20 @@ export default function MarketingFooter() {
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-helm-slate" aria-label="Footer">
             {FOOTER_LINKS.map((l) => (
-              <Link key={l.to + l.label} to={l.to} className="hover:text-helm-cream transition-colors">
-                {l.label}
-              </Link>
+              l.href ? (
+                <a
+                  key={l.href + l.label}
+                  href={l.href}
+                  data-testid="footer-contact-link"
+                  className="hover:text-helm-cream transition-colors"
+                >
+                  {l.label}
+                </a>
+              ) : (
+                <Link key={l.to + l.label} to={l.to} className="hover:text-helm-cream transition-colors">
+                  {l.label}
+                </Link>
+              )
             ))}
           </nav>
         </div>

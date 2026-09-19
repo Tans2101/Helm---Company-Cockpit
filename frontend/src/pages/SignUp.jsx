@@ -92,7 +92,7 @@ function SignUpClerk() {
             {TAGLINE}
           </h1>
           <p className="text-helm-slate text-base md:text-lg mt-6 leading-relaxed">
-            Create your account and set up your workspace. Start on Free, or upgrade anytime. Paid plans include a 7-day trial.
+            Create your account and set up your workspace. Start on Free, or upgrade anytime. Paid plans include a 7-day free trial.
           </p>
         </div>
         <p className="text-xs text-helm-muted">
