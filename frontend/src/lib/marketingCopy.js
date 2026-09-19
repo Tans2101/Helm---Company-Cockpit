@@ -438,14 +438,14 @@ export const FEATURE_MODULES = [
   {
     title: "Work order tracking",
     ceoValue: "Production status without a separate system.",
-    body: "Work orders move through a fixed flow: Awaiting Materials, In Production, Quality Check, Completed, with overdue detection and average cycle time.",
-    example: "Three orders awaiting materials. One past due. Average cycle time visible without a spreadsheet.",
+    body: "Work orders move through a fixed flow with daily target-vs-actual logging, overtime cost visibility, and optional yield tracking for businesses that convert raw materials into finished goods.",
+    example: "Two work orders for the same product, each with its own daily target. Shortfalls show with overtime cost; yield drops flag process problems early.",
   },
   {
     title: "Vendor memory",
     ceoValue: "Re-order without starting from scratch.",
-    body: "Procurement remembers past vendors and prices per item, tracks expected delivery, and flags overdue requests by priority.",
-    example: "Same bracket as last quarter. Trenston recalls the vendor and last price when you raise the request.",
+    body: "Procurement remembers past vendors and prices, and surfaces each vendor’s sourcing-time and delivery-delay history so you pick on performance, not just last price.",
+    example: "Same bracket as last quarter. Trenston recalls the vendor, last price, and whether they typically deliver late.",
   },
   {
     title: "Equipment reliability alerts",

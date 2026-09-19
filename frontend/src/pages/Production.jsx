@@ -114,7 +114,34 @@ const emptyForm = () => ({
   linked_procurement_request_id: "",
   linked_maintenance_ticket_id: "",
   notes: "",
+  unit: "units",
+  yield_tracking_enabled: false,
+  expected_yield_pct: "",
+  input_unit: "",
 });
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function emptyDailyLog(unit = "units") {
+  return {
+    date: todayIso(),
+    target_quantity: "",
+    actual_quantity: "",
+    unit: unit || "units",
+    overtime_hours: "",
+    input_quantity: "",
+    input_unit: "",
+    notes: "",
+  };
+}
+
+function formatQty(n) {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const v = Number(n);
+  return Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000);
+}
 
 export default function Production() {
   const { data, loading, error, reload } = useFetch("/production/work-orders");
@@ -128,6 +155,11 @@ export default function Production() {
   const [completing, setCompleting] = useState(false);
   const [completeQty, setCompleteQty] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dailyLogs, setDailyLogs] = useState([]);
+  const [dailyRollup, setDailyRollup] = useState(null);
+  const [logForm, setLogForm] = useState(emptyDailyLog);
+  const [otRateDraft, setOtRateDraft] = useState("");
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const allOrders = useMemo(
     () => [...(data?.work_orders || [])].sort(compareOrders),
@@ -146,15 +178,27 @@ export default function Production() {
   const priorities = data?.priorities || ["low", "normal", "high"];
   const blockedCategories = data?.blocked_categories || Object.keys(CATEGORY_LABELS);
   const statuses = data?.statuses || STATUS_ORDER;
+  const commonUnits = data?.common_units || ["units", "kg", "liters", "boxes", "meters"];
+  const todaySummary = data?.today_summary || null;
+  const overtimeWeek = data?.overtime_week || null;
+  const canManageSettings = Boolean(data?.is_lead || data?.is_ceo);
   const workspaceMembers = (membersData?.members || []).filter(
     (m) => m.user_id && m.status === "active",
   );
   const cycleLabel = formatCycleTime(data?.average_cycle_time?.average_seconds);
 
   useEffect(() => {
+    setOtRateDraft(
+      data?.overtime_rate_per_hour == null ? "" : String(data.overtime_rate_per_hour),
+    );
+  }, [data?.overtime_rate_per_hour]);
+
+  useEffect(() => {
     if (!selected) {
       setDraft(null);
       setCompleting(false);
+      setDailyLogs([]);
+      setDailyRollup(null);
       return;
     }
     setDraft({
@@ -173,9 +217,36 @@ export default function Production() {
       linked_maintenance_ticket_id: selected.linked_maintenance_ticket_id || "",
       assigned_user_ids: [...(selected.assigned_user_ids || [])],
       notes: selected.notes || "",
+      unit: selected.unit || "units",
+      yield_tracking_enabled: Boolean(selected.yield_tracking_enabled),
+      expected_yield_pct: selected.expected_yield_pct == null ? "" : String(selected.expected_yield_pct),
+      input_unit: selected.input_unit || "",
     });
+    setLogForm(emptyDailyLog(selected.unit || "units"));
     setCompleting(false);
   }, [selected]);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    let cancelled = false;
+    setLogsLoading(true);
+    (async () => {
+      try {
+        const { data: res } = await api.get(`/production/work-orders/${selectedId}/daily-logs`);
+        if (cancelled) return;
+        setDailyLogs(res?.logs || []);
+        setDailyRollup(res?.rollup || null);
+      } catch {
+        if (!cancelled) {
+          setDailyLogs([]);
+          setDailyRollup(null);
+        }
+      } finally {
+        if (!cancelled) setLogsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedId]);
 
   if (loading) {
     return (
@@ -229,6 +300,9 @@ export default function Production() {
       notes: form.notes.trim(),
       linked_procurement_request_id: form.linked_procurement_request_id || null,
       linked_maintenance_ticket_id: form.linked_maintenance_ticket_id || null,
+      unit: (form.unit || "units").trim() || "units",
+      yield_tracking_enabled: Boolean(form.yield_tracking_enabled),
+      input_unit: form.yield_tracking_enabled ? (form.input_unit || "").trim() : "",
     };
     if (form.quantity_planned !== "") {
       const q = Number(form.quantity_planned);
@@ -237,6 +311,14 @@ export default function Production() {
         return;
       }
       body.quantity_planned = q;
+    }
+    if (form.yield_tracking_enabled && form.expected_yield_pct.trim() !== "") {
+      const ey = Number(form.expected_yield_pct);
+      if (!Number.isFinite(ey) || ey < 0 || ey > 100) {
+        toast.error("Expected yield must be 0–100");
+        return;
+      }
+      body.expected_yield_pct = ey;
     }
     setBusy(true);
     try {
@@ -266,6 +348,17 @@ export default function Production() {
     body.linked_procurement_request_id = draft.linked_procurement_request_id || "";
     body.linked_maintenance_ticket_id = draft.linked_maintenance_ticket_id || "";
     body.blocked = Boolean(draft.blocked);
+    body.unit = (draft.unit || "units").trim() || "units";
+    body.yield_tracking_enabled = Boolean(draft.yield_tracking_enabled);
+    body.input_unit = draft.yield_tracking_enabled ? (draft.input_unit || "").trim() : "";
+    if (draft.yield_tracking_enabled && draft.expected_yield_pct.trim() !== "") {
+      const ey = Number(draft.expected_yield_pct);
+      if (!Number.isFinite(ey) || ey < 0 || ey > 100) {
+        toast.error("Expected yield must be 0–100");
+        return;
+      }
+      body.expected_yield_pct = ey;
+    }
     if (draft.blocked) {
       body.blocked_reason = {
         category: draft.blocked_category,
@@ -355,6 +448,93 @@ export default function Production() {
     }
   };
 
+  const saveOvertimeRate = async () => {
+    if (!canManageSettings) return;
+    const raw = otRateDraft.trim();
+    if (raw === "") {
+      toast.error("Enter an overtime rate per hour");
+      return;
+    }
+    const rate = Number(raw);
+    if (!Number.isFinite(rate) || rate < 0) {
+      toast.error("Overtime rate must be a non-negative number");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.put("/production/settings", { overtime_rate_per_hour: rate });
+      toast.success("Overtime rate saved");
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save overtime rate");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveDailyLog = async () => {
+    if (!selected) return;
+    const date = (logForm.date || "").trim();
+    if (!date) {
+      toast.error("Date is required");
+      return;
+    }
+    const body = {
+      date,
+      unit: (logForm.unit || draft?.unit || "units").trim() || "units",
+      notes: (logForm.notes || "").trim(),
+    };
+    if (logForm.target_quantity.trim() !== "") {
+      const t = Number(logForm.target_quantity);
+      if (!Number.isFinite(t) || t < 0) {
+        toast.error("Target must be a non-negative number");
+        return;
+      }
+      body.target_quantity = t;
+    }
+    if (logForm.actual_quantity.trim() !== "") {
+      const a = Number(logForm.actual_quantity);
+      if (!Number.isFinite(a) || a < 0) {
+        toast.error("Actual must be a non-negative number");
+        return;
+      }
+      body.actual_quantity = a;
+    }
+    if (logForm.overtime_hours.trim() !== "") {
+      const ot = Number(logForm.overtime_hours);
+      if (!Number.isFinite(ot) || ot < 0) {
+        toast.error("Overtime hours must be a non-negative number");
+        return;
+      }
+      body.overtime_hours = ot;
+    }
+    if (draft?.yield_tracking_enabled) {
+      body.input_unit = (logForm.input_unit || draft.input_unit || "").trim();
+      if (logForm.input_quantity.trim() !== "") {
+        const iq = Number(logForm.input_quantity);
+        if (!Number.isFinite(iq) || iq < 0) {
+          toast.error("Input quantity must be a non-negative number");
+          return;
+        }
+        body.input_quantity = iq;
+      }
+    }
+    setBusy(true);
+    try {
+      await api.post(`/production/work-orders/${selected.id}/daily-logs`, body);
+      toast.success("Daily log saved");
+      setLogForm(emptyDailyLog(draft?.unit || "units"));
+      const { data: res } = await api.get(`/production/work-orders/${selected.id}/daily-logs`);
+      setDailyLogs(res?.logs || []);
+      setDailyRollup(res?.rollup || null);
+      await reload();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not save daily log");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleAssignee = (userId) => {
     setDraft((d) => {
       if (!d) return d;
@@ -386,6 +566,86 @@ export default function Production() {
         subtitle="Work order queue with fixed statuses and no pipeline setup."
         action={action}
       />
+
+      <div
+        className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5"
+        data-testid="production-ops-summary"
+      >
+        <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-today-output">
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">Today&apos;s output</p>
+          <p className={cn("font-mono text-xl mt-1", todaySummary?.has_data ? "text-helm-fg" : "text-helm-muted")}>
+            {todaySummary?.has_data
+              ? `${formatQty(todaySummary.total_actual)} / ${formatQty(todaySummary.total_target)}`
+              : "No data logged"}
+          </p>
+          <p className="text-[11px] text-helm-muted mt-0.5">
+            {todaySummary?.has_data
+              ? `${todaySummary.orders_with_log} of ${todaySummary.active_work_orders} active logged`
+              : "Log daily target vs actual on open work orders"}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-today-shortfall">
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">Today&apos;s shortfall</p>
+          <p
+            className={cn(
+              "font-mono text-xl mt-1",
+              !todaySummary?.has_data
+                ? "text-helm-muted"
+                : (todaySummary.shortfall || 0) > 0
+                  ? "text-helm-status-negative"
+                  : "text-helm-fg",
+            )}
+          >
+            {todaySummary?.has_data && todaySummary.shortfall != null
+              ? formatQty(todaySummary.shortfall)
+              : "No data logged"}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-ot-week">
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">OT this week</p>
+          <p className={cn("font-mono text-xl mt-1", overtimeWeek?.has_data ? "text-helm-fg" : "text-helm-muted")}>
+            {overtimeWeek?.has_data
+              ? (overtimeWeek.overtime_cost != null
+                ? `$${Number(overtimeWeek.overtime_cost).toLocaleString()}`
+                : `${formatQty(overtimeWeek.overtime_hours)}h`)
+              : "No data logged"}
+          </p>
+          <p className="text-[11px] text-helm-muted mt-0.5">
+            {overtimeWeek?.has_data && overtimeWeek.overtime_hours != null
+              ? `${formatQty(overtimeWeek.overtime_hours)}h overtime`
+              : "Set a rate below to price overtime"}
+          </p>
+        </div>
+        <div className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5" data-testid="production-ot-rate">
+          <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">OT rate / hour</p>
+          {canManageSettings ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                data-testid="overtime-rate-input"
+                value={otRateDraft}
+                onChange={(e) => setOtRateDraft(e.target.value)}
+                placeholder="e.g. 25"
+                className="w-full min-w-0 rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1 text-sm text-helm-fg font-mono"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                data-testid="overtime-rate-save"
+                onClick={saveOvertimeRate}
+                className="shrink-0 rounded-md border border-helm-line text-xs px-2 py-1.5 text-helm-fg hover:border-helm-gold/35 disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <p className={cn("font-mono text-xl mt-1", data?.overtime_rate_per_hour != null ? "text-helm-fg" : "text-helm-muted")}>
+              {data?.overtime_rate_per_hour != null
+                ? `$${Number(data.overtime_rate_per_hour).toLocaleString()}`
+                : "Not set"}
+            </p>
+          )}
+        </div>
+      </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <p className="text-xs text-helm-muted font-mono">
@@ -435,6 +695,7 @@ export default function Production() {
               <tr className="border-b border-helm-line text-[10px] font-mono uppercase tracking-wide text-helm-muted">
                 <th className="px-3 py-2 font-medium">Reference</th>
                 <th className="px-3 py-2 font-medium">Product</th>
+                <th className="px-3 py-2 font-medium">Target vs actual</th>
                 <th className="px-3 py-2 font-medium">Customer</th>
                 <th className="px-3 py-2 font-medium">Priority</th>
                 <th className="px-3 py-2 font-medium">Due</th>
@@ -444,6 +705,7 @@ export default function Production() {
             <tbody>
               {visible.map((order) => {
                 const overdue = isDueDateOverdue(order.due_date, order.status);
+                const rollup = order.daily_rollup;
                 return (
                   <tr
                     key={order.id}
@@ -475,11 +737,21 @@ export default function Production() {
                     <td className="px-3 py-2.5 text-helm-muted truncate max-w-[10rem]">
                       {[
                         order.product || null,
-                        order.quantity_planned != null ? `× ${order.quantity_planned}` : null,
-                        order.status === "completed" && order.quantity_produced != null
-                          ? `(made ${order.quantity_produced})`
-                          : null,
-                      ].filter(Boolean).join(" ") || "—"}
+                        order.quantity_planned != null ? `plan ${order.quantity_planned}` : null,
+                        order.unit ? order.unit : null,
+                      ].filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-xs" data-testid={`wo-target-actual-${order.id}`}>
+                      {rollup?.has_logs ? (
+                        <span className={cn(
+                          (rollup.cumulative_shortfall || 0) > 0 ? "text-helm-status-negative" : "text-helm-fg",
+                        )}>
+                          {formatQty(rollup.cumulative_actual)} / {formatQty(rollup.cumulative_target)}
+                          {order.unit ? ` ${order.unit}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-helm-muted">No data logged</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-helm-muted truncate max-w-[8rem]">{order.customer || "—"}</td>
                     <td className="px-3 py-2.5 text-helm-muted capitalize">{order.priority || "normal"}</td>
@@ -568,6 +840,20 @@ export default function Production() {
               />
             </label>
             <label className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Output unit</span>
+              <input
+                data-testid="wo-unit-input"
+                list="production-units"
+                disabled={busy}
+                value={draft.unit}
+                onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))}
+                className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+              />
+              <datalist id="production-units">
+                {commonUnits.map((u) => <option key={u} value={u} />)}
+              </datalist>
+            </label>
+            <label className="space-y-1">
               <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Customer</span>
               <input
                 data-testid="wo-customer-input"
@@ -641,6 +927,220 @@ export default function Production() {
               className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
             />
           </label>
+
+          <div className="rounded-md border border-helm-line bg-helm-fg/[0.02] p-3 space-y-3" data-testid="wo-yield-settings">
+            <label className="inline-flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="wo-yield-toggle"
+                checked={draft.yield_tracking_enabled}
+                disabled={busy}
+                onChange={(e) => setDraft((d) => ({ ...d, yield_tracking_enabled: e.target.checked }))}
+              />
+              Track yield (input → output) for this work order
+            </label>
+            {draft.yield_tracking_enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Input unit</span>
+                  <input
+                    data-testid="wo-input-unit"
+                    list="production-units"
+                    disabled={busy}
+                    value={draft.input_unit}
+                    onChange={(e) => setDraft((d) => ({ ...d, input_unit: e.target.value }))}
+                    placeholder="e.g. kg"
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Expected yield %</span>
+                  <input
+                    data-testid="wo-expected-yield"
+                    disabled={busy}
+                    value={draft.expected_yield_pct}
+                    onChange={(e) => setDraft((d) => ({ ...d, expected_yield_pct: e.target.value }))}
+                    placeholder="Optional benchmark"
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-3 py-2 text-sm text-helm-fg disabled:opacity-50"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-md border border-helm-line p-3 space-y-3" data-testid="wo-daily-log-section">
+            <div className="flex items-center justify-between gap-2">
+              <SectionLabel>Daily production log</SectionLabel>
+              {(dailyRollup || selected.daily_rollup) && (
+                <p className="text-[11px] text-helm-muted font-mono" data-testid="wo-daily-rollup">
+                  {(dailyRollup || selected.daily_rollup)?.has_logs
+                    ? `Cum. ${formatQty((dailyRollup || selected.daily_rollup).cumulative_actual)} / ${formatQty((dailyRollup || selected.daily_rollup).cumulative_target)} ${(draft.unit || "").trim()}`
+                    : "No data logged"}
+                  {(dailyRollup || selected.daily_rollup)?.overtime_cost != null
+                    ? ` · OT $${Number((dailyRollup || selected.daily_rollup).overtime_cost).toLocaleString()}`
+                    : (dailyRollup || selected.daily_rollup)?.overtime_hours != null
+                      ? ` · OT ${formatQty((dailyRollup || selected.daily_rollup).overtime_hours)}h`
+                      : ""}
+                  {(dailyRollup || selected.daily_rollup)?.avg_actual_yield_pct != null
+                    ? ` · yield ${(dailyRollup || selected.daily_rollup).avg_actual_yield_pct}%`
+                    : ""}
+                </p>
+              )}
+            </div>
+
+            {selected.status !== "completed" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Date</span>
+                  <input
+                    type="date"
+                    data-testid="daily-log-date"
+                    disabled={busy}
+                    value={logForm.date}
+                    onChange={(e) => setLogForm((f) => ({ ...f, date: e.target.value }))}
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Day target</span>
+                  <input
+                    data-testid="daily-log-target"
+                    disabled={busy}
+                    value={logForm.target_quantity}
+                    onChange={(e) => setLogForm((f) => ({ ...f, target_quantity: e.target.value }))}
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Day actual</span>
+                  <input
+                    data-testid="daily-log-actual"
+                    disabled={busy}
+                    value={logForm.actual_quantity}
+                    onChange={(e) => setLogForm((f) => ({ ...f, actual_quantity: e.target.value }))}
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Unit</span>
+                  <input
+                    data-testid="daily-log-unit"
+                    list="production-units"
+                    disabled={busy}
+                    value={logForm.unit}
+                    onChange={(e) => setLogForm((f) => ({ ...f, unit: e.target.value }))}
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">OT hours</span>
+                  <input
+                    data-testid="daily-log-overtime"
+                    disabled={busy}
+                    value={logForm.overtime_hours}
+                    onChange={(e) => setLogForm((f) => ({ ...f, overtime_hours: e.target.value }))}
+                    placeholder="Optional"
+                    className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                  />
+                </label>
+                {draft.yield_tracking_enabled && (
+                  <>
+                    <label className="space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Input qty</span>
+                      <input
+                        data-testid="daily-log-input-qty"
+                        disabled={busy}
+                        value={logForm.input_quantity}
+                        onChange={(e) => setLogForm((f) => ({ ...f, input_quantity: e.target.value }))}
+                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Input unit</span>
+                      <input
+                        data-testid="daily-log-input-unit"
+                        list="production-units"
+                        disabled={busy}
+                        value={logForm.input_unit || draft.input_unit}
+                        onChange={(e) => setLogForm((f) => ({ ...f, input_unit: e.target.value }))}
+                        className="w-full rounded-md border border-helm-line bg-helm-fg/[0.03] px-2 py-1.5 text-sm text-helm-fg"
+                      />
+                    </label>
+                  </>
+                )}
+                <div className="col-span-2 md:col-span-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    data-testid="daily-log-save"
+                    onClick={saveDailyLog}
+                    className="rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-3 py-2 hover:bg-helm-gold-hover disabled:opacity-50"
+                  >
+                    Save daily log
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {logsLoading ? (
+              <p className="text-xs text-helm-muted">Loading logs…</p>
+            ) : dailyLogs.length === 0 ? (
+              <p className="text-xs text-helm-muted" data-testid="daily-logs-empty">No data logged yet for this work order.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs" data-testid="daily-logs-table">
+                  <thead>
+                    <tr className="text-[10px] font-mono uppercase tracking-wide text-helm-muted border-b border-helm-line">
+                      <th className="py-1.5 pr-2 font-medium">Date</th>
+                      <th className="py-1.5 pr-2 font-medium">Target</th>
+                      <th className="py-1.5 pr-2 font-medium">Actual</th>
+                      <th className="py-1.5 pr-2 font-medium">OT</th>
+                      {draft.yield_tracking_enabled && <th className="py-1.5 pr-2 font-medium">Yield</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyLogs.map((log) => (
+                      <tr key={log.id || log.date} className="border-b border-helm-line/60">
+                        <td className="py-1.5 pr-2 font-mono text-helm-muted">{log.date}</td>
+                        <td className="py-1.5 pr-2 text-helm-fg">
+                          {log.target_logged ? `${formatQty(log.target_quantity)} ${log.unit || ""}` : "—"}
+                        </td>
+                        <td className="py-1.5 pr-2 text-helm-fg">
+                          {log.actual_logged ? `${formatQty(log.actual_quantity)} ${log.unit || ""}` : "—"}
+                          {log.shortfall != null && log.shortfall > 0 ? (
+                            <span className="text-helm-status-negative ml-1">(-{formatQty(log.shortfall)})</span>
+                          ) : null}
+                        </td>
+                        <td className="py-1.5 pr-2 text-helm-muted">
+                          {log.overtime_hours != null
+                            ? `${formatQty(log.overtime_hours)}h${log.overtime_cost != null ? ` · $${log.overtime_cost}` : ""}`
+                            : "—"}
+                        </td>
+                        {draft.yield_tracking_enabled && (
+                          <td className="py-1.5 pr-2">
+                            {log.actual_yield_pct != null ? (
+                              <span className={log.yield_below_benchmark ? "text-helm-status-negative" : "text-helm-fg"}>
+                                {log.actual_yield_pct}%
+                                {log.yield_below_benchmark ? " below bench" : ""}
+                              </span>
+                            ) : log.yield_raw ? (
+                              <span className="text-helm-muted">
+                                {formatQty(log.yield_raw.output_quantity)} {log.yield_raw.output_unit || ""}
+                                {" / "}
+                                {formatQty(log.yield_raw.input_quantity)} {log.yield_raw.input_unit || ""}
+                              </span>
+                            ) : (
+                              <span className="text-helm-muted">Not logged</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-2">
             <label className="inline-flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
@@ -866,6 +1366,45 @@ export default function Production() {
                   className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
                 />
               </label>
+              <label className="block text-xs text-helm-muted">Output unit
+                <input
+                  data-testid="new-wo-unit"
+                  list="production-units"
+                  value={form.unit}
+                  onChange={(e) => setForm((o) => ({ ...o, unit: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
+                />
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-helm-fg cursor-pointer">
+                <input
+                  type="checkbox"
+                  data-testid="new-wo-yield-toggle"
+                  checked={form.yield_tracking_enabled}
+                  onChange={(e) => setForm((o) => ({ ...o, yield_tracking_enabled: e.target.checked }))}
+                />
+                Track yield for this work order
+              </label>
+              {form.yield_tracking_enabled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-xs text-helm-muted">Input unit
+                    <input
+                      data-testid="new-wo-input-unit"
+                      list="production-units"
+                      value={form.input_unit}
+                      onChange={(e) => setForm((o) => ({ ...o, input_unit: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
+                    />
+                  </label>
+                  <label className="block text-xs text-helm-muted">Expected yield %
+                    <input
+                      data-testid="new-wo-expected-yield"
+                      value={form.expected_yield_pct}
+                      onChange={(e) => setForm((o) => ({ ...o, expected_yield_pct: e.target.value }))}
+                      className="mt-1 w-full rounded-md border border-helm-line bg-helm-card text-helm-fg text-sm px-3 py-2"
+                    />
+                  </label>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs text-helm-muted">Priority
                   <select

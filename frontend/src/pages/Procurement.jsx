@@ -54,6 +54,23 @@ function StatusBadge({ status }) {
   );
 }
 
+function formatDays(value) {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  const n = Number(value);
+  if (n === Math.trunc(n)) return `${n}d`;
+  return `${n.toFixed(1).replace(/\.0$/, "")}d`;
+}
+
+function formatLeadMetric(tracked, days, { signed = false } = {}) {
+  if (!tracked || days == null) return "Not tracked";
+  const n = Number(days);
+  const label = formatDays(Math.abs(n)) || "0d";
+  if (!signed) return label;
+  if (n > 0) return `${label} late`;
+  if (n < 0) return `${label} early`;
+  return "On time";
+}
+
 function personLabel(p) {
   if (!p) return "—";
   return p.name || p.email || "Teammate";
@@ -96,6 +113,7 @@ export default function Procurement() {
   const [form, setForm] = useState({ item: "", quantity: "1", vendor_name: "", cost: "", notes: "", expected_delivery_date: "", priority: "normal" });
 
   const allRequests = useMemo(() => data?.requests || [], [data?.requests]);
+  const leadSummary = data?.lead_time_summary || null;
   const visible = useMemo(() => {
     // Backend owns queue order; only filter closed locally.
     return showClosed ? allRequests : allRequests.filter((r) => !CLOSED.has(r.status));
@@ -353,6 +371,90 @@ export default function Procurement() {
         action={action}
       />
 
+      {leadSummary && (
+        <div
+          className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5"
+          data-testid="procurement-lead-time-summary"
+        >
+          {[
+            {
+              key: "sourcing",
+              label: "Avg sourcing time",
+              value: leadSummary.sourcing_sample_count
+                ? formatDays(leadSummary.avg_sourcing_days)
+                : "Not tracked",
+              muted: !leadSummary.sourcing_sample_count,
+              detail: leadSummary.sourcing_sample_count
+                ? `${leadSummary.sourcing_sample_count} tracked`
+                : "No vendor lock-in dates yet",
+            },
+            {
+              key: "delay",
+              label: "Avg fulfillment delay",
+              value: leadSummary.delay_sample_count
+                ? formatLeadMetric(true, leadSummary.avg_fulfillment_delay_days, { signed: true })
+                : "Not tracked",
+              muted: !leadSummary.delay_sample_count,
+              detail: leadSummary.delay_sample_count
+                ? `${leadSummary.delay_sample_count} delivered`
+                : "No actual delivery dates yet",
+            },
+            {
+              key: "late",
+              label: "Currently late",
+              value: String(leadSummary.currently_late_count ?? 0),
+              muted: false,
+              detail: (leadSummary.currently_late_count ?? 0)
+                ? "Ordered past expected date"
+                : "None overdue",
+              warn: (leadSummary.currently_late_count ?? 0) > 0,
+            },
+          ].map((s) => (
+            <div
+              key={s.key}
+              className="rounded-md border border-helm-line bg-helm-card/40 px-3 py-2.5"
+              data-testid={`procurement-summary-${s.key}`}
+            >
+              <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-helm-muted">
+                {s.label}
+              </p>
+              <p
+                className={cn(
+                  "font-mono text-xl mt-1",
+                  s.warn ? "text-helm-status-negative" : s.muted ? "text-helm-muted" : "text-helm-fg",
+                )}
+              >
+                {s.value}
+              </p>
+              <p className="text-[11px] text-helm-muted mt-0.5">{s.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(leadSummary?.currently_late || []).length > 0 && (
+        <div
+          className="rounded-md border border-helm-status-negative/35 bg-helm-status-negative/8 px-3 py-2.5 mb-5 space-y-1"
+          data-testid="procurement-late-list"
+        >
+          <p className="text-[10px] font-mono uppercase tracking-wide text-helm-status-negative">
+            Late orders
+          </p>
+          {leadSummary.currently_late.slice(0, 5).map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setSelectedId(r.id)}
+              className="block w-full text-left text-xs text-helm-fg hover:text-helm-gold truncate"
+            >
+              {r.item || "Request"}
+              {r.vendor_name ? ` · ${r.vendor_name}` : ""}
+              {r.expected_delivery_date ? ` · due ${r.expected_delivery_date}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-xs text-helm-muted font-mono">
           {visible.length} shown · {allRequests.length} total
@@ -563,6 +665,50 @@ export default function Procurement() {
             <span>Status: <StatusBadge status={selected.status} /></span>
           </div>
 
+          <div
+            className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-md border border-helm-line bg-helm-fg/[0.02] p-3"
+            data-testid="procurement-lead-time-detail"
+          >
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Sourcing time</p>
+              <p className={cn("text-sm mt-0.5", selected.lead_time?.sourcing_tracked ? "text-helm-fg" : "text-helm-muted")}>
+                {formatLeadMetric(selected.lead_time?.sourcing_tracked, selected.lead_time?.sourcing_days)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Fulfillment time</p>
+              <p className={cn("text-sm mt-0.5", selected.lead_time?.fulfillment_tracked ? "text-helm-fg" : "text-helm-muted")}>
+                {formatLeadMetric(selected.lead_time?.fulfillment_tracked, selected.lead_time?.fulfillment_days)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide text-helm-muted">Fulfillment delay</p>
+              <p
+                className={cn(
+                  "text-sm mt-0.5",
+                  !selected.lead_time?.delay_tracked
+                    ? "text-helm-muted"
+                    : (selected.lead_time?.fulfillment_delay_days || 0) > 0
+                      ? "text-helm-status-negative"
+                      : "text-helm-fg",
+                )}
+              >
+                {formatLeadMetric(
+                  selected.lead_time?.delay_tracked,
+                  selected.lead_time?.fulfillment_delay_days,
+                  { signed: true },
+                )}
+              </p>
+            </div>
+            {selected.actual_delivery_date && (
+              <p className="sm:col-span-3 text-[11px] text-helm-muted">
+                Delivered {selected.actual_delivery_date}
+                {selected.ordered_at ? ` · ordered ${String(selected.ordered_at).slice(0, 10)}` : ""}
+                {selected.vendor_selected_at ? ` · vendor locked ${String(selected.vendor_selected_at).slice(0, 10)}` : ""}
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {(canEditContent || canApprove) && (
               <button
@@ -759,6 +905,15 @@ export default function Procurement() {
                       {s.last_cost != null ? `last paid $${Number(s.last_cost).toFixed(2)}` : "no cost on file"}
                       {`, ordered ${s.times_used}x`}
                       {s.last_ordered_at ? `, most recently ${String(s.last_ordered_at).slice(0, 10)}` : ""}
+                    </span>
+                    <span className="block text-helm-muted mt-0.5">
+                      {s.delay_sample_count
+                        ? `Avg delay ${formatLeadMetric(true, s.avg_fulfillment_delay_days, { signed: true })}`
+                        : "Delay not tracked"}
+                      {" · "}
+                      {s.fulfillment_sample_count
+                        ? `Avg fulfillment ${formatDays(s.avg_fulfillment_days)}`
+                        : "Fulfillment not tracked"}
                     </span>
                   </button>
                 ))}

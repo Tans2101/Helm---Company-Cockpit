@@ -60,6 +60,8 @@ import credential_crypto as cred_crypto
 import department_migrate as dept_migrate
 import work_items as helm_work_items
 import data_freshness as helm_freshness
+import procurement_metrics as proc_metrics
+import production_daily_logs as prod_daily
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -3408,6 +3410,146 @@ def _briefing_finance_metrics(fin: dict) -> list[dict]:
     ]
 
 
+def _fmt_days_metric(value: Optional[float]) -> str:
+    if value is None:
+        return "Not tracked"
+    n = float(value)
+    if n == int(n):
+        return f"{int(n)}d"
+    return f"{n:.1f}d"
+
+
+async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
+    """Procurement lead-time + Production daily output rollups for Briefing.
+
+    Missing timestamps / logs surface as not tracked / no data — never fabricated zeros.
+    """
+    depts = await dept_migrate.get_enabled_departments_by_type(
+        db,
+        workspace_id,
+        (dept_catalog.TYPE_PROCUREMENT, dept_catalog.TYPE_PRODUCTION),
+    )
+    out: list[dict] = []
+
+    proc_dept = depts.get(dept_catalog.TYPE_PROCUREMENT)
+    if proc_dept:
+        rows = await db.procurement_requests.find(
+            {"department_id": proc_dept["department_id"]},
+            {
+                "_id": 0, "id": 1, "item": 1, "vendor_name": 1, "status": 1, "priority": 1,
+                "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1,
+                "expected_delivery_date": 1, "actual_delivery_date": 1,
+            },
+        ).to_list(2000)
+        summary = proc_metrics.department_lead_time_summary(rows)
+        sourcing_known = summary["sourcing_sample_count"] > 0
+        delay_known = summary["delay_sample_count"] > 0
+        late_n = int(summary["currently_late_count"] or 0)
+        out.append({
+            "label": "Avg sourcing",
+            "value": _fmt_days_metric(summary["avg_sourcing_days"]) if sourcing_known else "Not tracked",
+            "delta": 0,
+            "tone": "neutral",
+            "missing": not sourcing_known,
+            "href": None if sourcing_known else "/app/procurement",
+        })
+        out.append({
+            "label": "Avg fulfillment delay",
+            "value": _fmt_days_metric(summary["avg_fulfillment_delay_days"]) if delay_known else "Not tracked",
+            "delta": 0,
+            "tone": "negative" if delay_known and (summary["avg_fulfillment_delay_days"] or 0) > 0 else "neutral",
+            "missing": not delay_known,
+            "href": None if delay_known else "/app/procurement",
+        })
+        out.append({
+            "label": "Late orders",
+            "value": str(late_n),
+            "delta": 0,
+            "tone": "negative" if late_n else "positive",
+            "missing": False,
+            "href": "/app/procurement" if late_n else None,
+        })
+
+    prod_dept = depts.get(dept_catalog.TYPE_PRODUCTION)
+    if prod_dept:
+        orders = await db.production_work_orders.find(
+            {"department_id": prod_dept["department_id"]},
+            {"_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1},
+        ).to_list(1000)
+        wo_ids = [o["id"] for o in orders if o.get("id")]
+        logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
+        today = prod_daily.today_iso()
+        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+        if wo_ids:
+            log_rows = await db.production_daily_logs.find(
+                {
+                    "workspace_id": workspace_id,
+                    "work_order_id": {"$in": wo_ids},
+                    "date": {"$gte": week_ago},
+                },
+                {"_id": 0},
+            ).to_list(5000)
+            for log in log_rows:
+                logs_by_wo.setdefault(log.get("work_order_id"), []).append(log)
+        day_summary = prod_daily.department_day_summary(orders, logs_by_wo, day=today)
+        week_logs = [log for logs in logs_by_wo.values() for log in logs]
+        ot = prod_daily.period_overtime_rollup(week_logs)
+        if day_summary.get("has_data"):
+            t = day_summary.get("total_target")
+            a = day_summary.get("total_actual")
+            value = f"{a:g} / {t:g}" if t is not None and a is not None else (
+                f"{a:g} logged" if a is not None else "Logged"
+            )
+            shortfall = day_summary.get("shortfall")
+            tone = "negative" if shortfall is not None and shortfall > 0 else "positive"
+            out.append({
+                "label": "Today's output",
+                "value": value,
+                "delta": 0,
+                "tone": tone,
+                "missing": False,
+                "href": "/app/production",
+            })
+        else:
+            out.append({
+                "label": "Today's output",
+                "value": "No data logged",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": True,
+                "href": "/app/production",
+            })
+        if ot.get("has_data") and ot.get("overtime_cost") is not None:
+            out.append({
+                "label": "OT cost (7d)",
+                "value": f"${ot['overtime_cost']:,.0f}",
+                "delta": 0,
+                "tone": "negative" if ot["overtime_cost"] > 0 else "neutral",
+                "missing": False,
+                "href": "/app/production",
+            })
+        elif ot.get("has_data") and ot.get("overtime_hours") is not None:
+            out.append({
+                "label": "OT hours (7d)",
+                "value": f"{ot['overtime_hours']:g}h",
+                "delta": 0,
+                "tone": "negative" if ot["overtime_hours"] > 0 else "neutral",
+                "missing": False,
+                "href": "/app/production",
+            })
+        else:
+            out.append({
+                "label": "OT cost (7d)",
+                "value": "No data logged",
+                "delta": 0,
+                "tone": "neutral",
+                "missing": True,
+                "href": "/app/production",
+            })
+
+    return out
+
+
 @api_router.get("/briefing")
 async def briefing(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
@@ -3444,12 +3586,20 @@ async def briefing(principal=Depends(get_principal)):
             {"workspace_id": c["workspace_id"], "day": day}, {"_id": 0},
         ).sort("updated_at", -1).to_list(50)
 
-    fin, acts, ups, (email_threads, gmail_meta), freshness = await asyncio.gather(
+    async def _load_ops():
+        try:
+            return await _briefing_ops_metrics(c["workspace_id"])
+        except Exception:
+            logger.exception("briefing ops metrics failed for %s", c.get("workspace_id"))
+            return []
+
+    fin, acts, ups, (email_threads, gmail_meta), freshness, ops_metrics = await asyncio.gather(
         _load_fin(),
         _load_acts(),
         _load_updates(),
         _briefing_gmail_swr(c, principal),
         helm_freshness.resolve_workspace_data_as_of(db, c),
+        _load_ops(),
     )
 
     metrics = []
@@ -3458,6 +3608,7 @@ async def briefing(principal=Depends(get_principal)):
         nrr = b.get("nrr")
         if nrr:
             metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
+    metrics.extend(ops_metrics or [])
     b["metrics"] = metrics
     act_items = [{"title": a["summary"], "detail": f"{a['actor_name']} · {_rel_time(a['created_at'])}", "tone": "neutral"} for a in acts]
     b["what_changed"] = act_items + list(b.get("what_changed", []))
@@ -8776,6 +8927,10 @@ class ProductionWorkOrderCreate(BaseModel):
     notes: str = ""
     blocked: bool = False
     blocked_reason: Optional[dict] = None
+    unit: str = "units"
+    yield_tracking_enabled: bool = False
+    expected_yield_pct: Optional[float] = None
+    input_unit: str = ""
 
 
 class ProductionWorkOrderPatch(BaseModel):
@@ -8794,6 +8949,25 @@ class ProductionWorkOrderPatch(BaseModel):
     source_deal_id: Optional[str] = None
     assigned_user_ids: Optional[list[str]] = None
     notes: Optional[str] = None
+    unit: Optional[str] = None
+    yield_tracking_enabled: Optional[bool] = None
+    expected_yield_pct: Optional[float] = None
+    input_unit: Optional[str] = None
+
+
+class ProductionDailyLogInput(BaseModel):
+    date: str
+    target_quantity: Optional[float] = None
+    actual_quantity: Optional[float] = None
+    unit: str = ""
+    overtime_hours: Optional[float] = None
+    input_quantity: Optional[float] = None
+    input_unit: str = ""
+    notes: str = ""
+
+
+class ProductionSettingsInput(BaseModel):
+    overtime_rate_per_hour: Optional[float] = None
 
 
 @api_router.get("/production/work-orders")
@@ -8845,6 +9019,32 @@ async def list_production_work_orders(
     orders = [
         await _enrich_work_order(r, users, procurement_by_id, maintenance_by_id) for r in rows
     ]
+    # Attach per-WO daily log rollups (independent targets — never shared across WOs).
+    wo_ids = [o.get("id") for o in orders if o.get("id")]
+    logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
+    if wo_ids:
+        log_rows = await db.production_daily_logs.find(
+            {"workspace_id": principal["workspace_id"], "work_order_id": {"$in": wo_ids}},
+            {"_id": 0},
+        ).sort("date", 1).to_list(5000)
+        for log in log_rows:
+            logs_by_wo.setdefault(log.get("work_order_id"), []).append(log)
+    for o in orders:
+        wid = o.get("id")
+        o["daily_rollup"] = prod_daily.rollup_work_order_logs(
+            logs_by_wo.get(wid) or [],
+            quantity_planned=o.get("quantity_planned"),
+            yield_tracking_enabled=bool(o.get("yield_tracking_enabled")),
+            expected_yield_pct=o.get("expected_yield_pct"),
+        )
+    today_summary = prod_daily.department_day_summary(orders, logs_by_wo)
+    week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+    week_logs = [
+        log for logs in logs_by_wo.values() for log in logs
+        if (log.get("date") or "") >= week_ago
+    ]
+    overtime_week = prod_daily.period_overtime_rollup(week_logs)
+    overtime_rate = float(dept.get("overtime_rate_per_hour") or 0) or None
     membership = await dept_access.get_department_membership(
         db, dept["department_id"], principal["user_id"],
     )
@@ -8878,6 +9078,10 @@ async def list_production_work_orders(
         "is_ceo": dept_access.is_workspace_ceo(principal),
         "is_lead": is_lead,
         "my_user_id": principal["user_id"],
+        "today_summary": today_summary,
+        "overtime_week": overtime_week,
+        "overtime_rate_per_hour": overtime_rate,
+        "common_units": list(prod_daily.COMMON_UNITS),
     }
     simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
     return payload_out
@@ -8943,10 +9147,22 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "source_deal_id": (payload.source_deal_id or "").strip() or None,
         "assigned_user_ids": assignees,
         "notes": (payload.notes or "").strip()[:2000],
+        "unit": ((payload.unit or "units").strip() or "units")[:32],
+        "yield_tracking_enabled": bool(payload.yield_tracking_enabled),
+        "expected_yield_pct": None,
+        "input_unit": (payload.input_unit or "").strip()[:32],
         "created_at": now,
         "updated_at": now,
         "completed_at": None,
     }
+    if payload.expected_yield_pct is not None:
+        try:
+            ey = float(payload.expected_yield_pct)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="expected_yield_pct must be a number")
+        if ey < 0 or ey > 100:
+            raise HTTPException(status_code=400, detail="expected_yield_pct must be 0–100")
+        order["expected_yield_pct"] = ey
     await db.production_work_orders.insert_one(dict(order))
     invalidate_workspace_list_cache(principal["workspace_id"], "production", "me_work", "calendar")
     return {"ok": True, "work_order": await _enrich_work_order(order)}
@@ -8999,6 +9215,20 @@ async def patch_production_work_order(
         upd["due_date"] = payload.due_date.strip()[:32]
     if payload.notes is not None:
         upd["notes"] = payload.notes.strip()[:2000]
+    if payload.unit is not None:
+        upd["unit"] = (payload.unit.strip() or "units")[:32]
+    if payload.input_unit is not None:
+        upd["input_unit"] = payload.input_unit.strip()[:32]
+    if payload.yield_tracking_enabled is not None:
+        upd["yield_tracking_enabled"] = bool(payload.yield_tracking_enabled)
+    if payload.expected_yield_pct is not None:
+        try:
+            ey = float(payload.expected_yield_pct)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="expected_yield_pct must be a number")
+        if ey < 0 or ey > 100:
+            raise HTTPException(status_code=400, detail="expected_yield_pct must be 0–100")
+        upd["expected_yield_pct"] = ey
     if payload.assigned_user_ids is not None:
         if not _can_lead_production(principal, membership):
             raise HTTPException(
@@ -9096,6 +9326,173 @@ async def delete_production_work_order(work_order_id: str, principal=Depends(get
     await db.production_work_orders.delete_one(
         {"id": work_order_id, "department_id": dept["department_id"]},
     )
+    await db.production_daily_logs.delete_many(
+        {"work_order_id": work_order_id, "workspace_id": principal["workspace_id"]},
+    )
+    return {"ok": True}
+
+
+@api_router.get("/production/settings")
+async def get_production_settings(principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    rate = dept.get("overtime_rate_per_hour")
+    try:
+        rate_f = float(rate) if rate is not None else None
+    except (TypeError, ValueError):
+        rate_f = None
+    return {
+        "overtime_rate_per_hour": rate_f,
+        "common_units": list(prod_daily.COMMON_UNITS),
+        "can_manage": dept_access.is_workspace_ceo(principal) or (
+            (await dept_access.get_department_membership(db, dept["department_id"], principal["user_id"]) or {}).get("role") == "lead"
+        ),
+    }
+
+
+@api_router.put("/production/settings")
+async def put_production_settings(payload: ProductionSettingsInput, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_lead_production(principal, membership):
+        raise HTTPException(status_code=403, detail="Only a production lead or CEO can change settings")
+    upd = {}
+    if payload.overtime_rate_per_hour is not None:
+        try:
+            rate = float(payload.overtime_rate_per_hour)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="overtime_rate_per_hour must be a number")
+        if rate < 0:
+            raise HTTPException(status_code=400, detail="overtime_rate_per_hour cannot be negative")
+        upd["overtime_rate_per_hour"] = rate
+    if not upd:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    await db.departments.update_one(
+        {"department_id": dept["department_id"]},
+        {"$set": upd},
+    )
+    invalidate_departments_cache(principal["workspace_id"])
+    invalidate_workspace_list_cache(principal["workspace_id"], "production")
+    return {"ok": True, **upd}
+
+
+@api_router.get("/production/work-orders/{work_order_id}/daily-logs")
+async def list_production_daily_logs(work_order_id: str, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    rows = await db.production_daily_logs.find(
+        {"work_order_id": work_order_id, "workspace_id": principal["workspace_id"]},
+        {"_id": 0},
+    ).sort("date", -1).to_list(366)
+    expected = order.get("expected_yield_pct") if order.get("yield_tracking_enabled") else None
+    logs = [prod_daily.enrich_daily_log(r, expected_yield_pct=expected) for r in rows]
+    return {
+        "work_order_id": work_order_id,
+        "yield_tracking_enabled": bool(order.get("yield_tracking_enabled")),
+        "expected_yield_pct": order.get("expected_yield_pct"),
+        "unit": order.get("unit") or "units",
+        "input_unit": order.get("input_unit") or "",
+        "logs": logs,
+        "rollup": prod_daily.rollup_work_order_logs(
+            rows,
+            quantity_planned=order.get("quantity_planned"),
+            yield_tracking_enabled=bool(order.get("yield_tracking_enabled")),
+            expected_yield_pct=order.get("expected_yield_pct"),
+        ),
+    }
+
+
+@api_router.post("/production/work-orders/{work_order_id}/daily-logs")
+async def upsert_production_daily_log(
+    work_order_id: str,
+    payload: ProductionDailyLogInput,
+    principal=Depends(get_principal),
+):
+    dept = await _production_department(principal)
+    order = await _get_work_order(dept["department_id"], work_order_id)
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_update_production_order(principal, membership, order):
+        raise HTTPException(status_code=403, detail="You are not assigned to this work order")
+    try:
+        day = prod_daily.normalize_log_date(payload.date)
+        target = prod_daily.parse_nonneg_float(payload.target_quantity, field="target_quantity")
+        actual = prod_daily.parse_nonneg_float(payload.actual_quantity, field="actual_quantity")
+        ot = prod_daily.parse_nonneg_float(payload.overtime_hours, field="overtime_hours")
+        in_qty = prod_daily.parse_nonneg_float(payload.input_quantity, field="input_quantity")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if target is None and actual is None:
+        raise HTTPException(status_code=400, detail="Enter a target and/or actual quantity for the day")
+    if not order.get("yield_tracking_enabled"):
+        in_qty = None
+    unit = (payload.unit or order.get("unit") or "units").strip()[:32] or "units"
+    input_unit = (payload.input_unit or order.get("input_unit") or "").strip()[:32]
+    rate = dept.get("overtime_rate_per_hour")
+    try:
+        rate_f = float(rate) if rate is not None else None
+    except (TypeError, ValueError):
+        rate_f = None
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": f"pdl_{uuid.uuid4().hex[:10]}",
+        "work_order_id": work_order_id,
+        "department_id": dept["department_id"],
+        "workspace_id": principal["workspace_id"],
+        "date": day,
+        "target_quantity": target,
+        "actual_quantity": actual,
+        "unit": unit,
+        "overtime_hours": ot,
+        "overtime_rate_per_hour": rate_f,
+        "input_quantity": in_qty,
+        "input_unit": input_unit if order.get("yield_tracking_enabled") else "",
+        "notes": (payload.notes or "").strip()[:1000],
+        "logged_by": principal["user_id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    existing = await db.production_daily_logs.find_one(
+        {"work_order_id": work_order_id, "date": day, "workspace_id": principal["workspace_id"]},
+        {"_id": 0, "id": 1, "created_at": 1},
+    )
+    if existing:
+        doc["id"] = existing["id"]
+        doc["created_at"] = existing.get("created_at") or now
+        await db.production_daily_logs.update_one(
+            {"id": existing["id"]},
+            {"$set": {k: v for k, v in doc.items() if k != "id"}},
+        )
+    else:
+        await db.production_daily_logs.insert_one(dict(doc))
+    invalidate_workspace_list_cache(principal["workspace_id"], "production")
+    expected = order.get("expected_yield_pct") if order.get("yield_tracking_enabled") else None
+    return {
+        "ok": True,
+        "log": prod_daily.enrich_daily_log(doc, expected_yield_pct=expected),
+        "updated": bool(existing),
+    }
+
+
+@api_router.delete("/production/daily-logs/{log_id}")
+async def delete_production_daily_log(log_id: str, principal=Depends(get_principal)):
+    dept = await _production_department(principal)
+    log = await db.production_daily_logs.find_one(
+        {"id": log_id, "workspace_id": principal["workspace_id"]},
+        {"_id": 0},
+    )
+    if not log:
+        raise HTTPException(status_code=404, detail="Daily log not found")
+    order = await _get_work_order(dept["department_id"], log["work_order_id"])
+    membership = await dept_access.get_department_membership(
+        db, dept["department_id"], principal["user_id"],
+    )
+    if not _can_update_production_order(principal, membership, order):
+        raise HTTPException(status_code=403, detail="You are not assigned to this work order")
+    await db.production_daily_logs.delete_one({"id": log_id})
+    invalidate_workspace_list_cache(principal["workspace_id"], "production")
     return {"ok": True}
 
 
@@ -9209,6 +9606,7 @@ async def _enrich_procurement_request(
             out["blocking_production_orders"] = list(mapping.get(rid) or [])
         else:
             out["blocking_production_orders"] = []
+    out = proc_metrics.attach_lead_time_metrics(out)
     return out
 
 
@@ -9293,6 +9691,7 @@ class ProcurementRequestPatch(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     expected_delivery_date: Optional[str] = None
+    actual_delivery_date: Optional[str] = None
     priority: Optional[str] = None
 
 
@@ -9310,7 +9709,11 @@ async def procurement_vendor_suggestions(
         return {"suggestions": []}
     rows = await db.procurement_requests.find(
         {"department_id": dept["department_id"]},
-        {"_id": 0, "item": 1, "vendor_name": 1, "cost": 1, "created_at": 1},
+        {
+            "_id": 0, "item": 1, "vendor_name": 1, "cost": 1, "created_at": 1,
+            "ordered_at": 1, "expected_delivery_date": 1, "actual_delivery_date": 1,
+            "vendor_selected_at": 1,
+        },
     ).sort("created_at", -1).to_list(2000)
     groups: dict[str, list] = {}
     for r in rows:
@@ -9345,12 +9748,17 @@ async def procurement_vendor_suggestions(
             avg = sum(prior_costs) / len(prior_costs)
             if avg > 0 and abs(last_cost - avg) / avg > 0.15:
                 price_changed = True
+        perf = proc_metrics.vendor_performance(hist_sorted)
         suggestions.append({
             "vendor_name": vendor,
             "last_cost": last_cost,
             "last_ordered_at": last.get("created_at") or "",
             "times_used": len(hist_sorted),
             "price_changed": price_changed,
+            "avg_fulfillment_delay_days": perf["avg_fulfillment_delay_days"],
+            "avg_fulfillment_days": perf["avg_fulfillment_days"],
+            "delay_sample_count": perf["delay_sample_count"],
+            "fulfillment_sample_count": perf["fulfillment_sample_count"],
         })
     suggestions.sort(key=lambda s: (s["times_used"], s.get("last_ordered_at") or ""), reverse=True)
     return {"suggestions": suggestions[:10]}
@@ -9386,6 +9794,7 @@ async def list_procurement_requests(
         rows, workspace_id=principal["workspace_id"],
     )
     items.sort(key=_procurement_queue_sort_key)
+    lead_time_summary = proc_metrics.department_lead_time_summary(items)
 
     payload_out = {
         "department_id": dept["department_id"],
@@ -9397,6 +9806,7 @@ async def list_procurement_requests(
         "is_lead": is_lead,
         "can_approve": is_lead,
         "my_user_id": principal["user_id"],
+        "lead_time_summary": lead_time_summary,
     }
     simple_cache.put(cache_key, payload_out, _DEPT_LIST_CACHE_TTL_SECONDS)
     return payload_out
@@ -9429,13 +9839,14 @@ async def create_procurement_request(
     if priority not in PROCUREMENT_PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
     now = datetime.now(timezone.utc).isoformat()
+    vendor = (payload.vendor_name or "").strip()
     req = {
         "id": f"preq_{uuid.uuid4().hex[:10]}",
         "department_id": dept["department_id"],
         "workspace_id": principal["workspace_id"],
         "item": item,
         "quantity": quantity,
-        "vendor_name": (payload.vendor_name or "").strip(),
+        "vendor_name": vendor,
         "cost": cost,
         "requested_by": principal["user_id"],
         "approved_by": None,
@@ -9443,6 +9854,9 @@ async def create_procurement_request(
         "notes": (payload.notes or "").strip(),
         "expected_delivery_date": _normalize_expected_delivery_date(payload.expected_delivery_date),
         "priority": priority,
+        "vendor_selected_at": now if vendor else None,
+        "ordered_at": None,
+        "actual_delivery_date": None,
         "created_at": now,
         "updated_at": now,
     }
@@ -9493,7 +9907,14 @@ async def patch_procurement_request(
         upd["quantity"] = quantity
     if payload.vendor_name is not None:
         content_touched = True
-        upd["vendor_name"] = payload.vendor_name.strip()
+        new_vendor = payload.vendor_name.strip()
+        upd["vendor_name"] = new_vendor
+        prev_vendor = (req.get("vendor_name") or "").strip()
+        # Stamp vendor lock-in when a vendor is first set or changed to a different one.
+        if new_vendor and new_vendor != prev_vendor:
+            upd["vendor_selected_at"] = datetime.now(timezone.utc).isoformat()
+        elif not new_vendor:
+            upd["vendor_selected_at"] = None
     if payload.cost is not None:
         content_touched = True
         try:
@@ -9521,6 +9942,8 @@ async def patch_procurement_request(
                 status_code=403,
                 detail="You can only edit expected delivery date on your own open requests",
             )
+    if payload.actual_delivery_date is not None:
+        upd["actual_delivery_date"] = _normalize_expected_delivery_date(payload.actual_delivery_date) or None
 
     if content_touched and not can_edit_content:
         raise HTTPException(
@@ -9546,6 +9969,13 @@ async def patch_procurement_request(
             else:
                 # ordered / delivered / back to requested — members may advance open work
                 upd["status"] = new_status
+                if new_status == "ordered" and not req.get("ordered_at"):
+                    upd["ordered_at"] = datetime.now(timezone.utc).isoformat()
+                    # If vendor is already set but never stamped, lock it in at order time.
+                    if (req.get("vendor_name") or "").strip() and not req.get("vendor_selected_at"):
+                        upd["vendor_selected_at"] = upd["ordered_at"]
+                if new_status == "delivered" and not req.get("actual_delivery_date"):
+                    upd["actual_delivery_date"] = datetime.now(timezone.utc).date().isoformat()
 
     helm_dept_drafts.apply_status_completion(req, upd, done_status="delivered")
     if not upd:
@@ -14250,6 +14680,10 @@ async def _ensure_indexes():
         (db.production_work_orders, [("department_id", 1), ("due_date", 1)], {}),
         (db.production_work_orders, [("linked_procurement_request_id", 1)], {}),
         (db.production_work_orders, [("linked_maintenance_ticket_id", 1)], {}),
+        (db.production_daily_logs, [("id", 1)], {"unique": True}),
+        (db.production_daily_logs, [("work_order_id", 1), ("date", 1)], {"unique": True}),
+        (db.production_daily_logs, [("workspace_id", 1), ("date", -1)], {}),
+        (db.production_daily_logs, [("department_id", 1), ("date", -1)], {}),
         (db.procurement_requests, [("id", 1)], {"unique": True}),
         (db.procurement_requests, [("department_id", 1), ("created_at", -1)], {}),
         (db.procurement_requests, [("department_id", 1), ("status", 1)], {}),
