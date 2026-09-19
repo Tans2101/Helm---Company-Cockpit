@@ -9,14 +9,14 @@ export const SITE_SEARCH_ACTIONS = [
     label: "About",
     to: "/about",
     description: "Site",
-    keywords: ["about helm", "company", "mission", "founder", "story"],
+    keywords: ["about trenston", "about helm", "company", "mission", "founder", "story"],
   },
   {
     id: "features",
     label: "Features",
     to: "/features",
     description: "Site",
-    keywords: ["product", "modules", "cockpit", "what helm includes"],
+    keywords: ["product", "modules", "cockpit", "what trenston includes", "what helm includes"],
   },
   {
     id: "pricing",
