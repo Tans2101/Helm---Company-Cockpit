@@ -15,7 +15,7 @@ import MarketingFooter from "@/components/marketing/MarketingFooter";
 import ProductScreens from "@/components/marketing/ProductScreens";
 import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
-import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
+import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PLANS, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
 import IntegrationsShowcase from "@/components/marketing/IntegrationsShowcase";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +38,8 @@ const HERO_LINES = [
   "Production: today’s output 820 / 1,000 units",
   "Maintenance: 2 spares low · overhead over budget",
 ];
+
+const STARTER_PLAN = PLANS.find((p) => p.id === "starter");
 
 export default function Features() {
   const { authed, enter } = useMarketingAuth();
@@ -154,7 +156,17 @@ export default function Features() {
       <section className="px-6 pb-16 border-t border-helm-cream/[0.05] pt-16">
         <div className="mx-auto max-w-6xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate mb-6">Included in Trenston</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate mb-2">
+            Included on Starter
+          </p>
+          <p className="text-sm text-helm-slate mb-6 max-w-xl">
+            What you get on the {STARTER_PLAN?.label || "Starter"} plan
+            {STARTER_PLAN?.price != null ? ` ($${STARTER_PLAN.price}/mo)` : ""}.
+            {" "}
+            <Link to="/pricing" className="text-helm-cream hover:text-helm-gold transition-colors">
+              Compare Free, Growth, and Business →
+            </Link>
+          </p>
           <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
             {PRO_FEATURES.map((f) => (
               <li key={f} className="flex items-start gap-2.5 text-sm text-helm-cream/85 border-b border-helm-cream/[0.06] pb-3">
