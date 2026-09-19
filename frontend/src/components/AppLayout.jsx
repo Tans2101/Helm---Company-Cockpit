@@ -6,6 +6,7 @@ import {
   Menu, X, UsersRound, ChevronDown, Check, Plus, Sun, Wallet, Search,
   HelpCircle, Shield, Scale, Settings, Plug, Download, ScrollText,
   Trash2, Building2, CreditCard, ShieldCheck, AlertTriangle, FolderOpen,
+  Info, LayoutGrid, Receipt,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
@@ -26,6 +27,7 @@ import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import ActionSearchBar from "@/components/kokonutui/action-search-bar";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
 import HelmMark from "@/components/HelmMark";
+import { SITE_SEARCH_ACTIONS } from "@/lib/siteSearchActions";
 
 const NAV = [
   { to: "/app/me", label: "My Day", icon: Sun, id: "myday", end: true },
@@ -59,6 +61,16 @@ function departmentNavVisible(dept) {
 function departmentNavTo(type) {
   return departmentPath(type);
 }
+
+const SITE_SEARCH_ICONS = {
+  about: Info,
+  features: LayoutGrid,
+  help: HelpCircle,
+  "security-page": Shield,
+  terms: FileText,
+  privacy: Scale,
+  refunds: Receipt,
+};
 
 function pathMatches(to, pathname, end) {
   if (end) return pathname === to;
@@ -373,40 +385,13 @@ function QuickNavPalette({ open, onOpenChange }) {
       });
     }
 
-    const siteActions = [
-      {
-        id: "help",
-        label: "Help",
-        to: "/help",
-        description: "Site",
-        keywords: ["docs", "how to", "guide", "faq"],
-        icon: <HelpCircle className="w-4 h-4" />,
-      },
-      {
-        id: "security-page",
-        label: "Security",
-        to: "/security",
-        description: "Site",
-        keywords: ["trust", "encryption", "privacy"],
-        icon: <Shield className="w-4 h-4" />,
-      },
-      {
-        id: "terms",
-        label: "Terms of Service",
-        to: "/terms",
-        description: "Site",
-        keywords: ["tos", "legal", "terms"],
-        icon: <FileText className="w-4 h-4" />,
-      },
-      {
-        id: "privacy",
-        label: "Privacy Policy",
-        to: "/privacy",
-        description: "Site",
-        keywords: ["legal", "data", "gdpr"],
-        icon: <Scale className="w-4 h-4" />,
-      },
-    ];
+    const siteActions = SITE_SEARCH_ACTIONS.map((item) => {
+      const Icon = SITE_SEARCH_ICONS[item.id] || HelpCircle;
+      return {
+        ...item,
+        icon: <Icon className="w-4 h-4" />,
+      };
+    });
 
     return [...navActions, ...deptActions, ...settingsActions, ...siteActions];
   }, [user, deptData, isOwner, canBilling, canExportActivity]);
