@@ -10,7 +10,7 @@
  * switches so revisits show last data instantly while a background refetch
  * runs when the entry is stale.
  */
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { invalidateFetchQueries } from "@/lib/fetchInvalidation";
@@ -18,16 +18,26 @@ import { invalidateFetchQueries } from "@/lib/fetchInvalidation";
 /** Short client stale window — safety net / dedupe only; writes invalidate. */
 export const FETCH_STALE_MS = 5_000;
 
+/** Stable default so omitted deps don't allocate a new [] every render. */
+const EMPTY_DEPS = [];
+
 export function fetchQueryKey(path) {
   return ["fetch", path];
 }
 
-export function useFetch(path, deps = []) {
+export function useFetch(path, deps = EMPTY_DEPS) {
   const queryClient = useQueryClient();
   const enabled = Boolean(path);
   // deps are folded into the key so callers that pass e.g. [weekStart] refetch
   // when those change, matching the previous useEffect dependency behavior.
-  const queryKey = enabled ? ["fetch", path, ...deps] : ["fetch", "__disabled__"];
+  // Memoize so useCallback(setData) doesn't see a new key array every render
+  // (CI treats that exhaustive-deps warning as a build error).
+  const queryKey = useMemo(
+    () => (enabled ? ["fetch", path, ...deps] : ["fetch", "__disabled__"]),
+    // Spread caller deps (primitives) — do not depend on the deps array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps is a value list
+    [enabled, path, ...deps],
+  );
 
   const query = useQuery({
     queryKey,
