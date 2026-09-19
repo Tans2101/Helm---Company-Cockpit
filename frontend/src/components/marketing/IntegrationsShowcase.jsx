@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { INTEGRATIONS_SHOWCASE } from "@/lib/marketingCopy";
 
@@ -29,7 +30,7 @@ export default function IntegrationsShowcase({ compact = false }) {
             Connect what you run today. Nothing requires an integration — manual entry stays available.
           </p>
         </motion.div>
-        <ul className="mt-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-10 list-none p-0 m-0">
+        <ul className="mt-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-8 gap-y-10 list-none p-0 m-0">
           {INTEGRATIONS_SHOWCASE.map((item, i) => (
             <motion.li
               key={item.name}
@@ -45,6 +46,15 @@ export default function IntegrationsShowcase({ compact = false }) {
             </motion.li>
           ))}
         </ul>
+        <p className="mt-10">
+          <Link
+            to="/integrations"
+            className="inline-flex items-center gap-2 text-sm text-helm-cream hover:text-helm-gold transition-colors"
+          >
+            See what each integration does
+            <span aria-hidden>→</span>
+          </Link>
+        </p>
       </div>
     </section>
   );

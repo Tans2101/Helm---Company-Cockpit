@@ -91,6 +91,16 @@ export default function Features() {
                     <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-slate">{mod.ceoValue}</p>
                     <h3 className="font-display mt-2 text-2xl tracking-tight text-helm-cream">{mod.title}</h3>
                     <p className="mt-3 text-sm text-helm-slate leading-relaxed">{mod.body}</p>
+                    {mod.link ? (
+                      <p className="mt-3">
+                        <Link
+                          to={mod.link.to}
+                          className="text-sm text-helm-cream hover:text-helm-gold transition-colors"
+                        >
+                          {mod.link.label} →
+                        </Link>
+                      </p>
+                    ) : null}
                     <p className="mt-4 text-sm text-helm-slate/90 leading-relaxed pl-4 border-l border-helm-cream/15">{mod.example}</p>
                   </motion.article>
                 );
@@ -126,6 +136,7 @@ export default function Features() {
               View pricing
             </a>
             <Link to="/about" className="hover:text-helm-cream transition-colors">About Helm</Link>
+            <Link to="/integrations" className="hover:text-helm-cream transition-colors">Integrations</Link>
             <Link to="/security" className="hover:text-helm-cream transition-colors">Security</Link>
           </p>
         </div>

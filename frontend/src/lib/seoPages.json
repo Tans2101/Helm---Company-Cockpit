@@ -20,6 +20,12 @@
       "ogTitle": "Helm Features",
       "ogDescription": "See what Helm includes: briefing, decisions, runway, Ask Helm, and department workflows in one CEO operating system."
     },
+    "/integrations": {
+      "title": "Integrations · Helm",
+      "description": "Connect Google, QuickBooks, Xero, SAP Business One, HubSpot, and Slack webhook alerts to Helm — no migration required.",
+      "ogTitle": "Helm Integrations",
+      "ogDescription": "What each Helm integration actually does: Calendar & Gmail, accounting, CRM, and Slack alerts — grounded in shipped product."
+    },
     "/help": {
       "title": "Help · Helm",
       "description": "How to get started with Helm and where to find support.",

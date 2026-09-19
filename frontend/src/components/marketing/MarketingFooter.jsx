@@ -6,6 +6,7 @@ import { goToHomeHash } from "@/lib/marketingHash";
 const FOOTER_LINKS = [
   { to: "/", label: "Home" },
   { to: "/features", label: "Features" },
+  { to: "/integrations", label: "Integrations" },
   { to: "/about", label: "About" },
   { to: "/help", label: "Help" },
   { to: "/security", label: "Security" },

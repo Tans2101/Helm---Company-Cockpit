@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { to: "/", label: "Home", match: ["/"] },
   { to: "/features", label: "Features", match: ["/features"] },
+  { to: "/integrations", label: "Integrations", match: ["/integrations"] },
   { to: "/about", label: "About", match: ["/about"] },
   { to: "/security", label: "Security", match: ["/security"] },
   { to: "/#pricing", label: "Pricing", match: ["/#pricing"], hash: "pricing" },

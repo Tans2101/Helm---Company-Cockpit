@@ -264,6 +264,14 @@ export default function Landing() {
               <div key={item.q} className="border-b border-helm-cream/[0.06] pb-4">
                 <p className="text-sm text-helm-cream">{item.q}</p>
                 <p className="text-xs text-helm-slate mt-1.5 leading-relaxed">{item.a}</p>
+                {item.link ? (
+                  <Link
+                    to={item.link.to}
+                    className="inline-block mt-2 text-xs text-helm-cream hover:text-helm-gold transition-colors"
+                  >
+                    {item.link.label} →
+                  </Link>
+                ) : null}
               </div>
             ))}
           </div>

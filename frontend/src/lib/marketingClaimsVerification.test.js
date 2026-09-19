@@ -13,6 +13,7 @@ import {
   FOUNDER_NOTE,
   INTEGRATIONS_SHOWCASE,
   INTEGRATIONS_PUBLIC_BLURB,
+  PUBLIC_INTEGRATIONS,
 } from "./marketingCopy";
 
 describe("marketing claim verification log", () => {
@@ -23,32 +24,53 @@ describe("marketing claim verification log", () => {
     expect(honest.body).toContain("Decision Center");
   });
 
-  test("pricing FAQ and Features list the same shipped integrations including SAP B1", () => {
+  test("pricing FAQ and Features point at /integrations as the source of truth", () => {
     const integrations = PRICING_FAQ.find((q) => q.q.includes("integrations"));
-    expect(integrations.a).toMatch(/Gmail/i);
-    expect(integrations.a).toMatch(/Calendar/i);
+    expect(integrations.link?.to).toBe("/integrations");
+    expect(integrations.a).toMatch(/Google/i);
     expect(integrations.a).toMatch(/QuickBooks/i);
     expect(integrations.a).toMatch(/Xero/i);
     expect(integrations.a).toMatch(/SAP Business One/i);
     expect(integrations.a).toMatch(/HubSpot/i);
+    expect(integrations.a).toMatch(/Slack/i);
     const mod = FEATURE_MODULES.find((m) => m.title === "Integrations");
     expect(mod.body).toBe(INTEGRATIONS_PUBLIC_BLURB);
-    expect(mod.body).toMatch(/SAP Business One/i);
+    expect(mod.link?.to).toBe("/integrations");
     expect(INTEGRATIONS_SHOWCASE.map((i) => i.name)).toEqual([
       "Google",
       "QuickBooks",
       "Xero",
       "SAP Business One",
       "HubSpot",
+      "Slack",
     ]);
   });
 
-  test("homepage Briefing and FAQ both acknowledge Gmail draft replies", () => {
+  test("public integrations page cards stay grounded in shipped scope", () => {
+    expect(PUBLIC_INTEGRATIONS.map((i) => i.id)).toEqual([
+      "google",
+      "quickbooks",
+      "xero",
+      "sap_b1",
+      "hubspot",
+      "slack",
+    ]);
+    const google = PUBLIC_INTEGRATIONS.find((i) => i.id === "google");
+    expect(google.scope).toMatch(/snippet/i);
+    expect(google.scope.toLowerCase()).toMatch(/not full inbox/);
+    const slack = PUBLIC_INTEGRATIONS.find((i) => i.id === "slack");
+    expect(slack.scope).toMatch(/webhook/i);
+    expect(slack.scope.toLowerCase()).toMatch(/no oauth/);
+    expect(slack.scope.toLowerCase()).toMatch(/no dms/);
+    expect(slack.description.toLowerCase()).not.toMatch(/slash command/);
+  });
+
+  test("homepage Briefing acknowledges Gmail draft replies", () => {
     const briefing = CEO_DAY.find((s) => s.title === "Briefing");
     expect(briefing.body).toMatch(/Gmail/i);
     expect(briefing.body).toMatch(/draft/i);
-    const integrations = PRICING_FAQ.find((q) => q.q.includes("integrations"));
-    expect(integrations.a).toMatch(/draft/i);
+    const google = PUBLIC_INTEGRATIONS.find((i) => i.id === "google");
+    expect(google.description).toMatch(/draft/i);
   });
 
   test("Decision Center module copy does not claim automated outcome-landed tracking", () => {

@@ -72,7 +72,11 @@ export const PRICING_FAQ = [
   { q: "Is there a free plan?", a: "Yes. Free includes 3 seats, 5 free AI extracts to try it (then upgrade), Ask Helm (10 messages/month), and the AI briefing. Paid plans add monthly extract and Ask Helm quotas, more seats, and integrations." },
   { q: "Is there a free trial?", a: "Yes. Starter, Growth, and Business include a 7-day free trial. Cancel before it ends and you won't be charged." },
   { q: "Can my leadership team use Helm?", a: "Yes. Free supports up to 3 members, Starter up to 10, Growth up to 25, and Business up to 50, with role-based access packs." },
-  { q: "What integrations are included?", a: "Paid plans can connect Google (Calendar, Gmail briefing threads with AI draft replies you review and send in Gmail, Sheets export, and Drive bill import), QuickBooks or Xero, SAP Business One, and HubSpot. Free stays manual-only." },
+  {
+    q: "What integrations are included?",
+    a: "Paid plans can connect Google, QuickBooks or Xero, SAP Business One, HubSpot, and Slack webhook alerts. Free stays manual-only.",
+    link: { to: "/integrations", label: "See what each integration does" },
+  },
   { q: "Can I cancel anytime?", a: "Yes. Manage billing through Paddle. Cancellation takes effect at the end of the current billing period. No refunds after payment. Use the trial to evaluate." },
 ];
 
@@ -83,11 +87,77 @@ export const INTEGRATIONS_SHOWCASE = [
   { name: "Xero", note: "Accounting" },
   { name: "SAP Business One", note: "ERP" },
   { name: "HubSpot", note: "CRM" },
+  { name: "Slack", note: "Webhook alerts" },
 ];
 
-/** Shared public integrations blurb — keep Pricing FAQ and Features module aligned. */
+/**
+ * Short Features / Pricing pointer — full capability detail lives on /integrations
+ * (sourced from backend/integrations_catalog.py + Slack webhook settings).
+ */
 export const INTEGRATIONS_PUBLIC_BLURB =
-  "Connect Google (Calendar and Gmail), QuickBooks or Xero, SAP Business One for ERP-based companies, and HubSpot where they fit. Manual entry stays available when a system is not connected.";
+  "Connect the tools you already use so Financials, Briefing, Pipeline, and alerts stay current. Manual entry stays available when a system is not connected.";
+
+export const PUBLIC_INTEGRATIONS_INTRO =
+  "Helm connects to the tools your team already uses — nothing to migrate, nothing to duplicate.";
+
+/** Public /integrations cards — text wordmarks only (vendor logos need written permission). */
+export const PUBLIC_INTEGRATIONS = [
+  {
+    id: "google",
+    name: "Google Calendar & Gmail",
+    category: "Calendar & email",
+    description:
+      "Sync meetings into Helm Calendar and your briefing. One Google connect also enables Gmail thread surfacing, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
+    feeds: "Feeds Calendar & Briefing",
+    scope:
+      "Gmail is snippet-level thread surfacing (sender, subject, preview) plus optional draft replies you review and send in Gmail — not full inbox or message-body access.",
+  },
+  {
+    id: "quickbooks",
+    name: "QuickBooks",
+    category: "Finance",
+    description:
+      "Pull purchases and invoices from your QuickBooks company into Financials. Use QuickBooks or Xero; you typically connect one accounting system.",
+    feeds: "Feeds Financials & Decision Engine",
+  },
+  {
+    id: "xero",
+    name: "Xero",
+    category: "Finance",
+    description:
+      "Pull invoices and bills from Xero into Financials, the global alternative to QuickBooks (UK, AU, NZ, and beyond).",
+    feeds: "Feeds Financials & Decision Engine",
+  },
+  {
+    id: "sap_b1",
+    name: "SAP Business One",
+    category: "Finance",
+    description:
+      "Pull A/R invoices and A/P purchase invoices from SAP Business One Service Layer into Financials.",
+    feeds: "Feeds Financials & Decision Engine",
+  },
+  {
+    id: "hubspot",
+    name: "HubSpot",
+    category: "Sales",
+    description:
+      "Pull HubSpot CRM deals into Helm Pipeline and Telemetry, built for SMB and mid-market teams.",
+    feeds: "Feeds Pipeline & Telemetry",
+  },
+  {
+    id: "slack",
+    name: "Slack",
+    category: "Alerts",
+    description:
+      "Paste a Slack Incoming Webhook URL to post high-severity Helm alerts to a channel.",
+    feeds: "Delivers high-severity alerts",
+    scope:
+      "Webhook-based alerts only — not a full Slack app. No OAuth, no DMs, no slash commands.",
+  },
+];
+
+export const PUBLIC_INTEGRATIONS_ATTRIBUTION =
+  "Google, QuickBooks, Xero, SAP, HubSpot, and Slack are trademarks of their respective owners. Helm is not affiliated with or endorsed by these companies.";
 
 export const FEATURE_CATEGORIES = [
   {
@@ -374,6 +444,7 @@ export const FEATURE_MODULES = [
     ceoValue: "Your team keeps their tools. You get the picture.",
     body: INTEGRATIONS_PUBLIC_BLURB,
     example: "Finance syncs QuickBooks or SAP Business One. Important Gmail threads surface in Briefing. You see it all in the cockpit.",
+    link: { to: "/integrations", label: "See all integrations" },
   },
   {
     title: "Team & Access",

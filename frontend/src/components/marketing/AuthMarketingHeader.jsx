@@ -5,6 +5,7 @@ import { goToHomeHash } from "@/lib/marketingHash";
 const LINKS = [
   { to: "/", label: "Home" },
   { to: "/features", label: "Features" },
+  { to: "/integrations", label: "Integrations" },
   { to: "/about", label: "About" },
   { to: "/security", label: "Security" },
   { to: "/#pricing", label: "Pricing", hash: "pricing" },
