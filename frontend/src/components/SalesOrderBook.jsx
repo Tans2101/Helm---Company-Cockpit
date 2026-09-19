@@ -37,7 +37,7 @@ export default function SalesOrderBook() {
   const [busy, setBusy] = useState(false);
   const [targetDraft, setTargetDraft] = useState("");
 
-  const entries = data?.entries || [];
+  const entries = useMemo(() => data?.entries || [], [data?.entries]);
   const summary = data?.summary || null;
   const tvs = data?.target_vs_actual || null;
   const canManageTarget = Boolean(data?.is_lead || data?.is_ceo);
