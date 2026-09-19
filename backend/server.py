@@ -3189,7 +3189,7 @@ class TemplateInput(BaseModel):
 
 
 _PRESERVE_WS_FIELDS = frozenset({
-    "join_code", "oauth_session_token_enc", "google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens", "sap_b1_credentials",
+    "join_code", "oauth_session_token_enc", "quickbooks_tokens", "xero_tokens", "hubspot_tokens", "sap_b1_credentials",
     "plan", "billing_provider", "paddle_subscription_id", "paddle_customer_id",
     "paddle_last_event_at", "billing_status", "subscription_status", "canceled_at",
     "workspace_id", "owner_user_id", "created_at",
@@ -3378,9 +3378,9 @@ def _gmail_briefing_cache_key(workspace: dict, principal: dict | None) -> str:
     return f"{ws_id}:{uid}"
 
 
-def _gmail_timeout_fallback(workspace: dict) -> tuple[list, dict]:
+def _gmail_timeout_fallback(*, connected: bool = False) -> tuple[list, dict]:
     return [], {
-        "connected": bool(_integration_tokens(workspace, "google_tokens")),
+        "connected": connected,
         "needs_reconnect": False,
         "compose": False,
     }
@@ -3396,6 +3396,11 @@ async def _briefing_gmail_fetch_and_store(
     workspace: dict, principal: dict | None, cache_key: str,
 ) -> tuple[list, dict]:
     """Live Gmail fetch with the existing 3s timeout; updates SWR cache on success."""
+    connected_hint = False
+    if principal and principal.get("user_id"):
+        connected_hint = await _user_google_tokens_present(
+            workspace.get("workspace_id") or "", principal["user_id"],
+        )
     try:
         threads, meta = await asyncio.wait_for(
             _briefing_email_threads(workspace, principal),
@@ -3403,7 +3408,7 @@ async def _briefing_gmail_fetch_and_store(
         )
     except asyncio.TimeoutError:
         logger.warning("Gmail briefing fetch timed out for %s", workspace.get("workspace_id"))
-        return _gmail_timeout_fallback(workspace)
+        return _gmail_timeout_fallback(connected=connected_hint)
     _gmail_briefing_cache[cache_key] = (threads, meta, time.monotonic())
     return threads, meta
 
@@ -3453,14 +3458,18 @@ async def _briefing_gmail_swr(
 
 
 async def _briefing_email_threads(workspace: dict, principal: dict | None = None) -> tuple[list, dict]:
-    """Fetch a few relevant Gmail threads for the briefing; never writes email content to Mongo."""
+    """Fetch a few relevant Gmail threads for the briefing; never writes email content to Mongo.
+
+    Uses the calling user's own Google tokens (per-user connection). Users who
+    have not connected Google simply get empty threads — never another teammate's
+    mailbox.
+    """
     meta = {"connected": False, "needs_reconnect": False, "compose": False, "access_denied": False}
-    tokens = _integration_tokens(workspace, "google_tokens")
-    if not tokens:
+    if not principal or not principal.get("user_id"):
         return [], meta
-    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
-        meta["connected"] = True
-        meta["access_denied"] = True
+    ws_id = workspace.get("workspace_id") or principal.get("workspace_id") or ""
+    tokens = await _user_google_tokens(ws_id, principal["user_id"])
+    if not tokens:
         return [], meta
     if not gcal.has_gmail_scope(tokens):
         meta["needs_reconnect"] = True
@@ -3472,19 +3481,19 @@ async def _briefing_email_threads(workspace: dict, principal: dict | None = None
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, limit=5,
         )
         if refreshed is not tokens:
-            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
+            await _store_user_google_tokens(ws_id, principal["user_id"], refreshed)
         return threads, meta
     except gcal.GoogleAuthError as exc:
-        logger.warning("Gmail auth failed for %s: %s", workspace.get("workspace_id"), exc)
+        logger.warning("Gmail auth failed for %s: %s", ws_id, exc)
         if "not granted" in str(exc).lower():
             meta["connected"] = False
             meta["needs_reconnect"] = True
         else:
-            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", None)
+            await _store_user_google_tokens(ws_id, principal["user_id"], None)
             meta["connected"] = False
         return [], meta
     except Exception:
-        logger.exception("Gmail fetch failed for %s", workspace.get("workspace_id"))
+        logger.exception("Gmail fetch failed for %s", ws_id)
         return [], meta
 
 
@@ -3957,7 +3966,7 @@ async def generate_briefing(principal=Depends(require_pro_perm("briefing:generat
         "financials": financials_for_synthesis(fin),
         "calendar": calendar_for_synthesis(
             cal_snap,
-            google_connected=bool(_integration_tokens(c, "google_tokens")),
+            google_connected=bool(cal_snap and cal_snap.get("live")),
         ),
     }
     system = (
@@ -5120,7 +5129,7 @@ async def telemetry(principal=Depends(require_section("telemetry", "telemetry:wr
         sources.append({"label": "Xero", "detail": "Accounting sync when connected", "freshness": "hourly"})
     if cred_crypto.credentials_present(c.get("hubspot_tokens")):
         sources.append({"label": "HubSpot", "detail": "CRM deals synced into Pipeline", "freshness": "live"})
-    if cred_crypto.credentials_present(c.get("google_tokens")):
+    if await _user_google_tokens_present(c["workspace_id"], principal["user_id"]):
         sources.append({"label": "Google Calendar", "detail": "Meeting load from your calendar", "freshness": "live"})
     suggested_risks = []
     try:
@@ -5221,11 +5230,11 @@ async def financials(principal=Depends(require_section("financials", "finance:wr
         helm_analytics.EVENT_DEPARTMENT_PAGE_VIEWED,
         {"department": dept_catalog.TYPE_ACCOUNTING_FINANCE},
     )
-    ws = await get_ws(principal["workspace_id"])
+    my_google = await _user_google_tokens(principal["workspace_id"], principal["user_id"])
     return {**fin, "entries": entries,
             "can_write": await can_access_financials(principal),
             "can_manage": "integrations:manage" in perms_for(principal["pack"]),
-            "google": gcal.google_capabilities(_integration_tokens(ws, "google_tokens")),
+            "google": gcal.google_capabilities(my_google),
             }
 
 
@@ -5635,7 +5644,7 @@ async def import_financial_document_from_drive(
     if not file_id:
         raise HTTPException(status_code=400, detail="file_id is required")
     c = await get_ws(principal["workspace_id"])
-    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    tokens = await _require_user_google_tokens(principal)
     if not gcal.has_scope(tokens, "drive.file"):
         raise HTTPException(status_code=400, detail="Reconnect Google to import from Drive")
     await _enforce_ai_extract_quota(principal)
@@ -5649,7 +5658,7 @@ async def import_financial_document_from_drive(
         data, mime, name, refreshed = await gcal.download_drive_file(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, file_id,
         )
-        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+        await _store_user_google_tokens(c["workspace_id"], principal["user_id"], refreshed)
     except gcal.GoogleAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
@@ -5690,7 +5699,7 @@ async def import_financial_document_from_drive(
 @api_router.post("/financials/export-sheets")
 async def export_financials_to_sheets(principal=Depends(require_section("financials", "finance:write"))):
     c = await get_ws(principal["workspace_id"])
-    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    tokens = await _require_user_google_tokens(principal)
     if not gcal.has_scope(tokens, "spreadsheets"):
         raise HTTPException(status_code=400, detail="Reconnect Google to export to Sheets")
     dept_ids = await dept_access.accessible_department_ids(
@@ -5734,7 +5743,7 @@ async def export_financials_to_sheets(principal=Depends(require_section("financi
         sid, url, refreshed = await gcal.create_spreadsheet(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, body,
         )
-        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+        await _store_user_google_tokens(c["workspace_id"], principal["user_id"], refreshed)
     except gcal.GoogleAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
@@ -7268,21 +7277,16 @@ async def _google_calendar_snapshot(
     week_start: Optional[datetime] = None,
     principal: dict | None = None,
 ) -> Optional[dict]:
-    """Fetch Google Calendar events for a week when connected; None if not connected."""
-    tokens = _integration_tokens(workspace, "google_tokens")
+    """Fetch the calling user's Google Calendar events for a week; None if not connected.
+
+    Never falls back to another teammate's tokens — personal Google data is per-user.
+    """
+    if not principal or not principal.get("user_id"):
+        return None
+    ws_id = workspace.get("workspace_id") or principal.get("workspace_id") or ""
+    tokens = await _user_google_tokens(ws_id, principal["user_id"])
     if not tokens:
         return None
-    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
-        return {
-            "events": [],
-            "meetings": [],
-            "focus_hours": 0,
-            "meeting_hours": 0,
-            "live": False,
-            "access_denied": True,
-            "source": "google_calendar",
-            "week_start": (week_start or _calendar_week_start(datetime.now(timezone.utc).date())).strftime("%Y-%m-%d"),
-        }
     if week_start is None:
         week_start = _calendar_week_start(datetime.now(timezone.utc).date())
     try:
@@ -7290,7 +7294,7 @@ async def _google_calendar_snapshot(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, week_start,
         )
         if refreshed is not tokens:
-            await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
+            await _store_user_google_tokens(ws_id, principal["user_id"], refreshed)
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         meetings = [e for e in events if e.get("date") == today_str and not e.get("all_day")]
         focus_hours, meeting_hours = gcal._compute_hours(meetings)
@@ -7304,11 +7308,11 @@ async def _google_calendar_snapshot(
             "week_start": week_start.strftime("%Y-%m-%d"),
         }
     except gcal.GoogleAuthError as exc:
-        logger.warning("Google Calendar auth failed for %s: %s", workspace.get("workspace_id"), exc)
-        await _store_integration_tokens(workspace["workspace_id"], "google_tokens", None)
+        logger.warning("Google Calendar auth failed for %s/%s: %s", ws_id, principal["user_id"], exc)
+        await _store_user_google_tokens(ws_id, principal["user_id"], None)
         return {"events": [], "meetings": [], "focus_hours": 0, "meeting_hours": 0, "live": False, "auth_error": str(exc)}
     except Exception:
-        logger.exception("Google Calendar fetch failed for %s", workspace.get("workspace_id"))
+        logger.exception("Google Calendar fetch failed for %s", ws_id)
         return None
 
 
@@ -7522,7 +7526,7 @@ async def calendar(
         data = {**dict(c["calendar"]), **live_cal}
     else:
         data = dict(c["calendar"])
-        data["live"] = cred_crypto.credentials_present(c.get("google_tokens"))
+        data["live"] = False
         today = datetime.now(timezone.utc).date()
         seed_events = _normalize_seed_events(data.get("meetings") or [], today)
         data["events"] = seed_events
@@ -7595,9 +7599,11 @@ async def calendar(
         can_write=data["can_write"],
         accessible_department_ids=annotate_depts,
     )
-    data["google_connected"] = cred_crypto.credentials_present(c.get("google_tokens"))
+    data["google_connected"] = await _user_google_tokens_present(
+        principal["workspace_id"], principal["user_id"],
+    )
     data["google_available"] = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
-    tokens = _integration_tokens(c, "google_tokens") if data["google_connected"] else None
+    tokens = await _user_google_tokens(principal["workspace_id"], principal["user_id"]) if data["google_connected"] else None
     data["google"] = gcal.google_capabilities(tokens)
     return data
 
@@ -7792,10 +7798,11 @@ async def _maybe_push_google_event(
 ) -> dict:
     if not payload.push_to_google:
         return ev
-    if principal is not None and not _can_use_integration_tokens(principal, workspace, "google_tokens"):
-        ev["google_push_error"] = "access_denied"
+    if not principal or not principal.get("user_id"):
+        ev["google_push_error"] = "reconnect"
         return ev
-    tokens = _integration_tokens(workspace, "google_tokens")
+    ws_id = workspace.get("workspace_id") or principal.get("workspace_id") or ""
+    tokens = await _user_google_tokens(ws_id, principal["user_id"])
     if not tokens or not gcal.has_scope(tokens, "calendar.events"):
         ev["google_push_error"] = "reconnect"
         return ev
@@ -7805,7 +7812,7 @@ async def _maybe_push_google_event(
             title=ev["title"], start_iso=ev["start_at"], end_iso=ev["end_at"],
             all_day=bool(ev.get("all_day")), date=ev.get("date"),
         )
-        await _store_integration_tokens(workspace["workspace_id"], "google_tokens", refreshed)
+        await _store_user_google_tokens(ws_id, principal["user_id"], refreshed)
         if gid:
             ev["google_event_id"] = gid
     except Exception:
@@ -7871,8 +7878,8 @@ async def edit_calendar_event(
             )
             found = events[i]
             gid = ev.get("google_event_id")
-            if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
-                tokens = _integration_tokens(c, "google_tokens")
+            if gid:
+                tokens = await _user_google_tokens(c["workspace_id"], principal["user_id"])
                 if tokens and gcal.has_scope(tokens, "calendar.events"):
                     try:
                         refreshed = await gcal.patch_calendar_event(
@@ -7880,7 +7887,7 @@ async def edit_calendar_event(
                             title=found["title"], start_iso=found["start_at"], end_iso=found["end_at"],
                             all_day=bool(found.get("all_day")), date=found.get("date"),
                         )
-                        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+                        await _store_user_google_tokens(c["workspace_id"], principal["user_id"], refreshed)
                     except Exception:
                         logger.exception("Google Calendar patch failed")
             break
@@ -7912,12 +7919,12 @@ async def delete_calendar_event(
         )
     events = [e for e in (cal.get("helm_events") or []) if e.get("id") != event_id]
     gid = existing[0].get("google_event_id")
-    if gid and _can_use_integration_tokens(principal, c, "google_tokens"):
-        tokens = _integration_tokens(c, "google_tokens")
+    if gid:
+        tokens = await _user_google_tokens(c["workspace_id"], principal["user_id"])
         if tokens and gcal.has_scope(tokens, "calendar.events"):
             try:
                 refreshed = await gcal.delete_calendar_event(tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, gid)
-                await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+                await _store_user_google_tokens(c["workspace_id"], principal["user_id"], refreshed)
             except Exception:
                 logger.exception("Google Calendar delete failed")
     cal["helm_events"] = events
@@ -11559,7 +11566,7 @@ GOOGLE_SCOPES = [
 
 
 def _integration_tokens(workspace: dict, field: str) -> Optional[dict]:
-    """Decrypt stored Google/QuickBooks (or future SAP) credentials for use."""
+    """Decrypt stored QuickBooks/Xero/HubSpot/SAP (workspace-shared) credentials."""
     try:
         return cred_crypto.unseal_credentials(workspace.get(field))
     except cred_crypto.CredentialCryptoError:
@@ -11578,9 +11585,17 @@ async def _store_integration_tokens(
 ):
     """Encrypt credentials before writing to the workspace document.
 
+    Used for company-shared grants (QuickBooks, Xero, HubSpot, SAP). Google
+    Calendar/Gmail tokens are per-user — see ``_store_user_google_tokens``.
+
     When tokens are saved, stamp who connected them so use of the grant can be
     limited to that person (and workspace owners). Clearing tokens clears the stamp.
     """
+    if field == "google_tokens":
+        raise ValueError(
+            "google_tokens must be stored per-user via _store_user_google_tokens; "
+            "do not write them onto the workspace document"
+        )
     sealed = cred_crypto.seal_credentials(tokens) if tokens else None
     sets = {**(extra_set or {})}
     unsets = {**(extra_unset or {})}
@@ -11604,12 +11619,87 @@ async def _store_integration_tokens(
     await db.workspaces.update_one({"workspace_id": workspace_id}, update)
 
 
+async def _user_google_row(workspace_id: str, user_id: str) -> Optional[dict]:
+    """Raw ``user_google_tokens`` document for this member in this workspace."""
+    if not workspace_id or not user_id:
+        return None
+    return await db.user_google_tokens.find_one(
+        {"workspace_id": workspace_id, "user_id": user_id},
+        {"_id": 0},
+    )
+
+
+async def _user_google_tokens_present(workspace_id: str, user_id: str) -> bool:
+    """True when this user has a Google connection row (sealed blob present)."""
+    row = await _user_google_row(workspace_id, user_id)
+    return bool(row and cred_crypto.credentials_present(row.get("google_tokens")))
+
+
+async def _user_google_tokens(workspace_id: str, user_id: str) -> Optional[dict]:
+    """Decrypt this user's Google Calendar/Gmail tokens. None if not connected.
+
+    Gmail and Calendar share the same per-user OAuth grant on purpose — both
+    are personal Google data for the calling teammate, not a workspace-wide
+    shared mailbox or calendar.
+    """
+    row = await _user_google_row(workspace_id, user_id)
+    if not row:
+        return None
+    try:
+        return cred_crypto.unseal_credentials(row.get("google_tokens"))
+    except cred_crypto.CredentialCryptoError:
+        logger.exception(
+            "Failed to decrypt user Google tokens for %s in %s", user_id, workspace_id,
+        )
+        return None
+
+
+async def _store_user_google_tokens(
+    workspace_id: str, user_id: str, tokens: Optional[dict],
+) -> None:
+    """Upsert or clear this user's Google OAuth tokens (Calendar + Gmail)."""
+    if not workspace_id or not user_id:
+        return
+    if tokens:
+        sealed = cred_crypto.seal_credentials(tokens)
+        await db.user_google_tokens.update_one(
+            {"workspace_id": workspace_id, "user_id": user_id},
+            {
+                "$set": {
+                    "workspace_id": workspace_id,
+                    "user_id": user_id,
+                    "google_tokens": sealed,
+                    "connected_at": datetime.now(timezone.utc).isoformat(),
+                },
+            },
+            upsert=True,
+        )
+        return
+    await db.user_google_tokens.delete_one(
+        {"workspace_id": workspace_id, "user_id": user_id},
+    )
+
+
+async def _require_user_google_tokens(principal: dict) -> dict:
+    """Return the calling user's Google tokens or 400 if they have not connected."""
+    tokens = await _user_google_tokens(principal["workspace_id"], principal["user_id"])
+    if not tokens:
+        raise HTTPException(
+            status_code=400,
+            detail="Connect your Google account on Integrations to use Calendar and Gmail",
+        )
+    return tokens
+
+
 def _is_workspace_owner_principal(principal: dict) -> bool:
     return principal.get("role") == "owner" or principal.get("pack") == "owner" or pack_of(principal) == "owner"
 
 
 def _can_use_integration_tokens(principal: dict, workspace: dict, field: str) -> bool:
-    """Shared OAuth grants may be used by the connector or a workspace owner."""
+    """Shared OAuth grants (QB/Xero/HubSpot/SAP) — connector or workspace owner."""
+    if field == "google_tokens":
+        # Google is per-user; callers must use _user_google_tokens instead.
+        return False
     if not workspace or not _integration_tokens(workspace, field):
         return False
     by_field = _INTEGRATION_CONNECTED_BY.get(field)
@@ -11623,6 +11713,11 @@ def _can_use_integration_tokens(principal: dict, workspace: dict, field: str) ->
 
 
 def _require_integration_token_use(principal: dict, workspace: dict, field: str) -> dict:
+    if field == "google_tokens":
+        raise HTTPException(
+            status_code=400,
+            detail="Connect your Google account on Integrations to use Calendar and Gmail",
+        )
     tokens = _integration_tokens(workspace, field)
     if not tokens:
         raise HTTPException(status_code=400, detail="Integration is not connected")
@@ -11679,6 +11774,8 @@ def _provider_config(provider: str):
 @api_router.get("/integrations")
 async def integrations(principal=Depends(get_principal)):
     c = await get_ws(principal["workspace_id"])
+    my_google_row = await _user_google_row(principal["workspace_id"], principal["user_id"])
+    my_google_sealed = (my_google_row or {}).get("google_tokens")
     ints = integ_catalog.merge_integrations(
         c,
         google_configured=bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
@@ -11690,20 +11787,22 @@ async def integrations(principal=Depends(get_principal)):
         resend_configured=bool(RESEND_API_KEY),
         paddle_ready=bool(PADDLE_CLIENT_TOKEN and helm_plans.any_paddle_price_configured()),
         clerk_configured=clerk_auth.clerk_configured(),
+        user_google_tokens=my_google_sealed,
     )
     xero_pending: list = []
     xero_tokens = _integration_tokens(c, "xero_tokens")
     if xero_tokens and not xero_tokens.get("tenant_id"):
         xero_pending = list(xero_tokens.get("pending_tenants") or [])
+    google_connected = cred_crypto.credentials_present(my_google_sealed)
     connection_owners = {
-        "google": c.get("google_tokens_connected_by"),
+        "google": principal["user_id"] if google_connected else None,
         "quickbooks": c.get("quickbooks_tokens_connected_by"),
         "xero": c.get("xero_tokens_connected_by"),
         "hubspot": c.get("hubspot_tokens_connected_by"),
         "sap_b1": c.get("sap_b1_credentials_connected_by"),
     }
     can_use = {
-        "google": _can_use_integration_tokens(principal, c, "google_tokens"),
+        "google": google_connected,
         "quickbooks": _can_use_integration_tokens(principal, c, "quickbooks_tokens"),
         "xero": _can_use_integration_tokens(principal, c, "xero_tokens"),
         "hubspot": _can_use_integration_tokens(principal, c, "hubspot_tokens"),
@@ -11713,6 +11812,7 @@ async def integrations(principal=Depends(get_principal)):
         "integrations": ints,
         "is_pro": workspace_is_pro(c),
         "can_manage": "integrations:manage" in perms_for(principal["pack"]),
+        "can_connect_google": True,
         "connection_owners": connection_owners,
         "can_use_connection": can_use,
         "slack_webhook_configured": bool((c.get("slack_webhook_url") or "").strip()),
@@ -11755,7 +11855,10 @@ async def toggle_integration(integration_id: str, principal=Depends(require_pro_
 
 
 @api_router.get("/integrations/{provider}/connect")
-async def integration_connect(provider: str, request: Request, principal=Depends(require_pro_perm("integrations:manage"))):
+async def integration_connect(provider: str, request: Request, principal=Depends(get_principal)):
+    """Start OAuth. Google is per-user (any member); company ledgers require integrations:manage."""
+    if provider != "google" and "integrations:manage" not in perms_for(principal["pack"]):
+        raise HTTPException(status_code=403, detail="Only workspace owners can connect this integration")
     cfg = _provider_config(provider)
     if not cfg:
         raise HTTPException(status_code=404, detail="Unknown provider")
@@ -11894,7 +11997,11 @@ async def _complete_oauth_callback(
         "user_id": user_id,
         "status": "active",
     }, {"_id": 0, "role": 1, "pack": 1, "permissions": 1})
-    if not membership or "integrations:manage" not in perms_for(pack_of(membership)):
+    if not membership:
+        return RedirectResponse(f"{integrations_path}?error=state")
+    # Google is per-user — any active member may complete their own connect.
+    # Company ledgers (QB/Xero/HubSpot) still require integrations:manage.
+    if provider != "google" and "integrations:manage" not in perms_for(pack_of(membership)):
         return RedirectResponse(f"{integrations_path}?error=state")
     try:
         async with httpx.AsyncClient(timeout=30.0) as hc:
@@ -11952,6 +12059,9 @@ async def _complete_oauth_callback(
         if realmId:
             tokens["realmId"] = realmId
         tokens["obtained_at"] = datetime.now(timezone.utc).isoformat()
+        if provider == "google":
+            await _store_user_google_tokens(workspace_id, user_id, tokens)
+            return RedirectResponse(f"{integrations_path}?connected=google")
         if provider == "xero":
             try:
                 tenants = await xero_sync.fetch_xero_connections(tokens.get("access_token") or "")
@@ -11980,9 +12090,14 @@ async def _complete_oauth_callback(
 
 
 @api_router.post("/integrations/{provider}/disconnect")
-async def integration_disconnect(provider: str, principal=Depends(require_pro_perm("integrations:manage"))):
+async def integration_disconnect(provider: str, principal=Depends(get_principal)):
+    """Disconnect. Google clears only the calling user's tokens; others need integrations:manage."""
+    if provider == "google":
+        await _store_user_google_tokens(principal["workspace_id"], principal["user_id"], None)
+        return {"ok": True}
+    if "integrations:manage" not in perms_for(principal["pack"]):
+        raise HTTPException(status_code=403, detail="Only workspace owners can disconnect this integration")
     field = {
-        "google": "google_tokens",
         "quickbooks": "quickbooks_tokens",
         "xero": "xero_tokens",
         "hubspot": "hubspot_tokens",
@@ -12494,17 +12609,16 @@ async def _upsert_hubspot_deals(*, ws_id: str, principal: dict, deals: list) -> 
 
 @api_router.get("/integrations/google/calendar-events")
 async def google_calendar_events(principal=Depends(get_principal)):
-    c = await get_ws(principal["workspace_id"])
-    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    tokens = await _require_user_google_tokens(principal)
     try:
         meetings, _, _, refreshed = await gcal.fetch_today_calendar(
             tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, max_results=20,
         )
         if refreshed is not tokens:
-            await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+            await _store_user_google_tokens(principal["workspace_id"], principal["user_id"], refreshed)
         return {"events": meetings, "live": True}
     except gcal.GoogleAuthError as exc:
-        await _store_integration_tokens(c["workspace_id"], "google_tokens", None)
+        await _store_user_google_tokens(principal["workspace_id"], principal["user_id"], None)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
@@ -12520,17 +12634,16 @@ async def google_picker_config(principal=Depends(get_principal)):
     """Short-lived OAuth token + picker keys for Drive file picker (browser only)."""
     api_key = os.environ.get("GOOGLE_PICKER_API_KEY", "").strip()
     app_id = os.environ.get("GOOGLE_CLOUD_PROJECT_NUMBER", "").strip()
-    c = await get_ws(principal["workspace_id"])
-    if not _can_use_integration_tokens(principal, c, "google_tokens"):
-        return {"configured": False, "needs_reconnect": False, "access_denied": True}
-    tokens = _integration_tokens(c, "google_tokens")
-    if not tokens or not gcal.has_scope(tokens, "drive.file"):
+    tokens = await _user_google_tokens(principal["workspace_id"], principal["user_id"])
+    if not tokens:
+        return {"configured": False, "needs_reconnect": False, "access_denied": False}
+    if not gcal.has_scope(tokens, "drive.file"):
         return {"configured": False, "needs_reconnect": True}
     if not api_key or not app_id:
         return {"configured": False, "needs_reconnect": False}
     try:
         refreshed = await gcal.refresh_google_token(tokens, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
-        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+        await _store_user_google_tokens(principal["workspace_id"], principal["user_id"], refreshed)
     except gcal.GoogleAuthError:
         return {"configured": False, "needs_reconnect": True}
     return {
@@ -12544,8 +12657,7 @@ async def google_picker_config(principal=Depends(get_principal)):
 
 @api_router.post("/integrations/google/gmail-draft")
 async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_principal)):
-    c = await get_ws(principal["workspace_id"])
-    tokens = _require_integration_token_use(principal, c, "google_tokens")
+    tokens = await _require_user_google_tokens(principal)
     if not gcal.has_scope(tokens, "gmail.compose"):
         raise HTTPException(status_code=400, detail="Reconnect Google to create Gmail drafts")
     subject = (payload.subject or "Follow up").strip()[:200]
@@ -12568,7 +12680,7 @@ async def google_gmail_draft(payload: GmailDraftInput, principal=Depends(get_pri
             body=body,
             thread_id=(payload.thread_id or "").strip(),
         )
-        await _store_integration_tokens(c["workspace_id"], "google_tokens", refreshed)
+        await _store_user_google_tokens(principal["workspace_id"], principal["user_id"], refreshed)
     except gcal.GoogleAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
@@ -12994,15 +13106,14 @@ _WORKSPACE_COLLECTIONS = (
 )
 
 # Per-provider stamp: who connected the shared workspace OAuth grant.
+# Google is per-user (user_google_tokens) — not stamped on the workspace.
 _INTEGRATION_CONNECTED_BY = {
-    "google_tokens": "google_tokens_connected_by",
     "quickbooks_tokens": "quickbooks_tokens_connected_by",
     "xero_tokens": "xero_tokens_connected_by",
     "hubspot_tokens": "hubspot_tokens_connected_by",
     "sap_b1_credentials": "sap_b1_credentials_connected_by",
 }
 _INTEGRATION_CONNECTED_AT = {
-    "google_tokens": "google_tokens_connected_at",
     "quickbooks_tokens": "quickbooks_tokens_connected_at",
     "xero_tokens": "xero_tokens_connected_at",
     "hubspot_tokens": "hubspot_tokens_connected_at",
@@ -13088,6 +13199,11 @@ async def export_account(user=Depends(get_user)):
         "my_private_notes": await db.private_notes.find(
             {"user_id": user["user_id"]}, {"_id": 0},
         ).to_list(_EXPORT_ROW_CAP),
+        "my_google_connections": [
+            _strip_sensitive(r) for r in await db.user_google_tokens.find(
+                {"user_id": user["user_id"]}, {"_id": 0},
+            ).to_list(_EXPORT_ROW_CAP)
+        ],
         "my_product_events": await db.product_events.find(
             {"user_id": user["user_id"]}, {"_id": 0},
         ).to_list(_EXPORT_ROW_CAP),
@@ -13181,6 +13297,7 @@ async def delete_account(user=Depends(get_user)):
     await db.chat_messages.delete_many({"user_id": uid})
     await db.updates.delete_many({"user_id": uid})
     await db.private_notes.delete_many({"user_id": uid})
+    await db.user_google_tokens.delete_many({"user_id": uid})
     await db.product_events.delete_many({"user_id": uid})
     # Anonymize activity rows rather than deleting the company audit trail.
     await db.activities.update_many(
@@ -13242,6 +13359,7 @@ async def _delete_workspace_data(ws_id: str):
         await db.department_members.delete_many({"department_id": {"$in": department_ids}})
     for coll in _WORKSPACE_COLLECTIONS:
         await db[coll].delete_many({"workspace_id": ws_id})
+    await db.user_google_tokens.delete_many({"workspace_id": ws_id})
     await db.departments.delete_many({"workspace_id": ws_id})
     await db.memberships.delete_many({"workspace_id": ws_id})
     await db.referrals.delete_many({"referred_workspace_id": ws_id})
@@ -13781,6 +13899,8 @@ async def _ensure_indexes():
         (db.chat_messages, [("workspace_id", 1), ("user_id", 1), ("created_at", 1)], {}),
         (db.chat_messages, [("user_id", 1)], {}),
         (db.private_notes, [("workspace_id", 1), ("user_id", 1), ("created_at", -1)], {}),
+        (db.user_google_tokens, [("workspace_id", 1), ("user_id", 1)], {"unique": True}),
+        (db.user_google_tokens, [("user_id", 1)], {}),
         (db.departments, [("workspace_id", 1), ("type", 1)], {"unique": True}),
         (db.departments, [("department_id", 1)], {"unique": True}),
         (db.department_members, [("department_id", 1), ("user_id", 1)], {"unique": True}),
@@ -13954,7 +14074,7 @@ async def _scrub_null_financial_external_ids() -> None:
         logger.exception("financial external-id scrub failed")
 
 
-_INTEGRATION_TOKEN_FIELDS = ("google_tokens", "quickbooks_tokens", "xero_tokens", "hubspot_tokens")
+_INTEGRATION_TOKEN_FIELDS = ("quickbooks_tokens", "xero_tokens", "hubspot_tokens", "sap_b1_credentials")
 
 
 async def _seal_plaintext_integration_tokens() -> None:
@@ -13987,6 +14107,35 @@ async def _seal_plaintext_integration_tokens() -> None:
                 updated += 1
         if updated:
             logger.info("sealed plaintext integration tokens on %s workspace(s)", updated)
+        # Drop unused workspace-level google_tokens (Google is per-user now).
+        cleared = await db.workspaces.update_many(
+            {"google_tokens": {"$ne": None}},
+            {"$unset": {
+                "google_tokens": "",
+                "google_tokens_connected_by": "",
+                "google_tokens_connected_at": "",
+            }},
+        )
+        if cleared.modified_count:
+            logger.info("cleared legacy workspace google_tokens on %s workspace(s)", cleared.modified_count)
+        # Seal per-user Google tokens if any plaintext slipped in.
+        user_updated = 0
+        async for row in db.user_google_tokens.find(
+            {"google_tokens": {"$type": "object"}},
+            {"_id": 1, "google_tokens": 1},
+        ):
+            raw = row.get("google_tokens")
+            if not cred_crypto.needs_reencryption(raw):
+                continue
+            sealed = cred_crypto.seal_credentials(raw)
+            opened = cred_crypto.unseal_credentials(sealed)
+            if opened != dict(raw):
+                logger.error("user Google token seal round-trip mismatch for %s", row.get("_id"))
+                continue
+            await db.user_google_tokens.update_one({"_id": row["_id"]}, {"$set": {"google_tokens": sealed}})
+            user_updated += 1
+        if user_updated:
+            logger.info("sealed plaintext user Google tokens on %s row(s)", user_updated)
     except Exception:
         logger.exception("plaintext integration token seal failed")
 

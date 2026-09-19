@@ -42,14 +42,14 @@ def test_capabilities_and_missing_write_scopes():
 
 
 def test_catalog_reconnect_when_write_scopes_missing():
-    ws = {
-        "workspace_id": "ws1",
-        "google_tokens": {
-            "access_token": "x",
-            "scope": "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly",
-        },
+    ws = {"workspace_id": "ws1"}
+    user_google = {
+        "access_token": "x",
+        "scope": "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly",
     }
-    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=False)
+    ints = cat.merge_integrations(
+        ws, google_configured=True, qb_configured=False, user_google_tokens=user_google,
+    )
     gcal_card = next(i for i in ints if i["id"] == "google_calendar")
     gmail = next(i for i in ints if i["id"] == "gmail")
     assert gcal_card["connected"] is True

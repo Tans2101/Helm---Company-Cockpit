@@ -86,8 +86,8 @@ const CONTROLS = [
 
 const PRACTICES = [
   "Integration access is opt-in and can be disconnected at any time.",
-  "Shared OAuth connections (Google, QuickBooks, Xero, HubSpot) can be used only by the teammate who connected them, or by a workspace owner. Legacy unstamped connections are limited to owners until someone reconnects.",
-  "Google is not read-only. The current Connect Google grant includes Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm, not a full mailbox or Drive dump.",
+  "Google Calendar and Gmail are personal: each teammate connects their own Google account and only sees their meetings and threads. Shared company OAuth (QuickBooks, Xero, HubSpot, SAP) can be used only by the teammate who connected them, or by a workspace owner. Legacy unstamped company connections are limited to owners until someone reconnects.",
+  "Google is not read-only. Connecting your Google account grants Calendar read and write, Gmail snippets plus drafts, Sheets export, and Drive files you pick in Helm — not a full mailbox or Drive dump.",
   "Workspaces that connected Google under the original Calendar + Gmail read grant keep that narrower access until an owner reconnects and accepts the wider consent screen.",
   "Payment card details are handled by Paddle, not stored on Helm servers.",
   "Authentication is handled by Clerk using secure session controls.",
@@ -106,7 +106,7 @@ const QUESTIONS = [
   },
   {
     q: "What Google access does Helm request now?",
-    a: "Connect Google currently requests Calendar read and write (Helm can create or update events when you ask), Gmail read for briefing snippets plus gmail.compose for drafts only (not gmail.send), Google Sheets to create a Financials export spreadsheet, and drive.file so you can pick a bill in Drive. Google’s consent screen may label compose as managing drafts and sending; Helm only posts to Gmail’s drafts API. The original grant was Calendar + Gmail read. Reconnect Google to add the write scopes.",
+    a: "Connecting your Google account requests Calendar read and write (Helm can create or update events when you ask), Gmail read for briefing snippets plus gmail.compose for drafts only (not gmail.send), Google Sheets to create a Financials export spreadsheet, and drive.file so you can pick a bill in Drive. Google’s consent screen may label compose as managing drafts and sending; Helm only posts to Gmail’s drafts API. Each teammate connects their own Google — never a shared workspace mailbox. Reconnect Google to add missing write scopes.",
   },
   {
     q: "Who can see uploaded bills and legal files?",

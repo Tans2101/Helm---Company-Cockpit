@@ -80,9 +80,10 @@ export default function Privacy() {
               pick in Helm (bill import via <span className="font-mono text-xs">drive.file</span>, not full Drive).
               For Gmail we do not store full email bodies as a mailbox archive, only the metadata needed to
               render the current briefing. Helm does not request <span className="font-mono text-xs">gmail.send</span>.
-              The original Connect Google grant was Calendar and Gmail read-only; existing workspaces keep that
-              narrower access until an owner reconnects and consents again. Nothing from Google is accessed
-              until you explicitly connect the integration. Shared Google (and other OAuth) tokens may only be used by the teammate who connected them, or by a workspace owner.
+              Each teammate connects their own Google account; Helm never surfaces another person&apos;s Google
+              Calendar or Gmail to you. Nothing from Google is accessed until you explicitly connect.
+              Company-shared OAuth grants (QuickBooks, Xero, HubSpot, SAP) may only be used by the teammate who
+              connected them, or by a workspace owner.
             </p>
           </section>
 

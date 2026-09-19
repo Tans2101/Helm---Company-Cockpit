@@ -49,7 +49,8 @@ async def test_gmail_swr_cold_miss_awaits_live_fetch():
     ws = {"workspace_id": "ws_g2"}
     principal = {"user_id": "u2", "workspace_id": "ws_g2"}
     live = AsyncMock(return_value=([{"id": "fresh"}], {"connected": True, "needs_reconnect": False, "compose": False}))
-    with patch.object(server, "_briefing_email_threads", new=live):
+    with patch.object(server, "_briefing_email_threads", new=live), \
+            patch.object(server, "_user_google_tokens_present", new=AsyncMock(return_value=True)):
         threads, meta = await server._briefing_gmail_swr(ws, principal)
     assert threads[0]["id"] == "fresh"
     live.assert_awaited_once()

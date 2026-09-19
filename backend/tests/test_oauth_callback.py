@@ -65,10 +65,11 @@ def test_google_callback_succeeds_with_naive_state_expiry():
         "workspace_id": "ws_oauth",
         "user_id": "user_oauth",
         "status": "active",
-        "pack": "owner",
-        "role": "owner",
+        "pack": "member",
+        "role": "member",
     })
-    mock_db.workspaces.update_one = AsyncMock(return_value=None)
+    mock_db.user_google_tokens = MagicMock()
+    mock_db.user_google_tokens.update_one = AsyncMock(return_value=None)
 
     token_resp = MagicMock()
     token_resp.status_code = 200
@@ -87,7 +88,7 @@ def test_google_callback_succeeds_with_naive_state_expiry():
     mock_hc.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(server, "db", mock_db), patch("httpx.AsyncClient", return_value=mock_hc), patch.object(
-        server, "_store_integration_tokens", new_callable=AsyncMock,
+        server, "_store_user_google_tokens", new_callable=AsyncMock,
     ) as store:
         client = TestClient(server.app)
         r = client.get(
@@ -98,6 +99,9 @@ def test_google_callback_succeeds_with_naive_state_expiry():
 
     assert r.status_code in (302, 307)
     assert "connected=google" in r.headers.get("location", "")
+    assert store.await_count == 1
+    assert store.await_args.args[0] == "ws_oauth"
+    assert store.await_args.args[1] == "user_oauth"
     stored = store.await_args.args[2]
     assert stored["access_token"] == "ya29.live"
     assert "id_token" not in stored

@@ -23,40 +23,47 @@ import server  # noqa: E402
 def test_can_use_integration_tokens_connector_or_owner():
     ws = {
         "workspace_id": "ws_1",
-        "google_tokens": {"access_token": "x"},
-        "google_tokens_connected_by": "user_a",
+        "quickbooks_tokens": {"access_token": "x"},
+        "quickbooks_tokens_connected_by": "user_a",
     }
     connector = {"user_id": "user_a", "role": "member", "pack": "ops"}
     other = {"user_id": "user_b", "role": "member", "pack": "ops"}
     owner = {"user_id": "user_c", "role": "owner", "pack": "owner"}
     with patch.object(server, "_integration_tokens", return_value={"access_token": "x"}):
-        assert server._can_use_integration_tokens(connector, ws, "google_tokens") is True
-        assert server._can_use_integration_tokens(other, ws, "google_tokens") is False
-        assert server._can_use_integration_tokens(owner, ws, "google_tokens") is True
+        assert server._can_use_integration_tokens(connector, ws, "quickbooks_tokens") is True
+        assert server._can_use_integration_tokens(other, ws, "quickbooks_tokens") is False
+        assert server._can_use_integration_tokens(owner, ws, "quickbooks_tokens") is True
 
 
 def test_can_use_integration_tokens_legacy_owners_only():
-    ws = {"workspace_id": "ws_1", "google_tokens": {"access_token": "x"}}
+    ws = {"workspace_id": "ws_1", "quickbooks_tokens": {"access_token": "x"}}
     member = {"user_id": "user_b", "role": "member", "pack": "ops"}
     owner = {"user_id": "user_c", "role": "owner", "pack": "owner"}
     with patch.object(server, "_integration_tokens", return_value={"access_token": "x"}):
-        assert server._can_use_integration_tokens(member, ws, "google_tokens") is False
-        assert server._can_use_integration_tokens(owner, ws, "google_tokens") is True
+        assert server._can_use_integration_tokens(member, ws, "quickbooks_tokens") is False
+        assert server._can_use_integration_tokens(owner, ws, "quickbooks_tokens") is True
 
 
 def test_require_integration_token_use_forbids_non_connector():
     ws = {
         "workspace_id": "ws_1",
-        "google_tokens": {"access_token": "x"},
-        "google_tokens_connected_by": "user_a",
+        "quickbooks_tokens": {"access_token": "x"},
+        "quickbooks_tokens_connected_by": "user_a",
     }
     other = {"user_id": "user_b", "role": "member", "pack": "ops"}
     with patch.object(server, "_integration_tokens", return_value={"access_token": "x"}):
         try:
-            server._require_integration_token_use(other, ws, "google_tokens")
+            server._require_integration_token_use(other, ws, "quickbooks_tokens")
             assert False, "expected HTTPException"
         except HTTPException as exc:
             assert exc.status_code == 403
+
+
+def test_google_tokens_not_usable_via_workspace_acl():
+    """Google is per-user; workspace google_tokens ACL helpers always deny."""
+    ws = {"workspace_id": "ws_1", "google_tokens": {"access_token": "x"}}
+    owner = {"user_id": "user_c", "role": "owner", "pack": "owner"}
+    assert server._can_use_integration_tokens(owner, ws, "google_tokens") is False
 
 
 def test_setup_status_is_boolean_health_only(monkeypatch):

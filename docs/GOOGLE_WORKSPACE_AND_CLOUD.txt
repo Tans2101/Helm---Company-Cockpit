@@ -112,11 +112,13 @@ onto GCP to "use the credits". Those stay where they are.
 B. What Helm does with the customer's Google Workspace
 ---------------------------------------------------------------------------
 
-Trigger: workspace owner (Integrations → Connect Google). One consent
-covers Calendar, Gmail, Sheets, Drive-file, and compose.
+Trigger: each teammate (Integrations → Connect your Google). One consent
+covers Calendar, Gmail, Sheets, Drive-file, and compose for that person.
 
-Tokens are encrypted at rest (INTEGRATION_ENCRYPTION_KEY) on the workspace
-document. Helm refreshes them. If Google revokes, Helm asks reconnect.
+Tokens are encrypted at rest (INTEGRATION_ENCRYPTION_KEY) in the
+user_google_tokens collection, keyed by (workspace_id, user_id). Helm
+refreshes them. If Google revokes, Helm asks reconnect. Teammates never
+see each other's Google Calendar or Gmail.
 
 1) Calendar read  (already live)
    Pulls primary calendar into Helm Calendar and the briefing.

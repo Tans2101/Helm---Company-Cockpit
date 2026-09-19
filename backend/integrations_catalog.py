@@ -19,11 +19,11 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Sync meetings into Helm Calendar and your briefing. One Google connect also enables Gmail, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
+        "description": "Sync your Google Calendar meetings into Helm Calendar and your briefing. Connecting also enables your Gmail threads, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
         "value": "See today's schedule, prep time, and deadlines in one place, with no tab switching.",
         "cta_route": "/app/calendar",
         "cta_label": "Open calendar",
-        "connect_label": "Connect Google",
+        "connect_label": "Connect your Google",
     },
     {
         "id": "gmail",
@@ -33,11 +33,11 @@ USER_INTEGRATIONS: list[dict[str, Any]] = [
         "kind": "oauth",
         "oauth": True,
         "pro": True,
-        "description": "Surface important threads in your briefing, and draft replies in Gmail without Helm sending mail as you.",
+        "description": "Surface important threads from your Gmail in your briefing, and draft replies without Helm sending mail as you. Same Google connect as Calendar — personal to you.",
         "value": "Stay on top of customer and investor email without living in your inbox.",
         "cta_route": "/app",
         "cta_label": "Open briefing",
-        "connect_label": "Connect Gmail",
+        "connect_label": "Connect your Gmail",
     },
     {
         "id": "quickbooks",
@@ -133,10 +133,16 @@ def merge_integrations(
     qb_configured: bool,
     xero_configured: bool = False,
     hubspot_configured: bool = False,
+    user_google_tokens: Any = None,
     **_kwargs,
 ) -> list[dict]:
-    """Build user integration cards with live connection status."""
-    google_connected = cred_crypto.credentials_present(workspace.get("google_tokens"))
+    """Build user integration cards with live connection status.
+
+    Google Calendar/Gmail status comes from ``user_google_tokens`` (the calling
+    user's sealed or plaintext blob), not from the workspace document. Company
+    ledgers (QuickBooks, Xero, HubSpot, SAP) remain workspace-scoped.
+    """
+    google_connected = cred_crypto.credentials_present(user_google_tokens)
     qb_connected = cred_crypto.credentials_present(workspace.get("quickbooks_tokens"))
     qb_last_synced = workspace.get("qb_last_synced_at")
     xero_tokens = None
@@ -161,7 +167,7 @@ def merge_integrations(
     google_tokens = None
     if google_connected:
         try:
-            google_tokens = cred_crypto.unseal_credentials(workspace.get("google_tokens"))
+            google_tokens = cred_crypto.unseal_credentials(user_google_tokens)
         except cred_crypto.CredentialCryptoError:
             google_tokens = None
     google_scope = _token_scope(google_tokens)

@@ -250,7 +250,7 @@ export default function AccountSettings() {
           <span className="font-mono text-[11px] uppercase tracking-[0.2em]">Integrations</span>
         </div>
         <p className="text-sm text-helm-muted mb-4 leading-relaxed">
-          Connect Google Calendar, QuickBooks, and other tools Helm can pull data from automatically.
+            Connect Google Calendar, QuickBooks, and other tools. Google is personal to each teammate; accounting connects once for the company.
         </p>
         <Link
           to="/app/integrations"

@@ -5,7 +5,7 @@ import integrations_catalog as cat
 
 
 def test_merge_oauth_google_not_connected():
-    ws = {"workspace_id": "ws1", "google_tokens": None, "quickbooks_tokens": None, "plan": "free"}
+    ws = {"workspace_id": "ws1", "quickbooks_tokens": None, "plan": "free"}
     ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
     gcal = next(i for i in ints if i["id"] == "google_calendar")
     assert gcal["status"] == "not_connected"
@@ -25,11 +25,17 @@ def test_merge_oauth_connected():
     scope = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly"
     ws = {
         "workspace_id": "ws1",
-        "google_tokens": {"access_token": "x", "scope": scope},
         "quickbooks_tokens": {"access_token": "y"},
         "xero_tokens": {"access_token": "z", "tenant_id": "tenant-1", "tenant_name": "Demo"},
     }
-    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True, xero_configured=True)
+    user_google = {"access_token": "x", "scope": scope}
+    ints = cat.merge_integrations(
+        ws,
+        google_configured=True,
+        qb_configured=True,
+        xero_configured=True,
+        user_google_tokens=user_google,
+    )
     gcal = next(i for i in ints if i["id"] == "google_calendar")
     gmail = next(i for i in ints if i["id"] == "gmail")
     qb = next(i for i in ints if i["id"] == "quickbooks")
@@ -58,15 +64,14 @@ def test_xero_needs_tenant_select():
 
 
 def test_gmail_needs_reconsent_when_calendar_only():
-    ws = {
-        "workspace_id": "ws1",
-        "google_tokens": {
-            "access_token": "x",
-            "scope": "https://www.googleapis.com/auth/calendar.readonly",
-        },
-        "plan": "free",
+    ws = {"workspace_id": "ws1", "plan": "free"}
+    user_google = {
+        "access_token": "x",
+        "scope": "https://www.googleapis.com/auth/calendar.readonly",
     }
-    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    ints = cat.merge_integrations(
+        ws, google_configured=True, qb_configured=True, user_google_tokens=user_google,
+    )
     gcal = next(i for i in ints if i["id"] == "google_calendar")
     gmail = next(i for i in ints if i["id"] == "gmail")
     assert gcal["status"] == "connected"
@@ -77,12 +82,29 @@ def test_gmail_needs_reconsent_when_calendar_only():
 
 def test_merge_oauth_connected_when_sealed():
     sealed = {"_helm_enc": "v1", "payload": "gAAAAABnot-a-real-token-but-present"}
-    ws = {"workspace_id": "ws1", "google_tokens": sealed, "quickbooks_tokens": sealed, "plan": "free"}
-    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    ws = {"workspace_id": "ws1", "quickbooks_tokens": sealed, "plan": "free"}
+    ints = cat.merge_integrations(
+        ws, google_configured=True, qb_configured=True, user_google_tokens=sealed,
+    )
     gcal = next(i for i in ints if i["id"] == "google_calendar")
     qb = next(i for i in ints if i["id"] == "quickbooks")
-    assert gcal["status"] == "connected"
-    assert qb["status"] == "connected"
+    # Sealed blob counts as present even if payload cannot be unsealed here.
+    assert gcal["connected"] is True
+    assert qb["connected"] is True
+
+
+def test_workspace_google_tokens_ignored_without_user_blob():
+    """Legacy workspace-level google_tokens must not mark the user as connected."""
+    ws = {
+        "workspace_id": "ws1",
+        "google_tokens": {"access_token": "legacy", "scope": "gmail.readonly"},
+        "plan": "free",
+    }
+    ints = cat.merge_integrations(ws, google_configured=True, qb_configured=True)
+    gcal = next(i for i in ints if i["id"] == "google_calendar")
+    gmail = next(i for i in ints if i["id"] == "gmail")
+    assert gcal["status"] == "not_connected"
+    assert gmail["status"] == "not_connected"
 
 
 def test_coming_soon_integrations():

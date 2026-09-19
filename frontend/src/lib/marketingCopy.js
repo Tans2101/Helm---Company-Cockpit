@@ -109,7 +109,7 @@ export const PUBLIC_INTEGRATIONS = [
     name: "Google Calendar & Gmail",
     category: "Calendar & email",
     description:
-      "Sync meetings into Helm Calendar and your briefing. One Google connect also enables Gmail thread surfacing, Sheets export, calendar write, Gmail drafts, and Drive bill import.",
+      "Each teammate connects their own Google account. Sync your meetings into Helm Calendar and your briefing — plus Gmail thread surfacing, Sheets export, calendar write, Gmail drafts, and Drive bill import. Teammates never see each other's Google data.",
     feeds: "Feeds Calendar & Briefing",
     scope:
       "Gmail is snippet-level thread surfacing (sender, subject, preview) plus optional draft replies you review and send in Gmail — not full inbox or message-body access.",

@@ -52,7 +52,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconnect, onSync, onNavigate, syncingProvider }) {
+function IntegrationCard({ it, canManage, canUseConnection, canConnectGoogle, onConnect, onDisconnect, onSync, onNavigate, syncingProvider }) {
   const Icon = ICONS[it.id] || Cloud;
   const status = it.status || (it.connected ? "connected" : "not_connected");
   const lastSynced = it.sync_action ? formatLastSynced(it.last_synced_at) : null;
@@ -61,6 +61,9 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
   const isOAuth = it.kind === "oauth" && it.oauth;
   const isCredentials = it.kind === "credentials";
   const syncBusy = syncingProvider === it.provider;
+  const isGoogle = it.provider === "google";
+  // Google Calendar/Gmail is per-user — any teammate can connect their own account.
+  const canAct = isGoogle ? Boolean(canConnectGoogle ?? true) : canManage;
 
   const handleConnect = () => {
     if (isComingSoon || isUnavailable) return;
@@ -101,7 +104,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
         </p>
       )}
 
-      {it.needs_reconsent && it.connected && canManage && (
+      {it.needs_reconsent && it.connected && canAct && (
         <button
           type="button"
           data-testid={`reconnect-${it.id}`}
@@ -119,7 +122,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
       )}
 
       
-      {it.connected && canManage && !canUseConnection && (
+      {it.connected && canManage && !isGoogle && !canUseConnection && (
         <p className="text-xs text-helm-muted mt-3 leading-relaxed" data-testid={`${it.id}-token-restricted`}>
           Only the teammate who connected this integration (or a workspace owner) can sync or use it.
         </p>
@@ -156,7 +159,7 @@ function IntegrationCard({ it, canManage, canUseConnection, onConnect, onDisconn
         <button
           data-testid={`action-${it.id}`}
           onClick={handleConnect}
-          disabled={isComingSoon || isUnavailable || (!canManage && !it.connected)}
+          disabled={isComingSoon || isUnavailable || (!canAct && !it.connected)}
           className={cn(
             "mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-sm py-2.5 transition-colors disabled:opacity-50",
             it.connected
@@ -254,7 +257,8 @@ export default function Integrations() {
     );
   }
 
-  const gate = () => {
+  const gate = (provider) => {
+    if (provider === "google") return true;
     if (!data.can_manage) {
       toast.error("Only workspace owners can connect integrations");
       return false;
@@ -263,7 +267,7 @@ export default function Integrations() {
   };
 
   const oauthConnect = async (provider) => {
-    if (!gate()) return;
+    if (!gate(provider)) return;
     if (provider === "sap_b1") {
       setSapForm({ service_layer_url: "", company_db: "", username: "", password: "" });
       setSapModalOpen(true);
@@ -282,7 +286,7 @@ export default function Integrations() {
   };
 
   const connectSapB1 = async () => {
-    if (!gate()) return;
+    if (!gate("sap_b1")) return;
     if (!sapForm.service_layer_url.trim() || !sapForm.company_db.trim() || !sapForm.username.trim() || !sapForm.password) {
       toast.error("Service Layer URL, company database, username, and password are required");
       return;
@@ -307,7 +311,7 @@ export default function Integrations() {
   };
 
   const oauthDisconnect = async (provider) => {
-    if (!gate()) return;
+    if (!gate(provider)) return;
     try {
       await api.post(`/integrations/${provider}/disconnect`);
       reload();
@@ -318,7 +322,7 @@ export default function Integrations() {
   };
 
   const syncAccounting = async (provider) => {
-    if (!gate()) return;
+    if (!gate(provider)) return;
     setSyncingProvider(provider);
     try {
       const { data: res } = await api.post(`/integrations/${provider}/sync`, {}, { timeout: 120000 });
@@ -335,7 +339,7 @@ export default function Integrations() {
   };
 
   const selectXeroTenant = async (tenantId) => {
-    if (!gate()) return;
+    if (!gate("xero")) return;
     setXeroTenantBusy(true);
     try {
       const { data: res } = await api.post("/integrations/xero/select-tenant", { tenant_id: tenantId });
@@ -349,7 +353,7 @@ export default function Integrations() {
   };
 
   const saveSlackWebhook = async () => {
-    if (!gate()) return;
+    if (!gate("slack")) return;
     setSlackBusy(true);
     try {
       await api.put("/integrations/slack-webhook", { webhook_url: slackUrl.trim() });
@@ -375,8 +379,10 @@ export default function Integrations() {
 
       <GlassCard className="p-4 mb-8 fade-up border-helm-line">
         <p className="text-sm text-helm-muted leading-relaxed">
-          Each connection is <span className="text-helm-fg">per company workspace</span>. OAuth apps never share passwords;
-          SAP Business One stores Service Layer credentials encrypted at rest. Owners connect accounts here; teammates see the results in Calendar and Financials.
+          <span className="text-helm-fg">Google Calendar &amp; Gmail</span> are personal — each teammate connects
+          their own Google account and only sees their meetings and threads. Accounting (QuickBooks, Xero, SAP)
+          and HubSpot are <span className="text-helm-fg">per company workspace</span>; owners connect those once.
+          OAuth apps never share passwords; SAP Business One stores Service Layer credentials encrypted at rest.
           {connectedCount > 0 && (
             <span className="text-helm-status-positive/90"> {connectedCount} connected.</span>
           )}
@@ -453,6 +459,7 @@ export default function Integrations() {
             key={it.id}
             it={it}
             canManage={data.can_manage}
+            canConnectGoogle={data.can_connect_google !== false}
             canUseConnection={Boolean(data.can_use_connection?.[it.provider ?? it.id])}
             onConnect={oauthConnect}
             onDisconnect={oauthDisconnect}
@@ -473,6 +480,7 @@ export default function Integrations() {
                 key={it.id}
                 it={it}
                 canManage={data.can_manage}
+                canConnectGoogle={data.can_connect_google !== false}
                 canUseConnection={Boolean(data.can_use_connection?.[it.provider ?? it.id])}
                 onConnect={oauthConnect}
                 onDisconnect={oauthDisconnect}

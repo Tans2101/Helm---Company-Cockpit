@@ -307,6 +307,8 @@ def test_calendar_endpoint_merges_department_and_legacy_deadlines(cal_db):
         with patch.object(server, "db", mock_db), \
              patch.object(server, "get_ws", AsyncMock(return_value=ws)), \
              patch.object(server, "_google_calendar_snapshot", AsyncMock(return_value=None)), \
+             patch.object(server, "_user_google_tokens_present", AsyncMock(return_value=False)), \
+             patch.object(server, "_user_google_tokens", AsyncMock(return_value=None)), \
              patch.object(server, "BILLING_ENFORCED", False):
             client = TestClient(server.app)
             r = client.get("/api/calendar", params={"week_start": "2026-09-13"})
