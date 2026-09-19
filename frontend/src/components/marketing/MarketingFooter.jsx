@@ -1,6 +1,14 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
-import { CATEGORY, FOUNDER_CREDIT, PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_MAILTO, TAGLINE } from "@/lib/marketingCopy";
+import {
+  CATEGORY,
+  FOUNDER_CREDIT,
+  PUBLIC_CONTACT_EMAIL,
+  PUBLIC_CONTACT_MAILTO,
+  PUBLIC_INSTAGRAM_HANDLE,
+  PUBLIC_INSTAGRAM_URL,
+  TAGLINE,
+} from "@/lib/marketingCopy";
 import { goToHomeHash } from "@/lib/marketingHash";
 
 const FOOTER_LINKS = [
@@ -34,6 +42,14 @@ export default function MarketingFooter() {
             </p>
             <a href={PUBLIC_CONTACT_MAILTO} className="text-xs text-helm-slate hover:text-helm-cream transition-colors mt-2">
               {PUBLIC_CONTACT_EMAIL}
+            </a>
+            <a
+              href={PUBLIC_INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-helm-slate hover:text-helm-cream transition-colors"
+            >
+              Instagram {PUBLIC_INSTAGRAM_HANDLE}
             </a>
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-helm-slate" aria-label="Footer">
