@@ -1,7 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
-import { ArrowRight } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Activity,
+  ArrowRight,
+  Check,
+  Factory,
+  Radar,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import ProductScreens from "@/components/marketing/ProductScreens";
@@ -9,6 +17,7 @@ import DepartmentsShowcase from "@/components/marketing/DepartmentsShowcase";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import { CATEGORY, FEATURE_CATEGORIES, FEATURE_MODULES, PRO_FEATURES, TAGLINE } from "@/lib/marketingCopy";
 import IntegrationsShowcase from "@/components/marketing/IntegrationsShowcase";
+import { cn } from "@/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1];
 const fade = {
@@ -16,11 +25,64 @@ const fade = {
   show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.7, ease, delay: i * 0.06 } }),
 };
 
+const CATEGORY_ICONS = {
+  intelligence: Radar,
+  finance: TrendingUp,
+  operations: Factory,
+  people: Users,
+};
+
+const HERO_LINES = [
+  "Sales: $3.0M confirmed · $5.0M target · gap $2.0M",
+  "Procurement: 4 orders late · spend $184k this month",
+  "Production: today’s output 820 / 1,000 units",
+  "Maintenance: 2 spares low · overhead over budget",
+];
+
 export default function Features() {
   const { authed, enter } = useMarketingAuth();
+  const [activeCat, setActiveCat] = useState(FEATURE_CATEGORIES[0]?.id || "intelligence");
+  const [heroIdx, setHeroIdx] = useState(0);
+
+  const modulesByTitle = useMemo(
+    () => Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m])),
+    [],
+  );
+
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
-  const modulesByTitle = Object.fromEntries(FEATURE_MODULES.map((m) => [m.title, m]));
+  useEffect(() => {
+    const t = setInterval(() => {
+      setHeroIdx((i) => (i + 1) % HERO_LINES.length);
+    }, 3200);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const sections = FEATURE_CATEGORIES.map((c) => document.getElementById(`features-${c.id}`)).filter(Boolean);
+    if (!sections.length) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]?.target?.id) {
+          const id = visible[0].target.id.replace(/^features-/, "");
+          setActiveCat(id);
+        }
+      },
+      { rootMargin: "-30% 0px -50% 0px", threshold: [0.15, 0.35, 0.55] },
+    );
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToCategory = (id) => {
+    const el = document.getElementById(`features-${id}`);
+    if (!el) return;
+    setActiveCat(id);
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="min-h-screen bg-helm-ink text-helm-cream overflow-x-hidden">
@@ -40,6 +102,38 @@ export default function Features() {
             each designed to answer a specific leadership question:
             what changed, what to decide, what to delegate, and whether it landed.
           </motion.p>
+
+          <motion.div
+            variants={fade}
+            initial="hidden"
+            animate="show"
+            custom={3}
+            className="mt-10 rounded-md border border-helm-cream/[0.08] bg-helm-cream/[0.02] px-4 py-4 md:px-5"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-3.5 h-3.5 text-helm-gold" aria-hidden />
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-helm-slate">
+                From a morning Briefing
+              </p>
+            </div>
+            <div className="relative min-h-[3.25rem]">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={heroIdx}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.35, ease }}
+                  className="font-mono text-sm md:text-[15px] text-helm-cream leading-relaxed"
+                >
+                  {HERO_LINES[heroIdx]}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+            <p className="mt-4 font-mono text-[11px] text-helm-slate tracking-wide">
+              4 departments · 1 daily briefing · 0 spreadsheets
+            </p>
+          </motion.div>
         </div>
       </section>
 
@@ -58,54 +152,117 @@ export default function Features() {
       </section>
 
       <section className="px-6 pb-16 border-t border-helm-cream/[0.05] pt-16">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-6xl">
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
           <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-helm-slate mb-6">Included in Trenston</p>
-          <ul className="space-y-3">
+          <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
             {PRO_FEATURES.map((f) => (
-              <li key={f} className="text-sm text-helm-cream/85 border-b border-helm-cream/[0.06] pb-3">
-                {f}
+              <li key={f} className="flex items-start gap-2.5 text-sm text-helm-cream/85 border-b border-helm-cream/[0.06] pb-3">
+                <Check className="w-3.5 h-3.5 text-helm-gold shrink-0 mt-0.5" aria-hidden />
+                <span>{f}</span>
               </li>
             ))}
           </ul>
         </div>
       </section>
 
-      {FEATURE_CATEGORIES.map((cat) => (
-        <section key={cat.id} className="px-6 py-16 border-t border-helm-cream/[0.05]">
-          <div className="mx-auto max-w-3xl">
-            <motion.div variants={fade} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-40px" }} className="mb-10">
-              <h2 className="font-display text-3xl font-medium tracking-tight text-helm-cream">{cat.label}</h2>
-              <p className="mt-3 text-helm-slate text-sm leading-relaxed">{cat.intro}</p>
-            </motion.div>
-            <div className="space-y-0 border-t border-helm-cream/[0.06]">
-              {cat.modules.map((title, i) => {
-                const mod = modulesByTitle[title];
-                if (!mod) return null;
-                return (
-                  <motion.article key={mod.title} variants={fade} custom={i} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-40px" }}
-                    className="py-8 border-b border-helm-cream/[0.06]">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-slate">{mod.ceoValue}</p>
-                    <h3 className="font-display mt-2 text-2xl tracking-tight text-helm-cream">{mod.title}</h3>
-                    <p className="mt-3 text-sm text-helm-slate leading-relaxed">{mod.body}</p>
-                    {mod.link ? (
-                      <p className="mt-3">
-                        <Link
-                          to={mod.link.to}
-                          className="text-sm text-helm-cream hover:text-helm-gold transition-colors"
-                        >
-                          {mod.link.label} →
-                        </Link>
-                      </p>
-                    ) : null}
-                    <p className="mt-4 text-sm text-helm-slate/90 leading-relaxed pl-4 border-l border-helm-cream/15">{mod.example}</p>
-                  </motion.article>
-                );
-              })}
-            </div>
+      <nav
+        aria-label="Feature categories"
+        className="sticky top-16 z-30 border-y border-helm-cream/[0.06] bg-helm-ink/90 backdrop-blur-md"
+      >
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
+            {FEATURE_CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat.id] || Activity;
+              const active = activeCat === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => scrollToCategory(cat.id)}
+                  className={cn(
+                    "shrink-0 inline-flex items-center gap-2 rounded-md px-3 py-2.5 text-left border-b-2 transition-colors",
+                    active
+                      ? "border-helm-gold text-helm-cream"
+                      : "border-transparent text-helm-slate hover:text-helm-cream",
+                  )}
+                >
+                  <Icon className={cn("w-3.5 h-3.5", active ? "text-helm-gold" : "text-helm-slate")} aria-hidden />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] whitespace-nowrap">
+                    {cat.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </section>
-      ))}
+        </div>
+      </nav>
+
+      {FEATURE_CATEGORIES.map((cat) => {
+        const Icon = CATEGORY_ICONS[cat.id] || Activity;
+        return (
+          <section
+            key={cat.id}
+            id={`features-${cat.id}`}
+            className="px-6 py-16 md:py-20 border-t border-helm-cream/[0.05] scroll-mt-28"
+          >
+            <div className="mx-auto max-w-6xl">
+              <motion.div
+                variants={fade}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: "-40px" }}
+                className="mb-10 md:mb-12 max-w-2xl"
+              >
+                <Icon className="w-8 h-8 text-helm-gold mb-5" aria-hidden />
+                <h2 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-helm-cream">
+                  {cat.label}
+                </h2>
+                <p className="mt-3 text-helm-slate text-sm md:text-base leading-relaxed">{cat.intro}</p>
+              </motion.div>
+
+              <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+                {cat.modules.map((title, i) => {
+                  const mod = modulesByTitle[title];
+                  if (!mod) return null;
+                  return (
+                    <motion.article
+                      key={mod.title}
+                      variants={fade}
+                      custom={i}
+                      initial="hidden"
+                      whileInView="show"
+                      viewport={{ once: true, margin: "-40px" }}
+                      className="group rounded-md border border-helm-cream/[0.08] bg-helm-cream/[0.015] p-5 md:p-6 transition-all duration-300 hover:border-helm-gold/30 hover:-translate-y-0.5"
+                    >
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-slate">
+                        {mod.title}
+                      </p>
+                      <h3 className="font-display mt-3 text-xl md:text-2xl tracking-tight text-helm-cream leading-snug">
+                        {mod.ceoValue}
+                      </h3>
+                      <p className="mt-3 text-sm text-helm-slate leading-relaxed">{mod.body}</p>
+                      {mod.link ? (
+                        <p className="mt-3">
+                          <Link
+                            to={mod.link.to}
+                            className="text-sm text-helm-cream hover:text-helm-gold transition-colors"
+                          >
+                            {mod.link.label} →
+                          </Link>
+                        </p>
+                      ) : null}
+                      <p className="mt-4 text-sm text-helm-slate/90 leading-relaxed pl-3 border-l border-helm-gold/25">
+                        {mod.example}
+                      </p>
+                    </motion.article>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        );
+      })}
 
       <DepartmentsShowcase compact />
 

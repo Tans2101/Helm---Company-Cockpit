@@ -184,13 +184,25 @@ export const FEATURE_CATEGORIES = [
     id: "intelligence",
     label: "Executive intelligence",
     intro: "AI grounded in your company, not generic chatbot answers.",
-    modules: ["Briefing", "Decision Center", "Ask Trenston", "CEO Pack", "Gmail thread surfacing + AI draft replies"],
+    modules: [
+      "Briefing",
+      "Decision Center",
+      "Ask Trenston",
+      "CEO Pack",
+      "Daily morning briefing",
+      "Gmail thread surfacing + AI draft replies",
+    ],
   },
   {
     id: "finance",
     label: "Finance & growth",
     intro: "Pipeline and financials are connected: won deals land as revenue, not a spreadsheet chase.",
-    modules: ["Won deals become revenue", "Deal ownership & follow-ups", "Telemetry"],
+    modules: [
+      "Won deals become revenue",
+      "Deal ownership & follow-ups",
+      "Sales order book & monthly target",
+      "Telemetry",
+    ],
   },
   {
     id: "operations",
@@ -199,7 +211,9 @@ export const FEATURE_CATEGORIES = [
     modules: [
       "Work order tracking",
       "Vendor memory",
+      "Procurement spend visibility",
       "Equipment reliability alerts",
+      "Maintenance operations",
       "Cross-department blocking",
     ],
   },
@@ -430,6 +444,12 @@ export const FEATURE_MODULES = [
     example: "Financial snapshot, team updates, and open decisions, formatted to forward, not rebuilt in slides.",
   },
   {
+    title: "Daily morning briefing",
+    ceoValue: "The company picture in your inbox before the first meeting.",
+    body: "One email per day to the CEO or owner covering Sales, Procurement, Production, and Maintenance — separate from the weekly CEO Pack PDF. Metrics with no data yet say so plainly; nothing is invented.",
+    example: "Tuesday 7am: order book vs monthly target, late purchase orders, yesterday’s output shortfall, and two spares below threshold — without opening the app first.",
+  },
+  {
     title: "Gmail thread surfacing + AI draft replies",
     ceoValue: "Inbox signal without living in email.",
     body: "Surfaces important Gmail threads in the cockpit and drafts replies you can send, grounded in company context, not a blank compose box.",
@@ -448,10 +468,28 @@ export const FEATURE_MODULES = [
     example: "Same bracket as last quarter. Trenston recalls the vendor, last price, and whether they typically deliver late.",
   },
   {
+    title: "Sales order book & monthly target",
+    ceoValue: "See the real order book without chasing sales reps.",
+    body: "Log buyer, country, product, price, and quantity in Trenston instead of a private spreadsheet. Rollups by country and product, a forward view of expected orders for the next 2–3 months, and a company-wide monthly target vs confirmed actual with the gap as a real number.",
+    example: "Target $5M this month, confirmed $3M. India and UAE lead the book; $1.2M expected next month is already visible before the review.",
+  },
+  {
+    title: "Procurement spend visibility",
+    ceoValue: "Know what purchasing actually costs this month.",
+    body: "Total spend with breakdowns by vendor and item, plus a count of requests with no cost recorded so totals are never quietly incomplete. An optional department budget shows actual vs budget only when someone sets it — otherwise you still see actual alone.",
+    example: "September spend $184k across three vendors. Twelve requests still have no cost. Budget not set, so the card shows actual without a fake percentage.",
+  },
+  {
     title: "Equipment reliability alerts",
     ceoValue: "Notice the machine that keeps coming back.",
     body: "Maintenance tickets for equipment issues, plus reliability alerts when the same machine repeats, and ticket-open downtime totals.",
     example: "Press #3 logged three tickets in 90 days. Trenston flags it before the next breakdown.",
+  },
+  {
+    title: "Maintenance operations",
+    ceoValue: "Spares, schedules, and repair cost — not just tickets when something breaks.",
+    body: "Critical spares with a below-threshold flag, per-machine schedules that update last-serviced when a matching ticket is resolved, annual maintenance contract renewals, and overhead repair cost vs an optional budget.",
+    example: "Budget $100k/month for repairs; actual hits $1M. Two bearings below minimum, one AMC due in 12 days, and Press #2’s oil change is overdue.",
   },
   {
     title: "Cross-department blocking",
