@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
-import { CHANGELOG_ENTRIES, CHANGELOG_INTRO } from "@/lib/changelogEntries";
+import { CHANGELOG_INTRO, getChangelogEntries } from "@/lib/changelog";
 import { CATEGORY } from "@/lib/marketingCopy";
 
 const ease = [0.16, 1, 0.3, 1];
@@ -26,8 +26,10 @@ function formatDate(iso) {
   }
 }
 
+/** Renders only frontend/src/lib/changelog.json — never git history or CI output. */
 export default function Changelog() {
   const { authed, enter } = useMarketingAuth();
+  const entries = useMemo(() => getChangelogEntries(), []);
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -56,7 +58,7 @@ export default function Changelog() {
 
         <section className="border-t border-helm-cream/[0.05] px-6 py-16 md:py-20">
           <ol className="mx-auto max-w-3xl space-y-0">
-            {CHANGELOG_ENTRIES.map((entry, i) => (
+            {entries.map((entry, i) => (
               <motion.li
                 key={`${entry.date}-${entry.title}`}
                 variants={fade}
@@ -71,7 +73,7 @@ export default function Changelog() {
                 </time>
                 <div>
                   <h2 className="text-base font-medium text-helm-cream md:text-lg">{entry.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-helm-slate">{entry.body}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-helm-slate">{entry.description}</p>
                 </div>
               </motion.li>
             ))}
