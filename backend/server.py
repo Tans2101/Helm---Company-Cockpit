@@ -1431,9 +1431,12 @@ _FINANCIALS_CACHE_TTL_SECONDS = 90.0
 
 
 def _financials_cache_key(workspace_id: str, department_ids: Optional[list] = None) -> str:
-    if department_ids:
-        return f"financials:{workspace_id}:{','.join(sorted(str(d) for d in department_ids))}"
-    return f"financials:{workspace_id}"
+    # None = CEO bypass (all workspace rows). [] = no department access.
+    # Must not collapse those cases — empty list is falsy but not "all data".
+    if department_ids is None:
+        return f"financials:{workspace_id}"
+    scoped = ",".join(sorted(str(d) for d in department_ids))
+    return f"financials:{workspace_id}:{scoped or 'none'}"
 
 
 def invalidate_financials_cache(workspace_id: str) -> None:
