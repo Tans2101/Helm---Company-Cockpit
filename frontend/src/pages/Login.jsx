@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { SignIn, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
-import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
@@ -101,13 +100,21 @@ function LoginClerk() {
         <p className="text-xs text-helm-muted">Know what matters whenever you open Trenston.</p>
       </div>
 
-      <div className="flex items-center justify-center p-10 relative z-10">
+      <div className="flex items-center justify-center p-8 md:p-10 pt-28 lg:pt-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Enter the cockpit</h2>
-          <p className="text-helm-slate text-sm mt-2">Sign in, then activate Trenston to use the cockpit.</p>
+          <p className="text-helm-slate text-sm mt-2 leading-relaxed">
+            Sign in with Google, or email. Then open your workspace.
+          </p>
 
           {urlError === "session_retired" && (
             <p className="mt-4 text-sm text-helm-status-warning">That sign-in link has expired. Please sign in again below.</p>
+          )}
+
+          {passwordMinLength > 8 && (
+            <p className="mt-4 text-xs text-helm-slate leading-relaxed">
+              Email passwords need at least {passwordMinLength} characters. Google sign-in skips this.
+            </p>
           )}
 
           <div className="mt-6" data-testid="clerk-sign-in">
@@ -122,33 +129,21 @@ function LoginClerk() {
             />
           </div>
 
-          <p className="mt-4 text-center text-xs text-helm-slate">
-            <Link to="/" className="hover:text-helm-slate transition-colors">← Back to home</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/sign-up" className="hover:text-helm-gold transition-colors">Create account</Link>
-          </p>
-
-          {passwordMinLength > 8 && (
-            <p className="mt-3 text-center text-xs text-helm-slate">
-              Email passwords must be at least {passwordMinLength} characters (Clerk setting).
-            </p>
-          )}
-
-          <p className="mt-3 text-center text-xs text-helm-slate">
-            Password rules are set in Clerk (not Trenston). Use Google for fastest sign-in.
-          </p>
-
-          <div className="mt-6 flex items-center gap-2 text-xs text-helm-slate">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Sign-in powered by Clerk</span>
+          <div className="mt-8 space-y-3 border-t border-helm-cream/10 pt-6">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <Link to="/" className="text-helm-slate hover:text-helm-cream transition-colors">
+                ← Home
+              </Link>
+              <Link to="/sign-up" className="text-helm-gold hover:text-helm-gold/90 transition-colors">
+                Create account
+              </Link>
+            </div>
+            <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-helm-muted" aria-label="Legal">
+              <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
+              <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
+              <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
+            </nav>
           </div>
         </div>
       </div>

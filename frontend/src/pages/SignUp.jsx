@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SignUp, useAuth as useClerkAuth, useSession, useClerk } from "@clerk/clerk-react";
-import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useClerkMode } from "@/components/ClerkProviderBootstrap";
 import { clerkAppearance } from "@/lib/clerkTheme";
@@ -102,14 +101,16 @@ function SignUpClerk() {
         </p>
       </div>
 
-      <div className="flex items-center justify-center p-10 relative z-10">
+      <div className="flex items-center justify-center p-8 md:p-10 pt-28 lg:pt-10 relative z-10">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-normal text-helm-cream tracking-tight">Create your account</h2>
-          <p className="text-helm-slate text-sm mt-2">Google or email. Activate Trenston after sign-up.</p>
+          <p className="text-helm-slate text-sm mt-2 leading-relaxed">
+            Google or email. Activate Trenston after sign-up.
+          </p>
           {passwordMinLength > 8 && (
-            <p className="mt-3 text-sm text-helm-gold/90">
-              Email sign-up needs a password of at least {passwordMinLength} characters
-              {captchaEnabled ? " (Clerk also shows a CAPTCHA)" : ""}. Google skips the password.
+            <p className="mt-4 text-xs text-helm-slate leading-relaxed">
+              Email passwords need at least {passwordMinLength} characters
+              {captchaEnabled ? " (CAPTCHA may appear)" : ""}. Google skips this.
             </p>
           )}
 
@@ -127,23 +128,22 @@ function SignUpClerk() {
             />
           </div>
 
-          <div className="mt-6 flex items-center gap-2 text-xs text-helm-slate">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Powered by Clerk</span>
+          <div className="mt-8 space-y-3 border-t border-helm-cream/10 pt-6">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <Link to="/" className="text-helm-slate hover:text-helm-cream transition-colors">
+                ← Home
+              </Link>
+              <Link to="/login" className="text-helm-gold hover:text-helm-gold/90 transition-colors">
+                Sign in
+              </Link>
+            </div>
+            <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-helm-muted" aria-label="Legal">
+              <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
+              <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
+              <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
+            </nav>
           </div>
-          <p className="mt-4 text-center text-xs text-helm-slate">
-            <Link to="/" className="hover:text-helm-slate transition-colors">← Back to home</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/privacy" className="hover:text-helm-slate transition-colors">Privacy</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/security" className="hover:text-helm-slate transition-colors">Security</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/terms" className="hover:text-helm-slate transition-colors">Terms</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/refunds" className="hover:text-helm-slate transition-colors">Refunds</Link>
-            <span className="mx-2 text-helm-muted">·</span>
-            <Link to="/login" className="hover:text-helm-slate transition-colors">Sign in</Link>
-          </p>
         </div>
       </div>
     </div>
