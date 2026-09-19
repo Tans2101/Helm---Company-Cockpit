@@ -193,6 +193,34 @@ def _mock_coll(rows):
     return find, cursor
 
 
+_ASK_TYPES = (
+    dept_catalog.TYPE_SALES,
+    dept_catalog.TYPE_HR,
+    dept_catalog.TYPE_PRODUCTION,
+    dept_catalog.TYPE_PROCUREMENT,
+    dept_catalog.TYPE_LEGAL,
+    dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
+)
+
+
+def _enabled_by_type(types=_ASK_TYPES):
+    return {t: {"department_id": f"dept_{t}", "type": t, "enabled": True} for t in types}
+
+
+def _access_by_type(member_types=(), *, ceo=False, types=_ASK_TYPES):
+    if ceo:
+        return {t: None for t in types}
+    return {t: ([f"dept_{t}"] if t in member_types else []) for t in types}
+
+
+def _ask_period():
+    return {
+        "key": "2026-09-01",
+        "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
+        "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
+    }
+
+
 @pytest.mark.asyncio
 async def test_ask_helm_scopes_each_department_by_membership():
     """Sales member: sales data in prompt; every other dept restricted; no raw foreign rows."""
@@ -228,7 +256,7 @@ async def test_ask_helm_scopes_each_department_by_membership():
         captured["system"] = system
         yield "ok"
 
-    async def _slice(principal, dept_type, collection_attr):
+    async def _slice(principal, dept_type, collection_attr, *, enabled_dept=None, access_ids=None):
         # Replicate membership: only Sales visible.
         if dept_type == dept_catalog.TYPE_SALES:
             return (
@@ -245,12 +273,16 @@ async def test_ask_helm_scopes_each_department_by_membership():
             patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
             patch.object(server.helm_llm, "stream_text", side_effect=_capture_stream), \
             patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
-            patch.object(server.plan_usage, "current_usage_period", return_value={
-                "key": "2026-09-01",
-                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
-                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
-            }), \
+            patch.object(server.plan_usage, "current_usage_period", return_value=_ask_period()), \
             patch.object(server, "BILLING_ENFORCED", False), \
+            patch.object(
+                server.dept_access, "accessible_department_ids_by_type",
+                new=AsyncMock(return_value=_access_by_type({dept_catalog.TYPE_SALES})),
+            ), \
+            patch.object(
+                server.dept_migrate, "get_enabled_departments_by_type",
+                new=AsyncMock(return_value=_enabled_by_type()),
+            ), \
             patch.object(server, "_ask_helm_department_slice", new=AsyncMock(side_effect=_slice)):
         resp = await server.ask_helm(
             server.AskInput(message="How is the pipeline looking?"),
@@ -291,7 +323,7 @@ async def test_ask_helm_member_of_production_gets_production_counts():
         captured["system"] = system
         yield "prod-ok"
 
-    async def _slice(principal, dept_type, collection_attr):
+    async def _slice(principal, dept_type, collection_attr, *, enabled_dept=None, access_ids=None):
         if dept_type == dept_catalog.TYPE_PRODUCTION:
             return _production(), True, True
         return [], True, False
@@ -303,12 +335,16 @@ async def test_ask_helm_member_of_production_gets_production_counts():
             patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
             patch.object(server.helm_llm, "stream_text", side_effect=_capture_stream), \
             patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
-            patch.object(server.plan_usage, "current_usage_period", return_value={
-                "key": "2026-09-01",
-                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
-                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
-            }), \
+            patch.object(server.plan_usage, "current_usage_period", return_value=_ask_period()), \
             patch.object(server, "BILLING_ENFORCED", False), \
+            patch.object(
+                server.dept_access, "accessible_department_ids_by_type",
+                new=AsyncMock(return_value=_access_by_type({dept_catalog.TYPE_PRODUCTION})),
+            ), \
+            patch.object(
+                server.dept_migrate, "get_enabled_departments_by_type",
+                new=AsyncMock(return_value=_enabled_by_type()),
+            ), \
             patch.object(server, "_ask_helm_department_slice", new=AsyncMock(side_effect=_slice)):
         resp = await server.ask_helm(
             server.AskInput(message="How many open work orders?"),
@@ -340,7 +376,7 @@ async def test_ask_helm_ceo_sees_all_department_slices_unfiltered():
 
     slice_calls = []
 
-    async def _slice(principal, dept_type, collection_attr):
+    async def _slice(principal, dept_type, collection_attr, *, enabled_dept=None, access_ids=None):
         slice_calls.append(dept_type)
         if dept_type == dept_catalog.TYPE_SALES:
             return _deals(), True, True
@@ -373,12 +409,16 @@ async def test_ask_helm_ceo_sees_all_department_slices_unfiltered():
             patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
             patch.object(server.helm_llm, "stream_text", side_effect=_capture_stream), \
             patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
-            patch.object(server.plan_usage, "current_usage_period", return_value={
-                "key": "2026-09-01",
-                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
-                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
-            }), \
+            patch.object(server.plan_usage, "current_usage_period", return_value=_ask_period()), \
             patch.object(server, "BILLING_ENFORCED", False), \
+            patch.object(
+                server.dept_access, "accessible_department_ids_by_type",
+                new=AsyncMock(return_value=_access_by_type(ceo=True)),
+            ), \
+            patch.object(
+                server.dept_migrate, "get_enabled_departments_by_type",
+                new=AsyncMock(return_value=_enabled_by_type()),
+            ), \
             patch.object(server, "_ask_helm_department_slice", new=AsyncMock(side_effect=_slice)):
         resp = await server.ask_helm(
             server.AskInput(message="Give me a company pulse"),
@@ -483,7 +523,7 @@ def test_ask_scopes_every_non_finance_catalog_department():
 
 @pytest.mark.asyncio
 async def test_ask_helm_calls_membership_slice_for_every_non_finance_dept():
-    """Inspect context construction: each non-finance dept goes through accessible_department_ids."""
+    """Batched membership once, then a slice for each non-finance dept type."""
     principal = {
         "user_id": "u_member",
         "workspace_id": "ws_ask",
@@ -496,8 +536,10 @@ async def test_ask_helm_calls_membership_slice_for_every_non_finance_dept():
     mock_db = MagicMock()
     mock_db.chat_messages.insert_one = AsyncMock(return_value=None)
     called = []
+    access_mock = AsyncMock(return_value=_access_by_type())
+    enabled_mock = AsyncMock(return_value=_enabled_by_type())
 
-    async def _slice(principal, dept_type, collection_attr):
+    async def _slice(principal, dept_type, collection_attr, *, enabled_dept=None, access_ids=None):
         called.append((dept_type, collection_attr))
         return [], True, False
 
@@ -514,12 +556,10 @@ async def test_ask_helm_calls_membership_slice_for_every_non_finance_dept():
             patch.object(server.helm_llm, "anthropic_configured", return_value=True), \
             patch.object(server.helm_llm, "stream_text", side_effect=_capture_stream), \
             patch.object(server.plan_usage, "acquire_period_ask_slot", new=AsyncMock(return_value=True)), \
-            patch.object(server.plan_usage, "current_usage_period", return_value={
-                "key": "2026-09-01",
-                "start": __import__("datetime").datetime(2026, 9, 1, tzinfo=__import__("datetime").timezone.utc),
-                "end": __import__("datetime").datetime(2026, 10, 1, tzinfo=__import__("datetime").timezone.utc),
-            }), \
+            patch.object(server.plan_usage, "current_usage_period", return_value=_ask_period()), \
             patch.object(server, "BILLING_ENFORCED", False), \
+            patch.object(server.dept_access, "accessible_department_ids_by_type", new=access_mock), \
+            patch.object(server.dept_migrate, "get_enabled_departments_by_type", new=enabled_mock), \
             patch.object(server, "_ask_helm_department_slice", new=AsyncMock(side_effect=_slice)), \
             patch.object(server.helm_freshness, "resolve_workspace_data_as_of", new=AsyncMock(return_value={
                 "data_as_of": None, "sources": {},
@@ -533,6 +573,10 @@ async def test_ask_helm_calls_membership_slice_for_every_non_finance_dept():
 
     expected = {(t, c) for t, c, _k in _ASK_DEPT_SLICES}
     assert set(called) == expected
+    assert access_mock.await_count == 1
+    assert enabled_mock.await_count == 1
+    batch_types = set(access_mock.await_args.args[2])
+    assert batch_types == {t for t, _c, _k in _ASK_DEPT_SLICES}
     system = captured["system"]
     for note_frag in (
         "Sales pipeline is not shared",

@@ -36,6 +36,23 @@ async def get_or_set(
     return value
 
 
+def peek(key: str) -> Any | None:
+    """Return cached value if present and unexpired; else None (no loader)."""
+    global _hits, _misses
+    now = time.monotonic()
+    row = _store.get(key)
+    if row is not None and row[1] > now:
+        _hits += 1
+        return row[0]
+    _misses += 1
+    return None
+
+
+def put(key: str, value: Any, ttl_seconds: float) -> None:
+    """Store a value with TTL without going through a loader."""
+    _store[key] = (value, time.monotonic() + float(ttl_seconds))
+
+
 def invalidate(key: str) -> bool:
     """Drop one key. Returns True if it was present."""
     return _store.pop(key, None) is not None

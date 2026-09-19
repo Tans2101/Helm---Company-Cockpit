@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 from typing import Optional
 
 import departments_catalog as dept_catalog
@@ -9,6 +10,22 @@ import departments_catalog as dept_catalog
 logger = logging.getLogger("helm")
 
 UNASSIGNED_DEPARTMENT_LABEL = "Unassigned"
+
+# Per-async-task memo for accessible_department_ids within one request.
+_access_ids_cache: ContextVar[Optional[dict]] = ContextVar("helm_dept_access_ids", default=None)
+
+
+def _access_cache() -> dict:
+    cache = _access_ids_cache.get()
+    if cache is None:
+        cache = {}
+        _access_ids_cache.set(cache)
+    return cache
+
+
+def clear_access_ids_cache() -> None:
+    """Drop request memo (tests)."""
+    _access_ids_cache.set({})
 
 
 def is_workspace_ceo(principal: dict) -> bool:
@@ -101,7 +118,13 @@ async def accessible_department_ids(
     Returns ``None`` for CEO (bypass — see all workspace records of that kind).
     Returns a list (possibly empty) for everyone else — empty means no access.
     """
+    cache = _access_cache()
+    cache_key = (principal.get("user_id"), principal.get("workspace_id"), dept_type)
+    if cache_key in cache:
+        return cache[cache_key]
+
     if is_workspace_ceo(principal):
+        cache[cache_key] = None
         return None
     rows = await db.departments.find(
         {
@@ -112,6 +135,7 @@ async def accessible_department_ids(
         {"_id": 0, "department_id": 1},
     ).to_list(50)
     if not rows:
+        cache[cache_key] = []
         return []
     my_rows = await db.department_members.find(
         {
@@ -120,7 +144,75 @@ async def accessible_department_ids(
         },
         {"_id": 0, "department_id": 1},
     ).to_list(50)
-    return [m["department_id"] for m in my_rows]
+    result = [m["department_id"] for m in my_rows]
+    cache[cache_key] = result
+    return result
+
+
+async def accessible_department_ids_by_type(
+    db, principal: dict, dept_types: list[str] | tuple[str, ...],
+) -> dict[str, Optional[list[str]]]:
+    """Batched membership lookup for many department types in one request.
+
+    Same semantics as calling :func:`accessible_department_ids` per type:
+    ``None`` = CEO bypass, ``[]`` = no access, non-empty list = allowed ids.
+    Uses two Mongo queries total (enabled departments + memberships) instead of
+    two per type. Populates the per-request memo so later single-type calls hit cache.
+    """
+    types = [t for t in dept_types if t]
+    out: dict[str, Optional[list[str]]] = {t: [] for t in types}
+    if not types:
+        return out
+
+    cache = _access_cache()
+    uid = principal.get("user_id")
+    ws_id = principal.get("workspace_id")
+
+    if is_workspace_ceo(principal):
+        for t in types:
+            out[t] = None
+            cache[(uid, ws_id, t)] = None
+        return out
+
+    # Fill from memo when every type is already cached.
+    if all((uid, ws_id, t) in cache for t in types):
+        return {t: cache[(uid, ws_id, t)] for t in types}
+
+    enabled = await db.departments.find(
+        {
+            "workspace_id": ws_id,
+            "type": {"$in": list(types)},
+            "enabled": True,
+        },
+        {"_id": 0, "department_id": 1, "type": 1},
+    ).to_list(200)
+
+    ids_by_type: dict[str, list[str]] = {t: [] for t in types}
+    all_ids: list[str] = []
+    for row in enabled:
+        did = row.get("department_id")
+        dtype = row.get("type")
+        if not did or dtype not in ids_by_type:
+            continue
+        ids_by_type[dtype].append(did)
+        all_ids.append(did)
+
+    member_ids: set[str] = set()
+    if all_ids:
+        my_rows = await db.department_members.find(
+            {
+                "user_id": uid,
+                "department_id": {"$in": all_ids},
+            },
+            {"_id": 0, "department_id": 1},
+        ).to_list(200)
+        member_ids = {m["department_id"] for m in my_rows if m.get("department_id")}
+
+    for t in types:
+        allowed = [did for did in ids_by_type[t] if did in member_ids]
+        out[t] = allowed
+        cache[(uid, ws_id, t)] = allowed
+    return out
 
 
 def apply_department_filter(base_filter: dict, department_ids: Optional[list[str]]) -> dict:

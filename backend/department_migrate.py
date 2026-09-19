@@ -23,6 +23,25 @@ async def get_enabled_department(db, workspace_id: str, dept_type: str) -> Optio
     )
 
 
+async def get_enabled_departments_by_type(
+    db, workspace_id: str, dept_types: list[str] | tuple[str, ...],
+) -> dict[str, Optional[dict]]:
+    """One query for many department types → ``{type: department|None}``."""
+    types = [t for t in dept_types if t]
+    out: dict[str, Optional[dict]] = {t: None for t in types}
+    if not types:
+        return out
+    rows = await db.departments.find(
+        {"workspace_id": workspace_id, "type": {"$in": list(types)}, "enabled": True},
+        {"_id": 0},
+    ).to_list(100)
+    for row in rows:
+        dtype = row.get("type")
+        if dtype in out and out[dtype] is None:
+            out[dtype] = row
+    return out
+
+
 async def ensure_enabled_department(db, workspace_id: str, dept_type: str) -> tuple[dict, bool]:
     """Return (department, created_or_reenabled).
 

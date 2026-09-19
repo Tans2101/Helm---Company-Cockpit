@@ -9,9 +9,10 @@ import hashlib
 import secrets
 import asyncio
 import logging
+import time
 from pathlib import Path
 from datetime import date, datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any
 from urllib.parse import urlencode, urlparse, quote
 from collections import defaultdict
 
@@ -2085,16 +2086,35 @@ def _ask_slice_context(
     )
 
 
-async def _ask_helm_department_slice(principal: dict, dept_type: str, collection_attr: str):
+_ASK_HELM_ACCESS_LOOKUP = object()
+
+
+async def _ask_helm_department_slice(
+    principal: dict,
+    dept_type: str,
+    collection_attr: str,
+    *,
+    enabled_dept: Optional[dict] = None,
+    access_ids: Any = _ASK_HELM_ACCESS_LOOKUP,
+):
     """Load Ask Helm rows with the same membership rule as department pages.
 
     Returns ``(rows, enabled, visible)``. CEO → visible with unfiltered ids (None bypass).
+
+    Pass ``enabled_dept`` / ``access_ids`` from a batched lookup to skip per-type queries.
+    Omit ``access_ids`` (default) to look up; pass ``None`` for CEO bypass.
     """
     ws_id = principal["workspace_id"]
-    dept = await dept_migrate.get_enabled_department(db, ws_id, dept_type)
+    if enabled_dept is None and access_ids is _ASK_HELM_ACCESS_LOOKUP:
+        dept = await dept_migrate.get_enabled_department(db, ws_id, dept_type)
+    else:
+        dept = enabled_dept
     if not dept:
         return [], False, False
-    ids = await dept_access.accessible_department_ids(db, principal, dept_type)
+    if access_ids is _ASK_HELM_ACCESS_LOOKUP:
+        ids = await dept_access.accessible_department_ids(db, principal, dept_type)
+    else:
+        ids = access_ids
     visible = ids is None or len(ids) > 0
     if not visible:
         return [], True, False
@@ -3294,46 +3314,142 @@ async def briefing(principal=Depends(get_principal)):
         b["headline"] = "Start by logging your financials and adding your team."
     is_pro = workspace_is_pro(c)
     has_fin_access = await can_access_financials(principal)
+    day = datetime.now(timezone.utc).date().isoformat()
+
+    async def _load_fin():
+        if not has_fin_access:
+            return None
+        return await compute_financials(c["workspace_id"])
+
+    async def _load_acts():
+        return await db.activities.find(
+            {"workspace_id": c["workspace_id"]}, {"_id": 0},
+        ).sort("created_at", -1).to_list(5)
+
+    async def _load_updates():
+        return await db.updates.find(
+            {"workspace_id": c["workspace_id"], "day": day}, {"_id": 0},
+        ).sort("updated_at", -1).to_list(50)
+
+    fin, acts, ups, (email_threads, gmail_meta), freshness = await asyncio.gather(
+        _load_fin(),
+        _load_acts(),
+        _load_updates(),
+        _briefing_gmail_swr(c, principal),
+        helm_freshness.resolve_workspace_data_as_of(db, c),
+    )
+
     metrics = []
-    if has_fin_access:
-        fin = await compute_financials(c["workspace_id"])
+    if has_fin_access and fin is not None:
         metrics = _briefing_finance_metrics(fin)
         nrr = b.get("nrr")
         if nrr:
             metrics.append({"label": "NRR", "value": nrr["value"], "delta": nrr["delta"], "tone": nrr["tone"]})
     b["metrics"] = metrics
-    acts = await db.activities.find({"workspace_id": c["workspace_id"]}, {"_id": 0}).sort("created_at", -1).to_list(5)
     act_items = [{"title": a["summary"], "detail": f"{a['actor_name']} · {_rel_time(a['created_at'])}", "tone": "neutral"} for a in acts]
     b["what_changed"] = act_items + list(b.get("what_changed", []))
-    day = datetime.now(timezone.utc).date().isoformat()
-    ups = await db.updates.find({"workspace_id": c["workspace_id"], "day": day}, {"_id": 0}).sort("updated_at", -1).to_list(50)
     b["team_updates"] = [{"user_name": u.get("user_name"), "text": u.get("text"),
                           "blocker": u.get("blocker", False),
                           "ago": _rel_time(u.get("updated_at", ""))} for u in ups]
     b["what_to_decide"] = _briefing_what_to_decide(c)
     b["what_to_delegate"] = _briefing_what_to_delegate(c)
     b["insights_generated_at"] = c.get("insights_generated_at")
-    # Live Gmail threads — cap wait so a slow Google call cannot freeze Briefing.
-    try:
-        email_threads, gmail_meta = await asyncio.wait_for(
-            _briefing_email_threads(c, principal),
-            timeout=3.0,
-        )
-    except asyncio.TimeoutError:
-        logger.warning("Gmail briefing fetch timed out for %s", c.get("workspace_id"))
-        email_threads, gmail_meta = [], {
-            "connected": bool(_integration_tokens(c, "google_tokens")),
-            "needs_reconnect": False,
-            "compose": False,
-        }
     b["email_threads"] = email_threads
     b["gmail_connected"] = gmail_meta["connected"]
     b["gmail_needs_reconnect"] = gmail_meta["needs_reconnect"]
     b["gmail_compose"] = gmail_meta.get("compose", False)
-    freshness = await helm_freshness.resolve_workspace_data_as_of(db, c)
     b["data_as_of"] = freshness.get("data_as_of")
     b["data_freshness_sources"] = freshness.get("sources") or {}
     return {**b, "is_pro": is_pro, "ai_summary": b.get("ai_summary") if is_pro else None}
+
+
+# Gmail briefing: stale-while-revalidate. Key includes user_id so a future
+# per-user Google token change keeps the same cache shape.
+GMAIL_BRIEFING_SOFT_TTL_SECONDS = 45.0
+GMAIL_BRIEFING_HARD_TTL_SECONDS = 1800.0
+_gmail_briefing_cache: dict[str, tuple[list, dict, float]] = {}
+_gmail_briefing_refresh_inflight: set[str] = set()
+_gmail_briefing_refresh_tasks: set[asyncio.Task] = set()
+
+
+def _gmail_briefing_cache_key(workspace: dict, principal: dict | None) -> str:
+    ws_id = workspace.get("workspace_id") or ""
+    uid = (principal or {}).get("user_id") or "anon"
+    return f"{ws_id}:{uid}"
+
+
+def _gmail_timeout_fallback(workspace: dict) -> tuple[list, dict]:
+    return [], {
+        "connected": bool(_integration_tokens(workspace, "google_tokens")),
+        "needs_reconnect": False,
+        "compose": False,
+    }
+
+
+def clear_gmail_briefing_cache() -> None:
+    """Tests / process recycle."""
+    _gmail_briefing_cache.clear()
+    _gmail_briefing_refresh_inflight.clear()
+
+
+async def _briefing_gmail_fetch_and_store(
+    workspace: dict, principal: dict | None, cache_key: str,
+) -> tuple[list, dict]:
+    """Live Gmail fetch with the existing 3s timeout; updates SWR cache on success."""
+    try:
+        threads, meta = await asyncio.wait_for(
+            _briefing_email_threads(workspace, principal),
+            timeout=3.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Gmail briefing fetch timed out for %s", workspace.get("workspace_id"))
+        return _gmail_timeout_fallback(workspace)
+    _gmail_briefing_cache[cache_key] = (threads, meta, time.monotonic())
+    return threads, meta
+
+
+def _schedule_gmail_briefing_refresh(
+    workspace: dict, principal: dict | None, cache_key: str,
+) -> None:
+    if cache_key in _gmail_briefing_refresh_inflight:
+        return
+    _gmail_briefing_refresh_inflight.add(cache_key)
+
+    async def _run() -> None:
+        try:
+            await _briefing_gmail_fetch_and_store(workspace, principal, cache_key)
+        except Exception:
+            logger.exception("background Gmail briefing refresh failed for %s", cache_key)
+        finally:
+            _gmail_briefing_refresh_inflight.discard(cache_key)
+
+    try:
+        task = asyncio.get_running_loop().create_task(_run())
+        _gmail_briefing_refresh_tasks.add(task)
+        task.add_done_callback(_gmail_briefing_refresh_tasks.discard)
+    except RuntimeError:
+        _gmail_briefing_refresh_inflight.discard(cache_key)
+
+
+async def _briefing_gmail_swr(
+    workspace: dict, principal: dict | None = None,
+) -> tuple[list, dict]:
+    """Serve cached Gmail threads immediately; refresh in the background when soft-stale.
+
+    Cold miss (first load / no cache): wait on the live fetch (same 3s timeout).
+    """
+    cache_key = _gmail_briefing_cache_key(workspace, principal)
+    cached = _gmail_briefing_cache.get(cache_key)
+    now = time.monotonic()
+    if cached is not None:
+        threads, meta, fetched_at = cached
+        age = now - fetched_at
+        if age <= GMAIL_BRIEFING_HARD_TTL_SECONDS:
+            if age >= GMAIL_BRIEFING_SOFT_TTL_SECONDS:
+                _schedule_gmail_briefing_refresh(workspace, principal, cache_key)
+            return threads, meta
+        _gmail_briefing_cache.pop(cache_key, None)
+    return await _briefing_gmail_fetch_and_store(workspace, principal, cache_key)
 
 
 async def _briefing_email_threads(workspace: dict, principal: dict | None = None) -> tuple[list, dict]:
@@ -6189,16 +6305,50 @@ def _me_work_row(
     )
 
 
+async def _me_work_dept_ids_by_type(
+    principal: dict, dept_types: tuple[str, ...] | list[str],
+) -> dict[str, Optional[list[str]]]:
+    """Batched version of ``_me_work_dept_ids`` for all My Day department types."""
+    access_by_type = await dept_access.accessible_department_ids_by_type(
+        db, principal, dept_types,
+    )
+    out: dict[str, Optional[list[str]]] = {}
+    # CEO bypass → need enabled department ids (one query for all types).
+    ceo_types = [t for t, access in access_by_type.items() if access is None]
+    enabled_ids_by_type: dict[str, Optional[list[str]]] = {t: None for t in ceo_types}
+    if ceo_types:
+        rows = await db.departments.find(
+            {
+                "workspace_id": principal["workspace_id"],
+                "type": {"$in": ceo_types},
+                "enabled": True,
+            },
+            {"_id": 0, "department_id": 1, "type": 1},
+        ).to_list(200)
+        buckets: dict[str, list[str]] = {t: [] for t in ceo_types}
+        for row in rows:
+            dtype = row.get("type")
+            did = row.get("department_id")
+            if dtype in buckets and did:
+                buckets[dtype].append(did)
+        enabled_ids_by_type = {t: (ids or None) for t, ids in buckets.items()}
+
+    for dtype in dept_types:
+        access = access_by_type.get(dtype)
+        if access is not None:
+            out[dtype] = access if access else None
+        else:
+            out[dtype] = enabled_ids_by_type.get(dtype)
+    return out
+
+
 async def _me_work_dept_ids(principal: dict, dept_type: str) -> Optional[list[str]]:
     """Department ids to query for this type, or None to skip entirely.
 
     Non-CEO with no membership → []. CEO → enabled dept ids (assignee filter still applies).
     """
-    access = await dept_access.accessible_department_ids(db, principal, dept_type)
-    if access is not None:
-        return access if access else None
-    # CEO bypass for membership — still require the type to be enabled in the workspace.
-    return await helm_work_items.enabled_department_ids(db, principal["workspace_id"], dept_type)
+    batched = await _me_work_dept_ids_by_type(principal, (dept_type,))
+    return batched.get(dept_type)
 
 
 @api_router.get("/me/work-items")
@@ -6212,9 +6362,7 @@ async def my_work_items(principal=Depends(get_principal)):
         dept_catalog.TYPE_SALES,
         dept_catalog.TYPE_PROCUREMENT,
     )
-    department_ids_by_type = {
-        dtype: await _me_work_dept_ids(principal, dtype) for dtype in types
-    }
+    department_ids_by_type = await _me_work_dept_ids_by_type(principal, types)
     items = await helm_work_items.collect_for_user(
         db,
         principal["workspace_id"],
@@ -11262,24 +11410,35 @@ async def ask_helm(payload: AskInput, principal=Depends(require_pro_perm("ask:us
 
     fin = await compute_financials(c["workspace_id"]) if has_fin_access else {}
 
-    deals, sales_enabled, sales_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_SALES, "deals",
+    ask_dept_specs = (
+        (dept_catalog.TYPE_SALES, "deals"),
+        (dept_catalog.TYPE_HR, "hr_onboarding_instances"),
+        (dept_catalog.TYPE_PRODUCTION, "production_work_orders"),
+        (dept_catalog.TYPE_PROCUREMENT, "procurement_requests"),
+        (dept_catalog.TYPE_LEGAL, "legal_matters"),
+        (dept_catalog.TYPE_ENGINEERING_MAINTENANCE, "maintenance_tickets"),
     )
-    onboarding_rows, hr_enabled, hr_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_HR, "hr_onboarding_instances",
+    ask_types = [t for t, _ in ask_dept_specs]
+    access_by_type, enabled_by_type = await asyncio.gather(
+        dept_access.accessible_department_ids_by_type(db, principal, ask_types),
+        dept_migrate.get_enabled_departments_by_type(db, c["workspace_id"], ask_types),
     )
-    production_rows, production_enabled, production_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_PRODUCTION, "production_work_orders",
-    )
-    procurement_rows, procurement_enabled, procurement_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_PROCUREMENT, "procurement_requests",
-    )
-    legal_rows, legal_enabled, legal_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_LEGAL, "legal_matters",
-    )
-    maintenance_rows, maintenance_enabled, maintenance_visible = await _ask_helm_department_slice(
-        principal, dept_catalog.TYPE_ENGINEERING_MAINTENANCE, "maintenance_tickets",
-    )
+    slice_results = await asyncio.gather(*[
+        _ask_helm_department_slice(
+            principal, dtype, coll,
+            enabled_dept=enabled_by_type.get(dtype),
+            access_ids=access_by_type.get(dtype, []),
+        )
+        for dtype, coll in ask_dept_specs
+    ])
+    (
+        (deals, sales_enabled, sales_visible),
+        (onboarding_rows, hr_enabled, hr_visible),
+        (production_rows, production_enabled, production_visible),
+        (procurement_rows, procurement_enabled, procurement_visible),
+        (legal_rows, legal_enabled, legal_visible),
+        (maintenance_rows, maintenance_enabled, maintenance_visible),
+    ) = slice_results
 
     context = ask_context_for_synthesis(
         c,
