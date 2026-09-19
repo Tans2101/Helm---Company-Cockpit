@@ -9055,7 +9055,7 @@ async def create_production_work_order(payload: ProductionWorkOrderCreate, princ
         "completed_at": None,
     }
     try:
-        order["unit"] = prod_daily.normalize_unit(payload.unit, required=True, field="unit")
+        order["unit"] = prod_daily.normalize_unit(payload.unit, required=False, field="unit")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if payload.expected_yield_pct is not None:
@@ -9371,25 +9371,25 @@ async def upsert_production_daily_log(
         "created_at": now,
         "updated_at": now,
     }
-    existing = await db.production_daily_logs.find_one(
-        {"work_order_id": work_order_id, "date": day, "workspace_id": principal["workspace_id"]},
-        {"_id": 0, "id": 1, "created_at": 1},
+    query = {
+        "work_order_id": work_order_id,
+        "date": day,
+        "workspace_id": principal["workspace_id"],
+    }
+    set_fields = {k: v for k, v in doc.items() if k not in ("id", "created_at")}
+    result = await db.production_daily_logs.update_one(
+        query,
+        {"$set": set_fields, "$setOnInsert": {"id": doc["id"], "created_at": now}},
+        upsert=True,
     )
-    if existing:
-        doc["id"] = existing["id"]
-        doc["created_at"] = existing.get("created_at") or now
-        await db.production_daily_logs.update_one(
-            {"id": existing["id"]},
-            {"$set": {k: v for k, v in doc.items() if k != "id"}},
-        )
-    else:
-        await db.production_daily_logs.insert_one(dict(doc))
+    final = await db.production_daily_logs.find_one(query, {"_id": 0})
+    was_update = bool(result.matched_count) and not result.upserted_id
     invalidate_workspace_list_cache(principal["workspace_id"], "production")
     expected = order.get("expected_yield_pct") if order.get("yield_tracking_enabled") else None
     return {
         "ok": True,
-        "log": prod_daily.enrich_daily_log(doc, expected_yield_pct=expected),
-        "updated": bool(existing),
+        "log": prod_daily.enrich_daily_log(final or doc, expected_yield_pct=expected),
+        "updated": was_update,
     }
 
 
@@ -9838,11 +9838,9 @@ async def patch_procurement_request(
         new_vendor = payload.vendor_name.strip()
         upd["vendor_name"] = new_vendor
         prev_vendor = (req.get("vendor_name") or "").strip()
-        # Stamp vendor lock-in when a vendor is first set or changed to a different one.
-        if new_vendor and new_vendor != prev_vendor:
+        # One-time lock: stamp only on first empty→non-empty transition.
+        if new_vendor and not prev_vendor and not req.get("vendor_selected_at"):
             upd["vendor_selected_at"] = datetime.now(timezone.utc).isoformat()
-        elif not new_vendor:
-            upd["vendor_selected_at"] = None
     if payload.cost is not None:
         content_touched = True
         try:
@@ -9871,6 +9869,11 @@ async def patch_procurement_request(
                 detail="You can only edit expected delivery date on your own open requests",
             )
     if payload.actual_delivery_date is not None:
+        if not is_lead:
+            raise HTTPException(
+                status_code=403,
+                detail="Only a Procurement lead or the CEO can set the actual delivery date",
+            )
         upd["actual_delivery_date"] = _normalize_expected_delivery_date(payload.actual_delivery_date) or None
 
     if content_touched and not can_edit_content:
@@ -10983,7 +10986,7 @@ async def patch_maintenance_ticket(
     )
 
     # Best-effort: resolving a ticket updates matching schedule last_done_at.
-    if becoming_resolved or (upd.get("status") == "resolved"):
+    if becoming_resolved:
         try:
             eq_name = (upd.get("equipment_name") or ticket.get("equipment_name") or "").strip()
             if eq_name:

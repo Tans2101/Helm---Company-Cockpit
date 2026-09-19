@@ -130,7 +130,13 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
 
     @api_router.get("/sales/order-book/summary")
     async def sales_order_book_summary(principal=Depends(get_principal)):
-        data = await list_sales_order_book(principal=principal)
+        data = await list_sales_order_book(
+            principal=principal,
+            status=None,
+            country=None,
+            month_from=None,
+            month_to=None,
+        )
         return {
             "summary": data["summary"],
             "target_vs_actual": data["target_vs_actual"],
@@ -181,7 +187,7 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
             "updated_at": now,
         }
         await db.sales_order_book.insert_one(dict(entry))
-        invalidate_workspace_list_cache(principal["workspace_id"], "deals")
+        invalidate_workspace_list_cache(principal["workspace_id"], "sales_order_book")
         return {"ok": True, "entry": _strip_entry(entry)}
 
     @api_router.patch("/sales/order-book/{entry_id}")
@@ -254,7 +260,7 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
         await db.sales_order_book.update_one(
             {"id": entry_id, "department_id": dept["department_id"]}, {"$set": upd},
         )
-        invalidate_workspace_list_cache(principal["workspace_id"], "deals")
+        invalidate_workspace_list_cache(principal["workspace_id"], "sales_order_book")
         return {"ok": True, "entry": {**entry, **upd}}
 
     @api_router.delete("/sales/order-book/{entry_id}")
@@ -273,7 +279,7 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
         if not (is_lead or is_owner):
             raise HTTPException(status_code=403, detail="You can only delete your own order book entries")
         await db.sales_order_book.delete_one({"id": entry_id, "department_id": dept["department_id"]})
-        invalidate_workspace_list_cache(principal["workspace_id"], "deals")
+        invalidate_workspace_list_cache(principal["workspace_id"], "sales_order_book")
         return {"ok": True}
 
     @api_router.get("/sales/targets")
@@ -324,7 +330,7 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
             doc["id"] = f"st_{uuid.uuid4().hex[:10]}"
             doc["created_at"] = now
             await db.sales_targets.insert_one(dict(doc))
-        invalidate_workspace_list_cache(principal["workspace_id"], "deals")
+        invalidate_workspace_list_cache(principal["workspace_id"], "sales_order_book")
         return {"ok": True, "target": {k: v for k, v in doc.items() if k != "_id"}}
 
     # ===================== Maintenance spares / schedules / contracts / costs =====================
@@ -755,20 +761,16 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
             {
                 "department_id": dept["department_id"],
                 "status": "resolved",
-                "resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
+                "$or": [
+                    {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
+                    {
+                        "resolved_at": {"$exists": False},
+                        "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
+                    },
+                ],
             },
             {"_id": 0, "cost": 1, "resolved_at": 1, "updated_at": 1},
         ).to_list(5000)
-        # Also include resolved tickets that only have updated_at in range (legacy rows).
-        if not tickets:
-            tickets = await db.maintenance_tickets.find(
-                {
-                    "department_id": dept["department_id"],
-                    "status": "resolved",
-                    "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
-                },
-                {"_id": 0, "cost": 1},
-            ).to_list(5000)
         ticket_costs = []
         for t in tickets:
             if t.get("cost") is None:

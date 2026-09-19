@@ -8,6 +8,7 @@ explicit "not set" / "no data", never fabricated zeros.
 from __future__ import annotations
 
 import html
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
@@ -19,6 +20,8 @@ import procurement_metrics as proc_metrics
 import procurement_spend as proc_spend
 import production_daily_logs as prod_daily
 import sales_order_book as sales_ob
+
+logger = logging.getLogger(__name__)
 
 
 def _fmt_days(value: Optional[float]) -> str:
@@ -64,177 +67,192 @@ async def assemble_ops_briefing_data(db, workspace_id: str) -> dict:
 
     proc_dept = depts.get(dept_catalog.TYPE_PROCUREMENT)
     if proc_dept:
-        rows = await db.procurement_requests.find(
-            {"department_id": proc_dept["department_id"]},
-            {
-                "_id": 0, "id": 1, "item": 1, "vendor_name": 1, "status": 1, "priority": 1,
-                "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1, "updated_at": 1,
-                "expected_delivery_date": 1, "actual_delivery_date": 1, "cost": 1,
-            },
-        ).to_list(2000)
-        lead = proc_metrics.department_lead_time_summary(rows)
-        month_start, month_end = decision_engine.month_period_bounds()
-        spend = proc_spend.spend_rollup(
-            rows,
-            period_start=month_start,
-            period_end=month_end,
-            budget=proc_dept.get("monthly_budget"),
-            budget_entered=bool(proc_dept.get("monthly_budget_entered")),
-        )
-        sections["procurement"] = {
-            "lead_time": lead,
-            "spend": spend,
-            "enabled": True,
-        }
+        try:
+            rows = await db.procurement_requests.find(
+                {"department_id": proc_dept["department_id"]},
+                {
+                    "_id": 0, "id": 1, "item": 1, "vendor_name": 1, "status": 1, "priority": 1,
+                    "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1, "updated_at": 1,
+                    "expected_delivery_date": 1, "actual_delivery_date": 1, "cost": 1,
+                },
+            ).to_list(2000)
+            lead = proc_metrics.department_lead_time_summary(rows)
+            month_start, month_end = decision_engine.month_period_bounds()
+            spend = proc_spend.spend_rollup(
+                rows,
+                period_start=month_start,
+                period_end=month_end,
+                budget=proc_dept.get("monthly_budget"),
+                budget_entered=bool(proc_dept.get("monthly_budget_entered")),
+            )
+            sections["procurement"] = {
+                "lead_time": lead,
+                "spend": spend,
+                "enabled": True,
+            }
+        except Exception:
+            logger.exception("ops briefing: procurement section failed for workspace %s", workspace_id)
+            sections["procurement"] = None
 
     prod_dept = depts.get(dept_catalog.TYPE_PRODUCTION)
     if prod_dept:
-        orders = await db.production_work_orders.find(
-            {"department_id": prod_dept["department_id"]},
-            {
-                "_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1, "unit": 1,
-                "reference": 1, "yield_tracking_enabled": 1,
-            },
-        ).to_list(1000)
-        wo_ids = [o["id"] for o in orders if o.get("id")]
-        logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
-        today = prod_daily.today_iso()
-        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
-        if wo_ids:
-            log_rows = await db.production_daily_logs.find(
+        try:
+            orders = await db.production_work_orders.find(
+                {"department_id": prod_dept["department_id"]},
                 {
-                    "workspace_id": workspace_id,
-                    "work_order_id": {"$in": wo_ids},
-                    "date": {"$gte": week_ago},
+                    "_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1, "unit": 1,
+                    "reference": 1, "yield_tracking_enabled": 1,
                 },
-                {"_id": 0},
-            ).to_list(5000)
-            for log in log_rows:
-                logs_by_wo.setdefault(log.get("work_order_id"), []).append(log)
-        day_summary = prod_daily.department_day_summary(orders, logs_by_wo, day=today)
-        week_logs = [log for logs in logs_by_wo.values() for log in logs]
-        ot = prod_daily.period_overtime_rollup(week_logs)
+            ).to_list(1000)
+            wo_ids = [o["id"] for o in orders if o.get("id")]
+            logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
+            today = prod_daily.today_iso()
+            week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+            if wo_ids:
+                log_rows = await db.production_daily_logs.find(
+                    {
+                        "workspace_id": workspace_id,
+                        "work_order_id": {"$in": wo_ids},
+                        "date": {"$gte": week_ago},
+                    },
+                    {"_id": 0},
+                ).to_list(5000)
+                for log in log_rows:
+                    logs_by_wo.setdefault(log.get("work_order_id"), []).append(log)
+            day_summary = prod_daily.department_day_summary(orders, logs_by_wo, day=today)
+            week_logs = [log for logs in logs_by_wo.values() for log in logs]
+            ot = prod_daily.period_overtime_rollup(week_logs)
 
-        yield_below: list[dict] = []
-        for wo in orders:
-            if (wo.get("status") or "") == "completed":
-                continue
-            expected = wo.get("expected_yield_pct")
-            if expected is None:
-                continue
-            enabled = bool(wo.get("yield_tracking_enabled")) or expected is not None
-            if not enabled:
-                continue
-            logs = logs_by_wo.get(wo.get("id")) or []
-            rollup = prod_daily.rollup_work_order_logs(
-                logs,
-                yield_tracking_enabled=True,
-                expected_yield_pct=expected,
-            )
-            if (rollup.get("yield_below_benchmark_days") or 0) > 0:
-                yield_below.append({
-                    "work_order_id": wo.get("id"),
-                    "reference": wo.get("reference") or wo.get("id"),
-                    "below_days": rollup["yield_below_benchmark_days"],
-                    "avg_actual_yield_pct": rollup.get("avg_actual_yield_pct"),
-                    "expected_yield_pct": expected,
-                })
+            yield_below: list[dict] = []
+            for wo in orders:
+                if (wo.get("status") or "") == "completed":
+                    continue
+                if not bool(wo.get("yield_tracking_enabled")):
+                    continue
+                expected = wo.get("expected_yield_pct")
+                if expected is None:
+                    continue
+                logs = logs_by_wo.get(wo.get("id")) or []
+                rollup = prod_daily.rollup_work_order_logs(
+                    logs,
+                    yield_tracking_enabled=True,
+                    expected_yield_pct=expected,
+                )
+                if (rollup.get("yield_below_benchmark_days") or 0) > 0:
+                    yield_below.append({
+                        "work_order_id": wo.get("id"),
+                        "reference": wo.get("reference") or wo.get("id"),
+                        "below_days": rollup["yield_below_benchmark_days"],
+                        "avg_actual_yield_pct": rollup.get("avg_actual_yield_pct"),
+                        "expected_yield_pct": expected,
+                    })
 
-        sections["production"] = {
-            "day_summary": day_summary,
-            "overtime": ot,
-            "yield_below_benchmark": yield_below,
-            "yield_below_count": len(yield_below),
-            "enabled": True,
-        }
+            sections["production"] = {
+                "day_summary": day_summary,
+                "overtime": ot,
+                "yield_below_benchmark": yield_below,
+                "yield_below_count": len(yield_below),
+                "enabled": True,
+            }
+        except Exception:
+            logger.exception("ops briefing: production section failed for workspace %s", workspace_id)
+            sections["production"] = None
 
     sales_dept = depts.get(dept_catalog.TYPE_SALES)
     if sales_dept:
-        entries = await db.sales_order_book.find(
-            {"department_id": sales_dept["department_id"]},
-            {"_id": 0},
-        ).to_list(5000)
-        # Settled: actual = confirmed order-book only. Never read deals.
-        summary = sales_ob.order_book_summary(entries, month=month)
-        target_row = await db.sales_targets.find_one(
-            {"workspace_id": workspace_id, "month": month}, {"_id": 0},
-        )
-        tvs = sales_ob.target_vs_actual(
-            target_row=target_row,
-            confirmed_actual=summary["confirmed_this_month"],
-        )
-        sections["sales"] = {
-            "summary": summary,
-            "target_vs_actual": tvs,
-            "month": month,
-            "enabled": True,
-        }
+        try:
+            entries = await db.sales_order_book.find(
+                {"department_id": sales_dept["department_id"]},
+                {"_id": 0},
+            ).to_list(5000)
+            # Settled: actual = confirmed order-book only. Never read deals.
+            summary = sales_ob.order_book_summary(entries, month=month)
+            target_row = await db.sales_targets.find_one(
+                {"workspace_id": workspace_id, "month": month}, {"_id": 0},
+            )
+            tvs = sales_ob.target_vs_actual(
+                target_row=target_row,
+                confirmed_actual=summary["confirmed_this_month"],
+            )
+            sections["sales"] = {
+                "summary": summary,
+                "target_vs_actual": tvs,
+                "month": month,
+                "enabled": True,
+            }
+        except Exception:
+            logger.exception("ops briefing: sales section failed for workspace %s", workspace_id)
+            sections["sales"] = None
 
     maint_dept = depts.get(dept_catalog.TYPE_ENGINEERING_MAINTENANCE)
     if maint_dept:
-        spare_rows = await db.maintenance_spares.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        below = maint_ops.spares_below_threshold(spare_rows)
-        sched_rows = await db.maintenance_schedules.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        overdue = maint_ops.overdue_schedules(sched_rows)
-        contract_rows = await db.maintenance_contracts.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        renewals = maint_ops.contracts_needing_attention(contract_rows)
-        month_start, month_end = decision_engine.month_period_bounds()
-        resolved = await db.maintenance_tickets.find(
-            {
-                "department_id": maint_dept["department_id"],
-                "status": "resolved",
-                "$or": [
-                    {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
-                    {
-                        "resolved_at": {"$exists": False},
-                        "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
-                    },
-                ],
-            },
-            {"_id": 0, "cost": 1},
-        ).to_list(5000)
-        ticket_costs = []
-        for t in resolved:
-            if t.get("cost") is None:
-                continue
-            try:
-                ticket_costs.append(float(t["cost"]))
-            except (TypeError, ValueError):
-                pass
-        ledger = await db.maintenance_costs.find(
-            {"department_id": maint_dept["department_id"], "month": month_start.strftime("%Y-%m")},
-            {"_id": 0, "amount": 1},
-        ).to_list(2000)
-        ledger_costs = []
-        for row in ledger:
-            try:
-                ledger_costs.append(float(row.get("amount") or 0))
-            except (TypeError, ValueError):
-                pass
-        overhead = maint_ops.overhead_rollup(
-            ticket_costs=ticket_costs,
-            ledger_costs=ledger_costs,
-            budget=maint_dept.get("monthly_budget"),
-            budget_entered=bool(maint_dept.get("monthly_budget_entered")),
-        )
-        overhead["period"] = month_start.strftime("%Y-%m")
-        overhead["period_label"] = month_start.strftime("%B %Y")
-        sections["maintenance"] = {
-            "spares_below_threshold_count": len(below),
-            "spares_below_threshold": below[:20],
-            "overdue_schedules_count": len(overdue),
-            "overdue_schedules": overdue[:20],
-            "contracts_needing_renewal_count": len(renewals),
-            "contracts_needing_renewal": renewals[:20],
-            "overhead": overhead,
-            "enabled": True,
-        }
+        try:
+            spare_rows = await db.maintenance_spares.find(
+                {"department_id": maint_dept["department_id"]}, {"_id": 0},
+            ).to_list(2000)
+            below = maint_ops.spares_below_threshold(spare_rows)
+            sched_rows = await db.maintenance_schedules.find(
+                {"department_id": maint_dept["department_id"]}, {"_id": 0},
+            ).to_list(2000)
+            overdue = maint_ops.overdue_schedules(sched_rows)
+            contract_rows = await db.maintenance_contracts.find(
+                {"department_id": maint_dept["department_id"]}, {"_id": 0},
+            ).to_list(2000)
+            renewals = maint_ops.contracts_needing_attention(contract_rows)
+            month_start, month_end = decision_engine.month_period_bounds()
+            resolved = await db.maintenance_tickets.find(
+                {
+                    "department_id": maint_dept["department_id"],
+                    "status": "resolved",
+                    "$or": [
+                        {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
+                        {
+                            "resolved_at": {"$exists": False},
+                            "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
+                        },
+                    ],
+                },
+                {"_id": 0, "cost": 1},
+            ).to_list(5000)
+            ticket_costs = []
+            for t in resolved:
+                if t.get("cost") is None:
+                    continue
+                try:
+                    ticket_costs.append(float(t["cost"]))
+                except (TypeError, ValueError):
+                    pass
+            ledger = await db.maintenance_costs.find(
+                {"department_id": maint_dept["department_id"], "month": month_start.strftime("%Y-%m")},
+                {"_id": 0, "amount": 1},
+            ).to_list(2000)
+            ledger_costs = []
+            for row in ledger:
+                try:
+                    ledger_costs.append(float(row.get("amount") or 0))
+                except (TypeError, ValueError):
+                    pass
+            overhead = maint_ops.overhead_rollup(
+                ticket_costs=ticket_costs,
+                ledger_costs=ledger_costs,
+                budget=maint_dept.get("monthly_budget"),
+                budget_entered=bool(maint_dept.get("monthly_budget_entered")),
+            )
+            overhead["period"] = month_start.strftime("%Y-%m")
+            overhead["period_label"] = month_start.strftime("%B %Y")
+            sections["maintenance"] = {
+                "spares_below_threshold_count": len(below),
+                "spares_below_threshold": below[:20],
+                "overdue_schedules_count": len(overdue),
+                "overdue_schedules": overdue[:20],
+                "contracts_needing_renewal_count": len(renewals),
+                "contracts_needing_renewal": renewals[:20],
+                "overhead": overhead,
+                "enabled": True,
+            }
+        except Exception:
+            logger.exception("ops briefing: maintenance section failed for workspace %s", workspace_id)
+            sections["maintenance"] = None
 
     enabled = [k for k, v in sections.items() if v is not None]
     return {

@@ -28,8 +28,8 @@ def _parse_iso_dt(raw: Any) -> Optional[datetime]:
 
 
 def in_period(req: dict, period_start: datetime, period_end: datetime) -> bool:
-    """Attribute spend to the period via updated_at (or created_at fallback)."""
-    dt = _parse_iso_dt(req.get("updated_at")) or _parse_iso_dt(req.get("created_at"))
+    """Attribute spend to the period via created_at (updated_at only if missing)."""
+    dt = _parse_iso_dt(req.get("created_at")) or _parse_iso_dt(req.get("updated_at"))
     if dt is None:
         return False
     return period_start <= dt < period_end

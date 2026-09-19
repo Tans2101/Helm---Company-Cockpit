@@ -130,12 +130,18 @@ class DocStore:
         self.rows = [r for r in self.rows if not _match(r, query)]
         return MagicMock(deleted_count=before - len(self.rows))
 
+    async def delete_many(self, query):
+        before = len(self.rows)
+        self.rows = [r for r in self.rows if not _match(r, query)]
+        return MagicMock(deleted_count=before - len(self.rows))
+
 
 @pytest.fixture
 def prod_api():
     orders = DocStore()
     procurement = DocStore()
     maintenance = DocStore()
+    daily_logs = DocStore()
     dept_members = [
         {"department_id": "dept_prod", "user_id": "u_mem", "role": "member"},
         {"department_id": "dept_prod", "user_id": "u_lead", "role": "lead"},
@@ -159,6 +165,7 @@ def prod_api():
     mock_db.production_work_orders = orders
     mock_db.procurement_requests = procurement
     mock_db.maintenance_tickets = maintenance
+    mock_db.production_daily_logs = daily_logs
     mock_db.users.find_one = AsyncMock(
         return_value={"name": "Mem", "email": "mem@acme.com", "picture": None},
     )

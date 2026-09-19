@@ -124,9 +124,17 @@ def test_procurement_spend_skips_unpriced():
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     end = datetime(2026, 10, 1, tzinfo=timezone.utc)
     rows = [
-        {"item": "Bolts", "vendor_name": "Acme", "cost": 100, "updated_at": "2026-09-10T00:00:00+00:00"},
-        {"item": "Nuts", "vendor_name": "Acme", "updated_at": "2026-09-11T00:00:00+00:00"},  # no cost
-        {"item": "Oil", "vendor_name": "Other", "cost": 50, "updated_at": "2026-08-01T00:00:00+00:00"},  # out of period
+        {"item": "Bolts", "vendor_name": "Acme", "cost": 100, "created_at": "2026-09-10T00:00:00+00:00"},
+        {"item": "Nuts", "vendor_name": "Acme", "created_at": "2026-09-11T00:00:00+00:00"},  # no cost
+        {"item": "Oil", "vendor_name": "Other", "cost": 50, "created_at": "2026-08-01T00:00:00+00:00"},  # out of period
+        # Touched later must not migrate spend into September.
+        {
+            "item": "Bags",
+            "vendor_name": "Acme",
+            "cost": 200,
+            "created_at": "2026-08-15T00:00:00+00:00",
+            "updated_at": "2026-09-20T00:00:00+00:00",
+        },
     ]
     s = ps.spend_rollup(rows, period_start=start, period_end=end, budget=None, budget_entered=False)
     assert s["actual"] == 100.0
