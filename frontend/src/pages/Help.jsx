@@ -27,7 +27,7 @@ export default function Help() {
 
       <section className="px-6 pb-24 border-t border-helm-cream/[0.05] pt-16">
         <div className="mx-auto max-w-3xl">
-          <HelmHowToUse />
+          <TrenstonHowToUse />
         </div>
       </section>
 

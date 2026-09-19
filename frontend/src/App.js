@@ -231,7 +231,7 @@ function ClerkAuthShell() {
           <ClerkHelmBridge />
           <AppRouter />
           <CookieNotice />
-          <HelmToaster />
+          <TrenstonToaster />
         </BrowserRouter>
       </ErrorBoundary>
     </AuthProvider>
@@ -246,7 +246,7 @@ function TrenstonAppShell() {
           <AppearanceSync />
           <AppRouter />
           <CookieNotice />
-          <HelmToaster />
+          <TrenstonToaster />
         </BrowserRouter>
       </ErrorBoundary>
     </AuthProvider>
