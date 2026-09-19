@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowRight, Menu, X } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
-import { goToHomeHash } from "@/lib/marketingHash";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
 import { cn } from "@/lib/utils";
 
@@ -12,44 +11,24 @@ const NAV_LINKS = [
   { to: "/integrations", label: "Integrations", match: ["/integrations"] },
   { to: "/about", label: "About", match: ["/about"] },
   { to: "/security", label: "Security", match: ["/security"] },
-  { to: "/#pricing", label: "Pricing", match: ["/#pricing"], hash: "pricing" },
+  { to: "/pricing", label: "Pricing", match: ["/pricing"] },
 ];
 
 function isActive(path, active) {
   if (path === "/") return active === "/";
-  if (path.startsWith("/#")) return active === path;
   return active === path || active?.startsWith(path);
 }
 
 export default function MarketingNav({ authed, onEnter, active }) {
   const [open, setOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
 
   const activeId = NAV_LINKS.find((l) => isActive(l.to, active))?.to || null;
 
-  const renderLink = (l, className) => {
-    if (l.hash) {
-      return (
-        <a
-          key={l.to}
-          href={l.to}
-          className={className}
-          onClick={(e) => {
-            e.preventDefault();
-            goToHomeHash(navigate, location, l.hash, () => setOpen(false));
-          }}
-        >
-          {l.label}
-        </a>
-      );
-    }
-    return (
-      <Link key={l.to} to={l.to} className={className} onClick={() => setOpen(false)}>
-        {l.label}
-      </Link>
-    );
-  };
+  const renderLink = (l, className) => (
+    <Link key={l.to} to={l.to} className={className} onClick={() => setOpen(false)}>
+      {l.label}
+    </Link>
+  );
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 border-b border-helm-cream/10 bg-helm-ink/90 backdrop-blur-md">

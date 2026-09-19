@@ -19,6 +19,13 @@ export const SITE_SEARCH_ACTIONS = [
     keywords: ["product", "modules", "cockpit", "what helm includes"],
   },
   {
+    id: "pricing",
+    label: "Pricing",
+    to: "/pricing",
+    description: "Site",
+    keywords: ["plans", "price", "cost", "starter", "growth", "business", "free", "billing"],
+  },
+  {
     id: "help",
     label: "Help",
     to: "/help",

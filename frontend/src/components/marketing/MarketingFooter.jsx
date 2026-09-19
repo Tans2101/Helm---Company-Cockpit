@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Instagram } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
 import {
@@ -10,16 +10,15 @@ import {
   PUBLIC_INSTAGRAM_URL,
   TAGLINE,
 } from "@/lib/marketingCopy";
-import { goToHomeHash } from "@/lib/marketingHash";
 
 const FOOTER_LINKS = [
   { to: "/", label: "Home" },
   { to: "/features", label: "Features" },
   { to: "/integrations", label: "Integrations" },
+  { to: "/pricing", label: "Pricing" },
   { to: "/about", label: "About" },
   { to: "/help", label: "Help" },
   { to: "/security", label: "Security" },
-  { to: "/#pricing", label: "Pricing", hash: "pricing" },
   { to: "/login", label: "Sign in" },
   { to: "/sign-up", label: "Create account" },
   { to: "/privacy", label: "Privacy" },
@@ -28,9 +27,6 @@ const FOOTER_LINKS = [
 ];
 
 export default function MarketingFooter() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
   return (
     <footer className="px-6 py-12 border-t border-helm-cream/10 bg-helm-ink">
       <div className="mx-auto max-w-6xl flex flex-col gap-8">
@@ -56,25 +52,11 @@ export default function MarketingFooter() {
             </a>
           </div>
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm text-helm-slate" aria-label="Footer">
-            {FOOTER_LINKS.map((l) =>
-              l.hash ? (
-                <a
-                  key={l.to + l.label}
-                  href={l.to}
-                  className="hover:text-helm-cream transition-colors"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    goToHomeHash(navigate, location, l.hash);
-                  }}
-                >
-                  {l.label}
-                </a>
-              ) : (
-                <Link key={l.to + l.label} to={l.to} className="hover:text-helm-cream transition-colors">
-                  {l.label}
-                </Link>
-              ),
-            )}
+            {FOOTER_LINKS.map((l) => (
+              <Link key={l.to + l.label} to={l.to} className="hover:text-helm-cream transition-colors">
+                {l.label}
+              </Link>
+            ))}
           </nav>
         </div>
         <p className="text-center text-[11px] text-helm-slate">

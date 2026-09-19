@@ -208,6 +208,9 @@ export default function Landing() {
             <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
             <h2 className="font-display text-4xl md:text-5xl font-medium tracking-tight leading-[1.1]">Plans that scale with you</h2>
             <p className="mt-4 text-helm-slate">Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
+            <Link to="/pricing" className="inline-flex items-center gap-2 mt-4 text-sm text-helm-cream hover:text-helm-gold transition-colors">
+              Full pricing page <ArrowRight className="w-4 h-4" />
+            </Link>
           </motion.div>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-0 border border-helm-cream/[0.08] divide-y sm:divide-y-0 sm:divide-x divide-helm-cream/[0.08]">
             {PLANS.map((plan) => {

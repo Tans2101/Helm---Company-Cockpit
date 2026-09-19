@@ -193,7 +193,9 @@ export const FEATURE_CATEGORIES = [
   },
 ];
 
-/** Canonical pricing — keep in sync with backend/plans.py */
+/** Canonical pricing — single source of truth for marketing, /pricing, prerender, and llms.txt.
+ * Keep backend/plans.py seats/prices aligned. Do not duplicate dollar figures in docs/memory.
+ */
 export const PLANS = [
   {
     id: "free",

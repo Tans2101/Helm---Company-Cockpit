@@ -98,3 +98,7 @@ yarn start
 ```
 
 Open http://localhost:3000/login → Continue with Google.
+
+## Pricing source of truth
+
+Public plan names and dollar amounts live in **`frontend/src/lib/marketingCopy.js`** (`PLANS`). Keep `backend/plans.py` seats/prices aligned with that list. Do not paste prices into `memory/`, READMEs, or other docs — they drift (an old single-tier Pro claim once misled crawlers). After changing `PLANS`, run `cd frontend && yarn sync-llms` (also runs during `yarn build`) and `yarn check-pricing-drift`. Canonical crawlable page: `/pricing`; machine readers: `/llms.txt`.

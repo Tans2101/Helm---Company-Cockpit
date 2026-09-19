@@ -4,21 +4,24 @@
  *
  * Copies build/index.html into per-route static files with route-specific
  * <title>, description, canonical, and Open Graph / Twitter tags rewritten
- * in the head. No headless browser: marketing pages depend on Clerk/auth
- * bootstrap, so Puppeteer/react-snap would be brittle here; crawlers and
- * link-preview bots need correct head tags (the confirmed live bug).
+ * in the head. For /pricing, also injects visible plan HTML + JSON-LD into
+ * #root so non-JS fetchers (AI crawlers, curl) see real dollar figures from
+ * marketingCopy.js — not just meta tags.
  *
  * Output:
  *   build/index.html
  *   build/about/index.html
- *   build/features/index.html
+ *   build/pricing/index.html
  *   …
+ *   build/llms.txt (+ refreshes public/llms.txt)
  *
  * Vercel serves these static files before the SPA rewrite catch-all.
  */
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, copyFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { loadMarketingPlans, formatPlanPrice } from "./loadMarketingPlans.mjs";
+import { writeLlmsTxt } from "./sync-llms-txt.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(__dirname, "..");
@@ -71,6 +74,93 @@ function applySeo(html, { path, page, origin, ogImage }) {
   return out;
 }
 
+function pricingJsonLd(plans, origin) {
+  const offers = plans.map((p) => ({
+    "@type": "Offer",
+    name: p.label,
+    description: p.for || undefined,
+    price: String(Number(p.price) || 0),
+    priceCurrency: "USD",
+    availability: "https://schema.org/InStock",
+    url: `${origin}/pricing`,
+    priceSpecification: {
+      "@type": "UnitPriceSpecification",
+      price: String(Number(p.price) || 0),
+      priceCurrency: "USD",
+      billingDuration: "P1M",
+      unitText: "month",
+    },
+  }));
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "Helm",
+    description: "CEO Operating System — Briefing, decisions, financials, and department lanes.",
+    brand: { "@type": "Brand", name: "Helm" },
+    url: `${origin}/pricing`,
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "USD",
+      lowPrice: String(Math.min(...plans.map((p) => Number(p.price) || 0))),
+      highPrice: String(Math.max(...plans.map((p) => Number(p.price) || 0))),
+      offerCount: String(plans.length),
+      offers,
+    },
+  };
+}
+
+function pricingStaticHtml(plans) {
+  const cards = plans
+    .map((p) => {
+      const price = formatPlanPrice(p);
+      const features = (p.includes || [])
+        .map((f) => `<li>${escapeHtml(f)}</li>`)
+        .join("");
+      const trial =
+        Number(p.trialDays) > 0
+          ? `<p>${escapeHtml(String(p.trialDays))}-day free trial</p>`
+          : "";
+      return `<article>
+  <h2>${escapeHtml(p.label)}</h2>
+  <p><strong>${escapeHtml(price)}</strong>${Number(p.price) > 0 ? "" : " (free)"}</p>
+  <p>${escapeHtml(p.for || "")}</p>
+  <p>Up to ${escapeHtml(String(p.seats))} seats</p>
+  ${trial}
+  <ul>${features}</ul>
+</article>`;
+    })
+    .join("\n");
+
+  return `<main id="helm-prerender-pricing">
+  <h1>Helm pricing</h1>
+  <p>Start free. Paid plans include a 7-day trial. Cancel anytime.</p>
+  <p>Canonical plan list (source: frontend/src/lib/marketingCopy.js PLANS):</p>
+  ${cards}
+  <p><a href="/features">Features</a> · <a href="/about">About</a> · <a href="/security">Security</a></p>
+</main>`;
+}
+
+function injectPricingBody(html, plans, origin) {
+  const body = pricingStaticHtml(plans);
+  const jsonLd = `<script type="application/ld+json" id="helm-pricing-jsonld">${JSON.stringify(pricingJsonLd(plans, origin))}</script>`;
+  let out = html;
+  // Visible content for non-JS fetchers; React replace #root on boot.
+  if (/<div id="root"><\/div>/i.test(out)) {
+    out = out.replace(/<div id="root"><\/div>/i, `<div id="root">${body}</div>`);
+  } else if (/<div id="root">[\s\S]*?<\/div>/i.test(out)) {
+    out = out.replace(/<div id="root">[\s\S]*?<\/div>/i, `<div id="root">${body}</div>`);
+  } else {
+    out = out.replace(/<body([^>]*)>/i, `<body$1>\n${body}\n`);
+  }
+  // Always attach Product/Offer JSON-LD (site may already have Organization graph).
+  if (/id="helm-pricing-jsonld"/i.test(out)) {
+    out = out.replace(/<script type="application\/ld\+json" id="helm-pricing-jsonld">[\s\S]*?<\/script>/i, jsonLd);
+  } else {
+    out = out.replace(/<\/head>/i, `    ${jsonLd}\n    </head>`);
+  }
+  return out;
+}
+
 function main() {
   if (!existsSync(indexPath)) {
     console.error("prerender-marketing: build/index.html missing — run build first");
@@ -78,9 +168,13 @@ function main() {
   }
   const { origin, ogImage, pages } = JSON.parse(readFileSync(seoPath, "utf8"));
   const shell = readFileSync(indexPath, "utf8");
+  const { PLANS } = loadMarketingPlans();
 
   for (const [path, page] of Object.entries(pages)) {
-    const html = applySeo(shell, { path, page, origin, ogImage });
+    let html = applySeo(shell, { path, page, origin, ogImage });
+    if (path === "/pricing") {
+      html = injectPricingBody(html, PLANS, origin);
+    }
     const outFile =
       path === "/"
         ? indexPath
@@ -89,6 +183,11 @@ function main() {
     writeFileSync(outFile, html, "utf8");
     console.log(`prerender-marketing: wrote ${outFile.slice(frontendRoot.length + 1)}`);
   }
+
+  const publicLlms = writeLlmsTxt(join(frontendRoot, "public/llms.txt"));
+  const buildLlms = join(buildDir, "llms.txt");
+  copyFileSync(publicLlms, buildLlms);
+  console.log(`prerender-marketing: wrote ${buildLlms.slice(frontendRoot.length + 1)}`);
   console.log("prerender-marketing: ok");
 }
 

@@ -1,0 +1,34 @@
+# Helm
+
+> CEO Operating System. Run the business. Don't chase it.
+
+Built for CEOs running companies of up to 50 people.
+
+Helm is a CEO operating system: one cockpit for money, pipeline, people,
+department work, and decisions — Briefing, Decision Center, Financials,
+Ask Helm, and department lanes (Production, Procurement, Legal, HR,
+Maintenance, Sales).
+
+## Canonical pages
+
+- Home: https://www.helmcontrol.online/
+- Pricing (authoritative): https://www.helmcontrol.online/pricing
+- Features: https://www.helmcontrol.online/features
+- Integrations: https://www.helmcontrol.online/integrations
+- Security: https://www.helmcontrol.online/security
+- About: https://www.helmcontrol.online/about
+- Help: https://www.helmcontrol.online/help
+
+## Current pricing
+
+Source of truth in the product repo: frontend/src/lib/marketingCopy.js (PLANS).
+Do not use older docs (e.g. memory/PRD.md) or guessed figures.
+
+- Free: $0 (3 seats) — Small teams trying Helm
+- Starter: $15/mo (10 seats) — Small businesses
+- Growth: $39/mo (25 seats) — Growing businesses
+- Business: $99/mo (50 seats) — Larger companies
+
+Paid plans (Starter, Growth, Business) include a 7-day free trial.
+Billing is via Paddle. Cancel anytime from Billing.
+

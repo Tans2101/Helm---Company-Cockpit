@@ -48,7 +48,7 @@
       "destination": "https://helm-company-cockpit.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/|__clerk|robots\\.txt|sitemap\\.xml|security\\.txt|\\.well-known(?:/.*)?|google[0-9a-z]+\\.html|about(?:/.*)?|features(?:/.*)?|integrations(?:/.*)?|help(?:/.*)?|security(?:/.*)?|privacy(?:/.*)?|terms(?:/.*)?|refunds(?:/.*)?).*)",
+      "source": "/((?!api/|__clerk|robots\\.txt|sitemap\\.xml|llms\\.txt|security\\.txt|\\.well-known(?:/.*)?|google[0-9a-z]+\\.html|about(?:/.*)?|features(?:/.*)?|pricing(?:/.*)?|integrations(?:/.*)?|help(?:/.*)?|security(?:/.*)?|privacy(?:/.*)?|terms(?:/.*)?|refunds(?:/.*)?).*)",
       "destination": "/index.html"
     }
   ]

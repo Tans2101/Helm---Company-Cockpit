@@ -16,15 +16,16 @@ CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finan
 
 ## Routing
 - `/` — marketing (Landing)
-- `/about`, `/features` — mission and product detail
+- `/about`, `/features`, `/pricing`, `/integrations` — mission, product, pricing, integrations
 - `/login` — Clerk or Google
 - `/privacy`, `/terms` — legal placeholders `[COMPANY_*]`
 - `/app/*` — authenticated cockpit (Briefing, Pipeline, Financials, etc.)
 
 ## Pricing
-- **Helm Pro only** — $8/mo via Paddle (`PRO_PRICE` env). No free tier.
-- Sign up → enter `/app` → preview shell with paywall until Paddle checkout completes.
-- Existing workspaces without Pro are forced to activate (no grandfathering).
+<!-- Source of truth: frontend/src/lib/marketingCopy.js → PLANS (keep backend/plans.py aligned). Do not invent dollar figures here. -->
+- Four tiers via Paddle: **Free** $0 (3 seats), **Starter** $15/mo (10 seats), **Growth** $39/mo (25 seats), **Business** $99/mo (50 seats).
+- Public crawlable page: `/pricing` (also summarized on Landing). Paid plans include a 7-day trial.
+- Sign up → enter `/app`; Free works without checkout; paid plans upgrade via Billing / Paddle.
 
 ## Tagline
 **Run the business. Don't chase it.**
@@ -43,7 +44,7 @@ CEO-only cockpit for seed/Series A companies (~8–40 people). Synthesizes finan
 - Paddle: `POST /api/billing/paddle/config`, webhook `/api/webhook/paddle`
 - Portal: `POST /api/payments/paddle/portal`
 - Webhooks handle `transaction.completed`, `subscription.canceled`, `subscription.past_due`
-- Display price from `PRO_PRICE` env
+- Display prices from plan catalog (`marketingCopy.js` / `plans.py`), not a single `PRO_PRICE`
 
 ## Ops
 - `GET /api/health` — Mongo ping
