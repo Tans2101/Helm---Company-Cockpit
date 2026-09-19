@@ -3027,12 +3027,19 @@ class MemberGrantsInput(BaseModel):
     grants: dict
 
 
+class MemberDepartmentsInput(BaseModel):
+    """Map membership_id → list of enabled department_ids that person belongs to."""
+    assignments: dict
+
+
 @api_router.get("/access/sections")
 async def get_section_access(principal=Depends(get_principal)):
     ws = await get_ws(principal["workspace_id"])
     can_manage = "members:manage" in perms_for(principal["pack"])
     section_access = sec_access.normalize_section_access(ws.get("section_access"))
     depts = await workspace_departments(principal["workspace_id"], ws)
+    enabled_departments = await dept_access.list_enabled_departments(db, principal["workspace_id"])
+    enabled_ids = {d["department_id"] for d in enabled_departments}
     mems = await db.memberships.find({"workspace_id": principal["workspace_id"]}, {"_id": 0}).to_list(200)
     users_by_id = await _users_by_ids(
         [m.get("user_id") for m in mems if pack_of(m) != "owner"],
@@ -3063,15 +3070,20 @@ async def get_section_access(principal=Depends(get_principal)):
             "effective": effective,
             "user_id": m.get("user_id"),
             "legacy_department": legacy_dept or None,
+            "department_ids": [],
         }
         members_out.append(row)
-    by_user = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    by_user_names = await dept_access.department_names_by_user_id(db, principal["workspace_id"])
+    by_user_ids = await dept_access.department_ids_by_user_id(db, principal["workspace_id"])
     for row in members_out:
-        dept_access.attach_real_departments(row, by_user.get(row.get("user_id") or "") or [])
+        uid = row.get("user_id") or ""
+        dept_access.attach_real_departments(row, by_user_names.get(uid) or [])
+        row["department_ids"] = [did for did in (by_user_ids.get(uid) or []) if did in enabled_ids]
     members_out.sort(key=lambda x: (x.get("name") or x["email"]).lower())
     return {
         "sections": sec_access.MANAGEABLE_SECTIONS,
         "departments": depts,
+        "enabled_departments": enabled_departments,
         "section_access": section_access,
         "members": members_out,
         "can_manage": can_manage,
@@ -3120,6 +3132,72 @@ async def update_member_grants(payload: MemberGrantsInput, principal=Depends(req
             {"$set": {"section_grants": grants}},
         )
         updated += 1
+    return {"ok": True, "updated": updated}
+
+
+@api_router.patch("/access/member-departments")
+async def update_member_departments(
+    payload: MemberDepartmentsInput,
+    principal=Depends(require_pro_perm("members:manage")),
+):
+    """CEO sets which enabled department lanes each teammate belongs to."""
+    if not isinstance(payload.assignments, dict):
+        raise HTTPException(status_code=400, detail="assignments must be an object")
+    ws_id = principal["workspace_id"]
+    enabled = await dept_access.list_enabled_departments(db, ws_id)
+    enabled_ids = {d["department_id"] for d in enabled}
+    mids = [str(mid).strip() for mid, _ in payload.assignments.items() if str(mid).strip()]
+    by_mid = await _docs_by_key(db.memberships, "membership_id", mids, {"_id": 0})
+    by_mid = {mid: m for mid, m in by_mid.items() if m.get("workspace_id") == ws_id}
+    updated = 0
+    now = datetime.now(timezone.utc).isoformat()
+    for membership_id, raw_ids in payload.assignments.items():
+        mid = str(membership_id).strip()
+        if not mid:
+            continue
+        m = by_mid.get(mid)
+        if not m or pack_of(m) == "owner":
+            continue
+        user_id = (m.get("user_id") or "").strip()
+        if not user_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{m.get('email') or mid} has not joined yet — department lanes need an active login",
+            )
+        wanted = []
+        seen = set()
+        for raw in (raw_ids if isinstance(raw_ids, list) else []):
+            did = str(raw or "").strip()
+            if not did or did not in enabled_ids or did in seen:
+                continue
+            seen.add(did)
+            wanted.append(did)
+        existing_rows = await db.department_members.find(
+            {"user_id": user_id, "department_id": {"$in": list(enabled_ids)}},
+            {"_id": 0, "department_id": 1, "role": 1},
+        ).to_list(50)
+        existing = {r["department_id"]: r for r in existing_rows if r.get("department_id")}
+        to_add = [did for did in wanted if did not in existing]
+        to_remove = [did for did in existing if did not in seen]
+        for did in to_add:
+            await db.department_members.update_one(
+                {"department_id": did, "user_id": user_id},
+                {"$setOnInsert": {
+                    "department_id": did,
+                    "user_id": user_id,
+                    "role": "member",
+                    "created_at": now,
+                }},
+                upsert=True,
+            )
+        if to_remove:
+            await db.department_members.delete_many(
+                {"user_id": user_id, "department_id": {"$in": to_remove}},
+            )
+        if to_add or to_remove:
+            updated += 1
+    if updated:
+        invalidate_departments_cache(ws_id)
     return {"ok": True, "updated": updated}
 
 

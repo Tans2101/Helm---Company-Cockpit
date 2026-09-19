@@ -15,6 +15,13 @@ describe("Team & Access invite field", () => {
     expect(src).not.toMatch(/\/referrals/);
   });
 
+  test("Manage Access includes department lane assignment", () => {
+    const src = fs.readFileSync(path.join(pagesDir, "Members.jsx"), "utf8");
+    expect(src).toMatch(/member-departments/);
+    expect(src).toMatch(/enabled_departments/);
+    expect(src).toMatch(/Department lanes/);
+  });
+
   test("InviteCeoCard never pipes raw fetch errors into the link input", () => {
     const src = fs.readFileSync(path.join(componentsDir, "InviteCeoCard.jsx"), "utf8");
     expect(src).not.toMatch(/fetchErrorMessage/);

@@ -80,6 +80,52 @@ async def department_names_by_user_id(db, workspace_id: str) -> dict[str, list[s
     return out
 
 
+async def department_ids_by_user_id(db, workspace_id: str) -> dict[str, list[str]]:
+    """Map user_id → enabled department_ids for a workspace."""
+    enabled = await db.departments.find(
+        {"workspace_id": workspace_id, "enabled": True},
+        {"_id": 0, "department_id": 1},
+    ).to_list(50)
+    enabled_ids = [d["department_id"] for d in enabled if d.get("department_id")]
+    if not enabled_ids:
+        return {}
+    rows = await db.department_members.find(
+        {"department_id": {"$in": enabled_ids}},
+        {"_id": 0, "department_id": 1, "user_id": 1},
+    ).to_list(2000)
+    out: dict[str, list[str]] = {}
+    for row in rows:
+        uid = row.get("user_id")
+        did = row.get("department_id")
+        if not uid or not did:
+            continue
+        bucket = out.setdefault(uid, [])
+        if did not in bucket:
+            bucket.append(did)
+    return out
+
+
+async def list_enabled_departments(db, workspace_id: str) -> list[dict]:
+    """Enabled department rows for access UI: id, type, name."""
+    rows = await db.departments.find(
+        {"workspace_id": workspace_id, "enabled": True},
+        {"_id": 0, "department_id": 1, "type": 1, "name": 1},
+    ).to_list(50)
+    out = []
+    for d in rows:
+        did = d.get("department_id")
+        if not did:
+            continue
+        dtype = d.get("type") or ""
+        out.append({
+            "department_id": did,
+            "type": dtype,
+            "name": (d.get("name") or "").strip() or dept_catalog.default_name(dtype),
+        })
+    out.sort(key=lambda x: (x.get("name") or "").lower())
+    return out
+
+
 async def get_department_membership(db, department_id: str, user_id: str) -> Optional[dict]:
     return await db.department_members.find_one(
         {"department_id": department_id, "user_id": user_id},

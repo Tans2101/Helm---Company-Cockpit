@@ -23,10 +23,13 @@ export default function Members() {
   const [busy, setBusy] = useState(false);
   /** Draft: membership_id → section_id[] (only CEO-editable grants, not pack/dept). */
   const [grantsDraft, setGrantsDraft] = useState(null);
+  /** Draft: membership_id → department_id[] for enabled department lanes. */
+  const [deptsDraft, setDeptsDraft] = useState(null);
   const [accessBusy, setAccessBusy] = useState(false);
 
   useEffect(() => {
     setGrantsDraft(null);
+    setDeptsDraft(null);
   }, [accessData]);
 
   if (loading) {
@@ -50,12 +53,20 @@ export default function Members() {
   const packOptions = ASSIGNABLE_PACKS;
   const sections = accessData?.sections || [];
   const accessMembers = accessData?.members || [];
+  const enabledDepartments = accessData?.enabled_departments || [];
 
   const draftFor = (membershipId, member) => {
     if (grantsDraft && Object.prototype.hasOwnProperty.call(grantsDraft, membershipId)) {
       return grantsDraft[membershipId];
     }
     return member?.section_grants || [];
+  };
+
+  const deptsFor = (membershipId, member) => {
+    if (deptsDraft && Object.prototype.hasOwnProperty.call(deptsDraft, membershipId)) {
+      return deptsDraft[membershipId];
+    }
+    return member?.department_ids || [];
   };
 
   const toggleGrant = (membershipId, sectionId, member) => {
@@ -66,14 +77,33 @@ export default function Members() {
     setGrantsDraft({ ...(grantsDraft || {}), [membershipId]: next });
   };
 
+  const toggleDept = (membershipId, departmentId, member) => {
+    if (!member?.user_id) {
+      toast.error("They need to accept the invite before you can add department lanes");
+      return;
+    }
+    const current = deptsFor(membershipId, member);
+    const next = current.includes(departmentId)
+      ? current.filter((id) => id !== departmentId)
+      : [...current, departmentId];
+    setDeptsDraft({ ...(deptsDraft || {}), [membershipId]: next });
+  };
+
   const saveAccess = async () => {
-    if (!grantsDraft) return;
+    if (!grantsDraft && !deptsDraft) return;
     setAccessBusy(true);
     try {
-      await api.patch("/access/member-grants", { grants: grantsDraft });
+      if (grantsDraft) {
+        await api.patch("/access/member-grants", { grants: grantsDraft });
+      }
+      if (deptsDraft) {
+        await api.patch("/access/member-departments", { assignments: deptsDraft });
+      }
       toast.success("Member access saved");
       setGrantsDraft(null);
+      setDeptsDraft(null);
       reloadAccess();
+      reload();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not save");
     } finally {
@@ -140,11 +170,12 @@ export default function Members() {
         <GlassCard className="p-5 mb-6 fade-up" data-testid="manage-access-panel">
           <div className="flex items-center gap-2 mb-2 text-helm-gold">
             <Shield className="w-4 h-4" />
-            <SectionLabel>Member section access</SectionLabel>
+            <SectionLabel>Member section &amp; department access</SectionLabel>
           </div>
           <p className="text-sm text-helm-muted mb-5">
-            Gold means they can edit that area. Items marked “via pack” come with their access pack and stay on.
-            Toggle the others to grant extra access. Owners (CEOs) always have full access and are not listed here.
+            Gold means they can open that area. Items marked “via pack” come with their access pack and stay on.
+            Toggle other product sections for extra access, and toggle department lanes (Production, HR, and so on)
+            so they appear in that teammate&apos;s sidebar. Owners always have full access and are not listed here.
           </p>
 
           {!accessData ? (
@@ -158,6 +189,7 @@ export default function Members() {
                 const grants = draftFor(member.membership_id, member);
                 const fromPack = new Set(member.from_pack || []);
                 const fromDept = new Set(member.from_department || []);
+                const memberDepts = new Set(deptsFor(member.membership_id, member));
                 return (
                   <div
                     key={member.membership_id}
@@ -180,6 +212,7 @@ export default function Members() {
                         <meta.icon className="w-3 h-3" />{meta.label}
                       </span>
                     </div>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-helm-muted mb-2">Product sections</p>
                     <div className="flex flex-wrap gap-2">
                       {sections.map((section) => {
                         const packLocked = fromPack.has(section.id);
@@ -224,6 +257,38 @@ export default function Members() {
                         );
                       })}
                     </div>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-helm-muted mt-4 mb-2">Department lanes</p>
+                    {enabledDepartments.length === 0 ? (
+                      <p className="text-xs text-helm-muted" data-testid={`access-depts-none-${member.membership_id}`}>
+                        No departments enabled yet. Turn them on under Settings → Departments.
+                      </p>
+                    ) : !member.user_id ? (
+                      <p className="text-xs text-helm-muted" data-testid={`access-depts-pending-${member.membership_id}`}>
+                        Waiting for them to accept the invite before department lanes can be assigned.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2" data-testid={`access-depts-${member.membership_id}`}>
+                        {enabledDepartments.map((dept) => {
+                          const on = memberDepts.has(dept.department_id);
+                          return (
+                            <button
+                              key={dept.department_id}
+                              type="button"
+                              title={`Add or remove ${dept.name} from their sidebar`}
+                              data-testid={`access-dept-${member.membership_id}-${dept.type}`}
+                              onClick={() => toggleDept(member.membership_id, dept.department_id, member)}
+                              className={cn(
+                                "inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors",
+                                on ? "border-helm-gold/35 bg-helm-gold/12 text-helm-gold" : "border-helm-line text-helm-muted hover:border-helm-fg/20",
+                              )}
+                            >
+                              {on ? <Check className="w-3 h-3" /> : null}
+                              {dept.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -234,7 +299,7 @@ export default function Members() {
             <button
               data-testid="save-access-btn"
               onClick={saveAccess}
-              disabled={accessBusy || !grantsDraft}
+              disabled={accessBusy || (!grantsDraft && !deptsDraft)}
               className="mt-5 rounded-md bg-helm-gold text-helm-navy font-medium text-sm px-4 py-2.5 hover:bg-helm-gold-hover disabled:opacity-60"
             >
               {accessBusy ? "Saving…" : "Save access"}
