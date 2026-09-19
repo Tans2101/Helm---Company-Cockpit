@@ -406,6 +406,10 @@ function QuickNavPalette({ open, onOpenChange }) {
       actions={actions}
       onSelect={(action) => {
         if (!action?.to) return;
+        if (action.to.startsWith("mailto:")) {
+          window.location.href = action.to;
+          return;
+        }
         navigate(action.to);
         // Re-trigger hash scroll when already on settings with a new hash.
         if (action.to.includes("#")) {

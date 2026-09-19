@@ -74,7 +74,11 @@ export default function About() {
                 {row.founder ? (
                   <FounderCredit creditClassName="text-sm text-helm-cream/90 leading-relaxed" />
                 ) : row.href ? (
-                  <a href={row.href} className="text-sm text-helm-cream leading-relaxed hover:text-helm-gold transition-colors">
+                  <a
+                    id={row.label === "Contact" ? "contact" : undefined}
+                    href={row.href}
+                    className="text-sm text-helm-cream leading-relaxed hover:text-helm-gold transition-colors"
+                  >
                     {row.body}
                   </a>
                 ) : (

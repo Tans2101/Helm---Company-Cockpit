@@ -4,6 +4,7 @@ import { ArrowRight, Menu, X } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
 import SmoothTab, { SmoothTabItem } from "@/components/kokonutui/smooth-tab";
 import { cn } from "@/lib/utils";
+import { PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", match: ["/"] },
@@ -59,9 +60,16 @@ export default function MarketingNav({ authed, onEnter, active }) {
             </SmoothTab>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <a
+              href={PUBLIC_CONTACT_MAILTO}
+              data-testid="nav-contact-link"
+              className="hidden sm:inline text-sm text-helm-slate hover:text-helm-cream transition-colors"
+            >
+              Contact
+            </a>
             {!authed && (
-              <Link to="/login" className="hidden sm:inline text-sm text-helm-slate hover:text-helm-cream transition-colors mr-1">
+              <Link to="/login" className="hidden sm:inline text-sm text-helm-slate hover:text-helm-cream transition-colors">
                 Sign in
               </Link>
             )}
@@ -93,6 +101,13 @@ export default function MarketingNav({ authed, onEnter, active }) {
                 `block rounded-lg px-3 py-2.5 text-sm ${isActive(l.to, active) ? "bg-helm-cream/5 text-helm-cream" : "text-helm-slate hover:text-helm-cream"}`,
               ),
             )}
+            <a
+              href={PUBLIC_CONTACT_MAILTO}
+              onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2.5 text-sm text-helm-slate hover:text-helm-cream"
+            >
+              Contact
+            </a>
             <div className="pt-2 border-t border-helm-cream/10 flex flex-col gap-2">
               {!authed && (
                 <Link to="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-helm-slate hover:text-helm-cream">

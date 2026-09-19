@@ -33,6 +33,13 @@ export const SITE_SEARCH_ACTIONS = [
     keywords: ["docs", "how to", "guide", "faq"],
   },
   {
+    id: "contact",
+    label: "Contact",
+    to: "mailto:contact@trenston.com",
+    description: "Site",
+    keywords: ["contact us", "email", "support", "reach", "talk"],
+  },
+  {
     id: "security-page",
     label: "Security",
     to: "/security",

@@ -7,8 +7,8 @@ const SITE_SEARCH_EXCLUDED = new Set(["/", "/integrations"]);
 
 describe("quick nav site search pages", () => {
   test("includes About, Features, and other public marketing routes", () => {
-    const tos = SITE_SEARCH_ACTIONS.map((a) => a.to).sort();
-    expect(tos).toEqual(
+    const pathTos = SITE_SEARCH_ACTIONS.filter((a) => a.to.startsWith("/")).map((a) => a.to).sort();
+    expect(pathTos).toEqual(
       [
         "/about",
         "/changelog",
@@ -23,6 +23,7 @@ describe("quick nav site search pages", () => {
       ].sort(),
     );
     expect(SITE_SEARCH_ACTIONS.find((a) => a.id === "about")?.label).toBe("About");
+    expect(SITE_SEARCH_ACTIONS.find((a) => a.id === "contact")?.to).toMatch(/^mailto:/);
   });
 
   test("does not list the public Integrations marketing page", () => {

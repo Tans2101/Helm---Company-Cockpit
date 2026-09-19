@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
+import { PUBLIC_CONTACT_MAILTO } from "@/lib/marketingCopy";
 
 const LINKS = [
   { to: "/", label: "Home" },
@@ -22,13 +23,18 @@ export default function AuthMarketingHeader() {
               {l.label}
             </Link>
           ))}
+          <a href={PUBLIC_CONTACT_MAILTO} className="hover:text-helm-cream transition-colors whitespace-nowrap">
+            Contact
+          </a>
         </nav>
-        <Link
-          to="/"
-          className="sm:hidden text-sm text-helm-slate hover:text-helm-cream transition-colors"
-        >
-          ← Home
-        </Link>
+        <div className="sm:hidden flex items-center gap-4 text-sm text-helm-slate">
+          <a href={PUBLIC_CONTACT_MAILTO} className="hover:text-helm-cream transition-colors">
+            Contact
+          </a>
+          <Link to="/" className="hover:text-helm-cream transition-colors">
+            ← Home
+          </Link>
+        </div>
       </div>
     </header>
   );
