@@ -49,7 +49,7 @@ export default function WorkspaceGate() {
       <div className="w-full max-w-xl">
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2.5">
-            <HelmMark size={36} className="rounded-md" />
+            <TrenstonMark size={36} className="rounded-md" />
             <div>
               <p className="text-helm-fg font-semibold tracking-tight leading-none">Trenston</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Company Workspace</p>

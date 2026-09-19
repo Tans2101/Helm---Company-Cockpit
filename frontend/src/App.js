@@ -254,8 +254,11 @@ function TrenstonAppShell() {
 }
 
 function AuthShell() {
-  const { clerkEnabled } = useClerkMode();
-  return clerkEnabled ? <ClerkAuthShell /> : <HelmAppShell />;
+  const { clerkEnabled, configLoading } = useClerkMode();
+  if (configLoading) {
+    return <LoadingScreen label="Loading" />;
+  }
+  return clerkEnabled ? <ClerkAuthShell /> : <TrenstonAppShell />;
 }
 
 function App() {

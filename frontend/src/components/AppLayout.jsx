@@ -458,7 +458,7 @@ export default function AppLayout() {
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between px-4 h-14 bg-helm-bg/95 backdrop-blur-md border-b border-helm-line">
         <div className="flex items-center gap-2">
-          <HelmMark size={28} className="rounded-md" />
+          <TrenstonMark size={28} className="rounded-md" />
           <span className="text-helm-fg font-semibold text-sm">Trenston</span>
         </div>
         <div className="flex items-center gap-1">

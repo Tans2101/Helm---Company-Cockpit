@@ -85,7 +85,7 @@ export default function CompanySetup({ company }) {
         <div className="w-full max-w-2xl">
           {/* Header */}
           <div className="flex items-center gap-2.5 mb-8">
-            <HelmMark size={36} className="rounded-md" />
+            <TrenstonMark size={36} className="rounded-md" />
             <div>
               <p className="text-helm-fg font-semibold tracking-tight leading-none">Trenston</p>
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-helm-muted mt-1">Set up your company</p>
