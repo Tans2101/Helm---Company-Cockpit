@@ -6,7 +6,8 @@
  * <title>, description, canonical, and Open Graph / Twitter tags rewritten
  * in the head. For /pricing, also injects visible plan HTML + JSON-LD into
  * #root so non-JS fetchers (AI crawlers, curl) see real dollar figures from
- * marketingCopy.js — not just meta tags.
+ * marketingCopy.js — not just meta tags. For /about, injects Person JSON-LD
+ * (founder name, role, LinkedIn sameAs) from the same marketingCopy constants.
  *
  * Output:
  *   build/index.html
@@ -20,7 +21,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, copyFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { loadMarketingPlans, formatPlanPrice } from "./loadMarketingPlans.mjs";
+import { loadMarketingPlans, formatPlanPrice, loadFounderIdentity } from "./loadMarketingPlans.mjs";
 import { writeLlmsTxt } from "./sync-llms-txt.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,18 @@ function pricingJsonLd(plans, origin) {
   };
 }
 
+/** Person JSON-LD for /about — name, role, LinkedIn sameAs only (no fabricated fields). */
+function founderPersonJsonLd({ FOUNDER_NAME, FOUNDER_ROLE, FOUNDER_LINKEDIN_URL }, origin) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: FOUNDER_NAME,
+    jobTitle: FOUNDER_ROLE,
+    sameAs: [FOUNDER_LINKEDIN_URL],
+    url: `${origin}/about`,
+  };
+}
+
 function pricingStaticHtml(plans) {
   const cards = plans
     .map((p) => {
@@ -161,6 +174,14 @@ function injectPricingBody(html, plans, origin) {
   return out;
 }
 
+function injectAboutPersonJsonLd(html, founder, origin) {
+  const jsonLd = `<script type="application/ld+json" id="helm-founder-jsonld">${JSON.stringify(founderPersonJsonLd(founder, origin))}</script>`;
+  if (/id="helm-founder-jsonld"/i.test(html)) {
+    return html.replace(/<script type="application\/ld\+json" id="helm-founder-jsonld">[\s\S]*?<\/script>/i, jsonLd);
+  }
+  return html.replace(/<\/head>/i, `    ${jsonLd}\n    </head>`);
+}
+
 function main() {
   if (!existsSync(indexPath)) {
     console.error("prerender-marketing: build/index.html missing — run build first");
@@ -169,11 +190,15 @@ function main() {
   const { origin, ogImage, pages } = JSON.parse(readFileSync(seoPath, "utf8"));
   const shell = readFileSync(indexPath, "utf8");
   const { PLANS } = loadMarketingPlans();
+  const founder = loadFounderIdentity();
 
   for (const [path, page] of Object.entries(pages)) {
     let html = applySeo(shell, { path, page, origin, ogImage });
     if (path === "/pricing") {
       html = injectPricingBody(html, PLANS, origin);
+    }
+    if (path === "/about") {
+      html = injectAboutPersonJsonLd(html, founder, origin);
     }
     const outFile =
       path === "/"

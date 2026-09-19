@@ -11,6 +11,9 @@ import {
   PLANS,
   paidPlanRenewalDisclosure,
   FOUNDER_NOTE,
+  FOUNDER_LINKEDIN_URL,
+  FOUNDER_NAME,
+  FOUNDER_ROLE,
   INTEGRATIONS_SHOWCASE,
   INTEGRATIONS_PUBLIC_BLURB,
   PUBLIC_INTEGRATIONS,
@@ -96,5 +99,11 @@ describe("marketing claim verification log", () => {
     expect(FOUNDER_NOTE).toMatch(/built Helm himself/i);
     expect(FOUNDER_NOTE).toMatch(/no separate product team/i);
     expect(FOUNDER_NOTE.toLowerCase()).not.toMatch(/\b(age|student|family|linkedin|photo)\b/);
+  });
+
+  test("founder LinkedIn URL is a single named constant for credit + Person sameAs", () => {
+    expect(FOUNDER_NAME).toBe("Tansher Dhawan");
+    expect(FOUNDER_ROLE).toMatch(/Founder/i);
+    expect(FOUNDER_LINKEDIN_URL).toBe("https://www.linkedin.com/in/tansher-dhawan-0a0848332/");
   });
 });

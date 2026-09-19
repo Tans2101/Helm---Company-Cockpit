@@ -6,6 +6,8 @@ export const AUDIENCE = "Built for CEOs running companies of up to 50 people.";
 export const FOUNDER_NAME = "Tansher Dhawan";
 export const FOUNDER_ROLE = "CEO & Founder";
 export const FOUNDER_CREDIT = `${FOUNDER_NAME}, ${FOUNDER_ROLE}`;
+/** Public LinkedIn profile — also used as Person JSON-LD sameAs on /about. */
+export const FOUNDER_LINKEDIN_URL = "https://www.linkedin.com/in/tansher-dhawan-0a0848332/";
 export const PUBLIC_CONTACT_EMAIL = "contact@helmcontrol.online";
 export const PUBLIC_CONTACT_MAILTO = `mailto:${PUBLIC_CONTACT_EMAIL}`;
 export const PUBLIC_INSTAGRAM_HANDLE = "@gethelmcontrol";

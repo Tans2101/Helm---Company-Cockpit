@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
+import FounderCredit from "@/components/marketing/FounderCredit";
 import { useMarketingAuth } from "@/hooks/useMarketingAuth";
 import {
   ABOUT_DIFFERENTIATOR,
@@ -13,7 +14,6 @@ import {
   CATEGORY,
   COMPANY_LOCATION,
   FOUNDED_DATE,
-  FOUNDER_CREDIT,
   FOUNDER_NOTE,
   PUBLIC_CONTACT_EMAIL,
   PUBLIC_CONTACT_MAILTO,
@@ -36,7 +36,7 @@ const ABOUT_FACTS = [
   { label: "Who it's for", body: AUDIENCE },
   { label: "Problem we solve", body: ABOUT_PROBLEM },
   { label: "Founded", body: FOUNDED_DATE },
-  { label: "Founder", body: FOUNDER_CREDIT },
+  { label: "Founder", founder: true },
   { label: "Operates from", body: COMPANY_LOCATION },
   { label: "Contact", body: PUBLIC_CONTACT_EMAIL, href: PUBLIC_CONTACT_MAILTO },
 ];
@@ -71,7 +71,9 @@ export default function About() {
                 className="grid sm:grid-cols-[11rem_1fr] gap-2 sm:gap-8 py-6 border-b border-helm-cream/[0.06]"
               >
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-helm-slate">{row.label}</h3>
-                {row.href ? (
+                {row.founder ? (
+                  <FounderCredit creditClassName="text-sm text-helm-cream/90 leading-relaxed" />
+                ) : row.href ? (
                   <a href={row.href} className="text-sm text-helm-cream leading-relaxed hover:text-helm-gold transition-colors">
                     {row.body}
                   </a>
@@ -97,7 +99,10 @@ export default function About() {
           <div className="h-px w-10 bg-helm-gold mb-6" aria-hidden />
           <h2 className="font-display text-3xl font-medium tracking-tight">Who&apos;s behind Helm</h2>
           <p className="mt-5 text-helm-cream/80 leading-relaxed" data-testid="founder-credit">{FOUNDER_NOTE}</p>
-          <p className="mt-4 font-mono text-xs uppercase tracking-[0.2em] text-helm-slate">{FOUNDER_CREDIT}</p>
+          <FounderCredit
+            className="mt-4"
+            creditClassName="font-mono text-xs uppercase tracking-[0.2em] text-helm-slate"
+          />
           <p className="mt-2 text-sm text-helm-slate">Based in {COMPANY_LOCATION}.</p>
         </div>
       </section>

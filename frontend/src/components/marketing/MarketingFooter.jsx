@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { Instagram } from "lucide-react";
 import MarketingLogo from "@/components/marketing/MarketingLogo";
+import FounderCredit from "@/components/marketing/FounderCredit";
 import {
   CATEGORY,
-  FOUNDER_CREDIT,
   PUBLIC_CONTACT_EMAIL,
   PUBLIC_CONTACT_MAILTO,
   PUBLIC_INSTAGRAM_HANDLE,
@@ -61,8 +61,9 @@ export default function MarketingFooter() {
             ))}
           </nav>
         </div>
-        <p className="text-center text-[11px] text-helm-slate">
-          © {new Date().getFullYear()} Helm · {FOUNDER_CREDIT}
+        <p className="text-center text-[11px] text-helm-slate inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1">
+          <span>© {new Date().getFullYear()} Helm ·</span>
+          <FounderCredit creditClassName="text-[11px] text-helm-slate" />
         </p>
       </div>
     </footer>

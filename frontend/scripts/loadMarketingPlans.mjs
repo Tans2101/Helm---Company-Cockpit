@@ -29,6 +29,18 @@ export function loadMarketingPlans() {
   return { PLANS, TAGLINE, CATEGORY, AUDIENCE, marketingCopyPath };
 }
 
+/** Founder identity for About Person JSON-LD (name, role, LinkedIn sameAs). */
+export function loadFounderIdentity() {
+  const src = readFileSync(marketingCopyPath, "utf8");
+  const FOUNDER_NAME = extractExport(src, "FOUNDER_NAME");
+  const FOUNDER_ROLE = extractExport(src, "FOUNDER_ROLE");
+  const FOUNDER_LINKEDIN_URL = extractExport(src, "FOUNDER_LINKEDIN_URL");
+  if (!FOUNDER_NAME || !FOUNDER_ROLE || !FOUNDER_LINKEDIN_URL) {
+    throw new Error("loadFounderIdentity: missing founder exports");
+  }
+  return { FOUNDER_NAME, FOUNDER_ROLE, FOUNDER_LINKEDIN_URL };
+}
+
 export function formatPlanPrice(plan) {
   const n = Number(plan.price);
   if (!(n > 0)) return "$0";
