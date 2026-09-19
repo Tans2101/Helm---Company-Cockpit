@@ -134,3 +134,32 @@ def test_procurement_spend_skips_unpriced():
     assert s["budget_entered"] is False
     s2 = ps.spend_rollup(rows, period_start=start, period_end=end, budget=80, budget_entered=True)
     assert s2["gap"] == 20.0
+
+
+def test_sales_actual_ignores_won_deals_concept():
+    """Actual is confirmed order-book only — no deal stage input exists on the helper."""
+    entries = [
+        {
+            "status": "confirmed",
+            "total_value": 1000,
+            "country": "IN",
+            "product": "Oil",
+            "expected_close_month": "2026-09",
+            "created_at": "2026-09-01T00:00:00+00:00",
+        },
+        {
+            # Expected line must not count toward actual even in this month.
+            "status": "expected",
+            "total_value": 9999,
+            "country": "IN",
+            "product": "Oil",
+            "expected_close_month": "2026-09",
+            "created_at": "2026-09-01T00:00:00+00:00",
+        },
+    ]
+    s = sob.order_book_summary(entries, month="2026-09", today=date(2026, 9, 15))
+    assert s["confirmed_this_month"] == 1000.0
+    tvs = sob.target_vs_actual(target_row={"target": 5000}, confirmed_actual=s["confirmed_this_month"])
+    assert tvs["actual"] == 1000.0
+    # target_vs_actual has no deals parameter — signature is settled.
+    assert "deals" not in sob.target_vs_actual.__code__.co_varnames

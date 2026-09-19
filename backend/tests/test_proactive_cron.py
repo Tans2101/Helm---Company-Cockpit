@@ -248,3 +248,151 @@ async def test_weekly_pack_endpoint_uses_shared_helper():
 def test_iso_week_key_format():
     key = server._iso_week_key(datetime(2026, 9, 17, tzinfo=timezone.utc))
     assert key == "2026-W38"
+
+
+def test_daily_briefing_endpoint_requires_cron_secret():
+    with patch.object(server, "INTERNAL_CRON_SECRET", "cron-secret-test"):
+        client = TestClient(server.app)
+        assert client.post("/api/internal/run-daily-briefing").status_code == 401
+        assert client.post(
+            "/api/internal/run-daily-briefing",
+            headers={"X-Trenston-Cron-Secret": "wrong"},
+        ).status_code == 401
+
+
+def test_daily_briefing_endpoint_runs_with_cron_header():
+    with (
+        patch.object(server, "INTERNAL_CRON_SECRET", "cron-secret-test"),
+        patch.object(
+            server,
+            "run_daily_briefing_cron",
+            new=AsyncMock(return_value={"workspaces_scanned": 0, "sent": 0, "day": "2026-09-19"}),
+        ),
+    ):
+        client = TestClient(server.app)
+        res = client.post(
+            "/api/internal/run-daily-briefing",
+            headers={"X-Trenston-Cron-Secret": "cron-secret-test"},
+        )
+    assert res.status_code == 200
+    assert res.json()["sent"] == 0
+
+
+def test_run_daily_briefing_emails_and_debounces():
+    day = "2026-09-19"
+    rows = [
+        {"workspace_id": "ws_send", "name": "Send Co"},
+        {
+            "workspace_id": "ws_done",
+            "name": "Done Co",
+            "daily_briefing_emailed_date": day,
+        },
+        {"workspace_id": "ws_empty", "name": "Empty Co"},
+    ]
+    fake_db = MagicMock()
+    fake_db.workspaces.find = MagicMock(return_value=_Cursor(rows))
+    fake_db.workspaces.update_one = AsyncMock()
+    fake_db.email_suppressions.find_one = AsyncMock(return_value=None)
+
+    sent = []
+
+    async def fake_send(*, to, subject, html, attachments=None, headers=None):
+        sent.append({"to": to, "subject": subject, "html": html, "headers": headers})
+        return {"sent": True, "id": "email_1"}
+
+    async def fake_recipients(wid):
+        if wid == "ws_empty":
+            return ["empty@test"]
+        return ["ceo@send.test"] if wid == "ws_send" else []
+
+    async def fake_assemble(wid):
+        if wid == "ws_empty":
+            return {"has_content": False, "sections": {}, "month": "2026-09"}
+        return {
+            "has_content": True,
+            "month": "2026-09",
+            "sections": {
+                "sales": {
+                    "summary": {
+                        "line_count": 1,
+                        "confirmed_this_month": 3000,
+                        "by_country_this_month": [{"country": "IN", "total_value": 3000, "count": 1}],
+                        "by_product_this_month": [{"product": "Oil", "total_value": 3000, "count": 1}],
+                        "forward_pipeline": [
+                            {"month": "2026-09", "expected": 0, "in_negotiation": 0, "confirmed": 3000},
+                            {"month": "2026-10", "expected": 500, "in_negotiation": 0, "confirmed": 0},
+                            {"month": "2026-11", "expected": 0, "in_negotiation": 200, "confirmed": 0},
+                        ],
+                    },
+                    "target_vs_actual": {
+                        "target_entered": True,
+                        "target": 5000,
+                        "actual": 3000,
+                        "gap": -2000,
+                        "pct_of_target": 60.0,
+                    },
+                },
+                "procurement": None,
+                "production": None,
+                "maintenance": None,
+            },
+        }
+
+    with (
+        patch.object(server, "db", fake_db),
+        patch.object(server, "SESSION_SECRET", "daily-briefing-test-secret"),
+        patch.object(server, "_alert_recipient_emails", side_effect=fake_recipients),
+        patch.object(server, "assemble_ops_briefing_data", side_effect=fake_assemble),
+        patch.object(server, "send_resend_email", side_effect=fake_send),
+        patch.object(server, "_daily_briefing_date_key", return_value=day),
+    ):
+        stats = asyncio.run(server.run_daily_briefing_cron())
+
+    assert stats["sent"] == 1
+    assert stats["skipped_already"] == 1
+    assert stats["skipped_empty"] == 1
+    assert stats["errors"] == 0
+    assert len(sent) == 1
+    assert sent[0]["to"] == ["ceo@send.test"]
+    assert "morning briefing" in sent[0]["subject"].lower()
+    assert "Unsubscribe" in sent[0]["html"]
+    assert "BGC, Taguig, Philippines" in sent[0]["html"]
+    assert "Target vs actual" in sent[0]["html"]
+    assert sent[0]["headers"] and "List-Unsubscribe" in sent[0]["headers"]
+    fake_db.workspaces.update_one.assert_awaited_once()
+    set_fields = fake_db.workspaces.update_one.await_args.args[1]["$set"]
+    assert set_fields["daily_briefing_emailed_date"] == day
+
+
+def test_run_daily_briefing_respects_suppression():
+    rows = [{"workspace_id": "ws_1", "name": "Suppressed Co"}]
+    fake_db = MagicMock()
+    fake_db.workspaces.find = MagicMock(return_value=_Cursor(rows))
+    fake_db.workspaces.update_one = AsyncMock()
+    fake_db.email_suppressions.find_one = AsyncMock(
+        return_value={"email": "ceo@x.test", "category": "commercial"},
+    )
+
+    with (
+        patch.object(server, "db", fake_db),
+        patch.object(server, "SESSION_SECRET", "daily-briefing-test-secret"),
+        patch.object(server, "_alert_recipient_emails", new=AsyncMock(return_value=["ceo@x.test"])),
+        patch.object(
+            server,
+            "assemble_ops_briefing_data",
+            new=AsyncMock(return_value={"has_content": True, "sections": {"sales": {}}, "month": "2026-09"}),
+        ),
+        patch.object(server, "send_resend_email", new=AsyncMock()) as send_mock,
+        patch.object(server, "_daily_briefing_date_key", return_value="2026-09-19"),
+    ):
+        stats = asyncio.run(server.run_daily_briefing_cron())
+
+    assert stats["skipped_suppressed"] == 1
+    assert stats["sent"] == 0
+    send_mock.assert_not_called()
+    fake_db.workspaces.update_one.assert_not_called()
+
+
+def test_daily_briefing_date_key_format():
+    key = server._daily_briefing_date_key(datetime(2026, 9, 19, 3, 0, tzinfo=timezone.utc))
+    assert key == "2026-09-19"

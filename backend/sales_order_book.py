@@ -1,9 +1,10 @@
 """Sales order book + monthly target helpers.
 
-Actual revenue for a month = sum of confirmed order-book `total_value` attributed
-to that month via `expected_close_month` when set, else the YYYY-MM of `created_at`.
-(Won deals are not double-counted — the order book is the source of truth for the
-target once the team starts logging lines.)
+Settled definition (do not reopen): monthly target `actual` is ONLY the sum of
+`sales_order_book` lines with `status == "confirmed"` whose attributed month
+(`expected_close_month` when set, else YYYY-MM of `created_at`) equals that
+month. The `deals` collection and deal stages are never consulted — a won deal
+with no matching order-book line does not move actual at all.
 
 Missing targets / empty books are "not set" / "no data" — never fabricated zeros.
 """
@@ -79,6 +80,8 @@ def order_book_summary(
     expected_this = 0.0
     by_country: dict[str, dict] = {}
     by_product: dict[str, dict] = {}
+    by_country_month: dict[str, dict] = {}
+    by_product_month: dict[str, dict] = {}
     forward_months = next_n_months(3, today=today)
     forward: dict[str, dict] = {
         m: {"month": m, "expected": 0.0, "in_negotiation": 0.0, "confirmed": 0.0, "count": 0}
@@ -100,6 +103,16 @@ def order_book_summary(
                 confirmed_this += total
             elif status in ("expected", "in_negotiation"):
                 expected_this += total
+            cm = by_country_month.setdefault(
+                country, {"country": country, "total_value": 0.0, "count": 0},
+            )
+            cm["total_value"] = round(cm["total_value"] + total, 2)
+            cm["count"] += 1
+            pm = by_product_month.setdefault(
+                product, {"product": product, "total_value": 0.0, "count": 0},
+            )
+            pm["total_value"] = round(pm["total_value"] + total, 2)
+            pm["count"] += 1
 
         c = by_country.setdefault(country, {"country": country, "total_value": 0.0, "count": 0})
         c["total_value"] = round(c["total_value"] + total, 2)
@@ -123,6 +136,12 @@ def order_book_summary(
         "expected_this_month": round(expected_this, 2),
         "by_country": sorted(by_country.values(), key=lambda x: -x["total_value"]),
         "by_product": sorted(by_product.values(), key=lambda x: -x["total_value"]),
+        "by_country_this_month": sorted(
+            by_country_month.values(), key=lambda x: -x["total_value"],
+        ),
+        "by_product_this_month": sorted(
+            by_product_month.values(), key=lambda x: -x["total_value"],
+        ),
         "forward_pipeline": [forward[m] for m in forward_months],
         "line_count": len(entries),
     }
@@ -133,9 +152,11 @@ def target_vs_actual(
     target_row: Optional[dict],
     confirmed_actual: float,
 ) -> dict:
-    """Company-wide monthly target vs confirmed order-book actual.
+    """Company-wide monthly target vs confirmed order-book actual only.
 
-    No target set → target_entered false, no fabricated pct/gap.
+    `confirmed_actual` must be order-book confirmed sum for the month — never
+    derived from won deals. No target set → target_entered false, no fabricated
+    pct/gap.
     """
     entered = False
     target = None

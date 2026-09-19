@@ -114,7 +114,7 @@ def register(api_router, *, db, get_principal, invalidate_workspace_list_cache, 
             {"workspace_id": principal["workspace_id"], "month": month},
             {"_id": 0},
         )
-        # Actual = confirmed order-book value attributed to this month (see sales_order_book.py).
+        # Settled: actual = confirmed order-book only. Deals/stages are never consulted.
         confirmed_actual = summary["confirmed_this_month"]
         target_vs = sales_ob.target_vs_actual(target_row=target_row, confirmed_actual=confirmed_actual)
         return {

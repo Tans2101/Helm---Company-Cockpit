@@ -3423,326 +3423,22 @@ def _fmt_days_metric(value: Optional[float]) -> str:
     return f"{n:.1f}d"
 
 
+async def assemble_ops_briefing_data(workspace_id: str) -> dict:
+    """Shared ops snapshot for Briefing UI and the daily morning email cron."""
+    import ops_briefing as ob
+    return await ob.assemble_ops_briefing_data(db, workspace_id)
+
+
 async def _briefing_ops_metrics(workspace_id: str) -> list[dict]:
     """Procurement / Production / Sales / Maintenance rollups for Briefing.
 
-    Missing timestamps / logs / budgets / targets surface as not tracked / no data
-    — never fabricated zeros.
+    Delegates to assemble_ops_briefing_data so the daily email uses the same
+    numbers. Missing timestamps / logs / budgets / targets surface as not
+    tracked / no data — never fabricated zeros.
     """
-    depts = await dept_migrate.get_enabled_departments_by_type(
-        db,
-        workspace_id,
-        (
-            dept_catalog.TYPE_PROCUREMENT,
-            dept_catalog.TYPE_PRODUCTION,
-            dept_catalog.TYPE_SALES,
-            dept_catalog.TYPE_ENGINEERING_MAINTENANCE,
-        ),
-    )
-    out: list[dict] = []
-
-    proc_dept = depts.get(dept_catalog.TYPE_PROCUREMENT)
-    if proc_dept:
-        rows = await db.procurement_requests.find(
-            {"department_id": proc_dept["department_id"]},
-            {
-                "_id": 0, "id": 1, "item": 1, "vendor_name": 1, "status": 1, "priority": 1,
-                "created_at": 1, "vendor_selected_at": 1, "ordered_at": 1, "updated_at": 1,
-                "expected_delivery_date": 1, "actual_delivery_date": 1, "cost": 1,
-            },
-        ).to_list(2000)
-        summary = proc_metrics.department_lead_time_summary(rows)
-        sourcing_known = summary["sourcing_sample_count"] > 0
-        delay_known = summary["delay_sample_count"] > 0
-        late_n = int(summary["currently_late_count"] or 0)
-        out.append({
-            "label": "Avg sourcing",
-            "value": _fmt_days_metric(summary["avg_sourcing_days"]) if sourcing_known else "Not tracked",
-            "delta": 0,
-            "tone": "neutral",
-            "missing": not sourcing_known,
-            "href": None if sourcing_known else "/app/procurement",
-        })
-        out.append({
-            "label": "Avg fulfillment delay",
-            "value": _fmt_days_metric(summary["avg_fulfillment_delay_days"]) if delay_known else "Not tracked",
-            "delta": 0,
-            "tone": "negative" if delay_known and (summary["avg_fulfillment_delay_days"] or 0) > 0 else "neutral",
-            "missing": not delay_known,
-            "href": None if delay_known else "/app/procurement",
-        })
-        out.append({
-            "label": "Late orders",
-            "value": str(late_n),
-            "delta": 0,
-            "tone": "negative" if late_n else "positive",
-            "missing": False,
-            "href": "/app/procurement" if late_n else None,
-        })
-        month_start, month_end = decision_engine.month_period_bounds()
-        spend = proc_spend.spend_rollup(
-            rows,
-            period_start=month_start,
-            period_end=month_end,
-            budget=proc_dept.get("monthly_budget"),
-            budget_entered=bool(proc_dept.get("monthly_budget_entered")),
-        )
-        if spend["budget_entered"]:
-            gap = spend.get("gap") or 0
-            out.append({
-                "label": "Procurement spend",
-                "value": f"${spend['actual']:,.0f} / ${spend['budget']:,.0f}",
-                "delta": 0,
-                "tone": "negative" if gap > 0 else "positive",
-                "missing": False,
-                "href": "/app/procurement",
-            })
-        else:
-            out.append({
-                "label": "Procurement spend",
-                "value": f"${spend['actual']:,.0f}",
-                "delta": 0,
-                "tone": "neutral",
-                "missing": spend["priced_count"] == 0,
-                "href": "/app/procurement",
-            })
-
-    prod_dept = depts.get(dept_catalog.TYPE_PRODUCTION)
-    if prod_dept:
-        orders = await db.production_work_orders.find(
-            {"department_id": prod_dept["department_id"]},
-            {"_id": 0, "id": 1, "status": 1, "expected_yield_pct": 1, "unit": 1},
-        ).to_list(1000)
-        wo_ids = [o["id"] for o in orders if o.get("id")]
-        logs_by_wo: dict[str, list] = {wid: [] for wid in wo_ids}
-        today = prod_daily.today_iso()
-        week_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
-        if wo_ids:
-            log_rows = await db.production_daily_logs.find(
-                {
-                    "workspace_id": workspace_id,
-                    "work_order_id": {"$in": wo_ids},
-                    "date": {"$gte": week_ago},
-                },
-                {"_id": 0},
-            ).to_list(5000)
-            for log in log_rows:
-                logs_by_wo.setdefault(log.get("work_order_id"), []).append(log)
-        day_summary = prod_daily.department_day_summary(orders, logs_by_wo, day=today)
-        week_logs = [log for logs in logs_by_wo.values() for log in logs]
-        ot = prod_daily.period_overtime_rollup(week_logs)
-        if day_summary.get("has_data"):
-            if day_summary.get("mixed_units"):
-                parts = []
-                for row in day_summary.get("by_unit") or []:
-                    u = row.get("unit") or ""
-                    a = row.get("total_actual")
-                    t = row.get("total_target")
-                    if a is not None and t is not None:
-                        parts.append(f"{a:g}/{t:g}{(' ' + u) if u else ''}")
-                value = " · ".join(parts) if parts else "Mixed units"
-                tone = "negative" if any(
-                    (r.get("shortfall") or 0) > 0 for r in (day_summary.get("by_unit") or [])
-                ) else "positive"
-            else:
-                t = day_summary.get("total_target")
-                a = day_summary.get("total_actual")
-                u = day_summary.get("unit") or ""
-                suffix = f" {u}" if u else ""
-                value = f"{a:g} / {t:g}{suffix}" if t is not None and a is not None else (
-                    f"{a:g}{suffix} logged" if a is not None else "Logged"
-                )
-                shortfall = day_summary.get("shortfall")
-                tone = "negative" if shortfall is not None and shortfall > 0 else "positive"
-            out.append({
-                "label": "Today's output",
-                "value": value,
-                "delta": 0,
-                "tone": tone,
-                "missing": False,
-                "href": "/app/production",
-            })
-        else:
-            out.append({
-                "label": "Today's output",
-                "value": "No data logged",
-                "delta": 0,
-                "tone": "neutral",
-                "missing": True,
-                "href": "/app/production",
-            })
-        if ot.get("has_data") and ot.get("overtime_cost") is not None:
-            out.append({
-                "label": "OT cost (7d)",
-                "value": f"${ot['overtime_cost']:,.0f}",
-                "delta": 0,
-                "tone": "negative" if ot["overtime_cost"] > 0 else "neutral",
-                "missing": False,
-                "href": "/app/production",
-            })
-        elif ot.get("has_data") and ot.get("overtime_hours") is not None:
-            out.append({
-                "label": "OT hours (7d)",
-                "value": f"{ot['overtime_hours']:g}h",
-                "delta": 0,
-                "tone": "negative" if ot["overtime_hours"] > 0 else "neutral",
-                "missing": False,
-                "href": "/app/production",
-            })
-        else:
-            out.append({
-                "label": "OT cost (7d)",
-                "value": "No data logged",
-                "delta": 0,
-                "tone": "neutral",
-                "missing": True,
-                "href": "/app/production",
-            })
-
-    sales_dept = depts.get(dept_catalog.TYPE_SALES)
-    if sales_dept:
-        entries = await db.sales_order_book.find(
-            {"department_id": sales_dept["department_id"]},
-            {"_id": 0},
-        ).to_list(5000)
-        summary = sales_ob.order_book_summary(entries)
-        month = sales_ob.current_month()
-        target_row = await db.sales_targets.find_one(
-            {"workspace_id": workspace_id, "month": month}, {"_id": 0},
-        )
-        tvs = sales_ob.target_vs_actual(
-            target_row=target_row, confirmed_actual=summary["confirmed_this_month"],
-        )
-        if tvs["target_entered"]:
-            out.append({
-                "label": "Sales vs target",
-                "value": f"${tvs['actual']:,.0f} / ${tvs['target']:,.0f}",
-                "delta": 0,
-                "tone": "negative" if (tvs.get("gap") or 0) < 0 else "positive",
-                "missing": False,
-                "href": "/app/pipeline",
-            })
-        else:
-            out.append({
-                "label": "Sales confirmed",
-                "value": f"${tvs['actual']:,.0f}" if summary["line_count"] else "No target set",
-                "delta": 0,
-                "tone": "neutral",
-                "missing": not tvs["target_entered"],
-                "href": "/app/pipeline",
-            })
-        fwd = summary["forward_pipeline"]
-        fwd_total = sum(
-            (b.get("expected") or 0) + (b.get("in_negotiation") or 0) + (b.get("confirmed") or 0)
-            for b in fwd
-        )
-        out.append({
-            "label": "Order book (3mo)",
-            "value": f"${fwd_total:,.0f}" if summary["line_count"] else "No data",
-            "delta": 0,
-            "tone": "neutral",
-            "missing": summary["line_count"] == 0,
-            "href": "/app/pipeline",
-        })
-
-    maint_dept = depts.get(dept_catalog.TYPE_ENGINEERING_MAINTENANCE)
-    if maint_dept:
-        spare_rows = await db.maintenance_spares.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        below_n = len(maint_ops.spares_below_threshold(spare_rows))
-        sched_rows = await db.maintenance_schedules.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        overdue_n = len(maint_ops.overdue_schedules(sched_rows))
-        contract_rows = await db.maintenance_contracts.find(
-            {"department_id": maint_dept["department_id"]}, {"_id": 0},
-        ).to_list(2000)
-        renew_n = len(maint_ops.contracts_needing_attention(contract_rows))
-        out.append({
-            "label": "Spares low",
-            "value": str(below_n),
-            "delta": 0,
-            "tone": "negative" if below_n else "positive",
-            "missing": False,
-            "href": "/app/maintenance" if below_n else None,
-        })
-        out.append({
-            "label": "Maint overdue",
-            "value": str(overdue_n),
-            "delta": 0,
-            "tone": "negative" if overdue_n else "positive",
-            "missing": False,
-            "href": "/app/maintenance" if overdue_n else None,
-        })
-        out.append({
-            "label": "AMC renewals",
-            "value": str(renew_n),
-            "delta": 0,
-            "tone": "negative" if renew_n else "positive",
-            "missing": False,
-            "href": "/app/maintenance" if renew_n else None,
-        })
-        month_start, month_end = decision_engine.month_period_bounds()
-        resolved = await db.maintenance_tickets.find(
-            {
-                "department_id": maint_dept["department_id"],
-                "status": "resolved",
-                "$or": [
-                    {"resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}},
-                    {
-                        "resolved_at": {"$exists": False},
-                        "updated_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()},
-                    },
-                ],
-            },
-            {"_id": 0, "cost": 1},
-        ).to_list(5000)
-        ticket_costs = []
-        for t in resolved:
-            if t.get("cost") is None:
-                continue
-            try:
-                ticket_costs.append(float(t["cost"]))
-            except (TypeError, ValueError):
-                pass
-        ledger = await db.maintenance_costs.find(
-            {"department_id": maint_dept["department_id"], "month": month_start.strftime("%Y-%m")},
-            {"_id": 0, "amount": 1},
-        ).to_list(2000)
-        ledger_costs = []
-        for row in ledger:
-            try:
-                ledger_costs.append(float(row.get("amount") or 0))
-            except (TypeError, ValueError):
-                pass
-        overhead = maint_ops.overhead_rollup(
-            ticket_costs=ticket_costs,
-            ledger_costs=ledger_costs,
-            budget=maint_dept.get("monthly_budget"),
-            budget_entered=bool(maint_dept.get("monthly_budget_entered")),
-        )
-        if overhead["budget_entered"]:
-            gap = overhead.get("gap") or 0
-            out.append({
-                "label": "Maint overhead",
-                "value": f"${overhead['actual']:,.0f} / ${overhead['budget']:,.0f}",
-                "delta": 0,
-                "tone": "negative" if gap > 0 else "positive",
-                "missing": False,
-                "href": "/app/maintenance",
-            })
-        else:
-            out.append({
-                "label": "Maint overhead",
-                "value": f"${overhead['actual']:,.0f}",
-                "delta": 0,
-                "tone": "neutral",
-                "missing": overhead["actual"] == 0,
-                "href": "/app/maintenance",
-            })
-
-    return out
+    import ops_briefing as ob
+    data = await assemble_ops_briefing_data(workspace_id)
+    return ob.ops_briefing_metric_cards(data)
 
 
 @api_router.get("/briefing")
@@ -14747,6 +14443,102 @@ async def run_weekly_digest_cron() -> dict:
     return stats
 
 
+def _daily_briefing_date_key(now: datetime | None = None) -> str:
+    """UTC calendar date for daily briefing debounce (YYYY-MM-DD)."""
+    now = now or datetime.now(timezone.utc)
+    return now.date().isoformat()
+
+
+def _daily_briefing_email_html(*, workspace_name: str, data: dict, app_url: str, unsubscribe_url: str = "") -> str:
+    import ops_briefing as ob
+    return ob.daily_briefing_email_html(
+        workspace_name=workspace_name,
+        data=data,
+        app_url=app_url,
+        unsubscribe_url=unsubscribe_url,
+    )
+
+
+async def run_daily_briefing_cron() -> dict:
+    """Cron: email a morning ops snapshot to CEO/owner recipients.
+
+    Separate from weekly pack digest and from daily insights alerts. Debounces
+    with daily_briefing_emailed_date (UTC ISO date) so a re-run the same day
+    does not double-send. Recipients + suppression list match the weekly digest.
+    Fixed UTC morning hour (v1 — no per-workspace timezone field yet).
+    """
+    import email_compliance as ec
+
+    workspaces = await db.workspaces.find({}, {"_id": 0}).to_list(MAX_PROACTIVE_CRON_WORKSPACES)
+    day = _daily_briefing_date_key()
+    app_url = _app_base_url()
+    api_base = public_api_origin()
+    stats = {
+        "workspaces_scanned": len(workspaces),
+        "day": day,
+        "sent": 0,
+        "skipped_already": 0,
+        "skipped_no_recipients": 0,
+        "skipped_suppressed": 0,
+        "skipped_empty": 0,
+        "send_failed": 0,
+        "errors": 0,
+    }
+    for c in workspaces:
+        wid = (c.get("workspace_id") or "").strip()
+        if not wid:
+            continue
+        try:
+            if (c.get("daily_briefing_emailed_date") or "") == day:
+                stats["skipped_already"] += 1
+                continue
+            recipients = await _alert_recipient_emails(wid)
+            if not recipients:
+                stats["skipped_no_recipients"] += 1
+                continue
+            sendable = await ec.filter_unsuppressed(db, recipients)
+            if not sendable:
+                stats["skipped_suppressed"] += 1
+                continue
+            data = await assemble_ops_briefing_data(wid)
+            if not data.get("has_content"):
+                stats["skipped_empty"] += 1
+                continue
+            ws_name = c.get("name") or "Company"
+            any_sent = False
+            for addr in sendable:
+                unsub = ec.unsubscribe_url(app_url, addr, secret=SESSION_SECRET)
+                one_click = ec.api_unsubscribe_url(api_base, addr, secret=SESSION_SECRET)
+                email_result = await send_resend_email(
+                    to=[addr],
+                    subject=f"Trenston morning briefing: {ws_name}",
+                    html=_daily_briefing_email_html(
+                        workspace_name=ws_name,
+                        data=data,
+                        app_url=app_url,
+                        unsubscribe_url=unsub,
+                    ),
+                    headers=ec.list_unsubscribe_headers(one_click),
+                )
+                if email_result.get("sent"):
+                    any_sent = True
+            if any_sent:
+                await db.workspaces.update_one(
+                    {"workspace_id": wid},
+                    {"$set": {
+                        "daily_briefing_emailed_date": day,
+                        "daily_briefing_emailed_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                stats["sent"] += 1
+            else:
+                stats["send_failed"] += 1
+        except Exception:
+            stats["errors"] += 1
+            logger.exception("daily briefing cron failed for workspace %s", wid)
+    return stats
+
+
 @api_router.post("/internal/run-retention-checks")
 async def internal_run_retention_checks(request: Request):
     """Daily Render cron: trial-ending reminder + inactivity nudge. Shared-secret header required."""
@@ -14791,6 +14583,16 @@ async def internal_run_weekly_digest(request: Request):
     """Weekly Render cron: email weekly pack PDF to CEO/owner. Shared-secret header required."""
     _require_internal_cron(request)
     return await run_weekly_digest_cron()
+
+
+@api_router.post("/internal/run-daily-briefing")
+async def internal_run_daily_briefing(request: Request):
+    """Daily Render cron: morning ops briefing email to CEO/owner. Shared-secret header required.
+
+    Separate from weekly pack digest. Fixed UTC morning hour (v1 — no per-workspace timezone).
+    """
+    _require_internal_cron(request)
+    return await run_daily_briefing_cron()
 
 
 async def _apply_unsubscribe_token(token: str, *, source: str) -> dict:
